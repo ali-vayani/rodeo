@@ -1,5 +1,8 @@
 node_modules
 
+# Prisma (v7+ client output)
+src/lib/generated
+
 # Output
 .output
 .vercel
