@@ -4,7 +4,7 @@ import { createSupabaseServerClient } from '$lib/server/supabase';
 
 export const GET: RequestHandler = async (event) => {
 	const code = event.url.searchParams.get('code');
-	const next = event.url.searchParams.get('next') ?? '/';
+	const next = event.url.searchParams.get('next') ?? '/admin/dashboard';
 
 	if (code) {
 		const supabase = createSupabaseServerClient(event);
