@@ -1,0 +1,196 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+
+
+// Enums
+// -----------------------------------------------------------------------------
+
+enum Role {
+  HACKER
+  JUDGE
+  MENTOR
+  VOLUNTEER
+  ORGANIZER
+  ADMIN
+  UNDECLARED
+}
+
+enum UserStatus {
+  CREATED
+  APPLIED
+  CONFIRMED
+  CHECKED_IN
+}
+
+enum DecisionStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+  WAITLISTED
+}
+
+enum QuestionType {
+  MULTIPLE_CHOICE
+  DROPDOWN
+  NUMBER
+  CHECKBOX
+  SHORT_TEXT
+  LONG_TEXT
+}
+
+enum ScheduleType {
+  EVENT
+  WORKSHOP
+  MEAL
+  CEREMONY
+}
+
+enum InvitationStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+}
+
+enum BlacklistType {
+  EMAIL
+  NAME
+}
+
+// Models
+// -----------------------------------------------------------------------------
+
+model User {
+  uid             String              @id @default(cuid())
+  name            String
+  email           String              @unique
+  application     ApplicationResponse[]
+  scans           Scan[]
+  teamId          String?
+  team            Team?               @relation(fields: [teamId], references: [id])
+  groupId         String?
+  group           Group?              @relation(fields: [groupId], references: [id])
+  pendingDecision DecisionStatus?
+  activeDecision  DecisionStatus?
+  roles           Role[]              @default([UNDECLARED])
+  status          UserStatus          @default(CREATED)
+  createdAt       DateTime            @default(now())
+
+  invitations Invitation[]
+  logs        Log[]
+}
+
+model ApplicationResponse {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [uid], onDelete: Cascade)
+  questionId String
+  question   Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  value      String // json?
+  createdAt  DateTime @default(now())
+
+  @@unique([userId, questionId])
+}
+
+model Settings {
+  id                  String   @id @default(cuid())
+  applicationOpen     DateTime
+  applicationDeadline DateTime
+  RSVPDeadline        DateTime
+  admissionsSend      DateTime?
+  hackathonStartDate  DateTime
+  scanActions         String[]
+  submitTemplate      String
+  acceptTemplate      String
+  confirmTemplate     String
+  declineTemplate     String
+  rejectTemplate      String
+  waitlistTemplate    String
+  timezone            String // IANA identifier, e.g. "America/Chicago"
+}
+
+model Blacklist {
+  id        String       @id @default(cuid())
+  type      BlacklistType
+  value     String
+  createdAt DateTime     @default(now())
+}
+
+model Question {
+  id          String              @id @default(cuid())
+  title       String
+  type        QuestionType
+  order       Int                 @default(0)
+  required    Boolean             @default(false)
+  targetRole  Role[]
+  placeholder String?
+  options     String[]
+  min         Float?
+  max         Float?
+  regex       String?
+  responses   ApplicationResponse[]
+}
+
+model Schedule {
+  id          String       @id @default(cuid())
+  name        String
+  description String?
+  start       DateTime
+  end         DateTime
+  location    String
+  type        ScheduleType
+}
+
+model Scan {
+  id        String   @id @default(cuid())
+  action    String
+  timestamp DateTime @default(now())
+  userId    String
+  user      User     @relation(fields: [userId], references: [uid], onDelete: Cascade)
+}
+
+model Log {
+  id        String   @id @default(cuid())
+  action    String
+  timestamp DateTime @default(now())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [uid], onDelete: SetNull)
+}
+
+model EmailLog {
+  id       String   @id @default(cuid())
+  template String?
+  subject  String
+  body     String
+  userIds  String[]
+  sentAt   DateTime @default(now())
+}
+
+model Group {
+  id      String @id @default(cuid())
+  name    String
+  members User[]
+}
+
+model Team {
+  id          String       @id @default(cuid())
+  teamName    String
+  members     User[]
+  invitations Invitation[]
+}
+
+model Invitation {
+  id     String           @id @default(cuid())
+  teamId String
+  team   Team             @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  email  String
+  userId String?
+  user   User?            @relation(fields: [userId], references: [uid], onDelete: SetNull)
+  status InvitationStatus @default(PENDING)
+}
