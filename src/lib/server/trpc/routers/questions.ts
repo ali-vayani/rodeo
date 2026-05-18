@@ -12,6 +12,7 @@ const questionInput = z.object({
 	min: z.number().optional(),
 	max: z.number().optional(),
 	regex: z.string().optional(),
+	linkedField: z.string().optional(),
 	order: z.number().int().default(0)
 });
 

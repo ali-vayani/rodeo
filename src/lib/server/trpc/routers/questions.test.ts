@@ -25,7 +25,8 @@ const allRolesQuestion = {
 	options: [],
 	min: null,
 	max: null,
-	regex: null
+	regex: null,
+	linkedField: null
 };
 
 const hackerQuestion = {
@@ -44,7 +45,7 @@ const judgeQuestion = {
 
 const questionInput = {
 	title: 'GitHub URL',
-	type: QuestionType.SHORT_TEXT as const,
+	type: QuestionType.SHORT_TEXT as QuestionType,
 	required: false,
 	targetRole: [Role.HACKER],
 	options: [],

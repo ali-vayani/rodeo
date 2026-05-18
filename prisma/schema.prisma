@@ -70,6 +70,8 @@ model User {
   uid             String              @id @default(cuid())
   name            String
   email           String              @unique
+  university      String?
+  year            String?
   application     ApplicationResponse[]
   scans           Scan[]
   teamId          String?
@@ -134,6 +136,7 @@ model Question {
   min         Float?
   max         Float?
   regex       String?
+  linkedField String?             // user field to sync on save: "name" | "university" | "year"
   responses   ApplicationResponse[]
 }
 

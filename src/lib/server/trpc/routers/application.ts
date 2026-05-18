@@ -28,6 +28,21 @@ export const applicationRouter = router({
 			})
 		)
 		.mutation(async ({ ctx, input }) => {
+			// eslint-disable-next-line @typescript-eslint/no-explicit-any
+			const question = await (ctx.prisma.question.findUnique as any)({
+				where: { id: input.questionId },
+				select: { linkedField: true }
+			}) as { linkedField?: string | null } | null;
+
+			// Write through to the user record for linked fields
+			const LINKED_USER_FIELDS = ['name', 'university', 'year'] as const;
+			if (question?.linkedField && (LINKED_USER_FIELDS as readonly string[]).includes(question.linkedField)) {
+				await ctx.prisma.user.update({
+					where: { uid: ctx.user.uid },
+					data: { [question.linkedField]: input.value }
+				});
+			}
+
 			return ctx.prisma.applicationResponse.upsert({
 				where: {
 					userId_questionId: {
@@ -43,6 +58,31 @@ export const applicationRouter = router({
 				}
 			});
 		}),
+
+	/**
+	 * RSVP — confirm attendance after being accepted
+	 */
+	rsvp: authedProcedure.mutation(async ({ ctx }) => {
+		const user = await ctx.prisma.user.findUniqueOrThrow({
+			where: { uid: ctx.user.uid }
+		});
+
+		if (user.activeDecision !== DecisionStatus.ACCEPTED) {
+			throw new TRPCError({
+				code: 'BAD_REQUEST',
+				message: 'You must be accepted before you can RSVP.'
+			});
+		}
+
+		if (user.status === UserStatus.CONFIRMED) {
+			throw new TRPCError({ code: 'BAD_REQUEST', message: 'You have already RSVP\'d.' });
+		}
+
+		return ctx.prisma.user.update({
+			where: { uid: ctx.user.uid },
+			data: { status: UserStatus.CONFIRMED }
+		});
+	}),
 
 	/**
 	 * Submit the application
