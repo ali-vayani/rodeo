@@ -22,3 +22,5 @@ export const adminProcedure = t.procedure.use(({ ctx, next }) => {
 	}
 	return next({ ctx: { ...ctx, user: ctx.user } });
 });
+
+export const createCallerFactory = t.createCallerFactory;
