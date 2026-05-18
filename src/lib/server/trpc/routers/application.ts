@@ -85,6 +85,31 @@ export const applicationRouter = router({
 	}),
 
 	/**
+	 * Decline RSVP — release spot after being accepted
+	 */
+	rsvpDecline: authedProcedure.mutation(async ({ ctx }) => {
+		const user = await ctx.prisma.user.findUniqueOrThrow({
+			where: { uid: ctx.user.uid }
+		});
+
+		if (user.activeDecision !== DecisionStatus.ACCEPTED) {
+			throw new TRPCError({
+				code: 'BAD_REQUEST',
+				message: 'You must be accepted before you can decline.'
+			});
+		}
+
+		if (user.status === UserStatus.DECLINED) {
+			throw new TRPCError({ code: 'BAD_REQUEST', message: 'You have already declined.' });
+		}
+
+		return ctx.prisma.user.update({
+			where: { uid: ctx.user.uid },
+			data: { status: UserStatus.DECLINED }
+		});
+	}),
+
+	/**
 	 * Submit the application
 	 */
 	submit: authedProcedure.mutation(async ({ ctx }) => {

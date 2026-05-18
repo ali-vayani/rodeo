@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { UserStatus, DecisionStatus } from '$lib/generated/prisma/enums';
+	import { computeApplicationState } from '$lib/application/state';
 	import type { UserModel } from '$lib/generated/prisma/models/User';
 	import type { SettingsModel } from '$lib/generated/prisma/models/Settings';
 
@@ -8,21 +8,15 @@
 		settings: SettingsModel | null;
 		onrsvp: () => Promise<void>;
 		rsvping?: boolean;
+		ondecline?: () => Promise<void>;
+		declining?: boolean;
 	}
 
-	let { user, settings, onrsvp, rsvping = false }: Props = $props();
+	let { user, settings, onrsvp, rsvping = false, ondecline, declining = false }: Props = $props();
 
-	type AppState = 'submitted' | 'waitlisted' | 'accepted' | 'rejected' | 'rsvpd';
+	const appState = $derived(computeApplicationState(user));
 
-	function getState(): AppState {
-		if (user.status === UserStatus.CONFIRMED) return 'rsvpd';
-		if (user.activeDecision === DecisionStatus.ACCEPTED) return 'accepted';
-		if (user.activeDecision === DecisionStatus.WAITLISTED) return 'waitlisted';
-		if (user.activeDecision === DecisionStatus.REJECTED) return 'rejected';
-		return 'submitted';
-	}
-
-	const state = $derived(getState());
+	let showDeclineConfirm = $state(false);
 
 	function formatDate(d: Date | null | undefined): string {
 		if (!d) return '—';
@@ -35,9 +29,13 @@
 
 	const rsvpDeadline = $derived(formatDate(settings?.RSVPDeadline));
 	const hackathonStart = $derived(formatDate(settings?.hackathonStartDate));
+
+	// TODO: fill in when URLs are ready
+	const scheduleUrl = '';
+	const discordUrl = '';
 </script>
 
-{#if state === 'submitted'}
+{#if appState === 'submitted'}
 	<!-- Submitted / Pending Review -->
 	<div class="mx-auto max-w-md rounded border bg-white p-8" style="border-color: #e0e0e0">
 		<div class="mb-6 flex items-center gap-3">
@@ -76,7 +74,7 @@
 		</div>
 	</div>
 
-{:else if state === 'waitlisted'}
+{:else if appState === 'waitlisted'}
 	<!-- Waitlisted -->
 	<div class="mx-auto max-w-md rounded border bg-white p-8" style="border-color: #e0e0e0">
 		<div class="mb-4 flex items-center justify-between">
@@ -113,7 +111,7 @@
 		</div>
 	</div>
 
-{:else if state === 'rejected'}
+{:else if appState === 'rejected'}
 	<!-- Rejected -->
 	<div class="mx-auto max-w-md rounded border bg-white p-8" style="border-color: #e0e0e0">
 		<div class="mb-4 flex items-center justify-between">
@@ -146,7 +144,7 @@
 		</div>
 	</div>
 
-{:else if state === 'accepted'}
+{:else if appState === 'accepted'}
 	<!-- Accepted — RSVP prompt -->
 	<div class="mx-auto max-w-md rounded border bg-white p-8" style="border-color: #e0e0e0">
 		<div class="mb-2">
@@ -173,6 +171,17 @@
 			>
 				{rsvping ? 'Confirming…' : 'RSVP Yes'}
 			</button>
+			{#if ondecline}
+				<button
+					type="button"
+					onclick={() => (showDeclineConfirm = true)}
+					disabled={rsvping}
+					class="rounded border px-5 py-2 text-sm transition-colors hover:bg-[--color-muted] disabled:opacity-40"
+					style="border-color: #e0e0e0; color: #191919"
+				>
+					Decline
+				</button>
+			{/if}
 		</div>
 		{#if settings?.RSVPDeadline}
 			<p class="text-xs" style="color: #aaaaaa">
@@ -180,8 +189,39 @@
 			</p>
 		{/if}
 	</div>
+{:else if appState === 'checked-in'}
+	<!-- Checked in -->
+	<div class="mx-auto max-w-md rounded border bg-white p-8" style="border-color: #e0e0e0">
+		<div class="mb-4 flex items-center justify-between">
+			<h2 class="text-base font-semibold" style="color: #191919">Application Status</h2>
+			<span
+				class="rounded border px-2.5 py-0.5 font-mono text-xs font-medium uppercase tracking-wide"
+				style="border-color: #191919; color: #aaaaaa; background: #f4f4f4"
+			>
+				Checked in
+			</span>
+		</div>
+		<div class="border-t" style="border-color: #e0e0e0">
+			<div class="flex justify-between border-b py-2.5 text-sm" style="border-color: #e0e0e0">
+				<span style="color: #aaaaaa">Applicant</span>
+				<span class="font-medium" style="color: #191919">{user.name}</span>
+			</div>
+			<div class="flex justify-between py-2.5 text-sm">
+				<span style="color: #aaaaaa">Email</span>
+				<span class="font-medium" style="color: #191919">{user.email}</span>
+			</div>
+		</div>
+		<div class="mt-4 rounded border p-4" style="border-color: #e0e0e0; background: #f4f4f4">
+			<p class="text-sm leading-relaxed" style="color: #191919">
+				Hope you have a good time! Take a look at our
+				<a href={scheduleUrl} class="underline" style="color: #191919">schedule</a>
+				and make sure to join the
+				<a href={discordUrl} class="underline" style="color: #191919">Discord</a>.
+			</p>
+		</div>
+	</div>
 
-{:else if state === 'rsvpd'}
+{:else if appState === 'rsvpd'}
 	<!-- RSVP confirmed -->
 	<div
 		class="mx-auto max-w-md rounded border bg-white p-8 text-center"
@@ -210,5 +250,75 @@
 				</span>
 			</div>
 		{/if}
+	</div>
+
+{:else if appState === 'declined'}
+	<!-- Declined -->
+	<div class="mx-auto max-w-md rounded border bg-white p-8" style="border-color: #e0e0e0">
+		<div class="mb-4 flex items-center justify-between">
+			<h2 class="text-base font-semibold" style="color: #191919">Invitation Declined</h2>
+			<span
+				class="rounded border px-2.5 py-0.5 font-mono text-xs font-medium uppercase tracking-wide"
+				style="border-color: #e0e0e0; color: #aaaaaa; background: #f4f4f4"
+			>
+				Declined
+			</span>
+		</div>
+		<div class="border-t" style="border-color: #e0e0e0">
+			<div class="flex justify-between border-b py-2.5 text-sm" style="border-color: #e0e0e0">
+				<span style="color: #aaaaaa">Applicant</span>
+				<span class="font-medium" style="color: #191919">{user.name}</span>
+			</div>
+			<div class="flex justify-between py-2.5 text-sm">
+				<span style="color: #aaaaaa">Email</span>
+				<span class="font-medium" style="color: #191919">{user.email}</span>
+			</div>
+		</div>
+		<div class="mt-4 rounded border p-4" style="border-color: #e0e0e0; background: #f4f4f4">
+			<p class="mb-1 text-xs font-medium uppercase tracking-widest" style="color: #aaaaaa">
+				What's next
+			</p>
+			<p class="text-sm leading-relaxed" style="color: #191919">
+				You've declined your invitation. Your spot has been released. We hope to see you at a future
+				event!
+			</p>
+		</div>
+	</div>
+{/if}
+
+<!-- Decline confirmation modal -->
+{#if showDeclineConfirm}
+	<div
+		class="fixed inset-0 z-50 flex items-center justify-center"
+		style="background: rgba(0,0,0,0.4)"
+		role="dialog"
+		aria-modal="true"
+	>
+		<div class="w-80 rounded border bg-white p-6 shadow-lg" style="border-color: #e0e0e0">
+			<h3 class="mb-2 text-base font-semibold" style="color: #191919">Decline your spot?</h3>
+			<p class="mb-5 text-sm leading-relaxed" style="color: #aaaaaa">
+				This will permanently release your spot and cannot be undone.
+			</p>
+			<div class="flex gap-2">
+				<button
+					type="button"
+					onclick={ondecline}
+					disabled={declining}
+					class="rounded px-4 py-2 text-sm font-medium transition-opacity disabled:opacity-60"
+					style="background: #b00000; color: #fff"
+				>
+					{declining ? 'Declining…' : 'Yes, decline'}
+				</button>
+				<button
+					type="button"
+					onclick={() => (showDeclineConfirm = false)}
+					disabled={declining}
+					class="rounded border px-4 py-2 text-sm transition-colors hover:bg-[#f4f4f4] disabled:opacity-40"
+					style="border-color: #e0e0e0; color: #191919"
+				>
+					Cancel
+				</button>
+			</div>
+		</div>
 	</div>
 {/if}

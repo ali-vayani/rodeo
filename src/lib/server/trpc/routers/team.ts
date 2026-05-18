@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { TRPCError } from '@trpc/server';
-import { DecisionStatus, InvitationStatus } from '$lib/generated/prisma/client';
+import { DecisionStatus, InvitationStatus, UserStatus } from '$lib/generated/prisma/client';
 import { router, authedProcedure } from '../init';
 
 const MAX_TEAM_SIZE = 4;
@@ -71,10 +71,10 @@ export const teamRouter = router({
 				throw new TRPCError({ code: 'NOT_FOUND', message: 'User not found.' });
 			}
 
-			if (invitee.activeDecision !== DecisionStatus.ACCEPTED) {
+			if (invitee.activeDecision !== DecisionStatus.ACCEPTED || invitee.status !== UserStatus.CONFIRMED) {
 				throw new TRPCError({
 					code: 'BAD_REQUEST',
-					message: 'You can only invite accepted hackers.'
+					message: "User's attendance is not confirmed."
 				});
 			}
 
@@ -149,6 +149,44 @@ export const teamRouter = router({
 			return ctx.prisma.invitation.update({
 				where: { id: input.invitationId },
 				data: { status: InvitationStatus.DECLINED }
+			});
+		}),
+
+	joinByCode: authedProcedure
+		.input(z.object({ inviteCode: z.string() }))
+		.mutation(async ({ ctx, input }) => {
+			const user = await ctx.prisma.user.findUniqueOrThrow({
+				where: { uid: ctx.user.uid }
+			});
+
+			if (user.activeDecision !== DecisionStatus.ACCEPTED || (user.status !== UserStatus.CONFIRMED && user.status !== UserStatus.CHECKED_IN)) {
+				throw new TRPCError({
+					code: 'BAD_REQUEST',
+					message: 'You must be confirmed or checked in to join a team.'
+				});
+			}
+
+			if (user.teamId) {
+				throw new TRPCError({ code: 'BAD_REQUEST', message: 'You are already on a team.' });
+			}
+
+			// eslint-disable-next-line @typescript-eslint/no-explicit-any
+			const team = await (ctx.prisma.team.findUnique as any)({
+				where: { inviteCode: input.inviteCode },
+				include: { members: true }
+			}) as { id: string; teamName: string; members: { uid: string }[] } | null;
+
+			if (!team) {
+				throw new TRPCError({ code: 'NOT_FOUND', message: 'Invite link not found or expired.' });
+			}
+
+			if (team.members.length >= MAX_TEAM_SIZE) {
+				throw new TRPCError({ code: 'BAD_REQUEST', message: 'Team is already full.' });
+			}
+
+			return ctx.prisma.user.update({
+				where: { uid: ctx.user.uid },
+				data: { teamId: team.id }
 			});
 		}),
 

@@ -26,6 +26,7 @@ enum UserStatus {
   CREATED
   APPLIED
   CONFIRMED
+  DECLINED
   CHECKED_IN
 }
 
@@ -184,6 +185,7 @@ model Group {
 model Team {
   id          String       @id @default(cuid())
   teamName    String
+  inviteCode  String       @unique @default(uuid())
   members     User[]
   invitations Invitation[]
 }

@@ -73,6 +73,14 @@ const users = [
 		activeDecision: DecisionStatus.REJECTED
 	},
 	{
+		name: 'Hacker (Declined)',
+		email: 'hacker.declined@yopmail.com',
+		roles: [Role.HACKER],
+		status: UserStatus.DECLINED,
+		pendingDecision: DecisionStatus.ACCEPTED,
+		activeDecision: DecisionStatus.ACCEPTED
+	},
+	{
 		name: 'Hacker (Checked In)',
 		email: 'hacker.checkedin@yopmail.com',
 		roles: [Role.HACKER],

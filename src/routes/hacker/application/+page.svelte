@@ -1,31 +1,21 @@
 <script lang="ts">
 	import type { PageData } from './$types';
-	import { Role, UserStatus, DecisionStatus } from '$lib/generated/prisma/enums';
+	import { Role, UserStatus } from '$lib/generated/prisma/enums';
+	import { computeApplicationState, type ApplicationState } from '$lib/application/state';
 	import { createClient } from '$lib/trpc/client';
 	import { untrack } from 'svelte';
 	import RoleSelector from '$lib/components/application/RoleSelector.svelte';
 	import QuestionRenderer from '$lib/components/application/QuestionRenderer.svelte';
 	import ApplicationStateView from '$lib/components/application/ApplicationStateView.svelte';
+	import { createRsvpHandler } from '$lib/application/rsvp.svelte';
+	import { createDeclineHandler } from '$lib/application/decline.svelte';
 
 	let { data }: { data: PageData } = $props();
 
 	const trpc = createClient();
 
 	// --- State machine ---
-	// Determine which view to show based on user status/decision
-	type AppState = 'filling' | 'submitted' | 'waitlisted' | 'accepted' | 'rejected' | 'rsvpd';
-
-	function computeState(): AppState {
-		const { user } = data;
-		if (user.status === UserStatus.CONFIRMED) return 'rsvpd';
-		if (user.activeDecision === DecisionStatus.ACCEPTED) return 'accepted';
-		if (user.activeDecision === DecisionStatus.WAITLISTED) return 'waitlisted';
-		if (user.activeDecision === DecisionStatus.REJECTED) return 'rejected';
-		if (user.status === UserStatus.APPLIED) return 'submitted';
-		return 'filling';
-	}
-
-	let currentState = $state<AppState>(computeState());
+	let currentState = $state<ApplicationState>(computeApplicationState(data.user));
 
 	// Mutable copy of user so we can update after mutations
 	// untrack: we intentionally snapshot the initial value; page data doesn't change
@@ -104,24 +94,87 @@
 		}
 	}
 
-	// --- RSVP ---
-	let rsvping = $state(false);
-
-	async function handleRsvp() {
-		rsvping = true;
-		try {
-			await trpc.application.rsvp.mutate();
-			user.status = UserStatus.CONFIRMED;
+	const { rsvping, handleRsvp } = createRsvpHandler({
+		user,
+		onSuccess: () => {
 			currentState = 'rsvpd';
-		} catch {
-			// silently leave state unchanged; user sees the button again
+		}
+	});
+
+	const { declining, handleDecline } = createDeclineHandler({
+		user,
+		onSuccess: () => {
+			currentState = 'declined';
+		}
+	});
+
+	// --- Team join via invite link ---
+	let joinTeam = $state(untrack(() => data.joinTeam));
+	let joining = $state(false);
+	let joinError = $state<string | null>(null);
+	let joinSuccess = $state(false);
+	let canJoinTeam = $derived(currentState === "rsvpd" || currentState === "checked-in");
+
+	async function handleJoinTeam() {
+		if (!joinTeam || !canJoinTeam) return;
+		joining = true;
+		joinError = null;
+		try {
+			await trpc.team.joinByCode.mutate({ inviteCode: joinTeam.inviteCode });
+			joinSuccess = true;
+		} catch (e) {
+			joinError = e instanceof Error ? e.message : 'Failed to join team.';
 		} finally {
-			rsvping = false;
+			joining = false;
 		}
 	}
 </script>
 
 <div class="mx-auto max-w-2xl">
+	<!-- Team invite link banner -->
+	{#if joinTeam && !joinSuccess && canJoinTeam}
+		<div class="mb-6 rounded border bg-white p-5" style="border-color: #e0e0e0">
+			<p class="mb-0.5 text-xs font-medium uppercase tracking-widest" style="color: #aaaaaa">
+				Team Invitation
+			</p>
+			<p class="mb-3 text-base font-semibold" style="color: #191919">
+				Join <span class="font-bold">{joinTeam.teamName}</span>
+				<span class="ml-1 text-sm font-normal" style="color: #aaaaaa">
+					({joinTeam.memberCount}/4 members)
+				</span>
+			</p>
+			{#if joinError}
+				<p class="mb-3 text-sm" style="color: #b00000">{joinError}</p>
+			{/if}
+			<div class="flex gap-2">
+				<button
+					type="button"
+					onclick={handleJoinTeam}
+					disabled={joining}
+					class="rounded px-4 py-2 text-sm font-medium transition-opacity disabled:opacity-60"
+					style="background: #191919; color: #fff"
+				>
+					{joining ? 'Joining…' : 'Join team'}
+				</button>
+				<button
+					type="button"
+					onclick={() => (joinTeam = null)}
+					class="rounded border px-4 py-2 text-sm transition-colors hover:bg-[--color-muted]"
+					style="border-color: #e0e0e0; color: #191919"
+				>
+					Dismiss
+				</button>
+			</div>
+		</div>
+	{:else if joinTeam && joinSuccess}
+		<div class="mb-6 rounded border bg-white p-5" style="border-color: #e0e0e0">
+			<p class="text-sm font-medium" style="color: #191919">
+				You joined <strong>{joinTeam.teamName}</strong>.
+				<a href="/hacker/account" class="ml-1 underline" style="color: #aaaaaa">Go to your account →</a>
+			</p>
+		</div>
+	{/if}
+
 	{#if currentState === 'filling'}
 		<!-- Header -->
 		<div class="mb-6">
@@ -200,6 +253,13 @@
 		<div class="mb-6">
 			<h1 class="text-2xl font-semibold" style="color: #191919">Application</h1>
 		</div>
-		<ApplicationStateView {user} settings={data.settings} onrsvp={handleRsvp} {rsvping} />
+		<ApplicationStateView
+			{user}
+			settings={data.settings}
+			onrsvp={handleRsvp}
+			{rsvping}
+			ondecline={handleDecline}
+			{declining}
+		/>
 	{/if}
 </div>
