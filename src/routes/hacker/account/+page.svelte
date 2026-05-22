@@ -3,7 +3,7 @@
 	import type { PageData } from './$types';
 	import { UserStatus, DecisionStatus } from '$lib/generated/prisma/enums';
 	import { getApplicationStateLabel } from '$lib/application/state';
-	import type { Role } from '$lib/generated/prisma/enums';
+	import { Role } from '$lib/generated/prisma/enums';
 	import QRCard from '$lib/components/account/QRCard.svelte';
 	import TeamPanel from '$lib/components/account/TeamPanel.svelte';
 	import ApplicationStateView from '$lib/components/application/ApplicationStateView.svelte';
@@ -135,7 +135,7 @@
 				ondecline={handleDecline}
 				{declining}
 			/>
-		{:else if showEventContent}
+		{:else if showEventContent && primaryRole == Role.HACKER}
 			<TeamPanel
 				uid={user.uid}
 				initialTeam={user.team}

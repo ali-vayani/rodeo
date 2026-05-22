@@ -190,6 +190,17 @@ export const teamRouter = router({
 			});
 		}),
 
+	getByInviteCode: authedProcedure
+		.input(z.object({ inviteCode: z.string() }))
+		.query(async ({ ctx, input }) => {
+			const team = await ctx.prisma.team.findUnique({
+				where: { inviteCode: input.inviteCode },
+				include: { members: true }
+			});
+			if (!team) return null;
+			return { teamName: team.teamName, memberCount: team.members.length, inviteCode: team.inviteCode };
+		}),
+
 	leaveTeam: authedProcedure.mutation(async ({ ctx }) => {
 		const user = await ctx.prisma.user.findUniqueOrThrow({
 			where: { uid: ctx.user.uid },

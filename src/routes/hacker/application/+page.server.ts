@@ -1,30 +1,21 @@
 import type { PageServerLoad } from './$types';
-import { prisma } from '$lib/server/db';
+import { createCallerFactory } from '$lib/server/trpc/init';
+import { appRouter } from '$lib/server/trpc/router';
+import { createContext } from '$lib/server/trpc/context';
 
-export const load: PageServerLoad = async ({ locals, url }) => {
-	const user = locals.user!;
+const createCaller = createCallerFactory(appRouter);
 
-	const joinCode = url.searchParams.get('join');
+export const load: PageServerLoad = async (event) => {
+	const caller = createCaller(createContext(event));
+	const joinCode = event.url.searchParams.get('join');
 
-	const [questions, responses, settings] = await Promise.all([
-		prisma.question.findMany({ orderBy: { order: 'asc' } }),
-		prisma.applicationResponse.findMany({ where: { userId: user.uid } }),
-		prisma.settings.findFirst()
+	const [questions, responses, rawSettings, joinTeam] = await Promise.all([
+		caller.questions.list({}),
+		caller.application.getMyResponses(),
+		caller.settings.get(),
+		joinCode ? caller.team.getByInviteCode({ inviteCode: joinCode }) : Promise.resolve(null)
 	]);
+	const settings = 'id' in rawSettings ? rawSettings : null;
 
-	let joinTeam: { teamName: string; memberCount: number; inviteCode: string } | null = null;
-
-	if (joinCode) {
-		// eslint-disable-next-line @typescript-eslint/no-explicit-any
-		const team = await (prisma.team.findUnique as any)({
-			where: { inviteCode: joinCode },
-			include: { members: true }
-		}) as { id: string; teamName: string; inviteCode: string; members: unknown[] } | null;
-
-		if (team) {
-			joinTeam = { teamName: team.teamName, memberCount: team.members.length, inviteCode: team.inviteCode };
-		}
-	}
-
-	return { user, questions, responses, settings, joinTeam };
+	return { user: event.locals.user!, questions, responses, settings, joinTeam };
 };

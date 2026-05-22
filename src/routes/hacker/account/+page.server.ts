@@ -1,29 +1,15 @@
 import type { PageServerLoad } from './$types';
-import { prisma } from '$lib/server/db';
-import { InvitationStatus } from '$lib/generated/prisma/enums';
+import { createCallerFactory } from '$lib/server/trpc/init';
+import { appRouter } from '$lib/server/trpc/router';
+import { createContext } from '$lib/server/trpc/context';
 
-export const load: PageServerLoad = async ({ locals }) => {
-	const user = locals.user!;
-	const settings = await prisma.settings.findFirst();
+const createCaller = createCallerFactory(appRouter);
 
-	const fullUser = await prisma.user.findUniqueOrThrow({
-		where: { uid: user.uid },
-		include: {
-			team: {
-				include: {
-					members: true,
-					invitations: {
-						where: { status: InvitationStatus.PENDING },
-						include: { user: true }
-					}
-				}
-			},
-			invitations: {
-				where: { status: InvitationStatus.PENDING },
-				include: { team: { include: { members: true } } }
-			}
-		}
-	});
+export const load: PageServerLoad = async (event) => {
+	const caller = createCaller(createContext(event));
 
-	return { user: fullUser, settings };
+	const [user, rawSettings] = await Promise.all([caller.user.me(), caller.settings.get()]);
+	const settings = 'id' in rawSettings ? rawSettings : null;
+
+	return { user, settings };
 };

@@ -1,12 +1,26 @@
 import { z } from 'zod';
-import { Role, UserStatus, DecisionStatus } from '$lib/generated/prisma/client';
+import { Role, UserStatus, DecisionStatus, InvitationStatus } from '$lib/generated/prisma/client';
 import { router, authedProcedure, adminProcedure } from '../init';
 
 export const userRouter = router({
 	me: authedProcedure.query(async ({ ctx }) => {
 		return ctx.prisma.user.findUniqueOrThrow({
 			where: { uid: ctx.user.uid },
-			include: { team: { include: { members: true } } }
+			include: {
+				team: {
+					include: {
+						members: true,
+						invitations: {
+							where: { status: InvitationStatus.PENDING },
+							include: { user: true }
+						}
+					}
+				},
+				invitations: {
+					where: { status: InvitationStatus.PENDING },
+					include: { team: { include: { members: true } } }
+				}
+			}
 		});
 	}),
 

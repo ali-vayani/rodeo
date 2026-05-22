@@ -1,5 +1,6 @@
+import { z } from 'zod';
 import { router, adminProcedure } from '../init';
-import { UserStatus, DecisionStatus, Role } from '$lib/generated/prisma/client';
+import { UserStatus, Role } from '$lib/generated/prisma/client';
 
 export const dashboardRouter = router({
 	stats: adminProcedure.query(async ({ ctx }) => {
@@ -59,5 +60,15 @@ export const dashboardRouter = router({
 			byRole: roleCounts,
 			recentActivity
 		};
-	})
+	}),
+
+	recentApplicants: adminProcedure
+		.input(z.object({ amount: z.number().int().min(1).max(100).default(10) }))
+		.query(async ({ ctx, input }) => {
+			return ctx.prisma.user.findMany({
+				take: input.amount,
+				orderBy: { createdAt: 'desc' },
+				where: { status: { not: UserStatus.CREATED } }
+			});
+		})
 });
