@@ -53,12 +53,16 @@ describe('user.list', () => {
 
 		expect(db.user.findMany).toHaveBeenCalledWith(
 			expect.objectContaining({
-				where: expect.objectContaining({
-					OR: [
-						{ name: { contains: 'hacker', mode: 'insensitive' } },
-						{ email: { contains: 'hacker', mode: 'insensitive' } }
-					]
-				})
+				where: {
+					AND: expect.arrayContaining([
+						{
+							OR: [
+								{ name: { contains: 'hacker', mode: 'insensitive' } },
+								{ email: { contains: 'hacker', mode: 'insensitive' } }
+							]
+						}
+					])
+				}
 			})
 		);
 	});

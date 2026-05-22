@@ -32,23 +32,40 @@ export const userRouter = router({
 				search: z.string().optional(),
 				roles: z.array(z.nativeEnum(Role)).optional(),
 				statuses: z.array(z.nativeEnum(UserStatus)).optional(),
-				decisions: z.array(z.nativeEnum(DecisionStatus)).optional()
+				decisions: z.array(z.nativeEnum(DecisionStatus)).optional(),
+				includeNoDecision: z.boolean().optional()
 			})
 		)
 		.query(async ({ ctx, input }) => {
-			const { page, pageSize, search, roles, statuses, decisions } = input;
+			const { page, pageSize, search, roles, statuses, decisions, includeNoDecision } = input;
 
-			const where = {
-				...(search && {
+			// Build AND conditions so each filter stacks independently
+			const conditions: any[] = [];
+
+			if (search) {
+				conditions.push({
 					OR: [
 						{ name: { contains: search, mode: 'insensitive' as const } },
 						{ email: { contains: search, mode: 'insensitive' as const } }
 					]
-				}),
-				...(roles?.length && { roles: { hasSome: roles } }),
-				...(statuses?.length && { status: { in: statuses } }),
-				...(decisions?.length && { activeDecision: { in: decisions } })
-			};
+				});
+			}
+
+			if (roles?.length) conditions.push({ roles: { hasSome: roles } });
+			if (statuses?.length) conditions.push({ status: { in: statuses } });
+
+			// Decision filter: support specific statuses AND/OR null (no decision)
+			if (decisions !== undefined || includeNoDecision !== undefined) {
+				const decisionOr: any[] = [];
+				if (decisions?.length) decisionOr.push({ activeDecision: { in: decisions } });
+				if (includeNoDecision) decisionOr.push({ activeDecision: null });
+				if (decisionOr.length === 1) conditions.push(decisionOr[0]);
+				else if (decisionOr.length > 1) conditions.push({ OR: decisionOr });
+				// empty decisionOr = all decision filters unchecked = show nothing
+				else conditions.push({ uid: 'IMPOSSIBLE_NO_MATCH' });
+			}
+
+			const where = conditions.length > 0 ? { AND: conditions } : {};
 
 			const [total, users] = await Promise.all([
 				ctx.prisma.user.count({ where }),
@@ -91,6 +108,21 @@ export const userRouter = router({
 			return ctx.prisma.user.update({
 				where: { uid: input.uid },
 				data: { status: input.status }
+			});
+		}),
+
+	updateDecisions: adminProcedure
+		.input(
+			z.object({
+				uid: z.string(),
+				pendingDecision: z.nativeEnum(DecisionStatus).nullable(),
+				activeDecision: z.nativeEnum(DecisionStatus).nullable()
+			})
+		)
+		.mutation(async ({ ctx, input }) => {
+			return ctx.prisma.user.update({
+				where: { uid: input.uid },
+				data: { pendingDecision: input.pendingDecision, activeDecision: input.activeDecision }
 			});
 		}),
 

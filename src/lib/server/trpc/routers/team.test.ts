@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { mockDeep, mockReset, type DeepMockProxy } from 'vitest-mock-extended';
 import type { PrismaClient } from '$lib/generated/prisma/client';
 import { DecisionStatus, InvitationStatus } from '$lib/generated/prisma/client';
-import { createTestCaller, hackerUser, acceptedHacker } from '../test-utils';
+import { createTestCaller, hackerUser, acceptedHacker, confirmedHacker } from '../test-utils';
 
 vi.mock('$lib/server/db', async () => {
 	const { mockDeep } = await import('vitest-mock-extended');
@@ -24,8 +24,8 @@ const mockTeam = {
 const mockInvitation = {
 	id: 'inv-1',
 	teamId: 'team-1',
-	email: acceptedHacker.email,
-	userId: acceptedHacker.uid,
+	email: confirmedHacker.email,
+	userId: confirmedHacker.uid,
 	status: InvitationStatus.PENDING,
 	team: { ...mockTeam, members: [hackerUser] }
 };
@@ -78,12 +78,12 @@ describe('team.inviteMember', () => {
 	it('creates invitation on success', async () => {
 		const caller = createTestCaller(db, hackerUser);
 		db.user.findUniqueOrThrow.mockResolvedValue({ ...hackerUser, team: mockTeam } as never);
-		db.user.findUnique.mockResolvedValue(acceptedHacker as never);
+		db.user.findUnique.mockResolvedValue(confirmedHacker as never);
 		db.invitation.findFirst.mockResolvedValue(null);
 		db.invitation.create.mockResolvedValue(mockInvitation as never);
 
-		const result = await caller.team.inviteMember({ email: acceptedHacker.email });
-		expect(result).toMatchObject({ teamId: 'team-1', email: acceptedHacker.email });
+		const result = await caller.team.inviteMember({ email: confirmedHacker.email });
+		expect(result).toMatchObject({ teamId: 'team-1', email: confirmedHacker.email });
 	});
 
 	it('throws NOT_FOUND if invitee does not exist', async () => {
@@ -104,19 +104,19 @@ describe('team.inviteMember', () => {
 
 		await expect(
 			caller.team.inviteMember({ email: hackerUser.email })
-		).rejects.toMatchObject({ code: 'BAD_REQUEST', message: expect.stringContaining('accepted') });
+		).rejects.toMatchObject({ code: 'BAD_REQUEST', message: expect.stringContaining('confirmed') });
 	});
 
 	it('throws BAD_REQUEST if invitee is already on a team', async () => {
 		const caller = createTestCaller(db, hackerUser);
 		db.user.findUniqueOrThrow.mockResolvedValue({ ...hackerUser, team: mockTeam } as never);
 		db.user.findUnique.mockResolvedValue({
-			...acceptedHacker,
+			...confirmedHacker,
 			teamId: 'other-team'
 		} as never);
 
 		await expect(
-			caller.team.inviteMember({ email: acceptedHacker.email })
+			caller.team.inviteMember({ email: confirmedHacker.email })
 		).rejects.toMatchObject({ code: 'BAD_REQUEST', message: expect.stringContaining('already on a team') });
 	});
 
@@ -131,18 +131,18 @@ describe('team.inviteMember', () => {
 		db.user.findUniqueOrThrow.mockResolvedValue({ ...hackerUser, team: fullTeam } as never);
 
 		await expect(
-			caller.team.inviteMember({ email: acceptedHacker.email })
+			caller.team.inviteMember({ email: confirmedHacker.email })
 		).rejects.toMatchObject({ code: 'BAD_REQUEST', message: expect.stringContaining('full') });
 	});
 
 	it('throws BAD_REQUEST if invite already pending', async () => {
 		const caller = createTestCaller(db, hackerUser);
 		db.user.findUniqueOrThrow.mockResolvedValue({ ...hackerUser, team: mockTeam } as never);
-		db.user.findUnique.mockResolvedValue({ ...acceptedHacker, teamId: null } as never);
+		db.user.findUnique.mockResolvedValue({ ...confirmedHacker, teamId: null } as never);
 		db.invitation.findFirst.mockResolvedValue(mockInvitation as never); // existing pending
 
 		await expect(
-			caller.team.inviteMember({ email: acceptedHacker.email })
+			caller.team.inviteMember({ email: confirmedHacker.email })
 		).rejects.toMatchObject({ code: 'BAD_REQUEST', message: expect.stringContaining('already sent') });
 	});
 });
