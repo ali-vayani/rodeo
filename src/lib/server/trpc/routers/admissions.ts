@@ -19,15 +19,17 @@ export const admissionsRouter = router({
 			z.object({
 				roles: z.array(z.nativeEnum(Role)).optional(),
 				decision: z.nativeEnum(DecisionStatus).optional(),
+				noDecision: z.boolean().optional(),
 				search: z.string().optional()
 			})
 		)
 		.query(async ({ ctx, input }) => {
-			const { roles, decision, search } = input;
+			const { roles, decision, noDecision, search } = input;
 
 			return ctx.prisma.user.findMany({
 				where: {
 					...(roles?.length && { roles: { hasSome: roles } }),
+					...(noDecision && { pendingDecision: null, activeDecision: null }),
 					...(decision !== undefined && {	OR: [
 							{ pendingDecision: decision },
 							{ activeDecision: decision }
