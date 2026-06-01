@@ -6,11 +6,10 @@
 	const links = [
 		{ href: '/admin/dashboard', label: 'Dashboard' },
 		{ href: '/admin/users', label: 'Users' },
-		{ href: '/admin/admissions', label: 'Admissions' },
 		{ href: '/admin/scan', label: 'Scan' },
 		{ href: '/admin/email-templates', label: 'Email Templates' },
 		{ href: '/admin/custom-email', label: 'Custom Email' },
-		{ href: '/admin/registration', label: 'Registration' },
+		{ href: '/admin/application-editor', label: 'Application Editor' },
 		{ href: '/admin/schedule', label: 'Schedule' },
 		{ href: '/admin/blacklist', label: 'Blacklist' },
 		{ href: '/admin/settings', label: 'Settings' }
