@@ -18,14 +18,12 @@
 </script>
 
 <div>
-	<div style="margin-bottom:24px;">
-		<h1 style="font-size:22px; font-weight:700; color:#191919; margin:0;">Dashboard</h1>
+	<div class="mb-6">
+		<h1 class="text-[22px] font-bold text-primary">Dashboard</h1>
 	</div>
 
 	<!-- Stat cards -->
-	<div
-		style="display:grid; grid-template-columns:repeat(5,1fr); gap:12px; margin-bottom:20px;"
-	>
+	<div class="grid grid-cols-5 gap-3 mb-5">
 		<StatCard label="Total" value={data.stats.total} />
 		<StatCard label="Accepted" value={accepted} />
 		<StatCard label="Waitlisted" value={waitlisted} />
@@ -34,7 +32,7 @@
 	</div>
 
 	<!-- Bar chart + activity feed -->
-	<div style="display:grid; grid-template-columns:2fr 1fr; gap:12px; margin-bottom:20px; align-items:stretch;">
+	<div class="grid grid-cols-[2fr_1fr] gap-3 mb-5 items-stretch">
 		<StatusBarChart byRole={data.stats.byRole} {accepted} confirmed={confirmedCount} />
 		<ActivityFeed entries={data.stats.recentActivity} />
 	</div>

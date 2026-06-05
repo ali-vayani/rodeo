@@ -133,44 +133,42 @@
 <div class="mx-auto max-w-2xl">
 	<!-- Team invite link banner -->
 	{#if joinTeam && !joinSuccess && canJoinTeam}
-		<div class="mb-6 rounded border bg-white p-5" style="border-color: #e0e0e0">
-			<p class="mb-0.5 text-xs font-medium uppercase tracking-widest" style="color: #aaaaaa">
+		<div class="mb-6 rounded border border-border bg-white p-5">
+			<p class="mb-0.5 text-xs font-medium uppercase tracking-widest text-muted-foreground">
 				Team Invitation
 			</p>
-			<p class="mb-3 text-base font-semibold" style="color: #191919">
+			<p class="mb-3 text-base font-semibold text-primary">
 				Join <span class="font-bold">{joinTeam.teamName}</span>
-				<span class="ml-1 text-sm font-normal" style="color: #aaaaaa">
+				<span class="ml-1 text-sm font-normal text-muted-foreground">
 					({joinTeam.memberCount}/4 members)
 				</span>
 			</p>
 			{#if joinError}
-				<p class="mb-3 text-sm" style="color: #b00000">{joinError}</p>
+				<p class="mb-3 text-sm text-destructive">{joinError}</p>
 			{/if}
 			<div class="flex gap-2">
 				<button
 					type="button"
 					onclick={handleJoinTeam}
 					disabled={joining}
-					class="rounded px-4 py-2 text-sm font-medium transition-opacity disabled:opacity-60"
-					style="background: #191919; color: #fff"
+					class="rounded px-4 py-2 text-sm font-medium bg-primary text-white transition-opacity disabled:opacity-60"
 				>
 					{joining ? 'Joining…' : 'Join team'}
 				</button>
 				<button
 					type="button"
 					onclick={() => (joinTeam = null)}
-					class="rounded border px-4 py-2 text-sm transition-colors hover:bg-[--color-muted]"
-					style="border-color: #e0e0e0; color: #191919"
+					class="rounded border border-border px-4 py-2 text-sm text-primary transition-colors hover:bg-[--color-muted]"
 				>
 					Dismiss
 				</button>
 			</div>
 		</div>
 	{:else if joinTeam && joinSuccess}
-		<div class="mb-6 rounded border bg-white p-5" style="border-color: #e0e0e0">
-			<p class="text-sm font-medium" style="color: #191919">
+		<div class="mb-6 rounded border border-border bg-white p-5">
+			<p class="text-sm font-medium text-primary">
 				You joined <strong>{joinTeam.teamName}</strong>.
-				<a href="/hacker/account" class="ml-1 underline" style="color: #aaaaaa">Go to your account →</a>
+				<a href="/hacker/account" class="ml-1 underline text-muted-foreground">Go to your account →</a>
 			</p>
 		</div>
 	{/if}
@@ -178,24 +176,24 @@
 	{#if currentState === 'filling'}
 		<!-- Header -->
 		<div class="mb-6">
-			<h1 class="text-2xl font-semibold" style="color: #191919">Application</h1>
-			<p class="mt-1 text-sm" style="color: #aaaaaa">
+			<h1 class="text-2xl font-semibold text-primary">Application</h1>
+			<p class="mt-1 text-sm text-muted-foreground">
 				Fill out the form below and submit when you're ready.
 			</p>
 		</div>
 
 		<!-- Form card -->
-		<div class="rounded border bg-white p-6" style="border-color: #e0e0e0">
+		<div class="rounded border border-border bg-white p-6">
 			<!-- Role selector -->
 			<div class="mb-6">
 				<RoleSelector selected={selectedRole} onselect={(r) => (selectedRole = r)} />
 			</div>
 
-			<div class="mb-6 border-t" style="border-color: #e0e0e0"></div>
+			<div class="mb-6 border-t border-border"></div>
 
 			<!-- Questions -->
 			{#if filteredQuestions.length === 0}
-				<p class="text-sm" style="color: #aaaaaa">No questions yet — check back soon.</p>
+				<p class="text-sm text-muted-foreground">No questions yet — check back soon.</p>
 			{:else}
 				<div class="flex flex-col gap-5">
 					{#each filteredQuestions as question (question.id)}
@@ -209,20 +207,20 @@
 			{/if}
 
 			<!-- Footer row -->
-			<div class="mt-8 flex items-center justify-between border-t pt-5" style="border-color: #e0e0e0">
+			<div class="mt-8 flex items-center justify-between border-t border-border pt-5">
 				<!-- Progress + save status -->
 				<div class="flex flex-col gap-0.5">
 					{#if requiredQuestions.length > 0}
-						<span class="font-mono text-xs" style="color: #aaaaaa">
+						<span class="font-mono text-xs text-muted-foreground">
 							{answeredRequiredCount} / {requiredQuestions.length} required
 						</span>
 					{/if}
 					{#if saveStatus === 'saving'}
-						<span class="font-mono text-xs" style="color: #aaaaaa">Saving…</span>
+						<span class="font-mono text-xs text-muted-foreground">Saving…</span>
 					{:else if saveStatus === 'saved'}
-						<span class="font-mono text-xs" style="color: #aaaaaa">Saved</span>
+						<span class="font-mono text-xs text-muted-foreground">Saved</span>
 					{:else if saveStatus === 'error'}
-						<span class="font-mono text-xs" style="color: #b00000">Save failed</span>
+						<span class="font-mono text-xs text-destructive">Save failed</span>
 					{/if}
 				</div>
 
@@ -232,26 +230,25 @@
 						type="button"
 						onclick={handleSubmit}
 						disabled={submitting || !canSubmit}
-						class="rounded px-5 py-2 text-sm font-medium transition-opacity disabled:opacity-40"
-						style="background: #191919; color: #fff"
+						class="rounded px-5 py-2 text-sm font-medium bg-primary text-white transition-opacity disabled:opacity-40"
 					>
 						{submitting ? 'Submitting…' : 'Submit Application'}
 					</button>
 					{#if !canSubmit && requiredQuestions.length > 0}
-						<span class="text-xs" style="color: #aaaaaa">Answer all required questions to submit</span>
+						<span class="text-xs text-muted-foreground">Answer all required questions to submit</span>
 					{/if}
 				</div>
 			</div>
 
 			{#if submitError}
-				<p class="mt-3 text-sm" style="color: #b00000">{submitError}</p>
+				<p class="mt-3 text-sm text-destructive">{submitError}</p>
 			{/if}
 		</div>
 
 	{:else}
 		<!-- Non-filling states -->
 		<div class="mb-6">
-			<h1 class="text-2xl font-semibold" style="color: #191919">Application</h1>
+			<h1 class="text-2xl font-semibold text-primary">Application</h1>
 		</div>
 		<ApplicationStateView
 			{user}

@@ -137,25 +137,23 @@
 </script>
 
 <!-- Page header -->
-<div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:16px;">
+<div class="flex items-center justify-between mb-4">
 	<div>
-		<h1 style="font-size:22px; font-weight:700; color:#191919; margin:0;">Admissions</h1>
-		<span style="font-size:13px; color:#aaaaaa; margin-top:2px; display:block;">
+		<h1 class="text-[22px] font-bold text-primary">Admissions</h1>
+		<span class="text-[13px] text-muted-foreground mt-0.5 block">
 			{applicants.length} remaining · {pendingCount} pending review
 		</span>
 	</div>
 	<button
 		onclick={openReleaseModal}
-		style="font-size:13px; font-weight:600; color:#fff; background:#b00000; border:none; border-radius:6px; padding:9px 18px; cursor:pointer;"
+		class="text-[13px] font-semibold text-white bg-destructive border-none rounded-md py-[9px] px-[18px] cursor-pointer"
 	>
 		Release Decisions
 	</button>
 </div>
 
 <!-- Split pane -->
-<div
-	style="display:flex; background:#fff; border:1px solid #e0e0e0; border-radius:6px; overflow:hidden; height:calc(100vh - 136px);"
->
+<div class="flex bg-white border border-border rounded-md overflow-hidden h-[calc(100vh-136px)]">
 	<ApplicantList
 		{applicants}
 		{selectedUid}
@@ -170,7 +168,7 @@
 	/>
 
 	<!-- Right detail pane -->
-	<div style="flex:1; overflow:hidden; display:flex; flex-direction:column; min-width:0;">
+	<div class="flex-1 overflow-hidden flex flex-col min-w-0">
 		{#if selected}
 			<ApplicantDetail
 				applicant={selected}
@@ -182,9 +180,7 @@
 				onNext={selectNext}
 			/>
 		{:else}
-			<div
-				style="flex:1; display:flex; align-items:center; justify-content:center; font-size:13px; color:#aaaaaa;"
-			>
+			<div class="flex-1 flex items-center justify-center text-[13px] text-muted-foreground">
 				{applicants.length === 0
 					? 'All applicants have been reviewed'
 					: 'Select an applicant to review their application'}
@@ -198,7 +194,7 @@
 	<div
 		role="presentation"
 		onclick={closeReleaseModal}
-		style="position:fixed; inset:0; background:rgba(0,0,0,0.45); z-index:100; display:flex; align-items:center; justify-content:center;"
+		class="fixed inset-0 bg-black/45 z-[100] flex items-center justify-center"
 	>
 		<div
 			role="dialog"
@@ -207,21 +203,19 @@
 			tabindex="-1"
 			onclick={(e) => e.stopPropagation()}
 			onkeydown={(e) => e.key === 'Escape' && closeReleaseModal()}
-			style="background:#fff; border-radius:8px; width:480px; max-width:calc(100vw - 48px); box-shadow:0 8px 32px rgba(0,0,0,0.18); overflow:hidden;"
+			class="bg-white rounded-lg w-[480px] max-w-[calc(100vw-48px)] shadow-[0_8px_32px_rgba(0,0,0,0.18)] overflow-hidden"
 		>
 			<!-- Header -->
-			<div
-				style="padding:20px 24px 16px; border-bottom:1px solid #e0e0e0; display:flex; align-items:flex-start; justify-content:space-between;"
-			>
+			<div class="px-6 pt-5 pb-4 border-b border-border flex items-start justify-between">
 				<div>
-					<div style="font-size:16px; font-weight:700; color:#191919;">Release Decisions</div>
-					<div style="font-size:13px; color:#aaaaaa; margin-top:4px;">
+					<div class="text-[16px] font-bold text-primary">Release Decisions</div>
+					<div class="text-[13px] text-muted-foreground mt-1">
 						This will copy all pending decisions to active decisions and send notification emails.
 					</div>
 				</div>
 				<button
 					onclick={closeReleaseModal}
-					style="font-size:20px; line-height:1; background:none; border:none; color:#aaaaaa; cursor:pointer; padding:0; margin-top:-2px;"
+					class="text-xl leading-none bg-transparent border-none text-muted-foreground cursor-pointer p-0 -mt-0.5"
 					aria-label="Close"
 				>
 					×
@@ -229,61 +223,49 @@
 			</div>
 
 			<!-- Body -->
-			<div style="padding:20px 24px;">
-				<div
-					style="background:#fff3f3; border:1px solid #fca5a5; border-radius:5px; padding:12px 14px; margin-bottom:20px;"
-				>
-					<div style="font-size:13px; font-weight:600; color:#b00000; margin-bottom:4px;">
+			<div class="px-6 py-5">
+				<div class="bg-[#fff3f3] border border-[#fca5a5] rounded px-[14px] py-3 mb-5">
+					<div class="text-[13px] font-semibold text-destructive mb-1">
 						{pendingCount} user{pendingCount === 1 ? '' : 's'} will be affected
 					</div>
-					<div style="font-size:12px; color:#666;">
+					<div class="text-xs text-[#666]">
 						Emails will be sent for all accepted, rejected, and waitlisted decisions. This action
 						cannot be undone.
 					</div>
 				</div>
 
-				<div style="margin-bottom:16px;">
+				<div class="mb-4">
 					<label
 						for="release-confirm"
-						style="display:block; font-size:12px; font-weight:600; color:#333; margin-bottom:6px;"
+						class="block text-xs font-semibold text-[#333] mb-1.5"
 					>
-						Type <span
-							style="font-family:'DM Mono', monospace; background:#f0f0f0; padding:1px 5px; border-radius:3px;"
-							>RELEASE</span
-						> to confirm
+						Type <span class="font-mono bg-[#f0f0f0] px-[5px] py-px rounded">RELEASE</span> to confirm
 					</label>
 					<input
 						id="release-confirm"
 						type="text"
 						bind:value={releaseConfirmText}
 						placeholder="RELEASE"
-						style="width:100%; font-size:13px; color:#191919; background:#fff; border:1px solid #e0e0e0; border-radius:5px; padding:8px 12px; outline:none; box-sizing:border-box; font-family:'DM Mono', monospace;"
+						class="w-full text-[13px] text-primary bg-white border border-border rounded px-3 py-2 outline-none font-mono"
 					/>
 				</div>
 			</div>
 
 			<!-- Footer -->
-			<div
-				style="padding:16px 24px; border-top:1px solid #e0e0e0; display:flex; justify-content:flex-end; gap:10px;"
-			>
+			<div class="px-6 py-4 border-t border-border flex justify-end gap-[10px]">
 				<button
 					onclick={closeReleaseModal}
 					disabled={releasing}
-					style="font-size:13px; font-weight:500; color:#191919; background:#fff; border:1px solid #e0e0e0; border-radius:6px; padding:8px 16px; cursor:pointer; opacity:{releasing
-						? 0.5
-						: 1};"
+					class="text-[13px] font-medium text-primary bg-white border border-border rounded-md py-2 px-4 cursor-pointer"
+					class:opacity-50={releasing}
 				>
 					Cancel
 				</button>
 				<button
 					onclick={handleRelease}
 					disabled={releaseConfirmText !== 'RELEASE' || releasing || pendingCount === 0}
-					style="font-size:13px; font-weight:600; color:#fff; background:#b00000; border:none; border-radius:6px; padding:8px 18px; cursor:pointer; opacity:{releaseConfirmText ===
-						'RELEASE' &&
-					!releasing &&
-					pendingCount > 0
-						? 1
-						: 0.4};"
+					class="text-[13px] font-semibold text-white bg-destructive border-none rounded-md py-2 px-[18px] cursor-pointer"
+					class:opacity-40={releaseConfirmText !== 'RELEASE' || releasing || pendingCount === 0}
 				>
 					{releasing
 						? 'Releasing…'
@@ -299,7 +281,7 @@
 	<div
 		in:fly={{ x: 60, duration: 280 }}
 		out:fly={{ x: 60, duration: 200 }}
-		style="position:fixed; bottom:28px; right:28px; z-index:200;"
+		class="fixed bottom-7 right-7 z-[200]"
 	>
 		<Toast message={toast.message} type={toast.type} />
 	</div>

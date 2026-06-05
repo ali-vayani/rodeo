@@ -44,40 +44,38 @@
 	const { rsvping, handleRsvp } = createRsvpHandler({ user });
 	const { declining, handleDecline } = createDeclineHandler({ user });
 
-	function statusStyle(label: string): string {
-		if (label === 'Confirmed' || label === 'Checked In') return 'background: #191919; color: #fff;';
-		if (label === 'Accepted') return 'background: #f4f4f4; color: #191919; border: 1px solid #191919;';
-		return 'background: #f4f4f4; color: #aaaaaa;';
+	function statusClass(label: string): string {
+		if (label === 'Confirmed' || label === 'Checked In') return 'bg-primary text-white';
+		if (label === 'Accepted') return 'bg-muted text-primary border border-primary';
+		return 'bg-muted text-muted-foreground';
 	}
 </script>
 
 <div>
 	<div class="mb-6">
-		<h1 class="text-2xl font-semibold" style="color: #191919">My Account</h1>
+		<h1 class="text-2xl font-semibold text-primary">My Account</h1>
 	</div>
 
 	<div class="grid grid-cols-1 gap-4 {twoColumn ? 'lg:grid-cols-2' : 'max-w-md'}">
 		<!-- Left column: profile + QR (QR only when confirmed/checked in) -->
 		<div class="flex flex-col gap-4">
-			<div class="rounded border bg-white p-6" style="border-color: #e0e0e0">
-				<p class="mb-4 text-xs font-medium uppercase tracking-widest" style="color: #aaaaaa">
+			<div class="rounded border border-border bg-white p-6">
+				<p class="mb-4 text-xs font-medium uppercase tracking-widest text-muted-foreground">
 					PROFILE
 				</p>
 
 				<div class="mb-5 flex items-start gap-4">
 					<div
-						class="flex h-14 w-14 shrink-0 items-center justify-center text-base font-semibold"
-						style="background: #191919; color: #fff"
+						class="flex h-14 w-14 shrink-0 items-center justify-center text-base font-semibold bg-primary text-white"
 					>
 						{initials(user.name)}
 					</div>
 					<div>
-						<p class="text-base font-bold leading-tight" style="color: #191919">{user.name}</p>
-						<p class="mb-2 text-xs" style="color: #aaaaaa">{user.email}</p>
+						<p class="text-base font-bold leading-tight text-primary">{user.name}</p>
+						<p class="mb-2 text-xs text-muted-foreground">{user.email}</p>
 						{#if primaryRole}
 							<span
-								class="rounded border px-2 py-0.5 font-mono text-xs font-medium uppercase tracking-wide"
-								style="border-color: #191919; color: #191919"
+								class="rounded border border-primary px-2 py-0.5 font-mono text-xs font-medium uppercase tracking-wide text-primary"
 							>
 								{primaryRole}
 							</span>
@@ -85,34 +83,24 @@
 					</div>
 				</div>
 
-				<div class="border-t" style="border-color: #e0e0e0">
+				<div class="border-t border-border">
 					{#if user.university}
-						<div
-							class="flex justify-between border-b py-2.5 text-sm"
-							style="border-color: #e0e0e0"
-						>
-							<span style="color: #aaaaaa">School</span>
-							<span class="font-medium" style="color: #191919">{user.university}</span>
+						<div class="flex justify-between border-b border-border py-2.5 text-sm">
+							<span class="text-muted-foreground">School</span>
+							<span class="font-medium text-primary">{user.university}</span>
 						</div>
 					{/if}
 					{#if user.year}
-						<div
-							class="flex justify-between border-b py-2.5 text-sm"
-							style="border-color: #e0e0e0"
-						>
-							<span style="color: #aaaaaa">Grad Year</span>
-							<span class="font-medium" style="color: #191919">{user.year}</span>
+						<div class="flex justify-between border-b border-border py-2.5 text-sm">
+							<span class="text-muted-foreground">Grad Year</span>
+							<span class="font-medium text-primary">{user.year}</span>
 						</div>
 					{/if}
 					{#if decisionLabel}
-						<div
-							class="flex justify-between py-2.5 text-sm"
-							style="border-color: #e0e0e0"
-						>
-							<span style="color: #aaaaaa">Status</span>
+						<div class="flex justify-between py-2.5 text-sm">
+							<span class="text-muted-foreground">Status</span>
 							<span
-								class="rounded px-2 py-0.5 font-mono text-xs font-semibold uppercase tracking-wide"
-								style={statusStyle(decisionLabel)}
+								class="rounded px-2 py-0.5 font-mono text-xs font-semibold uppercase tracking-wide {statusClass(decisionLabel)}"
 							>
 								{decisionLabel}
 							</span>

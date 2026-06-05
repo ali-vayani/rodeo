@@ -29,17 +29,11 @@
 		onNext: () => void;
 	} = $props();
 
-	const DECISION_BG: Record<string, string> = {
-		ACCEPTED: '#d1fae5',
-		WAITLISTED: '#fef9c3',
-		REJECTED: '#fee2e2',
-		PENDING: '#e5e7eb'
-	};
-	const DECISION_FG: Record<string, string> = {
-		ACCEPTED: '#065f46',
-		WAITLISTED: '#713f12',
-		REJECTED: '#991b1b',
-		PENDING: '#374151'
+	const DECISION_CLASS: Record<string, string> = {
+		ACCEPTED: 'bg-[#d1fae5] text-[#065f46]',
+		WAITLISTED: 'bg-[#fef9c3] text-[#713f12]',
+		REJECTED: 'bg-[#fee2e2] text-[#991b1b]',
+		PENDING: 'bg-[#e5e7eb] text-[#374151]'
 	};
 
 	function decLabel(d: string | null): string {
@@ -60,35 +54,29 @@
 	);
 </script>
 
-<div style="display:flex; flex-direction:column; height:100%;">
+<div class="flex flex-col h-full">
 	<!-- Header -->
-	<div style="padding:20px 24px 16px; border-bottom:1px solid #e0e0e0; flex-shrink:0;">
-		<div style="display:flex; align-items:flex-start; justify-content:space-between; gap:12px;">
+	<div class="px-6 pb-4 pt-5 border-b border-border shrink-0">
+		<div class="flex items-start justify-between gap-3">
 			<div>
-				<div style="font-size:18px; font-weight:700; color:#191919; line-height:1.2;">
+				<div class="text-[18px] font-bold text-primary leading-[1.2]">
 					{applicant.name}
 				</div>
-				<div style="font-size:13px; color:#aaaaaa; margin-top:3px;">{applicant.email}</div>
+				<div class="text-[13px] text-muted-foreground mt-[3px]">{applicant.email}</div>
 			</div>
-			<div style="display:flex; gap:6px; flex-wrap:wrap; justify-content:flex-end; flex-shrink:0;">
+			<div class="flex gap-1.5 flex-wrap justify-end shrink-0">
 				{#if applicant.roles.length}
-					<span
-						style="display:inline-block; padding:3px 8px; border-radius:4px; font-size:11px; font-weight:600; letter-spacing:0.04em; text-transform:uppercase; background:#f0f0f0; color:#555;"
-					>
+					<span class="inline-block px-2 py-[3px] rounded text-[11px] font-semibold tracking-[0.04em] uppercase bg-[#f0f0f0] text-[#555]">
 						{roleLabel(applicant.roles[0])}
 					</span>
 				{/if}
 				{#if applicant.pendingDecision}
-					<span
-						style="display:inline-block; padding:3px 8px; border-radius:4px; font-size:11px; font-weight:600; background:{DECISION_BG[applicant.pendingDecision] ?? '#e5e7eb'}; color:{DECISION_FG[applicant.pendingDecision] ?? '#374151'};"
-					>
+					<span class="inline-block px-2 py-[3px] rounded text-[11px] font-semibold {DECISION_CLASS[applicant.pendingDecision] ?? 'bg-[#e5e7eb] text-[#374151]'}">
 						Pending: {decLabel(applicant.pendingDecision)}
 					</span>
 				{/if}
 				{#if applicant.activeDecision}
-					<span
-						style="display:inline-block; padding:3px 8px; border-radius:4px; font-size:11px; font-weight:600; background:{DECISION_BG[applicant.activeDecision] ?? '#e5e7eb'}; color:{DECISION_FG[applicant.activeDecision] ?? '#374151'}; opacity:0.7;"
-					>
+					<span class="inline-block px-2 py-[3px] rounded text-[11px] font-semibold opacity-70 {DECISION_CLASS[applicant.activeDecision] ?? 'bg-[#e5e7eb] text-[#374151]'}">
 						Active: {decLabel(applicant.activeDecision)}
 					</span>
 				{/if}
@@ -97,72 +85,56 @@
 	</div>
 
 	<!-- Info grid -->
-	<div
-		style="padding:16px 24px; border-bottom:1px solid #f0f0f0; flex-shrink:0; display:grid; grid-template-columns:1fr 1fr; gap:12px;"
-	>
+	<div class="px-6 py-4 border-b border-[#f0f0f0] shrink-0 grid grid-cols-2 gap-3">
 		<div>
-			<div
-				style="font-size:10px; font-weight:700; letter-spacing:0.1em; text-transform:uppercase; color:#aaaaaa; margin-bottom:3px;"
-			>
+			<div class="text-[10px] font-bold tracking-widest uppercase text-muted-foreground mb-[3px]">
 				Role
 			</div>
-			<div style="font-size:13px; color:#333;">
+			<div class="text-[13px] text-[#333]">
 				{applicant.roles.length ? roleLabel(applicant.roles[0]) : '—'}
 			</div>
 		</div>
 		<div>
-			<div
-				style="font-size:10px; font-weight:700; letter-spacing:0.1em; text-transform:uppercase; color:#aaaaaa; margin-bottom:3px;"
-			>
+			<div class="text-[10px] font-bold tracking-widest uppercase text-muted-foreground mb-[3px]">
 				Status
 			</div>
-			<div style="font-size:13px; color:#333;">
+			<div class="text-[13px] text-[#333]">
 				{applicant.status.charAt(0) + applicant.status.slice(1).toLowerCase().replace(/_/g, ' ')}
 			</div>
 		</div>
 		<div>
-			<div
-				style="font-size:10px; font-weight:700; letter-spacing:0.1em; text-transform:uppercase; color:#aaaaaa; margin-bottom:3px;"
-			>
+			<div class="text-[10px] font-bold tracking-widest uppercase text-muted-foreground mb-[3px]">
 				Applied
 			</div>
-			<div style="font-size:13px; color:#333; font-family:'DM Mono', monospace;">
+			<div class="text-[13px] text-[#333] font-mono">
 				{formatDate(applicant.createdAt)}
 			</div>
 		</div>
 		<div>
-			<div
-				style="font-size:10px; font-weight:700; letter-spacing:0.1em; text-transform:uppercase; color:#aaaaaa; margin-bottom:3px;"
-			>
+			<div class="text-[10px] font-bold tracking-widest uppercase text-muted-foreground mb-[3px]">
 				UID
 			</div>
-			<div
-				style="font-size:11px; color:#aaaaaa; font-family:'DM Mono', monospace; word-break:break-all;"
-			>
+			<div class="text-[11px] text-muted-foreground font-mono break-all">
 				{applicant.uid}
 			</div>
 		</div>
 	</div>
 
 	<!-- Application responses -->
-	<div style="flex:1; overflow-y:auto; padding:20px 24px;">
+	<div class="flex-1 overflow-y-auto px-6 py-5">
 		{#if sortedResponses.length === 0}
-			<div style="font-size:13px; color:#aaaaaa; font-style:italic;">No application responses.</div>
+			<div class="text-[13px] text-muted-foreground italic">No application responses.</div>
 		{:else}
-			<div
-				style="font-size:10px; font-weight:700; letter-spacing:0.1em; text-transform:uppercase; color:#aaaaaa; margin-bottom:14px;"
-			>
+			<div class="text-[10px] font-bold tracking-widest uppercase text-muted-foreground mb-[14px]">
 				Application Responses
 			</div>
-			<div style="display:flex; flex-direction:column; gap:20px;">
+			<div class="flex flex-col gap-5">
 				{#each sortedResponses as response (response.question.title)}
 					<div>
-						<div style="font-size:12px; font-weight:600; color:#555; margin-bottom:6px;">
+						<div class="text-xs font-semibold text-[#555] mb-1.5">
 							{response.question.title}
 						</div>
-						<div
-							style="font-size:13px; color:#191919; background:#f9f9f9; border:1px solid #e0e0e0; border-radius:5px; padding:10px 12px; white-space:pre-wrap; word-break:break-word; line-height:1.5;"
-						>
+						<div class="text-[13px] text-primary bg-[#f9f9f9] border border-border rounded px-3 py-[10px] whitespace-pre-wrap break-words leading-[1.5]">
 							{response.value || '—'}
 						</div>
 					</div>

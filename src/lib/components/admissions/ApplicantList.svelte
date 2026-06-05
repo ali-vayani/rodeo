@@ -38,17 +38,11 @@
 		{ key: 'VOLUNTEER', label: 'Volunteers' }
 	];
 
-	const DECISION_BG: Record<string, string> = {
-		ACCEPTED: '#d1fae5',
-		WAITLISTED: '#fef9c3',
-		REJECTED: '#fee2e2',
-		PENDING: '#e5e7eb'
-	};
-	const DECISION_FG: Record<string, string> = {
-		ACCEPTED: '#065f46',
-		WAITLISTED: '#713f12',
-		REJECTED: '#991b1b',
-		PENDING: '#374151'
+	const DECISION_CLASS: Record<string, string> = {
+		ACCEPTED: 'bg-[#d1fae5] text-[#065f46]',
+		WAITLISTED: 'bg-[#fef9c3] text-[#713f12]',
+		REJECTED: 'bg-[#fee2e2] text-[#991b1b]',
+		PENDING: 'bg-[#e5e7eb] text-[#374151]'
 	};
 
 	function decLabel(d: string | null): string {
@@ -62,40 +56,31 @@
 </script>
 
 <div
-	style="flex-shrink:0; display:flex; flex-direction:column; border-right:1px solid #e0e0e0; transition:width 0.2s ease; overflow:hidden; width:{collapsed ? '44px' : '300px'};"
+	class="shrink-0 flex flex-col border-r border-border overflow-hidden transition-[width] duration-200 ease-[ease]"
+	style="width:{collapsed ? '44px' : '300px'};"
 >
 	{#if collapsed}
 		<!-- Collapsed strip -->
-		<div style="display:flex; flex-direction:column; align-items:center; padding:10px 0; gap:8px;">
+		<div class="flex flex-col items-center py-[10px] gap-2">
 			<button
 				onclick={onToggleCollapse}
 				title="Expand sidebar"
-				style="width:28px; height:28px; display:flex; align-items:center; justify-content:center; background:none; border:1px solid #e0e0e0; border-radius:4px; cursor:pointer; font-size:14px; color:#191919;"
+				class="w-7 h-7 flex items-center justify-center bg-transparent border border-border rounded cursor-pointer text-sm text-primary"
 			>
 				›
 			</button>
-			<span
-				style="font-size:10px; font-weight:600; letter-spacing:0.1em; text-transform:uppercase; color:#aaaaaa; writing-mode:vertical-rl; text-orientation:mixed; margin-top:8px;"
-			>
+			<span class="text-[10px] font-semibold tracking-widest uppercase text-muted-foreground [writing-mode:vertical-rl] mt-2">
 				{applicants.length}
 			</span>
 		</div>
 	{:else}
 		<!-- Role tabs + collapse button -->
-		<div
-			style="display:flex; align-items:stretch; border-bottom:1px solid #e0e0e0; flex-shrink:0; overflow-x:hidden;"
-		>
-			<div style="display:flex; flex:1; overflow-x:auto;">
+		<div class="flex items-stretch border-b border-border shrink-0 overflow-x-hidden">
+			<div class="flex flex-1 overflow-x-auto">
 				{#each ROLE_TABS as tab}
 					<button
 						onclick={() => onRoleTabChange(tab.key)}
-						style="padding:10px 10px; font-size:11px; font-weight:{roleTab === tab.key
-							? '600'
-							: '400'}; color:{roleTab === tab.key
-							? '#191919'
-							: '#aaaaaa'}; background:none; border:none; border-bottom:{roleTab === tab.key
-							? '2px solid #191919'
-							: '2px solid transparent'}; cursor:pointer; white-space:nowrap; transition:color 0.1s; flex-shrink:0;"
+						class="px-[10px] py-[10px] text-[11px] whitespace-nowrap shrink-0 bg-transparent border-none cursor-pointer transition-colors border-b-2 {roleTab === tab.key ? 'font-semibold text-primary border-b-primary' : 'font-normal text-muted-foreground border-b-transparent'}"
 					>
 						{tab.label}
 					</button>
@@ -105,72 +90,57 @@
 			<button
 				onclick={onToggleCollapse}
 				title="Collapse sidebar"
-				style="flex-shrink:0; padding:0 10px; background:none; border:none; border-left:1px solid #e0e0e0; cursor:pointer; color:#aaaaaa; font-size:14px;"
+				class="shrink-0 px-[10px] bg-transparent border-none border-l border-border cursor-pointer text-muted-foreground text-sm"
 			>
 				‹
 			</button>
 		</div>
 
 		<!-- Search -->
-		<div style="padding:10px 12px; border-bottom:1px solid #e0e0e0; flex-shrink:0;">
+		<div class="px-3 py-[10px] border-b border-border shrink-0">
 			<input
 				type="text"
 				placeholder="Search by name or email…"
 				value={search}
 				oninput={(e) => onSearchInput((e.currentTarget as HTMLInputElement).value)}
-				style="width:100%; font-size:12px; color:#191919; background:#f9f9f9; border:1px solid #e0e0e0; border-radius:4px; padding:6px 10px; outline:none; box-sizing:border-box;"
+				class="w-full text-xs text-primary bg-[#f9f9f9] border border-border rounded px-[10px] py-1.5 outline-none"
 			/>
 		</div>
 
 		<!-- List -->
-		<div style="flex:1; overflow-y:auto; opacity:{loading ? 0.5 : 1}; transition:opacity 0.15s;">
+		<div
+			class="flex-1 overflow-y-auto transition-opacity"
+			class:opacity-50={loading}
+		>
 			{#if applicants.length === 0}
-				<div style="padding:32px 16px; text-align:center; font-size:12px; color:#aaaaaa;">
+				<div class="px-4 py-8 text-center text-xs text-muted-foreground">
 					{loading ? 'Loading…' : 'No applicants found'}
 				</div>
 			{:else}
 				{#each applicants as applicant (applicant.uid)}
 					<button
 						onclick={() => onSelect(applicant.uid)}
-						style="width:100%; text-align:left; background:{selectedUid === applicant.uid
-							? '#ebebeb'
-							: '#fff'}; border:none; border-bottom:1px solid #f0f0f0; padding:12px 16px; cursor:pointer; display:block; transition:background 0.1s;"
-						onmouseenter={(e) => {
-							if (selectedUid !== applicant.uid)
-								(e.currentTarget as HTMLElement).style.background = '#f5f5f5';
-						}}
-						onmouseleave={(e) => {
-							if (selectedUid !== applicant.uid)
-								(e.currentTarget as HTMLElement).style.background = '#fff';
-						}}
+						class="w-full text-left border-none border-b border-[#f0f0f0] px-4 py-3 cursor-pointer block transition-colors {selectedUid === applicant.uid ? 'bg-[#ebebeb]' : 'bg-white hover:bg-[#f5f5f5]'}"
 					>
 						<!-- Row top: name + decision chip -->
-						<div
-							style="display:flex; align-items:center; justify-content:space-between; gap:6px;"
-						>
-							<span
-								style="font-size:13px; font-weight:500; color:#191919; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;"
-							>
+						<div class="flex items-center justify-between gap-1.5">
+							<span class="text-[13px] font-medium text-primary truncate">
 								{applicant.name}
 							</span>
 							{#if applicant.pendingDecision}
-								<span
-									style="flex-shrink:0; display:inline-block; padding:2px 6px; border-radius:3px; font-size:10px; font-weight:600; background:{DECISION_BG[applicant.pendingDecision] ?? '#e5e7eb'}; color:{DECISION_FG[applicant.pendingDecision] ?? '#374151'};"
-								>
+								<span class="shrink-0 inline-block px-1.5 py-0.5 rounded text-[10px] font-semibold {DECISION_CLASS[applicant.pendingDecision] ?? 'bg-[#e5e7eb] text-[#374151]'}">
 									{decLabel(applicant.pendingDecision)}
 								</span>
 							{/if}
 						</div>
 						<!-- Row middle: role -->
 						{#if applicant.roles.length}
-							<div style="font-size:11px; color:#aaaaaa; margin-top:2px;">
+							<div class="text-[11px] text-muted-foreground mt-0.5">
 								{applicant.roles[0].charAt(0) + applicant.roles[0].slice(1).toLowerCase()}
 							</div>
 						{/if}
 						<!-- Row bottom: applied date -->
-						<div
-							style="font-size:11px; color:#cccccc; margin-top:1px; font-family:'DM Mono', monospace;"
-						>
+						<div class="text-[11px] text-[#cccccc] mt-px font-mono">
 							{formatShortDate(applicant.createdAt)}
 						</div>
 					</button>

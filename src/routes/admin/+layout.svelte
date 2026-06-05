@@ -20,33 +20,27 @@
 <div class="flex min-h-screen">
 	<!-- Sidebar -->
 	<nav
-		class="fixed top-0 left-0 flex h-full w-[210px] flex-col border-r bg-white"
-		style="border-color: #e0e0e0"
+		class="fixed top-0 left-0 flex h-full w-[210px] flex-col border-r border-border bg-white"
 	>
 		<div class="px-5 py-5">
-			<span class="font-mono text-lg font-medium" style="color: #191919">rodeo</span>
+			<span class="font-mono text-lg font-medium text-primary">rodeo</span>
 		</div>
 		<ul class="mt-1 flex flex-1 flex-col gap-0.5 px-3">
 			{#each links as link}
 				<li>
 					<a
 						href={link.href}
-						class="block rounded px-3 py-2 text-sm transition-colors"
-						class:active={page.url.pathname === link.href}
-						style={page.url.pathname === link.href
-							? 'background: #191919; color: #fff;'
-							: 'color: #191919;'}
+						class="block rounded px-3 py-2 text-sm transition-colors {page.url.pathname === link.href ? 'bg-primary text-white' : 'text-primary'}"
 					>
 						{link.label}
 					</a>
 				</li>
 			{/each}
 		</ul>
-		<form method="POST" action="/logout" class="border-t p-3" style="border-color: #e0e0e0">
+		<form method="POST" action="/logout" class="border-t border-border p-3">
 			<button
 				type="submit"
-				class="block w-full rounded px-3 py-2 text-left text-sm transition-colors hover:bg-[#f4f4f4]"
-				style="color: #191919"
+				class="block w-full rounded px-3 py-2 text-left text-sm text-primary transition-colors hover:bg-[#f4f4f4]"
 			>
 				Log out
 			</button>
@@ -54,7 +48,7 @@
 	</nav>
 
 	<!-- Main content -->
-	<main class="ml-[210px] min-h-screen flex-1 p-8" style="background: #f4f4f4">
+	<main class="ml-[210px] min-h-screen flex-1 bg-muted p-8">
 		{@render children()}
 	</main>
 </div>
