@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RODEO — ADMIN SCAN</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Playfair+Display:wght@400;700;900&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'DM Mono', monospace; background: #fff; color: #000; }
+  .topbar { font-family: 'DM Mono', monospace; font-size: 11px; font-weight: 500; letter-spacing: 0.15em; padding: 10px 16px; border-bottom: 2px solid #000; background: #000; color: #fff; text-transform: uppercase; }
+  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0; border-left: 1px solid #000; border-top: 1px solid #000; }
+  .cell { border-right: 1px solid #000; border-bottom: 1px solid #000; }
+  .cell-label { font-family: 'DM Mono', monospace; font-size: 11px; padding: 8px 12px; border-bottom: 1px solid #000; display: flex; justify-content: space-between; align-items: center; background: #f4f4f4; }
+  .cell-num { font-size: 20px; font-weight: 700; line-height: 1; }
+  .cell-frame { height: 400px; overflow: hidden; padding: 16px; position: relative; background: #fff; }
+
+  /* Shared viewfinder CSS */
+  .viewfinder {
+    border: 2px solid #000;
+    position: relative;
+    background: #f4f4f4;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+  }
+  .viewfinder::before, .viewfinder::after {
+    content: '';
+    position: absolute;
+    width: 16px;
+    height: 16px;
+    border-color: #000;
+    border-style: solid;
+  }
+  .viewfinder::before { top: 6px; left: 6px; border-width: 2px 0 0 2px; }
+  .viewfinder::after { bottom: 6px; right: 6px; border-width: 0 2px 2px 0; }
+  .viewfinder-inner { font-family: 'DM Mono', monospace; font-size: 9px; color: #aaa; text-align: center; letter-spacing: 0.05em; }
+  .scan-line {
+    position: absolute;
+    left: 10%;
+    right: 10%;
+    height: 1px;
+    background: #000;
+    opacity: 0.3;
+    top: 40%;
+  }
+
+  /* VAR 1: EDITORIAL */
+  .v1 { font-family: 'Playfair Display', serif; }
+  .v1 .group-label { font-family: 'DM Mono', monospace; font-size: 8px; text-transform: uppercase; letter-spacing: 0.1em; color: #aaa; margin-bottom: 4px; }
+  .v1 .group-select { font-family: 'DM Mono', monospace; font-size: 10px; border: 1px solid #000; padding: 4px 8px; background: #fff; width: 100%; margin-bottom: 12px; }
+  .v1 .vf { height: 120px; margin-bottom: 12px; }
+  .v1 .confirm-box { border-left: 3px solid #000; padding: 8px 10px; background: #f4f4f4; margin-bottom: 10px; }
+  .v1 .confirm-check { font-family: 'DM Mono', monospace; font-size: 9px; color: #aaa; margin-bottom: 2px; }
+  .v1 .confirm-name { font-family: 'Playfair Display', serif; font-size: 16px; font-weight: 700; margin-bottom: 1px; }
+  .v1 .confirm-status { font-family: 'DM Mono', monospace; font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; }
+  .v1 .manual-row { display: flex; gap: 6px; }
+  .v1 .manual-input { font-family: 'DM Mono', monospace; font-size: 10px; border: 1px solid #000; padding: 4px 8px; flex: 1; background: #fff; }
+  .v1 .manual-btn { font-family: 'DM Mono', monospace; font-size: 9px; padding: 4px 10px; background: #000; color: #fff; border: none; cursor: pointer; }
+
+  /* VAR 2: BRUTALIST */
+  .v2 { font-family: 'Arial Black', 'Impact', sans-serif; }
+  .v2 .top-strip { background: #000; color: #fff; font-size: 9px; font-weight: 900; text-transform: uppercase; padding: 4px 8px; letter-spacing: 0.1em; margin-bottom: 6px; display: flex; justify-content: space-between; }
+  .v2 .group-bar { display: flex; gap: 0; border: 3px solid #000; margin-bottom: 8px; overflow: hidden; }
+  .v2 .g-btn { font-size: 7px; font-weight: 900; padding: 4px 6px; background: #fff; border-right: 2px solid #000; cursor: pointer; text-transform: uppercase; white-space: nowrap; }
+  .v2 .g-btn:last-child { border-right: none; }
+  .v2 .g-btn.active { background: #000; color: #fff; }
+  .v2 .big-vf { height: 140px; border: 4px solid #000; margin-bottom: 8px; display: flex; align-items: center; justify-content: center; background: #f4f4f4; position: relative; }
+  .v2 .vf-text { font-size: 8px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.1em; color: #aaa; }
+  .v2 .big-confirm { border: 4px solid #000; padding: 8px; text-align: center; }
+  .v2 .big-confirm-text { font-size: 13px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.05em; }
+  .v2 .big-confirm-status { font-size: 9px; font-weight: 900; text-transform: uppercase; color: #000; background: #000; color: #fff; display: inline-block; padding: 2px 6px; margin-top: 3px; }
+  .v2 .error-box { border: 3px solid #000; padding: 5px 8px; margin-top: 6px; display: flex; gap: 8px; align-items: center; }
+  .v2 .error-tag { font-size: 8px; font-weight: 900; text-transform: uppercase; background: #000; color: #fff; padding: 2px 5px; }
+  .v2 .error-text { font-size: 8px; font-weight: 900; text-transform: uppercase; }
+
+  /* VAR 3: MINIMAL */
+  .v3 { font-family: system-ui, sans-serif; }
+  .v3 .minimal-label { font-family: 'DM Mono', monospace; font-size: 8px; color: #aaa; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 4px; }
+  .v3 .minimal-select { font-family: 'DM Mono', monospace; font-size: 10px; border: none; border-bottom: 1px solid #000; padding: 3px 0; background: transparent; width: 100%; margin-bottom: 12px; }
+  .v3 .minimal-vf { height: 100px; border: 1px solid #e0e0e0; margin-bottom: 10px; display: flex; align-items: center; justify-content: center; background: #f4f4f4; }
+  .v3 .minimal-vf-text { font-family: 'DM Mono', monospace; font-size: 9px; color: #aaa; }
+  .v3 .confirm-line { padding: 8px 0; border-top: 1px solid #000; border-bottom: 1px solid #e0e0e0; margin-bottom: 10px; }
+  .v3 .confirm-name-min { font-size: 13px; font-weight: 600; margin-bottom: 2px; }
+  .v3 .confirm-sub { font-family: 'DM Mono', monospace; font-size: 9px; color: #aaa; }
+  .v3 .recent-label { font-family: 'DM Mono', monospace; font-size: 8px; color: #aaa; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 6px; }
+  .v3 .recent-row { display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px solid #f4f4f4; }
+  .v3 .rr-name { font-size: 10px; }
+  .v3 .rr-meta { font-family: 'DM Mono', monospace; font-size: 8px; color: #aaa; }
+  .v3 .manual-row-min { display: flex; gap: 4px; margin-top: 10px; }
+  .v3 .man-in { font-family: 'DM Mono', monospace; font-size: 9px; border: none; border-bottom: 1px solid #000; padding: 3px 0; flex: 1; background: transparent; }
+  .v3 .man-btn-min { font-family: 'DM Mono', monospace; font-size: 8px; padding: 3px 8px; background: #000; color: #fff; border: none; cursor: pointer; }
+
+  /* VAR 4: SYSTEMATIC */
+  .v4 { font-family: 'DM Mono', monospace; }
+  .v4 .info-row { display: grid; grid-template-columns: 80px 1fr; border-bottom: 1px solid #e0e0e0; }
+  .v4 .ir-label { font-size: 8px; color: #aaa; padding: 4px 6px; border-right: 1px solid #e0e0e0; text-transform: uppercase; letter-spacing: 0.06em; }
+  .v4 .ir-val { font-size: 9px; padding: 4px 6px; }
+  .v4 .small-vf { height: 60px; border: 1px solid #000; margin: 8px 0; display: flex; align-items: center; justify-content: center; position: relative; background: #f4f4f4; }
+  .v4 .vf-sm-txt { font-size: 8px; color: #aaa; letter-spacing: 0.05em; }
+  .v4 .data-table { width: 100%; border-collapse: collapse; margin-top: 4px; }
+  .v4 .data-table th { font-size: 7px; text-transform: uppercase; letter-spacing: 0.08em; color: #aaa; padding: 4px 4px; border-bottom: 1px solid #000; text-align: left; }
+  .v4 .data-table td { font-size: 8px; padding: 4px 4px; border-bottom: 1px solid #f4f4f4; }
+  .v4 .status-ok { background: #000; color: #fff; padding: 1px 4px; font-size: 7px; }
+  .v4 .status-err { background: #f4f4f4; color: #000; padding: 1px 4px; font-size: 7px; border: 1px solid #000; }
+  .v4 .man-row { display: flex; gap: 4px; margin-top: 6px; }
+  .v4 .man-in { font-family: 'DM Mono', monospace; font-size: 9px; border: 1px solid #000; padding: 3px 6px; flex: 1; }
+  .v4 .man-btn { font-size: 8px; padding: 3px 8px; background: #000; color: #fff; border: none; cursor: pointer; }
+
+  /* VAR 5: DASHBOARD */
+  .v5 { font-family: 'Inter', sans-serif; }
+  .v5 .layout { display: grid; grid-template-columns: 90px 1fr; height: 100%; }
+  .v5 .sidebar { border-right: 1px solid #e0e0e0; background: #f4f4f4; }
+  .v5 .sb-header { font-family: 'DM Mono', monospace; font-size: 8px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.08em; color: #aaa; padding: 6px 8px; border-bottom: 1px solid #e0e0e0; }
+  .v5 .sb-item { padding: 6px 8px; border-bottom: 1px solid #e0e0e0; cursor: pointer; }
+  .v5 .sb-item.active { background: #000; color: #fff; }
+  .v5 .sb-name { font-size: 9px; font-weight: 500; }
+  .v5 .sb-count { font-family: 'DM Mono', monospace; font-size: 8px; color: #aaa; }
+  .v5 .sb-item.active .sb-count { color: #aaa; }
+  .v5 .main-area { padding: 10px; }
+  .v5 .main-vf { height: 100px; border: 2px solid #000; margin-bottom: 8px; display: flex; align-items: center; justify-content: center; background: #f4f4f4; position: relative; }
+  .v5 .main-vf-txt { font-family: 'DM Mono', monospace; font-size: 8px; color: #aaa; }
+  .v5 .confirm-card { border: 1px solid #000; padding: 6px 8px; margin-bottom: 8px; background: #f4f4f4; }
+  .v5 .cc-label { font-family: 'DM Mono', monospace; font-size: 7px; color: #aaa; text-transform: uppercase; letter-spacing: 0.08em; }
+  .v5 .cc-name { font-size: 12px; font-weight: 600; }
+  .v5 .cc-status { font-family: 'DM Mono', monospace; font-size: 8px; }
+  .v5 .recent-header { font-family: 'DM Mono', monospace; font-size: 8px; color: #aaa; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 4px; }
+  .v5 .recent-row { display: flex; justify-content: space-between; padding: 3px 0; border-bottom: 1px solid #f4f4f4; font-size: 9px; }
+  .v5 .rr-time { font-family: 'DM Mono', monospace; font-size: 8px; color: #aaa; }
+
+  /* VAR 6: FORM-FIRST */
+  .v6 { font-family: 'Inter', sans-serif; }
+  .v6 .step-indicator { display: flex; gap: 4px; margin-bottom: 12px; }
+  .v6 .step { font-family: 'DM Mono', monospace; font-size: 8px; padding: 3px 8px; border: 1px solid #000; }
+  .v6 .step.active { background: #000; color: #fff; }
+  .v6 .step.done { background: #f4f4f4; }
+  .v6 .step-title { font-size: 11px; font-weight: 600; margin-bottom: 4px; }
+  .v6 .step-sub { font-family: 'DM Mono', monospace; font-size: 9px; color: #aaa; margin-bottom: 12px; }
+  .v6 .group-options { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; margin-bottom: 12px; }
+  .v6 .go-btn { font-family: 'DM Mono', monospace; font-size: 9px; padding: 6px 8px; border: 1px solid #000; background: #fff; cursor: pointer; text-align: left; }
+  .v6 .go-btn.selected { background: #000; color: #fff; }
+  .v6 .step-vf { height: 90px; border: 2px solid #000; margin-bottom: 8px; display: flex; align-items: center; justify-content: center; background: #f4f4f4; position: relative; }
+  .v6 .step-vf-txt { font-family: 'DM Mono', monospace; font-size: 9px; color: #aaa; }
+  .v6 .step-confirm { border: 1px solid #000; padding: 10px; text-align: center; background: #f4f4f4; }
+  .v6 .step-confirm-name { font-size: 14px; font-weight: 600; margin-bottom: 3px; }
+  .v6 .step-confirm-badge { font-family: 'DM Mono', monospace; font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; background: #000; color: #fff; display: inline-block; padding: 2px 8px; }
+  .v6 .next-btn { width: 100%; font-family: 'DM Mono', monospace; font-size: 10px; padding: 8px; background: #000; color: #fff; border: none; cursor: pointer; margin-top: 8px; letter-spacing: 0.05em; }
+  .v6 .manual-fallback { font-family: 'DM Mono', monospace; font-size: 8px; color: #aaa; text-align: center; margin-top: 6px; cursor: pointer; text-decoration: underline; }
+</style>
+</head>
+<body>
+
+<div class="topbar">RODEO &mdash; ADMIN SCAN</div>
+
+<div class="grid">
+
+  <!-- VAR 1: EDITORIAL -->
+  <div class="cell">
+    <div class="cell-label">
+      <span class="cell-num">01</span>
+      <span>Editorial — elegant serif confirmation</span>
+    </div>
+    <div class="cell-frame v1">
+      <div class="group-label">Scan Group</div>
+      <select class="group-select">
+        <option>Check-in</option>
+        <option>Lunch Day 1</option>
+        <option>Lunch Day 2</option>
+        <option>Workshop A</option>
+        <option>Workshop B</option>
+      </select>
+      <div class="viewfinder vf" style="height:100px;margin-bottom:12px;">
+        <div class="scan-line"></div>
+        <div class="viewfinder-inner">Waiting for scan...</div>
+      </div>
+      <div class="confirm-box">
+        <div class="confirm-check">&#10003; Scanned just now</div>
+        <div class="confirm-name">Alex Chen</div>
+        <div class="confirm-status">Checked In</div>
+      </div>
+      <div class="manual-row">
+        <input class="manual-input" type="text" placeholder="Enter email or QR code..." />
+        <button class="manual-btn">Look Up</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- VAR 2: BRUTALIST -->
+  <div class="cell">
+    <div class="cell-label">
+      <span class="cell-num">02</span>
+      <span>Brutalist — massive viewfinder, bold confirm</span>
+    </div>
+    <div class="cell-frame v2">
+      <div class="top-strip">
+        <span>SCAN STATION</span>
+        <span>Group: CHECK-IN</span>
+      </div>
+      <div class="group-bar">
+        <div class="g-btn active">CHECK-IN</div>
+        <div class="g-btn">LUNCH D1</div>
+        <div class="g-btn">LUNCH D2</div>
+        <div class="g-btn">WKSHP A</div>
+      </div>
+      <div class="big-vf">
+        <div class="scan-line"></div>
+        <div style="position:absolute;top:6px;left:6px;width:14px;height:14px;border-top:4px solid #000;border-left:4px solid #000;"></div>
+        <div style="position:absolute;bottom:6px;right:6px;width:14px;height:14px;border-bottom:4px solid #000;border-right:4px solid #000;"></div>
+        <div class="vf-text">ALIGN QR CODE</div>
+      </div>
+      <div class="big-confirm">
+        <div class="big-confirm-text">&#10003; Alex Chen</div>
+        <div class="big-confirm-status">CHECKED IN</div>
+      </div>
+      <div class="error-box">
+        <span class="error-tag">ERR</span>
+        <span class="error-text">Jordan Lee &mdash; Already Scanned</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- VAR 3: MINIMAL -->
+  <div class="cell">
+    <div class="cell-label">
+      <span class="cell-num">03</span>
+      <span>Minimal — clean, subtle confirmation</span>
+    </div>
+    <div class="cell-frame v3">
+      <div class="minimal-label">Scan Group</div>
+      <select class="minimal-select">
+        <option>Check-in</option>
+        <option>Lunch Day 1</option>
+        <option>Lunch Day 2</option>
+      </select>
+      <div class="minimal-vf">
+        <span class="minimal-vf-text">Ready to scan</span>
+      </div>
+      <div class="confirm-line">
+        <div class="confirm-name-min">Alex Chen &nbsp;&#10003;</div>
+        <div class="confirm-sub">Checked in &nbsp;·&nbsp; 2:14 PM</div>
+      </div>
+      <div class="recent-label">Recent</div>
+      <div class="recent-row">
+        <span class="rr-name">Alex Chen</span>
+        <span class="rr-meta">2:14 PM · Check-in</span>
+      </div>
+      <div class="recent-row">
+        <span class="rr-name">Jordan Lee</span>
+        <span class="rr-meta">2:11 PM · Check-in</span>
+      </div>
+      <div class="recent-row">
+        <span class="rr-name">Sam Torres</span>
+        <span class="rr-meta">2:09 PM · Check-in</span>
+      </div>
+      <div class="manual-row-min">
+        <input class="man-in" type="text" placeholder="Manual entry..." />
+        <button class="man-btn-min">Go</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- VAR 4: SYSTEMATIC -->
+  <div class="cell">
+    <div class="cell-label">
+      <span class="cell-num">04</span>
+      <span>Systematic — data-dense, small viewfinder</span>
+    </div>
+    <div class="cell-frame v4" style="padding:10px;">
+      <div style="border:1px solid #000;margin-bottom:8px;">
+        <div class="info-row">
+          <div class="ir-label">Group</div>
+          <div class="ir-val">Check-in</div>
+        </div>
+        <div class="info-row">
+          <div class="ir-label">Scanned</div>
+          <div class="ir-val">47 / 312</div>
+        </div>
+        <div class="info-row" style="border-bottom:none;">
+          <div class="ir-label">Last Scan</div>
+          <div class="ir-val">Alex Chen &nbsp;<span class="status-ok">OK</span></div>
+        </div>
+      </div>
+      <div class="small-vf">
+        <div style="position:absolute;top:4px;left:4px;width:10px;height:10px;border-top:2px solid #000;border-left:2px solid #000;"></div>
+        <div style="position:absolute;bottom:4px;right:4px;width:10px;height:10px;border-bottom:2px solid #000;border-right:2px solid #000;"></div>
+        <span class="vf-sm-txt">Camera viewfinder</span>
+      </div>
+      <div class="man-row">
+        <input class="man-in" type="text" placeholder="QR code / email..." />
+        <button class="man-btn">Submit</button>
+      </div>
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Time</th>
+            <th>Name</th>
+            <th>Event</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td>14:14</td><td>Alex Chen</td><td>Check-in</td><td><span class="status-ok">OK</span></td></tr>
+          <tr><td>14:11</td><td>Jordan Lee</td><td>Check-in</td><td><span class="status-ok">OK</span></td></tr>
+          <tr><td>14:09</td><td>Sam Torres</td><td>Check-in</td><td><span class="status-ok">OK</span></td></tr>
+          <tr><td>14:07</td><td>M. Chen</td><td>Check-in</td><td><span class="status-err">DUP</span></td></tr>
+          <tr><td>14:05</td><td>T. Nguyen</td><td>Check-in</td><td><span class="status-ok">OK</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- VAR 5: DASHBOARD -->
+  <div class="cell">
+    <div class="cell-label">
+      <span class="cell-num">05</span>
+      <span>Dashboard — sidebar groups, main viewfinder</span>
+    </div>
+    <div class="cell-frame v5" style="padding:0;">
+      <div class="layout">
+        <div class="sidebar">
+          <div class="sb-header">Groups</div>
+          <div class="sb-item active">
+            <div class="sb-name">Check-in</div>
+            <div class="sb-count" style="color:#aaa;">47 scanned</div>
+          </div>
+          <div class="sb-item">
+            <div class="sb-name">Lunch D1</div>
+            <div class="sb-count">0 scanned</div>
+          </div>
+          <div class="sb-item">
+            <div class="sb-name">Lunch D2</div>
+            <div class="sb-count">0 scanned</div>
+          </div>
+          <div class="sb-item">
+            <div class="sb-name">Workshop A</div>
+            <div class="sb-count">0 scanned</div>
+          </div>
+          <div class="sb-item">
+            <div class="sb-name">Workshop B</div>
+            <div class="sb-count">0 scanned</div>
+          </div>
+        </div>
+        <div class="main-area">
+          <div class="main-vf">
+            <div style="position:absolute;top:6px;left:6px;width:12px;height:12px;border-top:2px solid #000;border-left:2px solid #000;"></div>
+            <div style="position:absolute;bottom:6px;right:6px;width:12px;height:12px;border-bottom:2px solid #000;border-right:2px solid #000;"></div>
+            <div class="main-vf-txt">Waiting for scan...</div>
+          </div>
+          <div class="confirm-card">
+            <div class="cc-label">Last scan</div>
+            <div class="cc-name">Alex Chen &#10003;</div>
+            <div class="cc-status" style="font-family:'DM Mono',monospace;font-size:8px;">Checked In &nbsp;·&nbsp; 2:14 PM</div>
+          </div>
+          <div class="recent-header">Recent Scans</div>
+          <div class="recent-row">
+            <span>Alex Chen</span>
+            <span class="rr-time">2:14 PM</span>
+          </div>
+          <div class="recent-row">
+            <span>Jordan Lee</span>
+            <span class="rr-time">2:11 PM</span>
+          </div>
+          <div class="recent-row">
+            <span>Sam Torres</span>
+            <span class="rr-time">2:09 PM</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- VAR 6: FORM-FIRST -->
+  <div class="cell">
+    <div class="cell-label">
+      <span class="cell-num">06</span>
+      <span>Form-first — step-by-step flow</span>
+    </div>
+    <div class="cell-frame v6">
+      <div class="step-indicator">
+        <div class="step done">1 Group</div>
+        <div class="step done">2 Scan</div>
+        <div class="step active">3 Confirm</div>
+      </div>
+
+      <!-- Step 1 content shown as selected state hint -->
+      <div style="font-family:'DM Mono',monospace;font-size:8px;color:#aaa;margin-bottom:10px;">
+        Group: <strong style="color:#000;">Check-in</strong> &nbsp;·&nbsp; <span style="text-decoration:underline;cursor:pointer;">Change</span>
+      </div>
+
+      <!-- Step 3: Confirm screen -->
+      <div class="step-confirm">
+        <div style="font-family:'DM Mono',monospace;font-size:8px;color:#aaa;margin-bottom:4px;">&#10003; Scan successful</div>
+        <div class="step-confirm-name">Alex Chen</div>
+        <div style="font-family:'DM Mono',monospace;font-size:9px;color:#aaa;margin:3px 0 6px;">Hacker &nbsp;·&nbsp; UT Austin</div>
+        <div class="step-confirm-badge">Checked In</div>
+      </div>
+
+      <button class="next-btn">Scan Next Person</button>
+
+      <div class="manual-fallback">Can't scan? Enter manually</div>
+
+      <!-- Error state example -->
+      <div style="margin-top:12px;border:1px solid #000;padding:8px;background:#f4f4f4;">
+        <div style="font-family:'DM Mono',monospace;font-size:8px;color:#aaa;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:3px;">Error state example</div>
+        <div style="font-family:'DM Mono',monospace;font-size:10px;font-weight:500;">NOT FOUND</div>
+        <div style="font-family:'DM Mono',monospace;font-size:9px;color:#aaa;">No matching attendee for this QR code.</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+</body>
+</html>

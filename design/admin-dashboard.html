@@ -1,0 +1,1119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RODEO — ADMIN DASHBOARD</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Playfair+Display:wght@400;700;900&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'DM Mono', monospace;
+    background: #fff;
+    color: #000;
+    min-height: 100vh;
+  }
+
+  .topbar {
+    font-family: 'DM Mono', monospace;
+    font-size: 12px;
+    font-weight: 500;
+    letter-spacing: 0.15em;
+    padding: 12px 20px;
+    border-bottom: 2px solid #000;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: #fff;
+  }
+
+  .topbar-title { font-size: 13px; font-weight: 700; letter-spacing: 0.2em; }
+  .topbar-sub { font-size: 10px; color: #aaa; letter-spacing: 0.1em; }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0;
+    border-left: 1px solid #000;
+    border-top: 1px solid #000;
+  }
+
+  .cell {
+    border-right: 1px solid #000;
+    border-bottom: 1px solid #000;
+  }
+
+  .cell-label {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    padding: 8px 12px;
+    border-bottom: 1px solid #000;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: #f4f4f4;
+  }
+
+  .cell-num { font-size: 20px; font-weight: 700; line-height: 1; }
+  .cell-desc { font-size: 10px; color: #555; letter-spacing: 0.05em; }
+
+  .cell-frame {
+    height: 400px;
+    overflow: hidden;
+    padding: 16px;
+    position: relative;
+    background: #fff;
+  }
+
+  /* ===================== VAR 1: EDITORIAL ===================== */
+  .v1 .cell-frame { font-family: 'Playfair Display', serif; padding: 20px; }
+
+  .v1-header {
+    border-bottom: 3px double #000;
+    margin-bottom: 14px;
+    padding-bottom: 10px;
+  }
+
+  .v1-title {
+    font-family: 'Playfair Display', serif;
+    font-size: 9px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: #aaa;
+    margin-bottom: 4px;
+  }
+
+  .v1-headline {
+    font-family: 'Playfair Display', serif;
+    font-size: 22px;
+    font-weight: 900;
+    line-height: 1.1;
+  }
+
+  .v1-stats {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+
+  .v1-stat {
+    border-left: 2px solid #000;
+    padding-left: 8px;
+  }
+
+  .v1-stat-num {
+    font-family: 'Playfair Display', serif;
+    font-size: 26px;
+    font-weight: 700;
+    line-height: 1;
+    display: block;
+  }
+
+  .v1-stat-label {
+    font-family: 'DM Mono', monospace;
+    font-size: 8px;
+    color: #aaa;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    display: block;
+    margin-top: 2px;
+  }
+
+  .v1-cols {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+    font-family: 'DM Mono', monospace;
+    font-size: 9px;
+  }
+
+  .v1-col-title {
+    font-family: 'Playfair Display', serif;
+    font-size: 11px;
+    font-weight: 700;
+    border-bottom: 1px solid #000;
+    padding-bottom: 4px;
+    margin-bottom: 6px;
+  }
+
+  .v1-feed-item {
+    padding: 4px 0;
+    border-bottom: 1px solid #e0e0e0;
+    line-height: 1.4;
+    color: #333;
+  }
+
+  .v1-feed-time { color: #aaa; font-size: 8px; }
+
+  .v1-bar-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 5px;
+    font-size: 8px;
+  }
+
+  .v1-bar-label { width: 52px; text-align: right; color: #555; }
+  .v1-bar-track { flex: 1; background: #f4f4f4; height: 6px; }
+  .v1-bar-fill { height: 6px; background: #000; }
+  .v1-bar-val { width: 24px; font-weight: 700; }
+
+  /* ===================== VAR 2: BRUTALIST ===================== */
+  .v2 .cell-frame {
+    font-family: 'Arial Black', 'Impact', sans-serif;
+    background: #fff;
+    padding: 12px;
+  }
+
+  .v2-topbar {
+    background: #000;
+    color: #fff;
+    font-size: 9px;
+    font-weight: 900;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    padding: 4px 8px;
+    margin-bottom: 8px;
+  }
+
+  .v2-stats {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0;
+    border: 3px solid #000;
+    margin-bottom: 8px;
+  }
+
+  .v2-stat {
+    padding: 8px 6px;
+    border-right: 3px solid #000;
+    text-align: center;
+  }
+
+  .v2-stat:last-child { border-right: none; }
+
+  .v2-stat-num {
+    display: block;
+    font-size: 24px;
+    font-weight: 900;
+    line-height: 1;
+    letter-spacing: -0.02em;
+  }
+
+  .v2-stat-label {
+    display: block;
+    font-family: 'DM Mono', monospace;
+    font-size: 7px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: #555;
+    margin-top: 2px;
+  }
+
+  .v2-stats2 {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0;
+    border: 3px solid #000;
+    border-top: none;
+    margin-bottom: 8px;
+  }
+
+  .v2-stat2 {
+    padding: 6px 8px;
+    border-right: 3px solid #000;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .v2-stat2:last-child { border-right: none; }
+
+  .v2-stat2-num {
+    font-size: 20px;
+    font-weight: 900;
+  }
+
+  .v2-stat2-info { font-family: 'DM Mono', monospace; font-size: 8px; text-transform: uppercase; }
+
+  .v2-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0;
+    border: 3px solid #000;
+    margin-bottom: 8px;
+  }
+
+  .v2-cell {
+    padding: 6px 8px;
+    border-right: 3px solid #000;
+    border-bottom: 3px solid #000;
+    font-family: 'DM Mono', monospace;
+    font-size: 8px;
+    text-transform: uppercase;
+  }
+
+  .v2-cell:nth-child(2n) { border-right: none; }
+  .v2-cell:nth-last-child(-n+2) { border-bottom: none; }
+
+  .v2-cell b { font-size: 14px; display: block; }
+
+  .v2-activity {
+    border: 3px solid #000;
+    padding: 6px 8px;
+    font-family: 'DM Mono', monospace;
+    font-size: 8px;
+  }
+
+  .v2-act-title {
+    font-size: 9px;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    border-bottom: 2px solid #000;
+    padding-bottom: 4px;
+    margin-bottom: 4px;
+  }
+
+  .v2-act-item {
+    padding: 3px 0;
+    border-bottom: 1px solid #e0e0e0;
+    text-transform: uppercase;
+    color: #333;
+  }
+
+  /* ===================== VAR 3: MINIMAL ===================== */
+  .v3 .cell-frame {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #fff;
+    padding: 24px 20px;
+  }
+
+  .v3-label {
+    font-size: 9px;
+    color: #aaa;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    margin-bottom: 16px;
+    border-bottom: 1px solid #e0e0e0;
+    padding-bottom: 8px;
+  }
+
+  .v3-main-num {
+    font-size: 48px;
+    font-weight: 300;
+    line-height: 1;
+    letter-spacing: -0.03em;
+    margin-bottom: 2px;
+  }
+
+  .v3-main-label {
+    font-size: 9px;
+    color: #aaa;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    margin-bottom: 20px;
+  }
+
+  .v3-row {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    padding: 7px 0;
+    border-bottom: 1px solid #f4f4f4;
+  }
+
+  .v3-row-label { font-size: 10px; color: #555; }
+  .v3-row-val { font-size: 14px; font-weight: 500; }
+
+  .v3-divider { border: none; border-top: 1px solid #e0e0e0; margin: 14px 0; }
+
+  .v3-sub-label {
+    font-size: 9px;
+    color: #aaa;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+
+  .v3-mini-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 6px;
+    font-size: 9px;
+    color: #555;
+  }
+
+  .v3-mini-bar-track { flex: 1; height: 2px; background: #f4f4f4; }
+  .v3-mini-bar-fill { height: 2px; background: #000; }
+  .v3-mini-bar-val { font-size: 9px; color: #000; min-width: 20px; text-align: right; }
+
+  /* ===================== VAR 4: SYSTEMATIC ===================== */
+  .v4 .cell-frame {
+    font-family: 'DM Mono', monospace;
+    background: #fff;
+    padding: 10px;
+    font-size: 9px;
+  }
+
+  .v4-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 2px solid #000;
+    padding-bottom: 6px;
+    margin-bottom: 8px;
+  }
+
+  .v4-title { font-size: 10px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; }
+  .v4-meta { font-size: 8px; color: #aaa; }
+
+  .v4-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 9px;
+    margin-bottom: 8px;
+  }
+
+  .v4-table th {
+    text-align: left;
+    font-weight: 500;
+    font-size: 8px;
+    color: #aaa;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 3px 6px;
+    border-bottom: 1px solid #000;
+    border-right: 1px solid #e0e0e0;
+    background: #f4f4f4;
+  }
+
+  .v4-table td {
+    padding: 4px 6px;
+    border-bottom: 1px solid #e0e0e0;
+    border-right: 1px solid #e0e0e0;
+    font-size: 9px;
+  }
+
+  .v4-table tr:hover td { background: #f4f4f4; }
+
+  .v4-bar-section { margin-bottom: 8px; }
+
+  .v4-bar-title {
+    font-size: 8px;
+    color: #aaa;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin-bottom: 4px;
+    border-bottom: 1px solid #e0e0e0;
+    padding-bottom: 3px;
+  }
+
+  .v4-bar-row {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-bottom: 3px;
+  }
+
+  .v4-bar-key { width: 50px; font-size: 8px; color: #555; text-transform: uppercase; }
+  .v4-bar-track { flex: 1; height: 8px; background: #f4f4f4; border: 1px solid #e0e0e0; }
+  .v4-bar-fill { height: 100%; background: #000; }
+  .v4-bar-count { width: 24px; text-align: right; font-size: 8px; }
+
+  .v4-metrics {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 0;
+    border: 1px solid #000;
+  }
+
+  .v4-metric {
+    padding: 5px 6px;
+    border-right: 1px solid #000;
+    text-align: center;
+  }
+
+  .v4-metric:last-child { border-right: none; }
+  .v4-metric-val { font-size: 14px; font-weight: 700; display: block; }
+  .v4-metric-key { font-size: 7px; color: #aaa; text-transform: uppercase; display: block; margin-top: 1px; }
+
+  /* ===================== VAR 5: DASHBOARD ===================== */
+  .v5 .cell-frame {
+    font-family: 'Inter', sans-serif;
+    background: #f4f4f4;
+    padding: 0;
+    display: flex;
+    overflow: hidden;
+  }
+
+  .v5-sidebar {
+    width: 80px;
+    background: #000;
+    color: #fff;
+    padding: 12px 0;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .v5-sidebar-logo {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    padding: 0 10px 12px;
+    border-bottom: 1px solid #333;
+    margin-bottom: 8px;
+  }
+
+  .v5-nav-item {
+    font-size: 8px;
+    padding: 6px 10px;
+    color: #aaa;
+    cursor: pointer;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    transition: background 0.1s;
+  }
+
+  .v5-nav-item.active { background: #fff; color: #000; font-weight: 600; }
+  .v5-nav-item:hover:not(.active) { background: #222; }
+
+  .v5-main {
+    flex: 1;
+    padding: 12px;
+    overflow: hidden;
+  }
+
+  .v5-main-title {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    margin-bottom: 10px;
+    color: #000;
+  }
+
+  .v5-cards {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 6px;
+    margin-bottom: 8px;
+  }
+
+  .v5-card {
+    background: #fff;
+    border: 1px solid #e0e0e0;
+    padding: 8px 10px;
+  }
+
+  .v5-card-val { font-size: 18px; font-weight: 700; line-height: 1; }
+  .v5-card-label { font-size: 8px; color: #aaa; text-transform: uppercase; letter-spacing: 0.08em; margin-top: 2px; }
+  .v5-card-change { font-size: 8px; color: #555; margin-top: 4px; }
+
+  .v5-cards3 {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 6px;
+    margin-bottom: 8px;
+  }
+
+  .v5-card3 {
+    background: #fff;
+    border: 1px solid #e0e0e0;
+    padding: 6px 8px;
+  }
+
+  .v5-card3-val { font-size: 14px; font-weight: 700; line-height: 1; }
+  .v5-card3-label { font-size: 7px; color: #aaa; text-transform: uppercase; letter-spacing: 0.06em; margin-top: 2px; }
+
+  .v5-section-title {
+    font-size: 9px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: #555;
+    margin-bottom: 6px;
+  }
+
+  .v5-feed {
+    background: #fff;
+    border: 1px solid #e0e0e0;
+    padding: 8px;
+  }
+
+  .v5-feed-item {
+    display: flex;
+    gap: 6px;
+    padding: 4px 0;
+    border-bottom: 1px solid #f4f4f4;
+    font-size: 8px;
+    align-items: flex-start;
+  }
+
+  .v5-feed-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #000;
+    flex-shrink: 0;
+    margin-top: 2px;
+  }
+
+  .v5-feed-text { flex: 1; line-height: 1.4; color: #333; }
+  .v5-feed-time { color: #aaa; font-size: 7px; flex-shrink: 0; }
+
+  .v5-bar-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 4px;
+    font-size: 8px;
+  }
+
+  .v5-bar-label { width: 55px; color: #555; text-align: right; }
+  .v5-bar-track { flex: 1; background: #f4f4f4; height: 8px; border: 1px solid #e0e0e0; }
+  .v5-bar-fill { height: 100%; background: #000; }
+  .v5-bar-count { width: 24px; font-weight: 600; }
+
+  /* ===================== VAR 6: FORM-FIRST ===================== */
+  .v6 .cell-frame {
+    font-family: 'Inter', sans-serif;
+    background: #fff;
+    padding: 20px 18px;
+  }
+
+  .v6-progress-bar {
+    display: flex;
+    gap: 3px;
+    margin-bottom: 16px;
+  }
+
+  .v6-progress-step {
+    flex: 1;
+    height: 3px;
+    background: #e0e0e0;
+  }
+
+  .v6-progress-step.done { background: #000; }
+  .v6-progress-step.active { background: #555; }
+
+  .v6-step-label {
+    font-size: 9px;
+    color: #aaa;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    margin-bottom: 4px;
+  }
+
+  .v6-headline {
+    font-size: 16px;
+    font-weight: 700;
+    line-height: 1.2;
+    margin-bottom: 14px;
+    letter-spacing: -0.02em;
+  }
+
+  .v6-checklist {
+    margin-bottom: 14px;
+  }
+
+  .v6-check-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 10px;
+    border: 1px solid #e0e0e0;
+    margin-bottom: 4px;
+    font-size: 10px;
+    cursor: pointer;
+  }
+
+  .v6-check-item.done {
+    background: #f4f4f4;
+    border-color: #000;
+  }
+
+  .v6-check-box {
+    width: 14px;
+    height: 14px;
+    border: 1.5px solid #000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    font-size: 9px;
+  }
+
+  .v6-check-item.done .v6-check-box { background: #000; color: #fff; }
+
+  .v6-check-label { flex: 1; }
+  .v6-check-meta { font-size: 9px; color: #aaa; }
+
+  .v6-cta {
+    width: 100%;
+    padding: 10px;
+    background: #000;
+    color: #fff;
+    border: none;
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    cursor: pointer;
+    margin-bottom: 8px;
+  }
+
+  .v6-hint { font-size: 9px; color: #aaa; text-align: center; }
+
+  .v6-stat-row {
+    display: flex;
+    gap: 0;
+    border: 1px solid #e0e0e0;
+    margin-bottom: 10px;
+  }
+
+  .v6-stat-cell {
+    flex: 1;
+    text-align: center;
+    padding: 8px 4px;
+    border-right: 1px solid #e0e0e0;
+  }
+
+  .v6-stat-cell:last-child { border-right: none; }
+  .v6-stat-cell-val { font-size: 16px; font-weight: 700; display: block; line-height: 1; }
+  .v6-stat-cell-label { font-size: 7px; color: #aaa; text-transform: uppercase; letter-spacing: 0.08em; display: block; margin-top: 2px; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <span class="topbar-title">RODEO — ADMIN DASHBOARD</span>
+  <span class="topbar-sub">6 VARIATIONS · HACKATHON ADMIN</span>
+</div>
+
+<div class="grid">
+
+  <!-- VARIATION 01: EDITORIAL -->
+  <div class="cell v1">
+    <div class="cell-label">
+      <div>
+        <span class="cell-num">01</span>
+      </div>
+      <span class="cell-desc">EDITORIAL — serif, numbers as design</span>
+    </div>
+    <div class="cell-frame">
+      <div class="v1-header">
+        <div class="v1-title">Admin Dashboard · Fall 2024</div>
+        <div class="v1-headline">847<br>Applications</div>
+      </div>
+      <div class="v1-stats">
+        <div class="v1-stat">
+          <span class="v1-stat-num">312</span>
+          <span class="v1-stat-label">Accepted</span>
+        </div>
+        <div class="v1-stat">
+          <span class="v1-stat-num">156</span>
+          <span class="v1-stat-label">Waitlisted</span>
+        </div>
+        <div class="v1-stat">
+          <span class="v1-stat-num">203</span>
+          <span class="v1-stat-label">Rejected</span>
+        </div>
+      </div>
+      <div class="v1-cols">
+        <div>
+          <div class="v1-col-title">Roles</div>
+          <div class="v1-bar-row">
+            <span class="v1-bar-label">Hackers</span>
+            <div class="v1-bar-track"><div class="v1-bar-fill" style="width:75%"></div></div>
+            <span class="v1-bar-val">634</span>
+          </div>
+          <div class="v1-bar-row">
+            <span class="v1-bar-label">Mentors</span>
+            <div class="v1-bar-track"><div class="v1-bar-fill" style="width:12%"></div></div>
+            <span class="v1-bar-val">98</span>
+          </div>
+          <div class="v1-bar-row">
+            <span class="v1-bar-label">Judges</span>
+            <div class="v1-bar-track"><div class="v1-bar-fill" style="width:8%"></div></div>
+            <span class="v1-bar-val">71</span>
+          </div>
+          <div class="v1-bar-row">
+            <span class="v1-bar-label">Volunteers</span>
+            <div class="v1-bar-track"><div class="v1-bar-fill" style="width:5%"></div></div>
+            <span class="v1-bar-val">44</span>
+          </div>
+          <div style="margin-top:10px; border-top:1px solid #e0e0e0; padding-top:6px;">
+            <div class="v1-bar-row">
+              <span class="v1-bar-label" style="color:#000; font-weight:600;">RSVP Rate</span>
+              <div class="v1-bar-track"><div class="v1-bar-fill" style="width:74%"></div></div>
+              <span class="v1-bar-val">74%</span>
+            </div>
+          </div>
+        </div>
+        <div>
+          <div class="v1-col-title">Recent Activity</div>
+          <div class="v1-feed-item">
+            Alex Chen accepted<br><span class="v1-feed-time">2 min ago</span>
+          </div>
+          <div class="v1-feed-item">
+            Jordan Lee applied<br><span class="v1-feed-time">5 min ago</span>
+          </div>
+          <div class="v1-feed-item">
+            Sam Rivera confirmed<br><span class="v1-feed-time">12 min ago</span>
+          </div>
+          <div class="v1-feed-item">
+            Casey Kim waitlisted<br><span class="v1-feed-time">18 min ago</span>
+          </div>
+          <div class="v1-feed-item">
+            Morgan Park rejected<br><span class="v1-feed-time">25 min ago</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- VARIATION 02: BRUTALIST -->
+  <div class="cell v2">
+    <div class="cell-label">
+      <div>
+        <span class="cell-num">02</span>
+      </div>
+      <span class="cell-desc">BRUTALIST — heavy borders, raw grid</span>
+    </div>
+    <div class="cell-frame">
+      <div class="v2-topbar">■ ADMIN DASHBOARD — FALL 2024 — LIVE</div>
+      <div class="v2-stats">
+        <div class="v2-stat">
+          <span class="v2-stat-num">847</span>
+          <span class="v2-stat-label">Total</span>
+        </div>
+        <div class="v2-stat">
+          <span class="v2-stat-num">312</span>
+          <span class="v2-stat-label">Accept</span>
+        </div>
+        <div class="v2-stat">
+          <span class="v2-stat-num">176</span>
+          <span class="v2-stat-label">Pending</span>
+        </div>
+      </div>
+      <div class="v2-stats2">
+        <div class="v2-stat2">
+          <span class="v2-stat2-num">156</span>
+          <div class="v2-stat2-info">WAITLISTED</div>
+        </div>
+        <div class="v2-stat2">
+          <span class="v2-stat2-num">203</span>
+          <div class="v2-stat2-info">REJECTED</div>
+        </div>
+      </div>
+      <div class="v2-grid">
+        <div class="v2-cell"><b>634</b>HACKERS</div>
+        <div class="v2-cell"><b>98</b>MENTORS</div>
+        <div class="v2-cell"><b>71</b>JUDGES</div>
+        <div class="v2-cell"><b>44</b>VOLUNTEERS</div>
+      </div>
+      <div class="v2-activity">
+        <div class="v2-act-title">▶ RECENT ACTIVITY</div>
+        <div class="v2-act-item">ALEX CHEN — ACCEPTED — 2M AGO</div>
+        <div class="v2-act-item">JORDAN LEE — APPLIED — 5M AGO</div>
+        <div class="v2-act-item">SAM RIVERA — CONFIRMED — 12M AGO</div>
+        <div class="v2-act-item">RSVP RATE: 74% — 232/312 CONFIRMED</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- VARIATION 03: MINIMAL -->
+  <div class="cell v3">
+    <div class="cell-label">
+      <div>
+        <span class="cell-num">03</span>
+      </div>
+      <span class="cell-desc">MINIMAL — hairline rules, maximum air</span>
+    </div>
+    <div class="cell-frame">
+      <div class="v3-label">Admin Dashboard</div>
+      <div class="v3-main-num">847</div>
+      <div class="v3-main-label">Total Applications</div>
+
+      <div class="v3-row">
+        <span class="v3-row-label">Accepted</span>
+        <span class="v3-row-val">312</span>
+      </div>
+      <div class="v3-row">
+        <span class="v3-row-label">Waitlisted</span>
+        <span class="v3-row-val">156</span>
+      </div>
+      <div class="v3-row">
+        <span class="v3-row-label">Rejected</span>
+        <span class="v3-row-val">203</span>
+      </div>
+      <div class="v3-row">
+        <span class="v3-row-label">Pending</span>
+        <span class="v3-row-val">176</span>
+      </div>
+
+      <hr class="v3-divider">
+      <div class="v3-sub-label">Role Breakdown</div>
+
+      <div class="v3-mini-bar">
+        <span style="width:52px;font-size:9px;color:#555;">Hackers</span>
+        <div class="v3-mini-bar-track"><div class="v3-mini-bar-fill" style="width:75%"></div></div>
+        <span class="v3-mini-bar-val">634</span>
+      </div>
+      <div class="v3-mini-bar">
+        <span style="width:52px;font-size:9px;color:#555;">Mentors</span>
+        <div class="v3-mini-bar-track"><div class="v3-mini-bar-fill" style="width:15%"></div></div>
+        <span class="v3-mini-bar-val">98</span>
+      </div>
+      <div class="v3-mini-bar">
+        <span style="width:52px;font-size:9px;color:#555;">Judges</span>
+        <div class="v3-mini-bar-track"><div class="v3-mini-bar-fill" style="width:11%"></div></div>
+        <span class="v3-mini-bar-val">71</span>
+      </div>
+      <div class="v3-mini-bar">
+        <span style="width:52px;font-size:9px;color:#555;">Volunteers</span>
+        <div class="v3-mini-bar-track"><div class="v3-mini-bar-fill" style="width:7%"></div></div>
+        <span class="v3-mini-bar-val">44</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- VARIATION 04: SYSTEMATIC -->
+  <div class="cell v4">
+    <div class="cell-label">
+      <div>
+        <span class="cell-num">04</span>
+      </div>
+      <span class="cell-desc">SYSTEMATIC — dense tables, data-forward</span>
+    </div>
+    <div class="cell-frame">
+      <div class="v4-header">
+        <span class="v4-title">ADMIN_DASHBOARD</span>
+        <span class="v4-meta">upd: 14:32:07</span>
+      </div>
+
+      <div class="v4-metrics">
+        <div class="v4-metric">
+          <span class="v4-metric-val">847</span>
+          <span class="v4-metric-key">TOTAL</span>
+        </div>
+        <div class="v4-metric">
+          <span class="v4-metric-val">312</span>
+          <span class="v4-metric-key">ACCEPT</span>
+        </div>
+        <div class="v4-metric">
+          <span class="v4-metric-val">156</span>
+          <span class="v4-metric-key">WAIT</span>
+        </div>
+        <div class="v4-metric">
+          <span class="v4-metric-val">74%</span>
+          <span class="v4-metric-key">RSVP</span>
+        </div>
+      </div>
+
+      <div style="height:6px"></div>
+
+      <table class="v4-table">
+        <thead>
+          <tr>
+            <th>METRIC</th>
+            <th>COUNT</th>
+            <th>PCT</th>
+            <th>DELTA</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td>Accepted</td><td>312</td><td>36.8%</td><td>+12</td></tr>
+          <tr><td>Waitlisted</td><td>156</td><td>18.4%</td><td>+3</td></tr>
+          <tr><td>Rejected</td><td>203</td><td>24.0%</td><td>+8</td></tr>
+          <tr><td>Pending</td><td>176</td><td>20.8%</td><td>-23</td></tr>
+        </tbody>
+      </table>
+
+      <div class="v4-bar-section">
+        <div class="v4-bar-title">ROLE DISTRIBUTION</div>
+        <div class="v4-bar-row">
+          <span class="v4-bar-key">HACKERS</span>
+          <div class="v4-bar-track"><div class="v4-bar-fill" style="width:75%"></div></div>
+          <span class="v4-bar-count">634</span>
+        </div>
+        <div class="v4-bar-row">
+          <span class="v4-bar-key">MENTORS</span>
+          <div class="v4-bar-track"><div class="v4-bar-fill" style="width:12%"></div></div>
+          <span class="v4-bar-count">98</span>
+        </div>
+        <div class="v4-bar-row">
+          <span class="v4-bar-key">JUDGES</span>
+          <div class="v4-bar-track"><div class="v4-bar-fill" style="width:8%"></div></div>
+          <span class="v4-bar-count">71</span>
+        </div>
+        <div class="v4-bar-row">
+          <span class="v4-bar-key">VOLUNTEERS</span>
+          <div class="v4-bar-track"><div class="v4-bar-fill" style="width:5%"></div></div>
+          <span class="v4-bar-count">44</span>
+        </div>
+      </div>
+
+      <table class="v4-table">
+        <thead>
+          <tr><th>ACTIVITY</th><th>USER</th><th>TIME</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>ACCEPTED</td><td>a.chen</td><td>14:30</td></tr>
+          <tr><td>APPLIED</td><td>j.lee</td><td>14:27</td></tr>
+          <tr><td>CONFIRMED</td><td>s.rivera</td><td>14:20</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- VARIATION 05: DASHBOARD -->
+  <div class="cell v5">
+    <div class="cell-label">
+      <div>
+        <span class="cell-num">05</span>
+      </div>
+      <span class="cell-desc">DASHBOARD — sidebar nav, card grid</span>
+    </div>
+    <div class="cell-frame">
+      <div class="v5-sidebar">
+        <div class="v5-sidebar-logo">RODEO</div>
+        <div class="v5-nav-item active">Overview</div>
+        <div class="v5-nav-item">Users</div>
+        <div class="v5-nav-item">RSVPs</div>
+        <div class="v5-nav-item">Roles</div>
+        <div class="v5-nav-item">Export</div>
+        <div class="v5-nav-item">Settings</div>
+      </div>
+      <div class="v5-main">
+        <div class="v5-main-title">Overview</div>
+        <div class="v5-cards">
+          <div class="v5-card">
+            <div class="v5-card-val">847</div>
+            <div class="v5-card-label">Applications</div>
+            <div class="v5-card-change">+24 this week</div>
+          </div>
+          <div class="v5-card">
+            <div class="v5-card-val">74%</div>
+            <div class="v5-card-label">RSVP Rate</div>
+            <div class="v5-card-change">232/312 confirmed</div>
+          </div>
+        </div>
+        <div class="v5-cards3">
+          <div class="v5-card3">
+            <div class="v5-card3-val">312</div>
+            <div class="v5-card3-label">Accepted</div>
+          </div>
+          <div class="v5-card3">
+            <div class="v5-card3-val">156</div>
+            <div class="v5-card3-label">Waitlist</div>
+          </div>
+          <div class="v5-card3">
+            <div class="v5-card3-val">176</div>
+            <div class="v5-card3-label">Pending</div>
+          </div>
+        </div>
+        <div class="v5-bar-row">
+          <span class="v5-bar-label">Hackers</span>
+          <div class="v5-bar-track"><div class="v5-bar-fill" style="width:75%"></div></div>
+          <span class="v5-bar-count">634</span>
+        </div>
+        <div class="v5-bar-row">
+          <span class="v5-bar-label">Mentors</span>
+          <div class="v5-bar-track"><div class="v5-bar-fill" style="width:12%"></div></div>
+          <span class="v5-bar-count">98</span>
+        </div>
+        <div class="v5-section-title" style="margin-top:8px;">Activity</div>
+        <div class="v5-feed">
+          <div class="v5-feed-item">
+            <div class="v5-feed-dot"></div>
+            <span class="v5-feed-text">Alex Chen accepted</span>
+            <span class="v5-feed-time">2m</span>
+          </div>
+          <div class="v5-feed-item">
+            <div class="v5-feed-dot" style="background:#aaa"></div>
+            <span class="v5-feed-text">Jordan Lee applied</span>
+            <span class="v5-feed-time">5m</span>
+          </div>
+          <div class="v5-feed-item">
+            <div class="v5-feed-dot"></div>
+            <span class="v5-feed-text">Sam Rivera confirmed RSVP</span>
+            <span class="v5-feed-time">12m</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- VARIATION 06: FORM-FIRST -->
+  <div class="cell v6">
+    <div class="cell-label">
+      <div>
+        <span class="cell-num">06</span>
+      </div>
+      <span class="cell-desc">FORM-FIRST — checklist, one task at a time</span>
+    </div>
+    <div class="cell-frame">
+      <div class="v6-progress-bar">
+        <div class="v6-progress-step done"></div>
+        <div class="v6-progress-step done"></div>
+        <div class="v6-progress-step active"></div>
+        <div class="v6-progress-step"></div>
+        <div class="v6-progress-step"></div>
+      </div>
+      <div class="v6-step-label">Step 3 of 5 — Review Queue</div>
+      <div class="v6-headline">You have 176 applications<br>to review.</div>
+
+      <div class="v6-stat-row">
+        <div class="v6-stat-cell">
+          <span class="v6-stat-cell-val">847</span>
+          <span class="v6-stat-cell-label">Total</span>
+        </div>
+        <div class="v6-stat-cell">
+          <span class="v6-stat-cell-val">176</span>
+          <span class="v6-stat-cell-label">Pending</span>
+        </div>
+        <div class="v6-stat-cell">
+          <span class="v6-stat-cell-val">74%</span>
+          <span class="v6-stat-cell-label">RSVP</span>
+        </div>
+      </div>
+
+      <div class="v6-checklist">
+        <div class="v6-check-item done">
+          <div class="v6-check-box">✓</div>
+          <span class="v6-check-label">Send acceptance emails</span>
+          <span class="v6-check-meta">312 sent</span>
+        </div>
+        <div class="v6-check-item done">
+          <div class="v6-check-box">✓</div>
+          <span class="v6-check-label">Process waitlist</span>
+          <span class="v6-check-meta">156 done</span>
+        </div>
+        <div class="v6-check-item" style="border-color:#000; background:#fff;">
+          <div class="v6-check-box"></div>
+          <span class="v6-check-label" style="font-weight:600;">Review pending apps</span>
+          <span class="v6-check-meta" style="color:#000; font-weight:600;">176 left</span>
+        </div>
+        <div class="v6-check-item">
+          <div class="v6-check-box" style="border-color:#aaa;"></div>
+          <span class="v6-check-label" style="color:#aaa;">Send rejection notices</span>
+          <span class="v6-check-meta">203</span>
+        </div>
+      </div>
+
+      <button class="v6-cta">Review Next Application →</button>
+      <div class="v6-hint">Estimated time: ~45 min at current pace</div>
+    </div>
+  </div>
+
+</div>
+
+</body>
+</html>

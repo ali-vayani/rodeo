@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RODEO — ADMIN ADMISSIONS</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Playfair+Display:wght@400;700;900&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'DM Mono', monospace; background: #fff; color: #000; }
+  .topbar { font-family: 'DM Mono', monospace; font-size: 11px; font-weight: 500; letter-spacing: 0.15em; padding: 10px 16px; border-bottom: 2px solid #000; background: #000; color: #fff; text-transform: uppercase; }
+  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0; border-left: 1px solid #000; border-top: 1px solid #000; }
+  .cell { border-right: 1px solid #000; border-bottom: 1px solid #000; }
+  .cell-label { font-family: 'DM Mono', monospace; font-size: 11px; padding: 8px 12px; border-bottom: 1px solid #000; display: flex; justify-content: space-between; align-items: center; background: #f4f4f4; }
+  .cell-num { font-size: 20px; font-weight: 700; line-height: 1; }
+  .cell-frame { height: 400px; overflow: hidden; padding: 16px; position: relative; background: #fff; }
+
+  /* VAR 1: EDITORIAL */
+  .v1 { font-family: 'Playfair Display', serif; }
+  .v1 .filter-row { display: flex; gap: 6px; margin-bottom: 12px; border-bottom: 1px solid #000; padding-bottom: 10px; }
+  .v1 .filter-btn { font-family: 'DM Mono', monospace; font-size: 9px; padding: 3px 7px; border: 1px solid #000; background: #fff; cursor: pointer; letter-spacing: 0.05em; }
+  .v1 .filter-btn.active { background: #000; color: #fff; }
+  .v1 .counter { font-family: 'DM Mono', monospace; font-size: 9px; color: #aaa; margin-bottom: 10px; letter-spacing: 0.05em; }
+  .v1 .applicant-card { border: 1px solid #e0e0e0; padding: 12px; }
+  .v1 .app-name { font-family: 'Playfair Display', serif; font-size: 18px; font-weight: 700; letter-spacing: -0.01em; margin-bottom: 2px; }
+  .v1 .app-meta { font-family: 'DM Mono', monospace; font-size: 9px; color: #aaa; margin-bottom: 8px; letter-spacing: 0.05em; text-transform: uppercase; }
+  .v1 .app-excerpt { font-family: 'Playfair Display', serif; font-size: 11px; line-height: 1.6; color: #000; border-left: 2px solid #000; padding-left: 8px; margin-bottom: 10px; font-style: italic; }
+  .v1 .action-row { display: flex; gap: 6px; }
+  .v1 .btn-accept { font-family: 'DM Mono', monospace; font-size: 9px; padding: 5px 10px; background: #000; color: #fff; border: none; cursor: pointer; letter-spacing: 0.08em; }
+  .v1 .btn-waitlist { font-family: 'DM Mono', monospace; font-size: 9px; padding: 5px 10px; background: #fff; color: #000; border: 1px solid #000; cursor: pointer; letter-spacing: 0.08em; }
+  .v1 .btn-reject { font-family: 'DM Mono', monospace; font-size: 9px; padding: 5px 10px; background: #fff; color: #aaa; border: 1px solid #e0e0e0; cursor: pointer; letter-spacing: 0.08em; }
+  .v1 .nav-row { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; padding-top: 10px; border-top: 1px solid #e0e0e0; }
+  .v1 .nav-arrow { font-family: 'DM Mono', monospace; font-size: 9px; color: #aaa; cursor: pointer; }
+
+  /* VAR 2: BRUTALIST */
+  .v2 { font-family: 'Arial Black', 'Impact', sans-serif; }
+  .v2 .header-bar { background: #000; color: #fff; font-size: 10px; font-weight: 900; text-transform: uppercase; padding: 5px 8px; letter-spacing: 0.1em; margin-bottom: 8px; }
+  .v2 .filter-strip { display: flex; gap: 0; margin-bottom: 8px; border: 2px solid #000; }
+  .v2 .f-btn { font-family: 'Arial Black', sans-serif; font-size: 8px; font-weight: 900; padding: 4px 8px; background: #fff; border-right: 2px solid #000; cursor: pointer; text-transform: uppercase; }
+  .v2 .f-btn:last-child { border-right: none; }
+  .v2 .f-btn.active { background: #000; color: #fff; }
+  .v2 .card-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
+  .v2 .app-card { border: 3px solid #000; padding: 8px; }
+  .v2 .app-card-name { font-size: 10px; font-weight: 900; text-transform: uppercase; margin-bottom: 2px; letter-spacing: 0.05em; }
+  .v2 .app-card-role { font-family: 'DM Mono', monospace; font-size: 8px; background: #000; color: #fff; display: inline-block; padding: 1px 4px; margin-bottom: 4px; }
+  .v2 .app-card-school { font-family: 'DM Mono', monospace; font-size: 8px; color: #aaa; margin-bottom: 6px; }
+  .v2 .card-btns { display: flex; gap: 2px; }
+  .v2 .cb-a { font-size: 7px; font-weight: 900; padding: 3px 5px; background: #000; color: #fff; border: none; cursor: pointer; text-transform: uppercase; }
+  .v2 .cb-w { font-size: 7px; font-weight: 900; padding: 3px 5px; background: #fff; color: #000; border: 2px solid #000; cursor: pointer; text-transform: uppercase; }
+  .v2 .cb-r { font-size: 7px; font-weight: 900; padding: 3px 5px; background: #f4f4f4; color: #000; border: 2px solid #aaa; cursor: pointer; text-transform: uppercase; }
+  .v2 .batch-bar { margin-top: 8px; border: 3px solid #000; padding: 5px 8px; display: flex; justify-content: space-between; align-items: center; background: #f4f4f4; }
+  .v2 .batch-text { font-size: 8px; font-weight: 900; text-transform: uppercase; }
+  .v2 .batch-btn { font-size: 7px; font-weight: 900; padding: 3px 6px; background: #000; color: #fff; border: none; cursor: pointer; text-transform: uppercase; }
+
+  /* VAR 3: MINIMAL */
+  .v3 { font-family: system-ui, sans-serif; }
+  .v3 .filter-line { display: flex; gap: 16px; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid #e0e0e0; }
+  .v3 .fl-item { font-size: 10px; color: #aaa; cursor: pointer; letter-spacing: 0.05em; }
+  .v3 .fl-item.active { color: #000; border-bottom: 1px solid #000; }
+  .v3 .counter-sm { font-family: 'DM Mono', monospace; font-size: 9px; color: #aaa; margin-bottom: 10px; }
+  .v3 .app-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #f4f4f4; }
+  .v3 .app-row:last-child { border-bottom: none; }
+  .v3 .row-left { flex: 1; }
+  .v3 .row-name { font-size: 11px; font-weight: 600; margin-bottom: 1px; }
+  .v3 .row-detail { font-family: 'DM Mono', monospace; font-size: 9px; color: #aaa; }
+  .v3 .row-right { display: flex; gap: 4px; }
+  .v3 .min-btn { font-family: 'DM Mono', monospace; font-size: 8px; padding: 3px 7px; border: 1px solid #e0e0e0; background: #fff; cursor: pointer; color: #aaa; }
+  .v3 .min-btn.primary { border-color: #000; color: #000; }
+  .v3 .excerpt-row { font-size: 9px; color: #aaa; font-style: italic; padding: 4px 0 8px; border-bottom: 1px solid #f4f4f4; }
+
+  /* VAR 4: SYSTEMATIC */
+  .v4 { font-family: 'DM Mono', monospace; }
+  .v4 .table-header { display: grid; grid-template-columns: 80px 60px 70px 55px 80px; gap: 0; border-bottom: 2px solid #000; margin-bottom: 0; }
+  .v4 .th { font-size: 8px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.08em; padding: 5px 4px; color: #aaa; border-right: 1px solid #e0e0e0; }
+  .v4 .th:last-child { border-right: none; }
+  .v4 .t-row { display: grid; grid-template-columns: 80px 60px 70px 55px 80px; gap: 0; border-bottom: 1px solid #f4f4f4; }
+  .v4 .t-row.selected { background: #f4f4f4; }
+  .v4 .td { font-size: 9px; padding: 5px 4px; border-right: 1px solid #f4f4f4; display: flex; align-items: center; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+  .v4 .td:last-child { border-right: none; }
+  .v4 .role-tag { font-size: 7px; background: #000; color: #fff; padding: 1px 3px; }
+  .v4 .status-select { font-family: 'DM Mono', monospace; font-size: 8px; border: 1px solid #e0e0e0; padding: 1px 3px; background: #fff; width: 70px; }
+  .v4 .toolbar { display: flex; justify-content: space-between; align-items: center; padding: 5px 0; border-bottom: 1px solid #000; margin-bottom: 0; }
+  .v4 .tb-count { font-size: 8px; color: #aaa; }
+  .v4 .tb-actions { display: flex; gap: 4px; }
+  .v4 .tb-btn { font-size: 8px; padding: 3px 6px; border: 1px solid #000; background: #fff; cursor: pointer; }
+  .v4 .tb-btn.fill { background: #000; color: #fff; }
+  .v4 .checkbox { width: 10px; height: 10px; border: 1px solid #000; display: inline-block; margin-right: 4px; flex-shrink: 0; }
+  .v4 .checkbox.checked { background: #000; }
+
+  /* VAR 5: DASHBOARD */
+  .v5 { font-family: 'Inter', sans-serif; }
+  .v5 .split { display: grid; grid-template-columns: 130px 1fr; height: 100%; gap: 0; }
+  .v5 .left-list { border-right: 1px solid #e0e0e0; overflow: hidden; }
+  .v5 .list-header { font-size: 8px; font-weight: 600; color: #aaa; text-transform: uppercase; letter-spacing: 0.08em; padding: 6px 8px; border-bottom: 1px solid #e0e0e0; background: #f4f4f4; }
+  .v5 .list-item { padding: 7px 8px; border-bottom: 1px solid #f4f4f4; cursor: pointer; }
+  .v5 .list-item.active { background: #f4f4f4; border-left: 2px solid #000; padding-left: 6px; }
+  .v5 .li-name { font-size: 10px; font-weight: 500; margin-bottom: 1px; }
+  .v5 .li-meta { font-family: 'DM Mono', monospace; font-size: 8px; color: #aaa; }
+  .v5 .right-detail { padding: 12px; overflow: hidden; }
+  .v5 .detail-name { font-size: 14px; font-weight: 600; margin-bottom: 3px; }
+  .v5 .detail-meta { font-family: 'DM Mono', monospace; font-size: 9px; color: #aaa; margin-bottom: 10px; }
+  .v5 .detail-section { margin-bottom: 8px; }
+  .v5 .section-label { font-family: 'DM Mono', monospace; font-size: 8px; color: #aaa; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 3px; }
+  .v5 .section-content { font-size: 10px; line-height: 1.5; color: #000; }
+  .v5 .action-group { display: flex; gap: 6px; margin-top: 10px; padding-top: 10px; border-top: 1px solid #e0e0e0; }
+  .v5 .v5-btn { font-family: 'DM Mono', monospace; font-size: 8px; padding: 5px 10px; cursor: pointer; border: 1px solid #000; background: #fff; }
+  .v5 .v5-btn.primary { background: #000; color: #fff; border-color: #000; }
+  .v5 .v5-counter { font-family: 'DM Mono', monospace; font-size: 8px; color: #aaa; margin-bottom: 8px; }
+
+  /* VAR 6: FORM-FIRST */
+  .v6 { font-family: 'Inter', sans-serif; }
+  .v6 .progress-bar { display: flex; gap: 0; margin-bottom: 12px; border: 1px solid #000; }
+  .v6 .prog-step { flex: 1; font-family: 'DM Mono', monospace; font-size: 8px; text-align: center; padding: 4px; border-right: 1px solid #000; color: #aaa; }
+  .v6 .prog-step:last-child { border-right: none; }
+  .v6 .prog-step.active { background: #000; color: #fff; }
+  .v6 .prog-step.done { background: #f4f4f4; color: #000; }
+  .v6 .focus-card { border: 1px solid #000; padding: 14px; }
+  .v6 .fc-label { font-family: 'DM Mono', monospace; font-size: 8px; text-transform: uppercase; letter-spacing: 0.1em; color: #aaa; margin-bottom: 4px; }
+  .v6 .fc-name { font-size: 16px; font-weight: 600; margin-bottom: 2px; }
+  .v6 .fc-sub { font-family: 'DM Mono', monospace; font-size: 9px; color: #aaa; margin-bottom: 10px; }
+  .v6 .fc-divider { height: 1px; background: #e0e0e0; margin-bottom: 10px; }
+  .v6 .fc-q { font-family: 'DM Mono', monospace; font-size: 8px; color: #aaa; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 4px; }
+  .v6 .fc-answer { font-size: 10px; line-height: 1.5; color: #000; margin-bottom: 10px; font-style: italic; }
+  .v6 .decision-row { display: flex; gap: 8px; margin-top: 10px; }
+  .v6 .d-btn { flex: 1; font-family: 'DM Mono', monospace; font-size: 9px; padding: 8px; text-align: center; border: 1px solid #000; cursor: pointer; background: #fff; letter-spacing: 0.05em; }
+  .v6 .d-btn.primary { background: #000; color: #fff; }
+  .v6 .keyboard-hint { font-family: 'DM Mono', monospace; font-size: 8px; color: #aaa; text-align: center; margin-top: 8px; }
+  .v6 .kbd { border: 1px solid #aaa; padding: 1px 4px; font-size: 8px; }
+</style>
+</head>
+<body>
+
+<div class="topbar">RODEO &mdash; ADMIN ADMISSIONS</div>
+
+<div class="grid">
+
+  <!-- VAR 1: EDITORIAL -->
+  <div class="cell">
+    <div class="cell-label">
+      <span class="cell-num">01</span>
+      <span>Editorial — large card, serif name</span>
+    </div>
+    <div class="cell-frame v1">
+      <div class="filter-row">
+        <button class="filter-btn active">All</button>
+        <button class="filter-btn">Hacker</button>
+        <button class="filter-btn">Mentor</button>
+        <button class="filter-btn">Judge</button>
+        <button class="filter-btn">Volunteer</button>
+      </div>
+      <div class="counter">Reviewing 1 of 176 pending</div>
+      <div class="applicant-card">
+        <div class="app-name">Taylor Nguyen</div>
+        <div class="app-meta">Hacker &nbsp;·&nbsp; UT Austin &nbsp;·&nbsp; Applied Apr 14, 2025</div>
+        <div class="app-excerpt">"I want to build an AI tool that helps students navigate university mental health resources in real time..."</div>
+        <div class="action-row">
+          <button class="btn-accept">Accept</button>
+          <button class="btn-waitlist">Waitlist</button>
+          <button class="btn-reject">Reject</button>
+        </div>
+      </div>
+      <div class="nav-row">
+        <span class="nav-arrow">← Prev</span>
+        <span style="font-family:'DM Mono',monospace;font-size:9px;color:#aaa;">1 / 176</span>
+        <span class="nav-arrow">Next →</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- VAR 2: BRUTALIST -->
+  <div class="cell">
+    <div class="cell-label">
+      <span class="cell-num">02</span>
+      <span>Brutalist — chunky cards, big buttons</span>
+    </div>
+    <div class="cell-frame v2">
+      <div class="header-bar">176 Pending &nbsp;|&nbsp; Admissions Review</div>
+      <div class="filter-strip">
+        <div class="f-btn active">ALL</div>
+        <div class="f-btn">HACKER</div>
+        <div class="f-btn">MENTOR</div>
+        <div class="f-btn">JUDGE</div>
+      </div>
+      <div class="card-grid">
+        <div class="app-card">
+          <div class="app-card-name">Taylor Nguyen</div>
+          <div class="app-card-role">HACKER</div>
+          <div class="app-card-school">UT Austin</div>
+          <div class="card-btns">
+            <button class="cb-a">ACC</button>
+            <button class="cb-w">WAIT</button>
+            <button class="cb-r">REJ</button>
+          </div>
+        </div>
+        <div class="app-card">
+          <div class="app-card-name">Riley Johnson</div>
+          <div class="app-card-role">MENTOR</div>
+          <div class="app-card-school">Google</div>
+          <div class="card-btns">
+            <button class="cb-a">ACC</button>
+            <button class="cb-w">WAIT</button>
+            <button class="cb-r">REJ</button>
+          </div>
+        </div>
+        <div class="app-card">
+          <div class="app-card-name">Drew Martinez</div>
+          <div class="app-card-role">JUDGE</div>
+          <div class="app-card-school">Microsoft</div>
+          <div class="card-btns">
+            <button class="cb-a">ACC</button>
+            <button class="cb-w">WAIT</button>
+            <button class="cb-r">REJ</button>
+          </div>
+        </div>
+        <div class="app-card">
+          <div class="app-card-name">Sam Torres</div>
+          <div class="app-card-role">HACKER</div>
+          <div class="app-card-school">Texas A&amp;M</div>
+          <div class="card-btns">
+            <button class="cb-a">ACC</button>
+            <button class="cb-w">WAIT</button>
+            <button class="cb-r">REJ</button>
+          </div>
+        </div>
+      </div>
+      <div class="batch-bar">
+        <span class="batch-text">2 selected</span>
+        <button class="batch-btn">BATCH ACCEPT</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- VAR 3: MINIMAL -->
+  <div class="cell">
+    <div class="cell-label">
+      <span class="cell-num">03</span>
+      <span>Minimal — simple list rows</span>
+    </div>
+    <div class="cell-frame v3">
+      <div class="filter-line">
+        <span class="fl-item active">All</span>
+        <span class="fl-item">Hacker</span>
+        <span class="fl-item">Mentor</span>
+        <span class="fl-item">Judge</span>
+      </div>
+      <div class="counter-sm">176 pending review</div>
+      <div class="app-row">
+        <div class="row-left">
+          <div class="row-name">Taylor Nguyen</div>
+          <div class="row-detail">Hacker · UT Austin · Apr 14</div>
+        </div>
+        <div class="row-right">
+          <button class="min-btn primary">Accept</button>
+          <button class="min-btn">Wait</button>
+          <button class="min-btn">Reject</button>
+        </div>
+      </div>
+      <div class="excerpt-row">"I want to build an AI tool that helps students..."</div>
+      <div class="app-row">
+        <div class="row-left">
+          <div class="row-name">Riley Johnson</div>
+          <div class="row-detail">Mentor · Google · Apr 12</div>
+        </div>
+        <div class="row-right">
+          <button class="min-btn primary">Accept</button>
+          <button class="min-btn">Wait</button>
+          <button class="min-btn">Reject</button>
+        </div>
+      </div>
+      <div class="excerpt-row">"5 years experience in backend systems and cloud..."</div>
+      <div class="app-row">
+        <div class="row-left">
+          <div class="row-name">Drew Martinez</div>
+          <div class="row-detail">Judge · Microsoft · Apr 10</div>
+        </div>
+        <div class="row-right">
+          <button class="min-btn primary">Accept</button>
+          <button class="min-btn">Wait</button>
+          <button class="min-btn">Reject</button>
+        </div>
+      </div>
+      <div class="excerpt-row">"Currently leading a team of 12 engineers..."</div>
+    </div>
+  </div>
+
+  <!-- VAR 4: SYSTEMATIC -->
+  <div class="cell">
+    <div class="cell-label">
+      <span class="cell-num">04</span>
+      <span>Systematic — dense table, inline controls</span>
+    </div>
+    <div class="cell-frame v4" style="padding:10px;">
+      <div class="toolbar">
+        <span class="tb-count">176 pending &nbsp;·&nbsp; 3 selected</span>
+        <div class="tb-actions">
+          <button class="tb-btn fill">Accept (3)</button>
+          <button class="tb-btn">Waitlist</button>
+          <button class="tb-btn">Export</button>
+        </div>
+      </div>
+      <div class="table-header">
+        <div class="th" style="display:flex;align-items:center;"><span class="checkbox checked"></span>Name</div>
+        <div class="th">Role</div>
+        <div class="th">School/Org</div>
+        <div class="th">Date</div>
+        <div class="th">Status</div>
+      </div>
+      <div class="t-row selected">
+        <div class="td"><span class="checkbox checked"></span><span style="overflow:hidden;text-overflow:ellipsis;">T. Nguyen</span></div>
+        <div class="td"><span class="role-tag">HACK</span></div>
+        <div class="td" style="font-size:8px;overflow:hidden;text-overflow:ellipsis;">UT Austin</div>
+        <div class="td" style="font-size:8px;">Apr 14</div>
+        <div class="td"><select class="status-select"><option>Pending</option><option>Accept</option><option>Waitlist</option><option>Reject</option></select></div>
+      </div>
+      <div class="t-row selected">
+        <div class="td"><span class="checkbox checked"></span><span style="overflow:hidden;text-overflow:ellipsis;">R. Johnson</span></div>
+        <div class="td"><span class="role-tag">MENT</span></div>
+        <div class="td" style="font-size:8px;overflow:hidden;text-overflow:ellipsis;">Google</div>
+        <div class="td" style="font-size:8px;">Apr 12</div>
+        <div class="td"><select class="status-select"><option>Pending</option><option>Accept</option><option>Waitlist</option><option>Reject</option></select></div>
+      </div>
+      <div class="t-row">
+        <div class="td"><span class="checkbox"></span><span style="overflow:hidden;text-overflow:ellipsis;">D. Martinez</span></div>
+        <div class="td"><span class="role-tag">JUDG</span></div>
+        <div class="td" style="font-size:8px;overflow:hidden;text-overflow:ellipsis;">Microsoft</div>
+        <div class="td" style="font-size:8px;">Apr 10</div>
+        <div class="td"><select class="status-select"><option>Pending</option><option>Accept</option><option>Waitlist</option><option>Reject</option></select></div>
+      </div>
+      <div class="t-row">
+        <div class="td"><span class="checkbox"></span><span style="overflow:hidden;text-overflow:ellipsis;">S. Torres</span></div>
+        <div class="td"><span class="role-tag">HACK</span></div>
+        <div class="td" style="font-size:8px;overflow:hidden;text-overflow:ellipsis;">Texas A&amp;M</div>
+        <div class="td" style="font-size:8px;">Apr 9</div>
+        <div class="td"><select class="status-select"><option>Pending</option><option>Accept</option><option>Waitlist</option><option>Reject</option></select></div>
+      </div>
+      <div class="t-row">
+        <div class="td"><span class="checkbox"></span><span style="overflow:hidden;text-overflow:ellipsis;">J. Park</span></div>
+        <div class="td"><span class="role-tag">VOLUN</span></div>
+        <div class="td" style="font-size:8px;overflow:hidden;text-overflow:ellipsis;">Rice Univ.</div>
+        <div class="td" style="font-size:8px;">Apr 8</div>
+        <div class="td"><select class="status-select"><option>Pending</option><option>Accept</option><option>Waitlist</option><option>Reject</option></select></div>
+      </div>
+      <div class="t-row">
+        <div class="td"><span class="checkbox"></span><span style="overflow:hidden;text-overflow:ellipsis;">M. Chen</span></div>
+        <div class="td"><span class="role-tag">HACK</span></div>
+        <div class="td" style="font-size:8px;overflow:hidden;text-overflow:ellipsis;">Stanford</div>
+        <div class="td" style="font-size:8px;">Apr 7</div>
+        <div class="td"><select class="status-select"><option>Pending</option><option>Accept</option><option>Waitlist</option><option>Reject</option></select></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- VAR 5: DASHBOARD -->
+  <div class="cell">
+    <div class="cell-label">
+      <span class="cell-num">05</span>
+      <span>Dashboard — split pane list + detail</span>
+    </div>
+    <div class="cell-frame v5" style="padding:0;">
+      <div class="split">
+        <div class="left-list">
+          <div class="list-header">Pending (176)</div>
+          <div class="v5-counter" style="padding:5px 8px;font-family:'DM Mono',monospace;font-size:8px;color:#aaa;border-bottom:1px solid #e0e0e0;">Filter: All roles</div>
+          <div class="list-item active">
+            <div class="li-name">Taylor Nguyen</div>
+            <div class="li-meta">Hacker · UT Austin</div>
+          </div>
+          <div class="list-item">
+            <div class="li-name">Riley Johnson</div>
+            <div class="li-meta">Mentor · Google</div>
+          </div>
+          <div class="list-item">
+            <div class="li-name">Drew Martinez</div>
+            <div class="li-meta">Judge · Microsoft</div>
+          </div>
+          <div class="list-item">
+            <div class="li-name">Sam Torres</div>
+            <div class="li-meta">Hacker · Texas A&amp;M</div>
+          </div>
+          <div class="list-item">
+            <div class="li-name">Jordan Park</div>
+            <div class="li-meta">Volunteer · Rice</div>
+          </div>
+        </div>
+        <div class="right-detail">
+          <div class="detail-name">Taylor Nguyen</div>
+          <div class="detail-meta">Hacker &nbsp;·&nbsp; UT Austin &nbsp;·&nbsp; Applied Apr 14, 2025</div>
+          <div class="detail-section">
+            <div class="section-label">Why do you want to attend?</div>
+            <div class="section-content">"I want to build an AI tool that helps students navigate university mental health resources in real time..."</div>
+          </div>
+          <div class="detail-section">
+            <div class="section-label">What will you build?</div>
+            <div class="section-content">"A mobile-first platform integrating with campus APIs to surface relevant support..."</div>
+          </div>
+          <div class="action-group">
+            <button class="v5-btn primary">Accept</button>
+            <button class="v5-btn">Waitlist</button>
+            <button class="v5-btn">Reject</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- VAR 6: FORM-FIRST -->
+  <div class="cell">
+    <div class="cell-label">
+      <span class="cell-num">06</span>
+      <span>Form-first — one at a time, keyboard hints</span>
+    </div>
+    <div class="cell-frame v6">
+      <div class="progress-bar">
+        <div class="prog-step done">1 READ</div>
+        <div class="prog-step active">2 DECIDE</div>
+        <div class="prog-step">3 NEXT</div>
+      </div>
+      <div style="font-family:'DM Mono',monospace;font-size:8px;color:#aaa;margin-bottom:8px;">Reviewing 1 of 176 pending</div>
+      <div class="focus-card">
+        <div class="fc-label">Applicant</div>
+        <div class="fc-name">Taylor Nguyen</div>
+        <div class="fc-sub">Hacker &nbsp;·&nbsp; UT Austin &nbsp;·&nbsp; Applied Apr 14, 2025</div>
+        <div class="fc-divider"></div>
+        <div class="fc-q">Why Rodeo?</div>
+        <div class="fc-answer">"I want to build an AI tool that helps students navigate university mental health resources in real time..."</div>
+        <div class="fc-q">Project Idea</div>
+        <div class="fc-answer">"A mobile-first platform integrating campus APIs to surface support services..."</div>
+        <div class="decision-row">
+          <button class="d-btn primary">Accept</button>
+          <button class="d-btn">Waitlist</button>
+          <button class="d-btn">Reject</button>
+        </div>
+      </div>
+      <div class="keyboard-hint">
+        <span class="kbd">A</span> Accept &nbsp;
+        <span class="kbd">W</span> Waitlist &nbsp;
+        <span class="kbd">R</span> Reject &nbsp;
+        <span class="kbd">→</span> Skip
+      </div>
+    </div>
+  </div>
+
+</div>
+
+</body>
+</html>

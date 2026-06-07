@@ -1,0 +1,1418 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RODEO — Hacker Account</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Playfair+Display:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'DM Mono', monospace;
+      background: #fff;
+      color: #000;
+    }
+
+    .topbar {
+      font-family: 'DM Mono', monospace;
+      font-size: 11px;
+      font-weight: 500;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      padding: 10px 24px;
+      border-bottom: 2px solid #000;
+      background: #000;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .topbar a {
+      color: #aaa;
+      text-decoration: none;
+      font-size: 10px;
+    }
+
+    .topbar a:hover { color: #fff; }
+
+    .page-title-bar {
+      padding: 16px 24px;
+      border-bottom: 1px solid #000;
+      display: flex;
+      align-items: baseline;
+      gap: 16px;
+    }
+
+    .page-title {
+      font-size: 11px;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+    }
+
+    .page-subtitle {
+      font-size: 10px;
+      color: #aaa;
+    }
+
+    /* OUTER GRID */
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 0;
+      border-left: 1px solid #000;
+      border-top: 1px solid #000;
+    }
+
+    .cell {
+      border-right: 1px solid #000;
+      border-bottom: 1px solid #000;
+    }
+
+    .cell-label {
+      font-family: 'DM Mono', monospace;
+      font-size: 11px;
+      padding: 8px 12px;
+      border-bottom: 1px solid #000;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: #f4f4f4;
+    }
+
+    .cell-num {
+      font-size: 20px;
+      font-weight: 700;
+      line-height: 1;
+    }
+
+    .cell-desc {
+      font-size: 10px;
+      color: #aaa;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+
+    .cell-frame {
+      height: 400px;
+      overflow: hidden;
+      padding: 16px;
+      position: relative;
+      background: #fff;
+    }
+
+    /* =====================
+       VAR 1 — EDITORIAL
+       ===================== */
+    .v1 .cell-frame {
+      padding: 0;
+      font-family: 'Playfair Display', serif;
+    }
+
+    .v1-masthead {
+      padding: 16px 18px;
+      border-bottom: 3px solid #000;
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+    }
+
+    .v1-name-block {}
+
+    .v1-overline {
+      font-family: 'DM Mono', monospace;
+      font-size: 9px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: #aaa;
+      margin-bottom: 3px;
+    }
+
+    .v1-big-name {
+      font-family: 'Playfair Display', serif;
+      font-size: 24px;
+      font-weight: 700;
+      line-height: 1;
+      letter-spacing: -0.02em;
+    }
+
+    .v1-role-badge {
+      font-family: 'DM Mono', monospace;
+      font-size: 9px;
+      padding: 3px 8px;
+      border: 1px solid #000;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      align-self: flex-end;
+    }
+
+    .v1-meta {
+      font-family: 'DM Mono', monospace;
+      font-size: 9px;
+      color: #aaa;
+      padding: 6px 18px;
+      border-bottom: 1px solid #e0e0e0;
+      display: flex;
+      gap: 14px;
+    }
+
+    .v1-cols {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+    }
+
+    .v1-col {
+      padding: 12px 18px;
+    }
+
+    .v1-col:first-child {
+      border-right: 1px solid #e0e0e0;
+    }
+
+    .v1-section-label {
+      font-family: 'DM Mono', monospace;
+      font-size: 9px;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: #aaa;
+      margin-bottom: 8px;
+      padding-bottom: 5px;
+      border-bottom: 1px solid #000;
+    }
+
+    .v1-team-member {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 7px;
+    }
+
+    .v1-avatar {
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: #000;
+      color: #fff;
+      font-family: 'DM Mono', monospace;
+      font-size: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .v1-member-name {
+      font-size: 10px;
+      font-family: 'Playfair Display', serif;
+    }
+
+    .v1-member-school {
+      font-family: 'DM Mono', monospace;
+      font-size: 9px;
+      color: #aaa;
+    }
+
+    .v1-invite-row {
+      margin-top: 8px;
+      border-top: 1px solid #e0e0e0;
+      padding-top: 8px;
+    }
+
+    .v1-invite-input {
+      font-family: 'DM Mono', monospace;
+      font-size: 9px;
+      width: 100%;
+      border: none;
+      border-bottom: 1px solid #000;
+      padding: 3px 0;
+      outline: none;
+      background: transparent;
+      color: #aaa;
+    }
+
+    .v1-invite-hint {
+      font-family: 'DM Mono', monospace;
+      font-size: 8px;
+      color: #aaa;
+      margin-top: 3px;
+    }
+
+    .v1-checkin-status {
+      display: inline-block;
+      font-family: 'DM Mono', monospace;
+      font-size: 9px;
+      padding: 3px 8px;
+      background: #000;
+      color: #fff;
+      letter-spacing: 0.06em;
+      margin-bottom: 8px;
+    }
+
+    .v1-pdf-btn {
+      font-family: 'DM Mono', monospace;
+      font-size: 9px;
+      display: block;
+      padding: 5px 10px;
+      border: 1px solid #000;
+      background: #fff;
+      text-align: center;
+      cursor: pointer;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      margin-top: 6px;
+    }
+
+    /* =====================
+       VAR 2 — BRUTALIST
+       ===================== */
+    .v2 .cell-frame {
+      padding: 0;
+      background: #fff;
+    }
+
+    .v2-topbar {
+      background: #000;
+      color: #fff;
+      font-family: 'Arial Black', 'Impact', sans-serif;
+      font-size: 11px;
+      font-weight: 900;
+      text-transform: uppercase;
+      padding: 7px 10px;
+      letter-spacing: 0.05em;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .v2-checkin-pill {
+      font-family: 'DM Mono', monospace;
+      font-size: 8px;
+      padding: 2px 7px;
+      background: #fff;
+      color: #000;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+    }
+
+    .v2-body {
+      padding: 8px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px;
+    }
+
+    .v2-box {
+      border: 3px solid #000;
+    }
+
+    .v2-box-header {
+      font-family: 'Arial Black', 'Impact', sans-serif;
+      font-size: 8px;
+      font-weight: 900;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      padding: 4px 7px;
+      background: #f4f4f4;
+      border-bottom: 2px solid #000;
+    }
+
+    .v2-box-body {
+      padding: 8px;
+    }
+
+    .v2-box-name {
+      font-family: 'Arial Black', 'Impact', sans-serif;
+      font-size: 13px;
+      font-weight: 900;
+      text-transform: uppercase;
+      line-height: 1.1;
+      margin-bottom: 3px;
+    }
+
+    .v2-box-detail {
+      font-family: 'DM Mono', monospace;
+      font-size: 9px;
+      color: #aaa;
+      margin-bottom: 2px;
+    }
+
+    .v2-qr {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 1px;
+      width: 70px;
+      height: 70px;
+      margin: 0 auto;
+    }
+
+    .v2-qr-cell {
+      background: #e0e0e0;
+    }
+
+    .v2-qr-cell.b {
+      background: #000;
+    }
+
+    .v2-team-list {
+      font-family: 'DM Mono', monospace;
+    }
+
+    .v2-team-row {
+      font-size: 9px;
+      padding: 3px 0;
+      border-bottom: 1px solid #e0e0e0;
+      display: flex;
+      justify-content: space-between;
+    }
+
+    .v2-team-name { font-weight: 500; }
+    .v2-team-role { color: #aaa; font-size: 8px; text-transform: uppercase; }
+
+    .v2-invite-box {
+      grid-column: span 2;
+      border: 3px solid #000;
+    }
+
+    .v2-invite-body {
+      padding: 7px;
+      display: flex;
+      gap: 6px;
+      align-items: center;
+    }
+
+    .v2-invite-input {
+      font-family: 'DM Mono', monospace;
+      font-size: 9px;
+      flex: 1;
+      border: 2px solid #000;
+      padding: 4px 6px;
+      outline: none;
+    }
+
+    .v2-invite-btn {
+      font-family: 'Arial Black', 'Impact', sans-serif;
+      font-size: 8px;
+      font-weight: 900;
+      padding: 5px 10px;
+      background: #000;
+      color: #fff;
+      border: none;
+      cursor: pointer;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      white-space: nowrap;
+    }
+
+    /* =====================
+       VAR 3 — MINIMAL
+       ===================== */
+    .v3 .cell-frame {
+      font-family: system-ui, -apple-system, sans-serif;
+    }
+
+    .v3-profile-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 16px;
+      padding-bottom: 14px;
+      border-bottom: 1px solid #e0e0e0;
+    }
+
+    .v3-avatar {
+      width: 36px;
+      height: 36px;
+      border: 1px solid #000;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      font-weight: 300;
+      flex-shrink: 0;
+    }
+
+    .v3-profile-name {
+      font-size: 14px;
+      font-weight: 300;
+      letter-spacing: -0.01em;
+    }
+
+    .v3-profile-email {
+      font-size: 10px;
+      color: #aaa;
+      margin-top: 1px;
+    }
+
+    .v3-badge {
+      font-family: 'DM Mono', monospace;
+      font-size: 8px;
+      padding: 2px 6px;
+      border: 1px solid #000;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      margin-top: 3px;
+      display: inline-block;
+    }
+
+    .v3-section {
+      margin-bottom: 16px;
+    }
+
+    .v3-section-label {
+      font-family: 'DM Mono', monospace;
+      font-size: 9px;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: #aaa;
+      margin-bottom: 8px;
+    }
+
+    .v3-team-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 6px 0;
+      border-bottom: 1px solid #f4f4f4;
+    }
+
+    .v3-team-name {
+      font-size: 10px;
+    }
+
+    .v3-team-you {
+      font-family: 'DM Mono', monospace;
+      font-size: 8px;
+      color: #aaa;
+    }
+
+    .v3-invite-row {
+      display: flex;
+      gap: 8px;
+      margin-top: 8px;
+    }
+
+    .v3-invite-input {
+      font-size: 10px;
+      flex: 1;
+      border: none;
+      border-bottom: 1px solid #000;
+      padding: 3px 0;
+      outline: none;
+      background: transparent;
+      font-family: system-ui, sans-serif;
+      color: #aaa;
+    }
+
+    .v3-invite-btn {
+      font-family: 'DM Mono', monospace;
+      font-size: 9px;
+      padding: 3px 8px;
+      background: #000;
+      color: #fff;
+      border: none;
+      cursor: pointer;
+    }
+
+    .v3-qr-placeholder {
+      width: 56px;
+      height: 56px;
+      border: 1px solid #000;
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 1px;
+      padding: 4px;
+    }
+
+    .v3-qr-c { background: #e0e0e0; }
+    .v3-qr-c.b { background: #000; }
+
+    .v3-bottom-row {
+      display: flex;
+      gap: 12px;
+      align-items: flex-start;
+    }
+
+    .v3-qr-section {}
+
+    .v3-qr-label {
+      font-family: 'DM Mono', monospace;
+      font-size: 8px;
+      color: #aaa;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-top: 3px;
+    }
+
+    .v3-pdf-btn {
+      font-family: 'DM Mono', monospace;
+      font-size: 9px;
+      padding: 5px 10px;
+      border: 1px solid #000;
+      background: #fff;
+      cursor: pointer;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      margin-top: 4px;
+    }
+
+    .v3-checkin {
+      display: inline-block;
+      font-family: 'DM Mono', monospace;
+      font-size: 8px;
+      padding: 2px 7px;
+      border: 1px solid #000;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      margin-top: 3px;
+    }
+
+    /* =====================
+       VAR 4 — SYSTEMATIC
+       ===================== */
+    .v4 .cell-frame {
+      font-family: 'DM Mono', monospace;
+      padding: 0;
+    }
+
+    .v4-header {
+      padding: 7px 12px;
+      border-bottom: 1px solid #000;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: #f4f4f4;
+    }
+
+    .v4-header-label {
+      font-size: 9px;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+    }
+
+    .v4-badge {
+      font-size: 8px;
+      padding: 2px 7px;
+      background: #000;
+      color: #fff;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
+    .v4-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 10px;
+    }
+
+    .v4-table td {
+      padding: 4px 10px;
+      border-bottom: 1px solid #e0e0e0;
+      vertical-align: top;
+    }
+
+    .v4-table td:first-child {
+      font-size: 9px;
+      color: #aaa;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      width: 100px;
+      white-space: nowrap;
+    }
+
+    .v4-section-divider {
+      font-size: 9px;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      padding: 5px 10px;
+      background: #f4f4f4;
+      border-bottom: 1px solid #000;
+      border-top: 1px solid #e0e0e0;
+    }
+
+    .v4-team-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 9px;
+    }
+
+    .v4-team-table th {
+      font-size: 8px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #aaa;
+      padding: 4px 10px;
+      border-bottom: 1px solid #e0e0e0;
+      text-align: left;
+    }
+
+    .v4-team-table td {
+      padding: 4px 10px;
+      border-bottom: 1px solid #f4f4f4;
+    }
+
+    .v4-you-tag {
+      font-size: 8px;
+      padding: 1px 4px;
+      background: #000;
+      color: #fff;
+      margin-left: 4px;
+    }
+
+    .v4-qr-row {
+      padding: 8px 10px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      border-top: 1px solid #e0e0e0;
+    }
+
+    .v4-qr-mini {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 1px;
+      width: 40px;
+      height: 40px;
+      padding: 3px;
+      border: 1px solid #000;
+      flex-shrink: 0;
+    }
+
+    .v4-qr-c { background: #e0e0e0; }
+    .v4-qr-c.b { background: #000; }
+
+    .v4-qr-meta {
+      font-size: 9px;
+    }
+
+    .v4-qr-id {
+      font-size: 10px;
+      font-weight: 500;
+      letter-spacing: 0.04em;
+      margin-bottom: 2px;
+    }
+
+    .v4-qr-label {
+      font-size: 8px;
+      color: #aaa;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+
+    .v4-pdf-btn {
+      margin-left: auto;
+      font-size: 8px;
+      padding: 4px 8px;
+      border: 1px solid #000;
+      background: #fff;
+      cursor: pointer;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+
+    /* =====================
+       VAR 5 — DASHBOARD
+       ===================== */
+    .v5 .cell-frame {
+      font-family: 'Inter', system-ui, sans-serif;
+      padding: 0;
+      display: flex;
+      background: #f4f4f4;
+    }
+
+    .v5-sidebar {
+      width: 80px;
+      background: #000;
+      color: #fff;
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+      padding: 10px 0;
+    }
+
+    .v5-sidebar-brand {
+      font-family: 'DM Mono', monospace;
+      font-size: 9px;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      padding: 0 8px 10px;
+      border-bottom: 1px solid rgba(255,255,255,0.1);
+      margin-bottom: 8px;
+    }
+
+    .v5-nav-item {
+      font-family: 'DM Mono', monospace;
+      font-size: 9px;
+      padding: 6px 8px;
+      cursor: pointer;
+      color: rgba(255,255,255,0.5);
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    .v5-nav-item.active {
+      color: #fff;
+      background: rgba(255,255,255,0.1);
+    }
+
+    .v5-main {
+      flex: 1;
+      padding: 10px;
+      overflow: hidden;
+    }
+
+    .v5-section-title {
+      font-size: 9px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #aaa;
+      margin-bottom: 8px;
+    }
+
+    .v5-profile-card {
+      background: #fff;
+      border: 1px solid #e0e0e0;
+      padding: 10px;
+      margin-bottom: 6px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .v5-avatar {
+      width: 30px;
+      height: 30px;
+      border-radius: 50%;
+      background: #000;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      font-weight: 600;
+      flex-shrink: 0;
+    }
+
+    .v5-profile-name {
+      font-size: 11px;
+      font-weight: 600;
+    }
+
+    .v5-profile-email {
+      font-size: 9px;
+      color: #aaa;
+    }
+
+    .v5-role-badge {
+      font-family: 'DM Mono', monospace;
+      font-size: 8px;
+      padding: 1px 6px;
+      border: 1px solid #000;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      margin-left: auto;
+    }
+
+    .v5-cards-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px;
+      margin-bottom: 6px;
+    }
+
+    .v5-card {
+      background: #fff;
+      border: 1px solid #e0e0e0;
+      padding: 8px;
+    }
+
+    .v5-card-label {
+      font-size: 8px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #aaa;
+      margin-bottom: 4px;
+    }
+
+    .v5-card-val {
+      font-size: 11px;
+      font-weight: 600;
+    }
+
+    .v5-card-sub {
+      font-size: 9px;
+      color: #aaa;
+      margin-top: 2px;
+    }
+
+    .v5-team-card {
+      background: #fff;
+      border: 1px solid #e0e0e0;
+      padding: 8px;
+    }
+
+    .v5-team-member-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 3px 0;
+      border-bottom: 1px solid #f4f4f4;
+      font-size: 9px;
+    }
+
+    .v5-you {
+      font-size: 8px;
+      color: #aaa;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+
+    .v5-download-btn {
+      font-family: 'DM Mono', monospace;
+      font-size: 8px;
+      padding: 4px 8px;
+      background: #000;
+      color: #fff;
+      border: none;
+      cursor: pointer;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      margin-top: 6px;
+      display: block;
+      width: 100%;
+      text-align: center;
+    }
+
+    /* =====================
+       VAR 6 — FORM-FIRST
+       ===================== */
+    .v6 .cell-frame {
+      font-family: system-ui, -apple-system, sans-serif;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .v6-step-header {
+      padding-bottom: 12px;
+      border-bottom: 1px solid #e0e0e0;
+      margin-bottom: 16px;
+    }
+
+    .v6-step-label {
+      font-family: 'DM Mono', monospace;
+      font-size: 9px;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: #aaa;
+      margin-bottom: 3px;
+    }
+
+    .v6-step-title {
+      font-size: 15px;
+      font-weight: 300;
+      letter-spacing: -0.01em;
+    }
+
+    .v6-form-field {
+      margin-bottom: 14px;
+    }
+
+    .v6-label {
+      font-family: 'DM Mono', monospace;
+      font-size: 9px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #aaa;
+      margin-bottom: 5px;
+      display: block;
+    }
+
+    .v6-input {
+      width: 100%;
+      font-size: 13px;
+      font-weight: 300;
+      font-family: system-ui, sans-serif;
+      padding: 6px 0;
+      border: none;
+      border-bottom: 2px solid #000;
+      outline: none;
+      background: transparent;
+      letter-spacing: -0.01em;
+    }
+
+    .v6-input:focus {
+      border-bottom-color: #000;
+    }
+
+    .v6-input.placeholder-style {
+      color: #e0e0e0;
+    }
+
+    .v6-input-hint {
+      font-family: 'DM Mono', monospace;
+      font-size: 9px;
+      color: #aaa;
+      margin-top: 4px;
+    }
+
+    .v6-add-btn {
+      font-family: 'DM Mono', monospace;
+      font-size: 9px;
+      padding: 7px 0;
+      background: #000;
+      color: #fff;
+      border: none;
+      cursor: pointer;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      width: 100%;
+      text-align: center;
+      margin-top: 4px;
+    }
+
+    .v6-member-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 10px;
+      padding: 3px 8px;
+      border: 1px solid #000;
+      background: #f4f4f4;
+      margin: 2px;
+    }
+
+    .v6-chip-remove {
+      font-size: 8px;
+      color: #aaa;
+      cursor: pointer;
+    }
+
+    .v6-members-row {
+      margin-bottom: 12px;
+    }
+
+    .v6-members-label {
+      font-family: 'DM Mono', monospace;
+      font-size: 9px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #aaa;
+      margin-bottom: 5px;
+    }
+
+    .v6-note {
+      font-family: 'DM Mono', monospace;
+      font-size: 9px;
+      color: #aaa;
+      border: 1px solid #e0e0e0;
+      padding: 7px;
+      background: #f4f4f4;
+      line-height: 1.4;
+      margin-top: 4px;
+    }
+
+    .v6-step-dots {
+      display: flex;
+      gap: 4px;
+      margin-top: auto;
+      padding-top: 10px;
+    }
+
+    .v6-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: #e0e0e0;
+    }
+
+    .v6-dot.active { background: #000; }
+  </style>
+</head>
+<body>
+
+  <div class="topbar">
+    <span>RODEO — Hacker Account</span>
+    <a href="index.html">← Index</a>
+  </div>
+
+  <div class="page-title-bar">
+    <span class="page-title">Hacker Account</span>
+    <span class="page-subtitle">6 variations × profile, team, QR, check-in</span>
+  </div>
+
+  <div class="grid">
+
+    <!-- VAR 1: EDITORIAL — Magazine-style profile -->
+    <div class="cell v1">
+      <div class="cell-label">
+        <div style="display:flex;align-items:baseline;gap:8px;">
+          <span class="cell-num">01</span>
+          <span class="cell-desc">Editorial</span>
+        </div>
+        <span style="font-size:10px;color:#aaa;">Profile + team section</span>
+      </div>
+      <div class="cell-frame">
+        <div class="v1-masthead">
+          <div class="v1-name-block">
+            <div class="v1-overline">Rodeo 2025 — Participant</div>
+            <div class="v1-big-name">Jordan Rivera</div>
+          </div>
+          <span class="v1-role-badge">Hacker</span>
+        </div>
+        <div class="v1-meta">
+          <span>jordan@ut.edu</span>
+          <span>UT Austin · 2026</span>
+          <span>Team: Apex</span>
+        </div>
+        <div class="v1-cols">
+          <div class="v1-col">
+            <div class="v1-section-label">Team — Apex</div>
+            <div class="v1-team-member">
+              <div class="v1-avatar">JR</div>
+              <div>
+                <div class="v1-member-name">Jordan Rivera</div>
+                <div class="v1-member-school">UT Austin · you</div>
+              </div>
+            </div>
+            <div class="v1-team-member">
+              <div class="v1-avatar">SC</div>
+              <div>
+                <div class="v1-member-name">Sam Chen</div>
+                <div class="v1-member-school">Rice Univ.</div>
+              </div>
+            </div>
+            <div class="v1-team-member">
+              <div class="v1-avatar">AK</div>
+              <div>
+                <div class="v1-member-name">Aisha Khan</div>
+                <div class="v1-member-school">TAMU</div>
+              </div>
+            </div>
+            <div class="v1-invite-row">
+              <div class="v1-invite-input" style="color:#aaa;font-size:9px;padding:3px 0;border-bottom:1px solid #000;">invite by email…</div>
+              <div class="v1-invite-hint">1 spot remaining</div>
+            </div>
+          </div>
+          <div class="v1-col">
+            <div class="v1-section-label">Check-in &amp; Docs</div>
+            <div class="v1-checkin-status">● Checked In</div>
+            <div style="font-family:'DM Mono',monospace;font-size:9px;color:#aaa;margin-bottom:8px;">May 14, 2025 · 9:03 AM</div>
+            <div style="font-family:'DM Mono',monospace;font-size:9px;color:#aaa;margin-bottom:3px;">QR Code</div>
+            <div style="width:48px;height:48px;border:1px solid #000;display:grid;grid-template-columns:repeat(5,1fr);gap:1px;padding:4px;margin-bottom:8px;">
+              <div style="background:#000;"></div><div style="background:#000;"></div><div style="background:#000;"></div><div style="background:#e0e0e0;"></div><div style="background:#000;"></div>
+              <div style="background:#000;"></div><div style="background:#e0e0e0;"></div><div style="background:#000;"></div><div style="background:#000;"></div><div style="background:#e0e0e0;"></div>
+              <div style="background:#000;"></div><div style="background:#000;"></div><div style="background:#e0e0e0;"></div><div style="background:#000;"></div><div style="background:#000;"></div>
+              <div style="background:#e0e0e0;"></div><div style="background:#000;"></div><div style="background:#000;"></div><div style="background:#e0e0e0;"></div><div style="background:#000;"></div>
+              <div style="background:#000;"></div><div style="background:#e0e0e0;"></div><div style="background:#000;"></div><div style="background:#000;"></div><div style="background:#000;"></div>
+            </div>
+            <button class="v1-pdf-btn">↓ Download PDF</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- VAR 2: BRUTALIST — QR prominent -->
+    <div class="cell v2">
+      <div class="cell-label">
+        <div style="display:flex;align-items:baseline;gap:8px;">
+          <span class="cell-num">02</span>
+          <span class="cell-desc">Brutalist</span>
+        </div>
+        <span style="font-size:10px;color:#aaa;">Bordered boxes, QR prominent</span>
+      </div>
+      <div class="cell-frame" style="padding:0;">
+        <div class="v2-topbar">
+          <span>MY ACCOUNT</span>
+          <span class="v2-checkin-pill">● CHECKED IN</span>
+        </div>
+        <div class="v2-body">
+          <div class="v2-box">
+            <div class="v2-box-header">PROFILE</div>
+            <div class="v2-box-body">
+              <div class="v2-box-name">ALEX CHEN</div>
+              <div class="v2-box-detail">alex@tamu.edu</div>
+              <div class="v2-box-detail">Texas A&M · 2025</div>
+              <div style="display:inline-block;font-family:'Arial Black',sans-serif;font-size:8px;font-weight:900;padding:2px 6px;border:2px solid #000;text-transform:uppercase;margin-top:4px;">HACKER</div>
+            </div>
+          </div>
+          <div class="v2-box">
+            <div class="v2-box-header">QR CHECK-IN</div>
+            <div class="v2-box-body" style="display:flex;flex-direction:column;align-items:center;">
+              <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:1px;width:64px;height:64px;">
+                <div style="background:#000"></div><div style="background:#000"></div><div style="background:#000"></div><div style="background:#e0e0e0"></div><div style="background:#000"></div><div style="background:#000"></div><div style="background:#000"></div>
+                <div style="background:#000"></div><div style="background:#e0e0e0"></div><div style="background:#000"></div><div style="background:#000"></div><div style="background:#000"></div><div style="background:#e0e0e0"></div><div style="background:#000"></div>
+                <div style="background:#000"></div><div style="background:#000"></div><div style="background:#000"></div><div style="background:#e0e0e0"></div><div style="background:#000"></div><div style="background:#000"></div><div style="background:#000"></div>
+                <div style="background:#e0e0e0"></div><div style="background:#000"></div><div style="background:#e0e0e0"></div><div style="background:#000"></div><div style="background:#e0e0e0"></div><div style="background:#000"></div><div style="background:#e0e0e0"></div>
+                <div style="background:#000"></div><div style="background:#000"></div><div style="background:#000"></div><div style="background:#e0e0e0"></div><div style="background:#000"></div><div style="background:#000"></div><div style="background:#000"></div>
+                <div style="background:#000"></div><div style="background:#e0e0e0"></div><div style="background:#000"></div><div style="background:#000"></div><div style="background:#e0e0e0"></div><div style="background:#e0e0e0"></div><div style="background:#000"></div>
+                <div style="background:#000"></div><div style="background:#000"></div><div style="background:#000"></div><div style="background:#e0e0e0"></div><div style="background:#000"></div><div style="background:#000"></div><div style="background:#000"></div>
+              </div>
+              <div style="font-family:'DM Mono',monospace;font-size:8px;margin-top:4px;letter-spacing:0.06em;">RD-2025-AC-0042</div>
+            </div>
+          </div>
+          <div class="v2-box">
+            <div class="v2-box-header">TEAM — APEX</div>
+            <div class="v2-box-body">
+              <div class="v2-team-row"><span class="v2-team-name">Alex Chen</span><span class="v2-team-role">You</span></div>
+              <div class="v2-team-row"><span class="v2-team-name">Sam Okafor</span><span class="v2-team-role">Member</span></div>
+              <div class="v2-team-row"><span class="v2-team-name">Priya Nair</span><span class="v2-team-role">Member</span></div>
+              <div class="v2-team-row" style="border:none;color:#aaa;font-size:8px;">Open slot available</div>
+            </div>
+          </div>
+          <div class="v2-box">
+            <div class="v2-box-header">DOCUMENTS</div>
+            <div class="v2-box-body">
+              <button style="font-family:'Arial Black',sans-serif;font-size:8px;font-weight:900;text-transform:uppercase;padding:6px 8px;background:#000;color:#fff;border:none;cursor:pointer;width:100%;letter-spacing:0.04em;margin-bottom:5px;">↓ CONFIRMATION PDF</button>
+              <div style="font-family:'DM Mono',monospace;font-size:8px;color:#aaa;">Last generated<br>May 14, 2025</div>
+            </div>
+          </div>
+          <div class="v2-invite-box">
+            <div class="v2-box-header">INVITE TEAMMATE</div>
+            <div class="v2-invite-body">
+              <input class="v2-invite-input" placeholder="teammate@email.com" readonly>
+              <button class="v2-invite-btn">SEND INVITE</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- VAR 3: MINIMAL — Minimal profile card + clean team list -->
+    <div class="cell v3">
+      <div class="cell-label">
+        <div style="display:flex;align-items:baseline;gap:8px;">
+          <span class="cell-num">03</span>
+          <span class="cell-desc">Minimal</span>
+        </div>
+        <span style="font-size:10px;color:#aaa;">Minimal profile + team list</span>
+      </div>
+      <div class="cell-frame">
+        <div class="v3-profile-row">
+          <div class="v3-avatar">SN</div>
+          <div>
+            <div class="v3-profile-name">Sofia Navarro</div>
+            <div class="v3-profile-email">sofia@rice.edu</div>
+            <span class="v3-badge">Hacker</span>
+          </div>
+        </div>
+        <div class="v3-section">
+          <div class="v3-section-label">Team — Nebula</div>
+          <div class="v3-team-item">
+            <span class="v3-team-name">Sofia Navarro</span>
+            <span class="v3-team-you">you</span>
+          </div>
+          <div class="v3-team-item">
+            <span class="v3-team-name">Marcus Webb</span>
+            <span class="v3-team-you">Rice Univ.</span>
+          </div>
+          <div class="v3-team-item">
+            <span class="v3-team-name">Yuna Kim</span>
+            <span class="v3-team-you">UT Austin</span>
+          </div>
+          <div class="v3-invite-row" style="margin-top:8px;">
+            <input class="v3-invite-input" value="invite by email" readonly>
+            <button class="v3-invite-btn">Invite</button>
+          </div>
+        </div>
+        <div class="v3-bottom-row">
+          <div class="v3-qr-section">
+            <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:1px;width:52px;height:52px;padding:4px;border:1px solid #000;">
+              <div style="background:#000;"></div><div style="background:#000;"></div><div style="background:#000;"></div><div style="background:#e0e0e0;"></div><div style="background:#000;"></div>
+              <div style="background:#000;"></div><div style="background:#e0e0e0;"></div><div style="background:#000;"></div><div style="background:#000;"></div><div style="background:#e0e0e0;"></div>
+              <div style="background:#000;"></div><div style="background:#000;"></div><div style="background:#e0e0e0;"></div><div style="background:#000;"></div><div style="background:#000;"></div>
+              <div style="background:#e0e0e0;"></div><div style="background:#000;"></div><div style="background:#000;"></div><div style="background:#e0e0e0;"></div><div style="background:#000;"></div>
+              <div style="background:#000;"></div><div style="background:#e0e0e0;"></div><div style="background:#000;"></div><div style="background:#000;"></div><div style="background:#000;"></div>
+            </div>
+            <div class="v3-qr-label">QR Check-in</div>
+          </div>
+          <div style="flex:1;">
+            <div style="font-family:'DM Mono',monospace;font-size:9px;color:#aaa;margin-bottom:4px;text-transform:uppercase;letter-spacing:0.08em;">Status</div>
+            <div style="display:inline-block;font-family:'DM Mono',monospace;font-size:9px;padding:2px 7px;border:1px solid #000;letter-spacing:0.06em;text-transform:uppercase;margin-bottom:8px;">Not checked in</div>
+            <div>
+              <button class="v3-pdf-btn">↓ Download PDF</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- VAR 4: SYSTEMATIC — Data tables -->
+    <div class="cell v4">
+      <div class="cell-label">
+        <div style="display:flex;align-items:baseline;gap:8px;">
+          <span class="cell-num">04</span>
+          <span class="cell-desc">Systematic</span>
+        </div>
+        <span style="font-size:10px;color:#aaa;">Data tables + roster</span>
+      </div>
+      <div class="cell-frame" style="padding:0;">
+        <div class="v4-header">
+          <span class="v4-header-label">Account — RD-2025-PN-0031</span>
+          <span class="v4-badge">● Checked In</span>
+        </div>
+        <table class="v4-table">
+          <tr><td>Name</td><td>Priya Nair</td></tr>
+          <tr><td>Email</td><td>p.nair@rice.edu</td></tr>
+          <tr><td>Role</td><td>Hacker</td></tr>
+          <tr><td>School</td><td>Rice University</td></tr>
+          <tr><td>Grad Year</td><td>2026</td></tr>
+          <tr><td>T-shirt</td><td>S</td></tr>
+          <tr><td>Dietary</td><td>Vegetarian</td></tr>
+        </table>
+        <div class="v4-section-divider">Team Roster — Team Delta</div>
+        <table class="v4-team-table">
+          <thead>
+            <tr><th>Name</th><th>School</th><th>Role</th><th>Joined</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Priya Nair <span class="v4-you-tag">you</span></td>
+              <td style="font-size:9px;">Rice</td>
+              <td style="font-size:9px;">Hacker</td>
+              <td style="font-size:9px;">05-01</td>
+            </tr>
+            <tr>
+              <td style="font-size:9px;">David Lim</td>
+              <td style="font-size:9px;">UT Austin</td>
+              <td style="font-size:9px;">Hacker</td>
+              <td style="font-size:9px;">05-03</td>
+            </tr>
+            <tr>
+              <td style="font-size:9px;">Rosa Alvarez</td>
+              <td style="font-size:9px;">TAMU</td>
+              <td style="font-size:9px;">Hacker</td>
+              <td style="font-size:9px;">05-05</td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="v4-qr-row">
+          <div class="v4-qr-mini">
+            <div class="v4-qr-c b"></div><div class="v4-qr-c b"></div><div class="v4-qr-c b"></div><div class="v4-qr-c"></div><div class="v4-qr-c b"></div>
+            <div class="v4-qr-c b"></div><div class="v4-qr-c"></div><div class="v4-qr-c b"></div><div class="v4-qr-c b"></div><div class="v4-qr-c"></div>
+            <div class="v4-qr-c b"></div><div class="v4-qr-c b"></div><div class="v4-qr-c"></div><div class="v4-qr-c b"></div><div class="v4-qr-c b"></div>
+            <div class="v4-qr-c"></div><div class="v4-qr-c b"></div><div class="v4-qr-c b"></div><div class="v4-qr-c"></div><div class="v4-qr-c b"></div>
+            <div class="v4-qr-c b"></div><div class="v4-qr-c"></div><div class="v4-qr-c b"></div><div class="v4-qr-c b"></div><div class="v4-qr-c b"></div>
+          </div>
+          <div class="v4-qr-meta">
+            <div class="v4-qr-id">RD-2025-PN-0031</div>
+            <div class="v4-qr-label">Scan at check-in</div>
+          </div>
+          <button class="v4-pdf-btn">↓ PDF</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- VAR 5: DASHBOARD — Sidebar + cards -->
+    <div class="cell v5">
+      <div class="cell-label">
+        <div style="display:flex;align-items:baseline;gap:8px;">
+          <span class="cell-num">05</span>
+          <span class="cell-desc">Dashboard</span>
+        </div>
+        <span style="font-size:10px;color:#aaa;">Sidebar + cards</span>
+      </div>
+      <div class="cell-frame" style="padding:0;">
+        <div class="v5-sidebar">
+          <div class="v5-sidebar-brand">Rodeo</div>
+          <div class="v5-nav-item active">Account</div>
+          <div class="v5-nav-item">Team</div>
+          <div class="v5-nav-item">QR Code</div>
+          <div class="v5-nav-item">Schedule</div>
+          <div class="v5-nav-item">Docs</div>
+        </div>
+        <div class="v5-main">
+          <div class="v5-section-title">My Account</div>
+          <div class="v5-profile-card">
+            <div class="v5-avatar">MW</div>
+            <div>
+              <div class="v5-profile-name">Marcus Webb</div>
+              <div class="v5-profile-email">m.webb@utdallas.edu</div>
+            </div>
+            <span class="v5-role-badge">Hacker</span>
+          </div>
+          <div class="v5-cards-row">
+            <div class="v5-card">
+              <div class="v5-card-label">Team</div>
+              <div class="v5-card-val">Apex</div>
+              <div class="v5-card-sub">3 / 4 members</div>
+            </div>
+            <div class="v5-card">
+              <div class="v5-card-label">Check-in</div>
+              <div class="v5-card-val">Not yet</div>
+              <div class="v5-card-sub">Doors open 8am</div>
+            </div>
+          </div>
+          <div class="v5-team-card">
+            <div class="v5-card-label" style="margin-bottom:5px;">Team — Apex</div>
+            <div class="v5-team-member-row">
+              <span style="font-size:9px;">Marcus Webb</span>
+              <span class="v5-you">you</span>
+            </div>
+            <div class="v5-team-member-row">
+              <span style="font-size:9px;">Yuna Kim</span>
+              <span style="font-size:8px;color:#aaa;">UT Austin</span>
+            </div>
+            <div class="v5-team-member-row">
+              <span style="font-size:9px;">David Lim</span>
+              <span style="font-size:8px;color:#aaa;">Rice Univ.</span>
+            </div>
+            <div class="v5-team-member-row" style="border:none;color:#aaa;font-size:9px;">
+              <span>+ invite member</span>
+              <span style="font-size:8px;">1 spot open</span>
+            </div>
+          </div>
+          <button class="v5-download-btn">↓ Download Confirmation PDF</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- VAR 6: FORM-FIRST — Team invite flow -->
+    <div class="cell v6">
+      <div class="cell-label">
+        <div style="display:flex;align-items:baseline;gap:8px;">
+          <span class="cell-num">06</span>
+          <span class="cell-desc">Form-first</span>
+        </div>
+        <span style="font-size:10px;color:#aaa;">Team invite flow</span>
+      </div>
+      <div class="cell-frame">
+        <div class="v6-step-header">
+          <div class="v6-step-label">Step 2 of 3 — Build your team</div>
+          <div class="v6-step-title">Who's on<br>your team?</div>
+        </div>
+        <div class="v6-members-row">
+          <div class="v6-members-label">Current members</div>
+          <div>
+            <span class="v6-member-chip">Taylor Nguyen <span class="v6-chip-remove">(you)</span></span>
+            <span class="v6-member-chip">Sam Okafor <span class="v6-chip-remove">×</span></span>
+          </div>
+        </div>
+        <div class="v6-form-field">
+          <label class="v6-label">Invite by email</label>
+          <input class="v6-input placeholder-style" value="teammate@university.edu" readonly>
+          <div class="v6-input-hint">They'll receive an invite link via email</div>
+        </div>
+        <button class="v6-add-btn">Send Invite</button>
+        <div class="v6-note">
+          Teams are 2–4 people. You can invite up to 2 more.<br>
+          Members must have a confirmed RSVP to join.
+        </div>
+        <div class="v6-step-dots">
+          <div class="v6-dot"></div>
+          <div class="v6-dot active"></div>
+          <div class="v6-dot"></div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /.grid -->
+
+</body>
+</html>

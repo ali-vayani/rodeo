@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RODEO — ADMIN EMAIL TEMPLATES</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Playfair+Display:wght@400;700;900&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'DM Mono', monospace; background: #fff; color: #000; }
+  .top-bar { border-bottom: 2px solid #000; padding: 12px 24px; display: flex; justify-content: space-between; align-items: center; background: #fff; }
+  .top-bar-title { font-family: 'DM Mono', monospace; font-size: 13px; font-weight: 500; letter-spacing: 0.08em; }
+  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0; border-left: 1px solid #000; border-top: 1px solid #000; }
+  .cell { border-right: 1px solid #000; border-bottom: 1px solid #000; }
+  .cell-label { font-family: 'DM Mono', monospace; font-size: 11px; padding: 8px 12px; border-bottom: 1px solid #000; display: flex; justify-content: space-between; align-items: center; background: #f4f4f4; }
+  .cell-num { font-size: 20px; font-weight: 700; line-height: 1; }
+  .cell-desc { font-size: 10px; color: #555; text-transform: uppercase; letter-spacing: 0.06em; }
+  .cell-frame { height: 400px; overflow: hidden; padding: 16px; position: relative; background: #fff; }
+
+  /* VAR 1: EDITORIAL */
+  .v1 { font-family: 'Playfair Display', serif; }
+  .v1-header { font-size: 13px; font-weight: 700; letter-spacing: 0.04em; border-bottom: 2px solid #000; padding-bottom: 6px; margin-bottom: 10px; text-transform: uppercase; font-family: 'DM Mono', monospace; }
+  .v1-tabs { display: flex; gap: 0; margin-bottom: 10px; flex-wrap: wrap; }
+  .v1-tab { font-family: 'DM Mono', monospace; font-size: 9px; padding: 4px 8px; border: 1px solid #000; margin-right: -1px; cursor: pointer; background: #fff; }
+  .v1-tab.active { background: #000; color: #fff; }
+  .v1-subject-label { font-family: 'DM Mono', monospace; font-size: 9px; text-transform: uppercase; letter-spacing: 0.06em; color: #aaa; margin-bottom: 3px; }
+  .v1-subject { font-family: 'Playfair Display', serif; font-size: 11px; width: 100%; border: none; border-bottom: 1px solid #000; padding: 4px 0; background: transparent; outline: none; }
+  .v1-toolbar { display: flex; gap: 2px; margin: 8px 0 4px; }
+  .v1-tbtn { font-family: 'DM Mono', monospace; font-size: 9px; padding: 2px 6px; border: 1px solid #000; background: #fff; cursor: pointer; }
+  .v1-body { font-family: 'Playfair Display', serif; font-size: 10px; width: 100%; height: 80px; border: 1px solid #e0e0e0; padding: 6px; resize: none; outline: none; line-height: 1.5; }
+  .v1-preview-label { font-family: 'DM Mono', monospace; font-size: 9px; text-transform: uppercase; color: #aaa; margin: 6px 0 3px; }
+  .v1-preview { background: #f4f4f4; border: 1px solid #e0e0e0; padding: 6px 8px; font-family: 'Playfair Display', serif; font-size: 9px; line-height: 1.6; height: 60px; overflow: hidden; }
+  .v1-actions { display: flex; gap: 6px; margin-top: 8px; align-items: center; }
+  .v1-btn-primary { font-family: 'DM Mono', monospace; font-size: 9px; padding: 5px 10px; background: #000; color: #fff; border: none; cursor: pointer; }
+  .v1-btn-secondary { font-family: 'DM Mono', monospace; font-size: 9px; padding: 5px 10px; background: #fff; color: #000; border: 1px solid #000; cursor: pointer; }
+  .v1-timestamp { font-family: 'DM Mono', monospace; font-size: 9px; color: #aaa; margin-left: auto; }
+
+  /* VAR 2: BRUTALIST */
+  .v2 { font-family: 'Arial Black', Arial, sans-serif; background: #fff; }
+  .v2-header { font-size: 14px; font-weight: 900; text-transform: uppercase; background: #000; color: #fff; padding: 6px 8px; margin-bottom: 0; letter-spacing: 0.04em; }
+  .v2-list { border: 3px solid #000; margin-bottom: 8px; }
+  .v2-item { font-size: 9px; font-weight: 700; text-transform: uppercase; padding: 5px 8px; border-bottom: 2px solid #000; cursor: pointer; display: flex; justify-content: space-between; align-items: center; }
+  .v2-item:last-child { border-bottom: none; }
+  .v2-item.active { background: #000; color: #fff; }
+  .v2-item-badge { font-size: 8px; padding: 1px 4px; border: 1px solid currentColor; }
+  .v2-subject-row { border: 3px solid #000; margin-bottom: 6px; }
+  .v2-subject-label { font-size: 8px; font-weight: 900; text-transform: uppercase; background: #000; color: #fff; padding: 3px 6px; }
+  .v2-subject-input { font-family: 'Arial Black', Arial, sans-serif; font-size: 10px; font-weight: 700; width: 100%; border: none; padding: 5px 6px; outline: none; background: #fff; }
+  .v2-textarea { width: 100%; height: 70px; border: 3px solid #000; border-top: none; font-family: 'Arial Black', Arial, sans-serif; font-size: 9px; padding: 5px; resize: none; outline: none; font-weight: 400; }
+  .v2-toolbar { display: flex; gap: 0; margin-bottom: 0; }
+  .v2-tbtn { font-size: 9px; font-weight: 900; padding: 3px 7px; border: 3px solid #000; border-right: none; background: #fff; cursor: pointer; text-transform: uppercase; }
+  .v2-tbtn:last-child { border-right: 3px solid #000; }
+  .v2-actions { display: flex; gap: 0; margin-top: 6px; }
+  .v2-btn { font-family: 'Arial Black', Arial, sans-serif; font-size: 9px; font-weight: 900; text-transform: uppercase; padding: 6px 10px; background: #000; color: #fff; border: 3px solid #000; cursor: pointer; margin-right: 4px; }
+  .v2-btn-outline { background: #fff; color: #000; }
+  .v2-timestamp { font-family: 'DM Mono', monospace; font-size: 8px; color: #aaa; margin-top: 4px; }
+
+  /* VAR 3: MINIMAL */
+  .v3 { font-family: system-ui, -apple-system, sans-serif; }
+  .v3-tabs { display: flex; gap: 12px; margin-bottom: 12px; border-bottom: 1px solid #e0e0e0; padding-bottom: 8px; flex-wrap: wrap; }
+  .v3-tab { font-size: 10px; color: #aaa; cursor: pointer; padding-bottom: 4px; }
+  .v3-tab.active { color: #000; border-bottom: 1px solid #000; }
+  .v3-label { font-size: 9px; text-transform: uppercase; letter-spacing: 0.08em; color: #aaa; margin-bottom: 4px; font-family: 'DM Mono', monospace; }
+  .v3-input { font-size: 11px; width: 100%; border: none; border-bottom: 1px solid #e0e0e0; padding: 4px 0; outline: none; background: transparent; font-family: system-ui, sans-serif; }
+  .v3-input:focus { border-bottom-color: #000; }
+  .v3-toolbar { display: flex; gap: 6px; margin: 8px 0; }
+  .v3-tbtn { font-size: 10px; color: #aaa; cursor: pointer; padding: 2px 4px; border: none; background: none; }
+  .v3-textarea { font-size: 10px; width: 100%; height: 80px; border: none; border-bottom: 1px solid #e0e0e0; padding: 4px 0; resize: none; outline: none; font-family: system-ui, sans-serif; line-height: 1.6; }
+  .v3-preview-box { background: #f4f4f4; padding: 8px; margin-top: 8px; font-size: 9px; line-height: 1.7; height: 60px; overflow: hidden; color: #555; }
+  .v3-actions { display: flex; gap: 8px; margin-top: 10px; align-items: center; }
+  .v3-btn { font-family: 'DM Mono', monospace; font-size: 9px; padding: 5px 12px; border: 1px solid #000; background: #fff; cursor: pointer; }
+  .v3-btn-fill { background: #000; color: #fff; }
+  .v3-timestamp { font-family: 'DM Mono', monospace; font-size: 9px; color: #aaa; margin-left: auto; }
+
+  /* VAR 4: SYSTEMATIC */
+  .v4 { font-family: 'DM Mono', monospace; }
+  .v4-meta-table { width: 100%; border-collapse: collapse; margin-bottom: 8px; font-size: 9px; }
+  .v4-meta-table th { background: #f4f4f4; border: 1px solid #e0e0e0; padding: 3px 6px; font-weight: 500; text-align: left; font-size: 8px; text-transform: uppercase; letter-spacing: 0.05em; }
+  .v4-meta-table td { border: 1px solid #e0e0e0; padding: 3px 6px; font-size: 9px; }
+  .v4-meta-table td.active-row { background: #000; color: #fff; }
+  .v4-field { margin-bottom: 6px; }
+  .v4-field-label { font-size: 8px; text-transform: uppercase; letter-spacing: 0.06em; color: #aaa; margin-bottom: 2px; }
+  .v4-field-input { font-family: 'DM Mono', monospace; font-size: 10px; width: 100%; border: 1px solid #e0e0e0; padding: 4px 6px; outline: none; background: #fff; }
+  .v4-field-input:focus { border-color: #000; }
+  .v4-toolbar { display: flex; gap: 0; margin-bottom: 4px; }
+  .v4-tbtn { font-family: 'DM Mono', monospace; font-size: 8px; padding: 2px 6px; border: 1px solid #e0e0e0; border-right: none; background: #f4f4f4; cursor: pointer; }
+  .v4-tbtn:last-child { border-right: 1px solid #e0e0e0; }
+  .v4-textarea { font-family: 'DM Mono', monospace; font-size: 9px; width: 100%; height: 65px; border: 1px solid #e0e0e0; padding: 5px; resize: none; outline: none; line-height: 1.5; }
+  .v4-actions { display: flex; gap: 4px; margin-top: 6px; align-items: center; }
+  .v4-btn { font-family: 'DM Mono', monospace; font-size: 8px; text-transform: uppercase; padding: 4px 8px; border: 1px solid #000; background: #000; color: #fff; cursor: pointer; }
+  .v4-btn-outline { background: #fff; color: #000; }
+  .v4-timestamp { font-size: 8px; color: #aaa; margin-left: auto; }
+
+  /* VAR 5: DASHBOARD */
+  .v5 { font-family: 'Inter', sans-serif; display: flex; height: 100%; }
+  .v5-sidebar { width: 90px; border-right: 1px solid #e0e0e0; flex-shrink: 0; overflow-y: auto; }
+  .v5-sidebar-header { font-family: 'DM Mono', monospace; font-size: 8px; text-transform: uppercase; letter-spacing: 0.06em; padding: 8px 8px 4px; color: #aaa; border-bottom: 1px solid #e0e0e0; }
+  .v5-nav-item { font-size: 9px; padding: 6px 8px; cursor: pointer; border-bottom: 1px solid #f4f4f4; color: #555; }
+  .v5-nav-item.active { background: #000; color: #fff; font-weight: 600; }
+  .v5-main { flex: 1; padding: 10px; overflow: hidden; display: flex; flex-direction: column; }
+  .v5-main-header { font-size: 11px; font-weight: 600; margin-bottom: 8px; padding-bottom: 6px; border-bottom: 1px solid #e0e0e0; display: flex; justify-content: space-between; align-items: center; }
+  .v5-field { margin-bottom: 6px; }
+  .v5-label { font-family: 'DM Mono', monospace; font-size: 8px; text-transform: uppercase; letter-spacing: 0.06em; color: #aaa; margin-bottom: 2px; }
+  .v5-input { font-family: 'Inter', sans-serif; font-size: 10px; width: 100%; border: 1px solid #e0e0e0; padding: 4px 6px; outline: none; border-radius: 2px; }
+  .v5-toolbar { display: flex; gap: 3px; margin-bottom: 4px; }
+  .v5-tbtn { font-family: 'DM Mono', monospace; font-size: 9px; padding: 2px 6px; border: 1px solid #e0e0e0; background: #fff; cursor: pointer; border-radius: 2px; }
+  .v5-textarea { font-family: 'Inter', sans-serif; font-size: 9px; width: 100%; height: 65px; border: 1px solid #e0e0e0; padding: 5px 6px; resize: none; outline: none; line-height: 1.5; border-radius: 2px; }
+  .v5-preview { background: #f4f4f4; padding: 6px; margin-top: 6px; font-size: 8px; line-height: 1.6; height: 50px; overflow: hidden; border-radius: 2px; }
+  .v5-actions { display: flex; gap: 4px; margin-top: auto; padding-top: 6px; }
+  .v5-btn { font-family: 'DM Mono', monospace; font-size: 8px; padding: 4px 8px; border: 1px solid #000; background: #000; color: #fff; cursor: pointer; border-radius: 2px; }
+  .v5-btn-outline { background: #fff; color: #000; }
+  .v5-timestamp { font-family: 'DM Mono', monospace; font-size: 8px; color: #aaa; margin-left: auto; }
+
+  /* VAR 6: FORM-FIRST */
+  .v6 { font-family: 'Inter', sans-serif; }
+  .v6-progress { display: flex; gap: 0; margin-bottom: 12px; }
+  .v6-step { flex: 1; text-align: center; font-family: 'DM Mono', monospace; font-size: 8px; padding: 5px; border: 1px solid #e0e0e0; border-right: none; color: #aaa; }
+  .v6-step:last-child { border-right: 1px solid #e0e0e0; }
+  .v6-step.active { background: #000; color: #fff; border-color: #000; }
+  .v6-step.done { background: #f4f4f4; color: #555; }
+  .v6-card-group { display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px; }
+  .v6-card { border: 1px solid #e0e0e0; padding: 7px 10px; cursor: pointer; display: flex; align-items: center; justify-content: space-between; }
+  .v6-card.selected { border: 2px solid #000; background: #f4f4f4; }
+  .v6-card-title { font-size: 10px; font-weight: 600; }
+  .v6-card-meta { font-family: 'DM Mono', monospace; font-size: 8px; color: #aaa; }
+  .v6-check { width: 12px; height: 12px; border: 1px solid #e0e0e0; border-radius: 50%; flex-shrink: 0; }
+  .v6-check.checked { background: #000; border-color: #000; }
+  .v6-field { margin-bottom: 8px; }
+  .v6-field-label { font-family: 'DM Mono', monospace; font-size: 9px; text-transform: uppercase; letter-spacing: 0.06em; color: #555; margin-bottom: 4px; }
+  .v6-field-input { font-size: 11px; width: 100%; border: 2px solid #000; padding: 8px 10px; outline: none; font-family: 'Inter', sans-serif; }
+  .v6-field-input:focus { background: #f4f4f4; }
+  .v6-btn-next { width: 100%; font-family: 'DM Mono', monospace; font-size: 10px; font-weight: 500; text-transform: uppercase; padding: 9px; background: #000; color: #fff; border: none; cursor: pointer; margin-top: 6px; letter-spacing: 0.06em; }
+</style>
+</head>
+<body>
+<div class="top-bar">
+  <span class="top-bar-title">RODEO — ADMIN EMAIL TEMPLATES</span>
+  <span style="font-family:'DM Mono',monospace;font-size:11px;color:#aaa;">6 variations</span>
+</div>
+
+<div class="grid">
+
+  <!-- CELL 1: EDITORIAL -->
+  <div class="cell">
+    <div class="cell-label">
+      <span class="cell-num">01</span>
+      <span class="cell-desc">Editorial</span>
+    </div>
+    <div class="cell-frame">
+      <div class="v1">
+        <div class="v1-header">Email Templates</div>
+        <div class="v1-tabs">
+          <div class="v1-tab active">Applied</div>
+          <div class="v1-tab">Accepted</div>
+          <div class="v1-tab">Rejected</div>
+          <div class="v1-tab">Waitlisted</div>
+          <div class="v1-tab">Confirmed</div>
+          <div class="v1-tab">RSVP'd</div>
+        </div>
+        <div class="v1-subject-label">Subject Line</div>
+        <input class="v1-subject" type="text" value="You've been accepted to Rodeo 2025!" />
+        <div class="v1-toolbar">
+          <button class="v1-tbtn"><b>B</b></button>
+          <button class="v1-tbtn"><i>I</i></button>
+          <button class="v1-tbtn"><u>U</u></button>
+          <button class="v1-tbtn">Link</button>
+        </div>
+        <textarea class="v1-body">Hi {{first_name}},
+
+We're thrilled to invite you to Rodeo 2025! Please RSVP by {{rsvp_deadline}} at: {{rsvp_link}}
+
+Best,
+The Rodeo Team</textarea>
+        <div class="v1-preview-label">Preview</div>
+        <div class="v1-preview">Hi Sarah, We're thrilled to invite you to Rodeo 2025! Please RSVP by Nov 10 at: rodeo.dev/rsvp/abc123 — Best, The Rodeo Team</div>
+        <div class="v1-actions">
+          <button class="v1-btn-primary">Save Template</button>
+          <button class="v1-btn-secondary">Send Test</button>
+          <span class="v1-timestamp">Saved 2:14 PM</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CELL 2: BRUTALIST -->
+  <div class="cell">
+    <div class="cell-label">
+      <span class="cell-num">02</span>
+      <span class="cell-desc">Brutalist</span>
+    </div>
+    <div class="cell-frame">
+      <div class="v2">
+        <div class="v2-header">Email Templates</div>
+        <div class="v2-list">
+          <div class="v2-item active">Applied <span class="v2-item-badge">ACTIVE</span></div>
+          <div class="v2-item">Accepted <span class="v2-item-badge">EDIT</span></div>
+          <div class="v2-item">Rejected</div>
+          <div class="v2-item">Waitlisted</div>
+          <div class="v2-item">Confirmed</div>
+          <div class="v2-item">RSVP'd</div>
+        </div>
+        <div class="v2-subject-row">
+          <div class="v2-subject-label">Subject</div>
+          <input class="v2-subject-input" type="text" value="Your application is received!" />
+        </div>
+        <div class="v2-toolbar">
+          <button class="v2-tbtn"><b>B</b></button>
+          <button class="v2-tbtn"><i>I</i></button>
+          <button class="v2-tbtn"><u>U</u></button>
+          <button class="v2-tbtn">LINK</button>
+        </div>
+        <textarea class="v2-textarea">Hi {{first_name}},
+
+Thanks for applying to {{hackathon_name}}. We've received your application and will be in touch soon.
+
+— The Rodeo Team</textarea>
+        <div class="v2-actions">
+          <button class="v2-btn">Save</button>
+          <button class="v2-btn v2-btn-outline">Send Test</button>
+        </div>
+        <div class="v2-timestamp">Last saved: Today 2:14 PM</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CELL 3: MINIMAL -->
+  <div class="cell">
+    <div class="cell-label">
+      <span class="cell-num">03</span>
+      <span class="cell-desc">Minimal</span>
+    </div>
+    <div class="cell-frame">
+      <div class="v3">
+        <div class="v3-tabs">
+          <span class="v3-tab">Applied</span>
+          <span class="v3-tab active">Accepted</span>
+          <span class="v3-tab">Rejected</span>
+          <span class="v3-tab">Waitlisted</span>
+          <span class="v3-tab">Confirmed</span>
+          <span class="v3-tab">RSVP'd</span>
+        </div>
+        <div style="margin-bottom:8px;">
+          <div class="v3-label">Subject</div>
+          <input class="v3-input" type="text" value="You've been accepted to Rodeo 2025!" />
+        </div>
+        <div class="v3-toolbar">
+          <button class="v3-tbtn"><b>B</b></button>
+          <button class="v3-tbtn"><i>I</i></button>
+          <button class="v3-tbtn"><u>U</u></button>
+          <button class="v3-tbtn">↗</button>
+        </div>
+        <textarea class="v3-textarea">Hi {{first_name}},
+
+We're thrilled to invite you to Rodeo 2025! Please RSVP by {{rsvp_deadline}} at: {{rsvp_link}}
+
+Best,
+The Rodeo Team</textarea>
+        <div class="v3-preview-box">Hi Sarah, We're thrilled to invite you to Rodeo 2025! Please RSVP by Nov 10 at: rodeo.dev/rsvp/abc123</div>
+        <div class="v3-actions">
+          <button class="v3-btn v3-btn-fill">Save Template</button>
+          <button class="v3-btn">Send Test</button>
+          <span class="v3-timestamp">Saved 2:14 PM</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CELL 4: SYSTEMATIC -->
+  <div class="cell">
+    <div class="cell-label">
+      <span class="cell-num">04</span>
+      <span class="cell-desc">Systematic</span>
+    </div>
+    <div class="cell-frame">
+      <div class="v4">
+        <table class="v4-meta-table">
+          <thead>
+            <tr><th>Template</th><th>Status</th><th>Last Modified</th></tr>
+          </thead>
+          <tbody>
+            <tr><td class="active-row">Accepted</td><td class="active-row">Active</td><td class="active-row">Oct 30</td></tr>
+            <tr><td>Applied</td><td>Active</td><td>Oct 28</td></tr>
+            <tr><td>Rejected</td><td>Draft</td><td>Oct 25</td></tr>
+            <tr><td>Waitlisted</td><td>Active</td><td>Oct 22</td></tr>
+          </tbody>
+        </table>
+        <div class="v4-field">
+          <div class="v4-field-label">Subject Line</div>
+          <input class="v4-field-input" type="text" value="You've been accepted to Rodeo 2025!" />
+        </div>
+        <div class="v4-toolbar">
+          <button class="v4-tbtn"><b>B</b></button>
+          <button class="v4-tbtn"><i>I</i></button>
+          <button class="v4-tbtn"><u>U</u></button>
+          <button class="v4-tbtn">Link</button>
+        </div>
+        <textarea class="v4-textarea">Hi {{first_name}},
+
+We're thrilled to invite you to {{hackathon_name}}! RSVP by {{rsvp_deadline}}: {{rsvp_link}}
+
+— The Rodeo Team</textarea>
+        <div class="v4-actions">
+          <button class="v4-btn">Save</button>
+          <button class="v4-btn v4-btn-outline">Test Email</button>
+          <span class="v4-timestamp">Saved: 14:14:02</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CELL 5: DASHBOARD -->
+  <div class="cell">
+    <div class="cell-label">
+      <span class="cell-num">05</span>
+      <span class="cell-desc">Dashboard</span>
+    </div>
+    <div class="cell-frame" style="padding:0;">
+      <div class="v5">
+        <div class="v5-sidebar">
+          <div class="v5-sidebar-header">Templates</div>
+          <div class="v5-nav-item">Applied</div>
+          <div class="v5-nav-item active">Accepted</div>
+          <div class="v5-nav-item">Rejected</div>
+          <div class="v5-nav-item">Waitlisted</div>
+          <div class="v5-nav-item">Confirmed</div>
+          <div class="v5-nav-item">RSVP'd</div>
+        </div>
+        <div class="v5-main">
+          <div class="v5-main-header">
+            <span>Accepted</span>
+            <span style="font-size:8px;color:#aaa;font-family:'DM Mono',monospace;">Saved 2:14 PM</span>
+          </div>
+          <div class="v5-field">
+            <div class="v5-label">Subject</div>
+            <input class="v5-input" type="text" value="You've been accepted to Rodeo 2025!" />
+          </div>
+          <div class="v5-toolbar">
+            <button class="v5-tbtn"><b>B</b></button>
+            <button class="v5-tbtn"><i>I</i></button>
+            <button class="v5-tbtn"><u>U</u></button>
+            <button class="v5-tbtn">Link</button>
+          </div>
+          <textarea class="v5-textarea">Hi {{first_name}},
+
+We're thrilled to invite you to Rodeo 2025! Please RSVP by {{rsvp_deadline}} at: {{rsvp_link}}
+
+Best, The Rodeo Team</textarea>
+          <div class="v5-preview">Preview: Hi Sarah, We're thrilled to invite you to Rodeo 2025! Please RSVP by Nov 10 at: rodeo.dev/rsvp/abc123</div>
+          <div class="v5-actions">
+            <button class="v5-btn">Save</button>
+            <button class="v5-btn v5-btn-outline">Send Test</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CELL 6: FORM-FIRST -->
+  <div class="cell">
+    <div class="cell-label">
+      <span class="cell-num">06</span>
+      <span class="cell-desc">Form-first</span>
+    </div>
+    <div class="cell-frame">
+      <div class="v6">
+        <div class="v6-progress">
+          <div class="v6-step done">1. Select</div>
+          <div class="v6-step active">2. Edit</div>
+          <div class="v6-step">3. Preview</div>
+          <div class="v6-step">4. Save</div>
+        </div>
+        <div class="v6-card-group">
+          <div class="v6-card selected">
+            <div>
+              <div class="v6-card-title">Accepted</div>
+              <div class="v6-card-meta">Last edited Oct 30</div>
+            </div>
+            <div class="v6-check checked"></div>
+          </div>
+          <div class="v6-card">
+            <div>
+              <div class="v6-card-title">Applied</div>
+              <div class="v6-card-meta">Last edited Oct 28</div>
+            </div>
+            <div class="v6-check"></div>
+          </div>
+        </div>
+        <div class="v6-field">
+          <div class="v6-field-label">Subject Line</div>
+          <input class="v6-field-input" type="text" value="You've been accepted to Rodeo 2025!" />
+        </div>
+        <button class="v6-btn-next">Next: Edit Body →</button>
+      </div>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>
