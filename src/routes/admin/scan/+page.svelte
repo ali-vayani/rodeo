@@ -2,6 +2,6 @@
 </script>
 
 <div>
-	<h1 class="text-2xl font-semibold" style="color: #191919">Scan</h1>
-	<p class="mt-1 text-sm" style="color: #aaaaaa">— coming soon —</p>
+	<h1 class="text-2xl font-semibold text-primary">Scan</h1>
+	<p class="mt-1 text-sm text-muted-foreground">— coming soon —</p>
 </div>

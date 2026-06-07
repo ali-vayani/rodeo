@@ -12,17 +12,11 @@
 
 	let { users, onEdit }: { users: User[]; onEdit: (u: User) => void } = $props();
 
-	const DECISION_BG: Record<string, string> = {
-		ACCEPTED: '#d1fae5',
-		WAITLISTED: '#fef9c3',
-		REJECTED: '#fee2e2',
-		PENDING: '#e5e7eb'
-	};
-	const DECISION_FG: Record<string, string> = {
-		ACCEPTED: '#065f46',
-		WAITLISTED: '#713f12',
-		REJECTED: '#991b1b',
-		PENDING: '#374151'
+	const DECISION_CLASS: Record<string, string> = {
+		ACCEPTED: 'bg-[#d1fae5] text-[#065f46]',
+		WAITLISTED: 'bg-[#fef9c3] text-[#713f12]',
+		REJECTED: 'bg-[#fee2e2] text-[#991b1b]',
+		PENDING: 'bg-[#e5e7eb] text-[#374151]'
 	};
 
 	function formatDate(d: Date | string): string {
@@ -41,17 +35,15 @@
 	}
 </script>
 
-<div style="background:#fff; border:1px solid #e0e0e0; border-radius:6px; overflow:hidden;">
+<div class="bg-white border border-border rounded-md overflow-hidden">
 	{#if users.length === 0}
-		<div style="padding:48px; text-align:center; font-size:13px; color:#aaaaaa;">No results</div>
+		<div class="py-12 text-center text-[13px] text-muted-foreground">No results</div>
 	{:else}
-		<table style="width:100%; border-collapse:collapse;">
+		<table class="w-full border-collapse">
 			<thead>
-				<tr style="background:#f9f9f9; border-bottom:1px solid #e0e0e0;">
+				<tr class="bg-[#f9f9f9] border-b border-border">
 					{#each ['Name', 'Email', 'Role', 'Status', 'Pending', 'Decision', 'Created', ''] as col}
-						<th
-							style="padding:10px 14px; text-align:left; font-size:11px; font-weight:600; letter-spacing:0.06em; text-transform:uppercase; color:#aaaaaa; white-space:nowrap;"
-						>
+						<th class="px-[14px] py-[10px] text-left text-[11px] font-semibold tracking-[0.06em] uppercase text-muted-foreground whitespace-nowrap">
 							{col}
 						</th>
 					{/each}
@@ -59,56 +51,46 @@
 			</thead>
 			<tbody>
 				{#each users as user (user.uid)}
-					<tr
-						style="border-bottom:1px solid #f0f0f0; transition:background 0.1s;"
-						onmouseenter={(e) => ((e.currentTarget as HTMLElement).style.background = '#fafafa')}
-						onmouseleave={(e) => ((e.currentTarget as HTMLElement).style.background = '')}
-					>
-						<td style="padding:11px 14px; font-size:13px; font-weight:500; color:#191919; white-space:nowrap;">
+					<tr class="border-b border-[#f0f0f0] hover:bg-[#fafafa] transition-colors">
+						<td class="px-[14px] py-[11px] text-[13px] font-medium text-primary whitespace-nowrap">
 							{user.name}
 						</td>
-						<td style="padding:11px 14px; font-size:12px; color:#aaaaaa;">
+						<td class="px-[14px] py-[11px] text-xs text-muted-foreground">
 							{user.email}
 						</td>
-						<td style="padding:11px 14px; font-size:13px; color:#333;">
+						<td class="px-[14px] py-[11px] text-[13px] text-[#333]">
 							{primaryRole(user.roles)}
 						</td>
-						<td style="padding:11px 14px;">
-							<span style="font-size:11px; font-weight:600; letter-spacing:0.05em; text-transform:uppercase; color:#555;">
+						<td class="px-[14px] py-[11px]">
+							<span class="text-[11px] font-semibold tracking-[0.05em] uppercase text-[#555]">
 								{statusLabel(user.status)}
 							</span>
 						</td>
-						<td style="padding:11px 14px;">
+						<td class="px-[14px] py-[11px]">
 							{#if user.pendingDecision}
-								<span
-									style="display:inline-block; padding:2px 7px; border-radius:4px; font-size:11px; font-weight:600; background:{DECISION_BG[user.pendingDecision] ?? '#e5e7eb'}; color:{DECISION_FG[user.pendingDecision] ?? '#374151'};"
-								>
+								<span class="inline-block px-[7px] py-0.5 rounded text-[11px] font-semibold {DECISION_CLASS[user.pendingDecision] ?? 'bg-[#e5e7eb] text-[#374151]'}">
 									{statusLabel(user.pendingDecision)}
 								</span>
 							{:else}
-								<span style="font-size:12px; color:#cccccc;">—</span>
+								<span class="text-xs text-[#cccccc]">—</span>
 							{/if}
 						</td>
-						<td style="padding:11px 14px;">
+						<td class="px-[14px] py-[11px]">
 							{#if user.activeDecision}
-								<span
-									style="display:inline-block; padding:2px 7px; border-radius:4px; font-size:11px; font-weight:600; background:{DECISION_BG[user.activeDecision] ?? '#e5e7eb'}; color:{DECISION_FG[user.activeDecision] ?? '#374151'};"
-								>
+								<span class="inline-block px-[7px] py-0.5 rounded text-[11px] font-semibold {DECISION_CLASS[user.activeDecision] ?? 'bg-[#e5e7eb] text-[#374151]'}">
 									{statusLabel(user.activeDecision)}
 								</span>
 							{:else}
-								<span style="font-size:12px; color:#cccccc;">—</span>
+								<span class="text-xs text-[#cccccc]">—</span>
 							{/if}
 						</td>
-						<td
-							style="padding:11px 14px; font-size:12px; color:#aaaaaa; font-family:'DM Mono', monospace; white-space:nowrap;"
-						>
+						<td class="px-[14px] py-[11px] text-xs text-muted-foreground font-mono whitespace-nowrap">
 							{formatDate(user.createdAt)}
 						</td>
-						<td style="padding:11px 14px;">
+						<td class="px-[14px] py-[11px]">
 							<button
 								onclick={() => onEdit(user)}
-								style="font-size:12px; color:#191919; background:none; border:1px solid #e0e0e0; border-radius:4px; padding:4px 10px; cursor:pointer;"
+								class="text-xs text-primary bg-transparent border border-border rounded px-[10px] py-1 cursor-pointer"
 							>
 								Edit
 							</button>

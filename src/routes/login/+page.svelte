@@ -18,13 +18,13 @@
 <div class="flex min-h-screen items-center justify-center bg-white">
 	<div class="w-full max-w-sm">
 		<div class="mb-8 text-center">
-			<p class="font-mono text-xs uppercase tracking-widest" style="color: #aaaaaa">
+			<p class="font-mono text-xs uppercase tracking-widest text-muted-foreground">
 				Hackathon Management
 			</p>
-			<h1 class="mt-1 font-mono text-3xl font-bold uppercase tracking-widest" style="color: #191919">
+			<h1 class="mt-1 font-mono text-3xl font-bold uppercase tracking-widest text-primary">
 				RODEO
 			</h1>
-			<p class="mt-2 text-sm" style="color: #aaaaaa">
+			<p class="mt-2 text-sm text-muted-foreground">
 				{data.isProd ? 'Sign in to continue' : 'Dev login — enter your yopmail address'}
 			</p>
 		</div>
@@ -40,8 +40,7 @@
 				placeholder={data.isProd ? 'you@example.com' : 'you@yopmail.com'}
 				required
 				autocomplete="email"
-				class="w-full rounded border px-3 py-2 text-sm outline-none focus:border-primary"
-				style="border-color: #e0e0e0;"
+				class="w-full rounded border border-border px-3 py-2 text-sm outline-none focus:border-primary"
 			/>
 
 			{#if data.isProd}
@@ -51,8 +50,7 @@
 					placeholder="Password"
 					required
 					autocomplete="current-password"
-					class="w-full rounded border px-3 py-2 text-sm outline-none focus:border-primary"
-					style="border-color: #e0e0e0;"
+					class="w-full rounded border border-border px-3 py-2 text-sm outline-none focus:border-primary"
 				/>
 			{/if}
 
@@ -62,8 +60,7 @@
 
 			<button
 				type="submit"
-				class="w-full rounded px-4 py-2 text-sm font-medium text-white transition-opacity hover:opacity-85"
-				style="background: #191919"
+				class="w-full rounded bg-primary px-4 py-2 text-sm font-medium text-white transition-opacity hover:opacity-85"
 			>
 				Sign in →
 			</button>
@@ -71,15 +68,14 @@
 
 		{#if data.isProd}
 			<div class="my-4 flex items-center gap-3">
-				<div class="h-px flex-1" style="background: #e0e0e0"></div>
-				<span class="text-xs" style="color: #aaaaaa">or</span>
-				<div class="h-px flex-1" style="background: #e0e0e0"></div>
+				<div class="h-px flex-1 bg-border"></div>
+				<span class="text-xs text-muted-foreground">or</span>
+				<div class="h-px flex-1 bg-border"></div>
 			</div>
 
 			<button
 				onclick={signInWithGoogle}
-				class="flex w-full items-center justify-center gap-3 rounded border px-4 py-2 text-sm font-medium transition-colors hover:bg-muted"
-				style="border-color: #e0e0e0; color: #191919"
+				class="flex w-full items-center justify-center gap-3 rounded border border-border px-4 py-2 text-sm font-medium text-primary transition-colors hover:bg-muted"
 			>
 				<svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
 					<path
@@ -103,7 +99,7 @@
 			</button>
 		{/if}
 
-		<p class="mt-8 text-center font-mono text-xs" style="color: #aaaaaa">
+		<p class="mt-8 text-center font-mono text-xs text-muted-foreground">
 			RODEO · Hackathon Management Platform
 		</p>
 	</div>

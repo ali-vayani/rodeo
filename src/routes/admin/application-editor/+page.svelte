@@ -16,7 +16,6 @@
 
   let { data, form }: Props = $props();
 
-  // Seed working copy from server data; re-seed when data changes (after invalidation)
   let questions = $derived<Question[]>(data.questions as Question[]);
   let workingQuestions = $derived<Question[]>(
     data.questions.map(q => ({ ...q, options: [...(q.options ?? [])], targetRole: [...(q.targetRole ?? [])] })) as Question[]
@@ -33,21 +32,17 @@
 
   let isSaving = $state(false);
 
-  // Modal states
   let editorOpen = $state(false);
   let editingQuestion = $state<Question | null>(null);
   let confirmOpen = $state(false);
 
-  // Add question form
   let addTitle = $state('');
   let addType = $state<QuestionType>('SHORT_TEXT');
 
-  // Toast
   let toastMsg = $state('');
   let toastKind = $state<'success' | 'error'>('success');
   let toastTimer: ReturnType<typeof setTimeout>;
 
-  // Show toast when form action returns
   $effect(() => {
     if (form?.error) {
       showToast(form.error, 'error');
@@ -66,7 +61,6 @@
   const ALL_ROLES: Role[] = ['HACKER', 'JUDGE', 'MENTOR', 'VOLUNTEER', 'ORGANIZER', 'ADMIN', 'UNDECLARED'];
   let selectedRole = $state<Role>('HACKER');
 
-  // Derived: pending changes
   const pendingChanges = $derived.by(() => {
     const added = workingQuestions.filter(q => !q.id || q.id.startsWith('temp-'));
     const deleted = questions.filter(q => !workingQuestions.find(wq => wq.id === q.id));
@@ -74,7 +68,6 @@
       const original = questions.find(q => q.id === wq.id);
       return original && JSON.stringify(original) !== JSON.stringify(wq);
     });
-    // Build reorder payload: only persisted questions whose order index changed
     const reordered = workingQuestions
       .filter(q => q.id && !q.id.startsWith('temp-'))
       .map((q, i) => ({ id: q.id!, order: i }))
@@ -99,7 +92,6 @@
     pendingChanges.reordered.length > 0
   );
 
-  // Unsaved-changes guard
   $effect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
       if (isDirty) {
@@ -111,7 +103,6 @@
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   });
 
-  // Reorder
   function moveUp(index: number) {
     if (index === 0) return;
     const arr = [...workingQuestions];
@@ -126,7 +117,6 @@
     workingQuestions = arr.map((q, i) => ({ ...q, order: i }));
   }
 
-  // Edit
   function openEdit(q: Question) {
     editingQuestion = { ...q, options: [...(q.options ?? [])], targetRole: [...(q.targetRole ?? [])] };
     editorOpen = true;
@@ -148,13 +138,11 @@
     editingQuestion = null;
   }
 
-  // Delete
   function deleteQuestion(id: string | undefined) {
     if (!id) return;
     workingQuestions = workingQuestions.filter(q => q.id !== id).map((q, i) => ({ ...q, order: i }));
   }
 
-  // Quick-add form
   function handleQuickAdd() {
     if (!addTitle.trim()) return;
     const tempId = `temp-${Date.now()}`;
@@ -179,13 +167,11 @@
     addType = 'SHORT_TEXT';
   }
 
-  // Save flow
   function handleSaveClick() {
     if (!isDirty) return;
     confirmOpen = true;
   }
 
-  // The hidden input value sent to the form action
   const changesPayload = $derived(
     JSON.stringify({
       added: pendingChanges.added.map(({ id, ...rest }) => rest),
@@ -205,29 +191,43 @@
   ];
 </script>
 
-<div class="page">
+<!-- Page -->
+<div class="px-8 py-7 max-w-[1200px] mx-auto flex flex-col gap-5 min-h-screen">
+
   <!-- Header -->
-  <div class="page-header">
-    <div class="header-top">
-      <div class="header-left">
-        <h1>Applications</h1>
+  <div class="flex flex-col gap-2.5">
+    <!-- Top row -->
+    <div class="flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <h1 class="text-[22px] font-extrabold text-[#191919] m-0 tracking-tight">Applications</h1>
         {#if isDirty}
-          <span class="unsaved-badge">Unsaved changes</span>
+          <span class="text-[11px] font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-[5px] px-2 py-0.5 tracking-[0.01em]">
+            Unsaved changes
+          </span>
         {/if}
       </div>
-      <button class="btn-save" onclick={handleSaveClick} disabled={!isDirty || isSaving}>
+      <button
+        class="flex items-center gap-2 text-[13px] font-semibold px-5 py-[9px] bg-[#191919] border border-[#191919] rounded-lg text-white cursor-pointer transition-colors duration-[120ms] hover:bg-[#333] hover:border-[#333] disabled:opacity-35 disabled:cursor-not-allowed"
+        onclick={handleSaveClick}
+        disabled={!isDirty || isSaving}
+      >
         {#if isSaving}
-          <span class="spinner-sm"></span>
+          <span class="inline-block w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
           Saving…
         {:else}
           Save Changes
         {/if}
       </button>
     </div>
-    <div class="header-bottom">
-      <div class="role-selector">
-        <label for="role-select">Role:</label>
-        <select id="role-select" bind:value={selectedRole}>
+    <!-- Bottom row -->
+    <div class="flex items-center">
+      <div class="flex items-center gap-1.5">
+        <label for="role-select" class="text-xs font-medium text-[#888]">Role:</label>
+        <select
+          id="role-select"
+          bind:value={selectedRole}
+          class="text-xs font-semibold text-[#191919] bg-[#f4f4f4] border border-[#e0e0e0] rounded-[5px] px-2 py-1 cursor-pointer outline-none focus:border-[#191919]"
+        >
           {#each ALL_ROLES as role}
             <option value={role}>{role}</option>
           {/each}
@@ -236,18 +236,24 @@
     </div>
   </div>
 
-  <div class="content-grid">
-    <!-- Left: Question List -->
-    <div class="question-list-col">
-      <div class="col-header">
-        <span class="col-label">Questions</span>
-        <span class="count-badge">{filteredQuestions.length}</span>
+  <!-- Content grid -->
+  <div class="grid grid-cols-[60%_1fr] gap-5 items-start max-[900px]:grid-cols-1">
+
+    <!-- Left: Question list -->
+    <div class="flex flex-col gap-2.5">
+      <!-- Col header -->
+      <div class="flex items-center gap-2 px-0.5">
+        <span class="text-[11px] font-bold text-[#aaa] tracking-[0.08em] uppercase">Questions</span>
+        <span class="text-[11px] font-bold text-[#888] bg-[#f4f4f4] border border-[#e0e0e0] rounded-xl px-[7px] py-px">
+          {filteredQuestions.length}
+        </span>
       </div>
 
-      <div class="question-list">
+      <!-- List -->
+      <div class="flex flex-col gap-1.5">
         {#if workingQuestions.length === 0}
-          <div class="list-empty">
-            <p>No questions yet. Add one below.</p>
+          <div class="p-8 text-center border border-dashed border-[#e0e0e0] rounded-lg">
+            <p class="text-[13px] text-[#aaa] m-0">No questions yet. Add one below.</p>
           </div>
         {:else}
           {#each filteredQuestions as q, i (q.id)}
@@ -265,30 +271,37 @@
         {/if}
       </div>
 
-      <!-- Add Question Form -->
-      <div class="add-form">
-        <div class="add-form-header">
+      <!-- Add question form -->
+      <div class="border border-[#e0e0e0] rounded-[10px] overflow-hidden bg-white mt-1">
+        <div class="flex items-center gap-[7px] px-3.5 py-2.5 bg-[#f4f4f4] border-b border-[#e0e0e0] text-xs font-bold text-[#444] tracking-[0.01em]">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
             <line x1="12" y1="5" x2="12" y2="19"></line>
             <line x1="5" y1="12" x2="19" y2="12"></line>
           </svg>
           Add Question
         </div>
-        <div class="add-form-body">
+        <div class="p-3.5 flex flex-col gap-2">
           <input
             type="text"
             bind:value={addTitle}
             placeholder="Question title…"
             onkeydown={(e) => e.key === 'Enter' && handleQuickAdd()}
-            class="add-title-input"
+            class="w-full px-2.5 py-2 border border-[#e0e0e0] rounded-md text-[13px] text-[#191919] bg-white outline-none box-border transition-[border-color,box-shadow] duration-[120ms] focus:border-[#191919] focus:shadow-[0_0_0_2px_rgba(25,25,25,0.07)]"
           />
-          <div class="add-row">
-            <select bind:value={addType} class="add-type-select">
+          <div class="flex gap-2">
+            <select
+              bind:value={addType}
+              class="flex-1 px-2.5 py-2 border border-[#e0e0e0] rounded-md text-[13px] text-[#191919] bg-white outline-none transition-[border-color] duration-[120ms] focus:border-[#191919]"
+            >
               {#each QUESTION_TYPES as t}
                 <option value={t.value}>{t.label}</option>
               {/each}
             </select>
-            <button class="btn-add-q" onclick={handleQuickAdd} disabled={!addTitle.trim()}>
+            <button
+              class="text-[13px] font-semibold px-5 py-2 bg-[#191919] border border-[#191919] rounded-md text-white cursor-pointer transition-colors duration-[120ms] whitespace-nowrap hover:bg-[#333] disabled:opacity-35 disabled:cursor-not-allowed"
+              onclick={handleQuickAdd}
+              disabled={!addTitle.trim()}
+            >
               Add
             </button>
           </div>
@@ -297,13 +310,13 @@
     </div>
 
     <!-- Right: Preview -->
-    <div class="preview-col">
+    <div class="sticky top-5 h-[calc(100vh-120px)] max-[900px]:static max-[900px]:h-[400px]">
       <PreviewPane questions={workingQuestions} {selectedRole} />
     </div>
   </div>
 </div>
 
-<!-- Hidden form for the save action — submitted programmatically from ConfirmationModal -->
+<!-- Hidden save form -->
 <form
   method="POST"
   action="?/save"
@@ -319,7 +332,7 @@
     };
   }}
   id="save-form"
-  style="display:none"
+  class="hidden"
 >
   <input type="hidden" name="changes" value={changesPayload} />
 </form>
@@ -349,7 +362,11 @@
 
 <!-- Toast -->
 {#if toastMsg}
-  <div class="toast" class:toast-error={toastKind === 'error'}>
+  <div
+    class="fixed bottom-6 right-6 flex items-center gap-2 px-[18px] py-3 rounded-[9px] text-[13px] font-medium text-white shadow-[0_8px_24px_rgba(0,0,0,0.2)] z-[100] animate-[slideUp_0.2s_ease]"
+    class:bg-[#191919]={toastKind === 'success'}
+    class:bg-[#b00000]={toastKind === 'error'}
+  >
     {#if toastKind === 'success'}
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
         <polyline points="20 6 9 17 4 12"></polyline>
@@ -365,317 +382,8 @@
 {/if}
 
 <style>
-  .page {
-    padding: 28px 32px;
-    max-width: 1200px;
-    margin: 0 auto;
-    display: flex;
-    flex-direction: column;
-    gap: 20px;
-    min-height: 100vh;
-  }
-
-  .page-header {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-  .header-top {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-  }
-
-  .header-bottom {
-    display: flex;
-    align-items: center;
-  }
-
-  .header-left {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-  }
-
-  h1 {
-    font-size: 22px;
-    font-weight: 800;
-    color: #191919;
-    margin: 0;
-    letter-spacing: -0.02em;
-  }
-
-  .unsaved-badge {
-    font-size: 11px;
-    font-weight: 600;
-    color: #b45309;
-    background: #fef3c7;
-    border: 1px solid #fde68a;
-    border-radius: 5px;
-    padding: 3px 8px;
-    letter-spacing: 0.01em;
-  }
-
-  .btn-save {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-size: 13px;
-    font-weight: 600;
-    padding: 9px 20px;
-    background: #191919;
-    border: 1px solid #191919;
-    border-radius: 8px;
-    color: #fff;
-    cursor: pointer;
-    transition: background 0.12s;
-  }
-
-  .btn-save:hover:not(:disabled) {
-    background: #333;
-    border-color: #333;
-  }
-
-  .btn-save:disabled {
-    opacity: 0.35;
-    cursor: not-allowed;
-  }
-
-  .header-right {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.role-selector {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.role-selector label {
-  font-size: 12px;
-  font-weight: 500;
-  color: #888;
-}
-
-.role-selector select {
-  font-size: 12px;
-  font-weight: 600;
-  color: #191919;
-  background: #f4f4f4;
-  border: 1px solid #e0e0e0;
-  border-radius: 5px;
-  padding: 4px 8px;
-  cursor: pointer;
-  outline: none;
-}
-
-.role-selector select:focus {
-  border-color: #191919;
-}
-
-  .spinner-sm {
-    width: 12px;
-    height: 12px;
-    border: 2px solid rgba(255,255,255,0.3);
-    border-top-color: #fff;
-    border-radius: 50%;
-    animation: spin 0.7s linear infinite;
-    display: inline-block;
-  }
-
-  .content-grid {
-    display: grid;
-    grid-template-columns: 60% 1fr;
-    gap: 20px;
-    align-items: start;
-  }
-
-  .question-list-col {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-  }
-
-  .col-header {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 0 2px;
-  }
-
-  .col-label {
-    font-size: 11px;
-    font-weight: 700;
-    color: #aaa;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-  }
-
-  .count-badge {
-    font-size: 11px;
-    font-weight: 700;
-    color: #888;
-    background: #f4f4f4;
-    border: 1px solid #e0e0e0;
-    border-radius: 12px;
-    padding: 1px 7px;
-  }
-
-  .question-list {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-  }
-
-  .list-empty {
-    padding: 32px;
-    text-align: center;
-    border: 1px dashed #e0e0e0;
-    border-radius: 8px;
-  }
-
-  .list-empty p {
-    font-size: 13px;
-    color: #aaa;
-    margin: 0;
-  }
-
-  .add-form {
-    border: 1px solid #e0e0e0;
-    border-radius: 10px;
-    overflow: hidden;
-    background: #fff;
-    margin-top: 4px;
-  }
-
-  .add-form-header {
-    display: flex;
-    align-items: center;
-    gap: 7px;
-    padding: 10px 14px;
-    background: #f4f4f4;
-    border-bottom: 1px solid #e0e0e0;
-    font-size: 12px;
-    font-weight: 700;
-    color: #444;
-    letter-spacing: 0.01em;
-  }
-
-  .add-form-body {
-    padding: 12px 14px;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-  }
-
-  .add-title-input {
-    width: 100%;
-    padding: 8px 10px;
-    border: 1px solid #e0e0e0;
-    border-radius: 6px;
-    font-size: 13px;
-    color: #191919;
-    background: #fff;
-    outline: none;
-    box-sizing: border-box;
-    transition: border-color 0.12s, box-shadow 0.12s;
-  }
-
-  .add-title-input:focus {
-    border-color: #191919;
-    box-shadow: 0 0 0 2px rgba(25,25,25,0.07);
-  }
-
-  .add-row {
-    display: flex;
-    gap: 8px;
-  }
-
-  .add-type-select {
-    flex: 1;
-    padding: 8px 10px;
-    border: 1px solid #e0e0e0;
-    border-radius: 6px;
-    font-size: 13px;
-    color: #191919;
-    background: #fff;
-    outline: none;
-    transition: border-color 0.12s;
-  }
-
-  .add-type-select:focus {
-    border-color: #191919;
-  }
-
-  .btn-add-q {
-    font-size: 13px;
-    font-weight: 600;
-    padding: 8px 20px;
-    background: #191919;
-    border: 1px solid #191919;
-    border-radius: 6px;
-    color: #fff;
-    cursor: pointer;
-    transition: background 0.12s;
-    white-space: nowrap;
-  }
-
-  .btn-add-q:hover:not(:disabled) {
-    background: #333;
-  }
-
-  .btn-add-q:disabled {
-    opacity: 0.35;
-    cursor: not-allowed;
-  }
-
-  .preview-col {
-    position: sticky;
-    top: 20px;
-    height: calc(100vh - 120px);
-  }
-
-  .toast {
-    position: fixed;
-    bottom: 24px;
-    right: 24px;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 12px 18px;
-    background: #191919;
-    color: #fff;
-    border-radius: 9px;
-    font-size: 13px;
-    font-weight: 500;
-    box-shadow: 0 8px 24px rgba(0,0,0,0.2);
-    z-index: 100;
-    animation: slideUp 0.2s ease;
-  }
-
-  .toast-error {
-    background: #b00000;
-  }
-
   @keyframes slideUp {
     from { transform: translateY(12px); opacity: 0; }
     to { transform: translateY(0); opacity: 1; }
-  }
-
-  @keyframes spin {
-    to { transform: rotate(360deg); }
-  }
-
-  @media (max-width: 900px) {
-    .content-grid {
-      grid-template-columns: 1fr;
-    }
-    .preview-col {
-      position: static;
-      height: 400px;
-    }
   }
 </style>

@@ -30,8 +30,8 @@
 	}
 </script>
 
-<div class="rounded border bg-white p-6" style="border-color: #e0e0e0">
-	<p class="mb-4 text-xs font-medium uppercase tracking-widest" style="color: #aaaaaa">
+<div class="rounded border border-border bg-white p-6">
+	<p class="mb-4 text-xs font-medium uppercase tracking-widest text-muted-foreground">
 		CHECK-IN QR CODE
 	</p>
 
@@ -39,21 +39,20 @@
 		{#if qrDataUrl}
 			<img src={qrDataUrl} alt="Check-in QR code" class="h-[200px] w-[200px]" />
 		{:else}
-			<div class="h-[200px] w-[200px]" style="background: #f4f4f4"></div>
+			<div class="h-[200px] w-[200px] bg-muted"></div>
 		{/if}
 	</div>
 
 	<div class="mb-1 text-center">
-		<span class="font-mono text-sm font-semibold" style="color: #191919">{displayCode}</span>
+		<span class="font-mono text-sm font-semibold text-primary">{displayCode}</span>
 	</div>
-	<p class="mb-5 text-center text-xs" style="color: #aaaaaa">Show at check-in</p>
+	<p class="mb-5 text-center text-xs text-muted-foreground">Show at check-in</p>
 
 	<button
 		type="button"
 		onclick={downloadQR}
 		disabled={!qrDataUrl}
-		class="w-full rounded border px-4 py-2 text-sm transition-colors hover:bg-[#f4f4f4] disabled:opacity-40"
-		style="border-color: #e0e0e0; color: #191919"
+		class="w-full rounded border border-border px-4 py-2 text-sm text-primary transition-colors hover:bg-[#f4f4f4] disabled:opacity-40"
 	>
 		Download PDF
 	</button>

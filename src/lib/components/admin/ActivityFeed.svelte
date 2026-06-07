@@ -31,41 +31,32 @@
 	}
 </script>
 
-<div
-	style="background:#fff; border:1px solid #e0e0e0; border-radius:6px; padding:20px 24px; height:100%; display:flex; flex-direction:column;"
->
-	<div
-		style="font-size:11px; font-weight:700; letter-spacing:0.12em; text-transform:uppercase; color:#aaaaaa; margin-bottom:16px; flex-shrink:0;"
-	>
+<div class="bg-white border border-border rounded-md px-6 py-5 h-full flex flex-col">
+	<div class="text-[11px] font-bold tracking-[0.12em] uppercase text-muted-foreground mb-4 shrink-0">
 		Recent Activity
 	</div>
 
 	{#if entries.length === 0}
-		<div style="font-size:13px; color:#aaaaaa; text-align:center; padding:24px 0;">
+		<div class="text-[13px] text-muted-foreground text-center py-6">
 			No activity yet
 		</div>
 	{:else}
-		<div style="flex:1; overflow-y:auto;">
+		<div class="flex-1 overflow-y-auto">
 			{#each entries as entry}
-				<div
-					style="display:flex; align-items:flex-start; gap:10px; padding:10px 0; border-bottom:1px solid #f0f0f0;"
-				>
+				<div class="flex items-start gap-[10px] py-[10px] border-b border-[#f0f0f0]">
 					<div
-						style="width:6px; height:6px; border-radius:50%; background:{isNotable(entry.action)
-							? '#191919'
-							: '#cccccc'}; flex-shrink:0; margin-top:4px;"
+						class="size-1.5 shrink-0 mt-1 rounded-full"
+						style="background:{isNotable(entry.action) ? '#191919' : '#cccccc'}"
 					></div>
-					<div style="flex:1; min-width:0;">
-						<div style="font-size:13px; color:#333; line-height:1.4;">
+					<div class="flex-1 min-w-0">
+						<div class="text-[13px] text-[#333] leading-[1.4]">
 							{#if entry.user}
-								<span style="font-weight:500;">{entry.user.name}</span>
+								<span class="font-medium">{entry.user.name}</span>
 							{/if}
 							{entry.action}
 						</div>
 					</div>
-					<div
-						style="font-size:11px; color:#aaaaaa; flex-shrink:0; font-family:'DM Mono', monospace;"
-					>
+					<div class="text-[11px] text-muted-foreground shrink-0 font-mono">
 						{formatRelative(entry.timestamp)}
 					</div>
 				</div>

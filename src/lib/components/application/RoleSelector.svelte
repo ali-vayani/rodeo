@@ -17,7 +17,7 @@
 </script>
 
 <div>
-	<p class="mb-2 text-xs font-medium uppercase tracking-widest" style="color: #aaaaaa">
+	<p class="mb-2 text-xs font-medium uppercase tracking-widest text-muted-foreground">
 		I am applying as
 	</p>
 	<div class="flex flex-wrap gap-2">
@@ -25,10 +25,7 @@
 			<button
 				type="button"
 				onclick={() => onselect(role.value)}
-				class="rounded border px-4 py-1.5 text-sm font-medium transition-colors"
-				style={selected === role.value
-					? 'background: #191919; color: #fff; border-color: #191919;'
-					: 'background: #fff; color: #191919; border-color: #e0e0e0;'}
+				class="rounded border px-4 py-1.5 text-sm font-medium transition-colors {selected === role.value ? 'bg-primary text-white border-primary' : 'bg-white text-primary border-border'}"
 			>
 				{role.label}
 			</button>

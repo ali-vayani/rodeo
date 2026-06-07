@@ -13,18 +13,11 @@
 		}>;
 	} = $props();
 
-	const DECISION_COLORS: Record<string, string> = {
-		ACCEPTED: '#d1fae5', // green
-		WAITLISTED: '#fef9c3', // yellow
-		REJECTED: '#fee2e2', // red
-		PENDING: '#e5e7eb', // gray
-	};
-
-	const DECISION_TEXT: Record<string, string> = {
-		ACCEPTED: '#065f46', // green
-		WAITLISTED: '#713f12', // yellow
-		REJECTED: '#991b1b', // red
-		PENDING: '#374151' // gray
+	const DECISION_CLASS: Record<string, string> = {
+		ACCEPTED: 'bg-[#d1fae5] text-[#065f46]',
+		WAITLISTED: 'bg-[#fef9c3] text-[#713f12]',
+		REJECTED: 'bg-[#fee2e2] text-[#991b1b]',
+		PENDING: 'bg-[#e5e7eb] text-[#374151]'
 	};
 
 	function formatDate(d: Date | string): string {
@@ -40,83 +33,57 @@
 	}
 </script>
 
-<div style="background:#fff; border:1px solid #e0e0e0; border-radius:6px; overflow:hidden;">
-	<div style="padding:16px 20px; border-bottom:1px solid #e0e0e0;">
-		<span
-			style="font-size:11px; font-weight:700; letter-spacing:0.12em; text-transform:uppercase; color:#aaaaaa;"
-		>
+<div class="bg-white border border-border rounded-md overflow-hidden">
+	<div class="px-5 py-4 border-b border-border">
+		<span class="text-[11px] font-bold tracking-[0.12em] uppercase text-muted-foreground">
 			Recent Applicants
 		</span>
 	</div>
 
 	{#if applicants.length === 0}
-		<div style="padding:32px; text-align:center; font-size:13px; color:#aaaaaa;">
+		<div class="p-8 text-center text-[13px] text-muted-foreground">
 			No applicants yet
 		</div>
 	{:else}
-		<table style="width:100%; border-collapse:collapse;">
+		<table class="w-full border-collapse">
 			<thead>
-				<tr style="background:#f9f9f9; border-bottom:1px solid #e0e0e0;">
-					<th
-						style="padding:10px 16px; text-align:left; font-size:11px; font-weight:600; letter-spacing:0.06em; text-transform:uppercase; color:#aaaaaa;"
-						>Name</th
-					>
-					<th
-						style="padding:10px 16px; text-align:left; font-size:11px; font-weight:600; letter-spacing:0.06em; text-transform:uppercase; color:#aaaaaa;"
-						>Email</th
-					>
-					<th
-						style="padding:10px 16px; text-align:left; font-size:11px; font-weight:600; letter-spacing:0.06em; text-transform:uppercase; color:#aaaaaa;"
-						>Role</th
-					>
-					<th
-						style="padding:10px 16px; text-align:left; font-size:11px; font-weight:600; letter-spacing:0.06em; text-transform:uppercase; color:#aaaaaa;"
-						>Status</th
-					>
-					<th
-						style="padding:10px 16px; text-align:left; font-size:11px; font-weight:600; letter-spacing:0.06em; text-transform:uppercase; color:#aaaaaa;"
-						>Decision</th
-					>
-					<th
-						style="padding:10px 16px; text-align:left; font-size:11px; font-weight:600; letter-spacing:0.06em; text-transform:uppercase; color:#aaaaaa;"
-						>Applied</th
-					>
+				<tr class="bg-[#f9f9f9] border-b border-border">
+					<th class="px-4 py-[10px] text-left text-[11px] font-semibold tracking-[0.06em] uppercase text-muted-foreground">Name</th>
+					<th class="px-4 py-[10px] text-left text-[11px] font-semibold tracking-[0.06em] uppercase text-muted-foreground">Email</th>
+					<th class="px-4 py-[10px] text-left text-[11px] font-semibold tracking-[0.06em] uppercase text-muted-foreground">Role</th>
+					<th class="px-4 py-[10px] text-left text-[11px] font-semibold tracking-[0.06em] uppercase text-muted-foreground">Status</th>
+					<th class="px-4 py-[10px] text-left text-[11px] font-semibold tracking-[0.06em] uppercase text-muted-foreground">Decision</th>
+					<th class="px-4 py-[10px] text-left text-[11px] font-semibold tracking-[0.06em] uppercase text-muted-foreground">Applied</th>
 				</tr>
 			</thead>
 			<tbody>
 				{#each applicants as applicant}
-					<tr style="border-bottom:1px solid #f0f0f0;">
-						<td style="padding:12px 16px; font-size:13px; font-weight:500; color:#191919;">
+					<tr class="border-b border-[#f0f0f0]">
+						<td class="px-4 py-3 text-[13px] font-medium text-primary">
 							{applicant.name}
 						</td>
-						<td style="padding:12px 16px; font-size:12px; color:#aaaaaa;">
+						<td class="px-4 py-3 text-xs text-muted-foreground">
 							{applicant.email}
 						</td>
-						<td style="padding:12px 16px; font-size:13px; color:#333;">
+						<td class="px-4 py-3 text-[13px] text-[#333]">
 							{primaryRole(applicant.roles)}
 						</td>
-						<td style="padding:12px 16px;">
-							<span
-								style="font-size:11px; font-weight:600; letter-spacing:0.06em; text-transform:uppercase; color:#555;"
-							>
+						<td class="px-4 py-3">
+							<span class="text-[11px] font-semibold tracking-[0.06em] uppercase text-[#555]">
 								{applicant.status.charAt(0) + applicant.status.slice(1).toLowerCase()}
 							</span>
 						</td>
-						<td style="padding:12px 16px;">
+						<td class="px-4 py-3">
 							{#if applicant.activeDecision}
-								<span
-									style="display:inline-block; padding:2px 8px; border-radius:4px; font-size:11px; font-weight:600; background:{DECISION_COLORS[applicant.activeDecision] ?? '#e5e7eb'}; color:{DECISION_TEXT[applicant.activeDecision] ?? '#374151'};"
-								>
+								<span class="inline-block px-2 py-0.5 rounded text-[11px] font-semibold {DECISION_CLASS[applicant.activeDecision] ?? 'bg-[#e5e7eb] text-[#374151]'}">
 									{applicant.activeDecision.charAt(0) +
 										applicant.activeDecision.slice(1).toLowerCase()}
 								</span>
 							{:else}
-								<span style="font-size:12px; color:#aaaaaa;">—</span>
+								<span class="text-xs text-muted-foreground">—</span>
 							{/if}
 						</td>
-						<td
-							style="padding:12px 16px; font-size:12px; color:#aaaaaa; font-family:'DM Mono', monospace;"
-						>
+						<td class="px-4 py-3 text-xs text-muted-foreground font-mono">
 							{formatDate(applicant.createdAt)}
 						</td>
 					</tr>

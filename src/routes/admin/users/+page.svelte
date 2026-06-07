@@ -182,17 +182,11 @@
 	}
 
 	// --- Display helpers ---
-	const DECISION_BG: Record<string, string> = {
-		ACCEPTED: '#d1fae5',
-		WAITLISTED: '#fef9c3',
-		REJECTED: '#fee2e2',
-		PENDING: '#e5e7eb'
-	};
-	const DECISION_FG: Record<string, string> = {
-		ACCEPTED: '#065f46',
-		WAITLISTED: '#713f12',
-		REJECTED: '#991b1b',
-		PENDING: '#374151'
+	const DECISION_CLASS: Record<string, string> = {
+		ACCEPTED: 'bg-[#d1fae5] text-[#065f46]',
+		WAITLISTED: 'bg-[#fef9c3] text-[#713f12]',
+		REJECTED: 'bg-[#fee2e2] text-[#991b1b]',
+		PENDING: 'bg-[#e5e7eb] text-[#374151]'
 	};
 
 	function decLabel(d: string | null): string {
@@ -210,23 +204,20 @@
 </script>
 
 <!-- Header -->
-<div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:24px;">
-	<h1 style="font-size:22px; font-weight:700; color:#191919; margin:0;">Users</h1>
+<div class="flex items-center justify-between mb-6">
+	<h1 class="text-[22px] font-bold text-primary">Users</h1>
 	<button
 		onclick={exportCsv}
 		disabled={exporting}
-		style="font-size:13px; font-weight:500; color:#191919; background:#fff; border:1px solid #e0e0e0; border-radius:6px; padding:7px 14px; cursor:pointer; opacity:{exporting
-			? 0.6
-			: 1};"
+		class="text-[13px] font-medium text-primary bg-white border border-border rounded-md py-[7px] px-[14px] cursor-pointer"
+		class:opacity-60={exporting}
 	>
 		{exporting ? 'Exporting…' : 'Export CSV'}
 	</button>
 </div>
 
 <!-- Layout: filter sidebar + table area -->
-<div
-	style="display:flex; background:#fff; border:1px solid #e0e0e0; border-radius:6px; overflow:hidden;"
->
+<div class="flex bg-white border border-border rounded-md overflow-hidden">
 	<UserFilters
 		{roleFilter}
 		onToggleRole={toggleRole}
@@ -240,43 +231,36 @@
 	/>
 
 	<!-- Table area -->
-	<div style="flex:1; min-width:0; display:flex; flex-direction:column;">
+	<div class="flex-1 min-w-0 flex flex-col">
 		<!-- Search + count bar -->
-		<div
-			style="display:flex; align-items:center; gap:12px; padding:12px 16px; border-bottom:1px solid #e0e0e0;"
-		>
+		<div class="flex items-center gap-3 px-4 py-3 border-b border-border">
 			<input
 				type="text"
 				placeholder="Search by name or email…"
 				bind:value={search}
 				oninput={onSearchInput}
-				style="flex:1; font-size:13px; color:#191919; background:#f9f9f9; border:1px solid #e0e0e0; border-radius:5px; padding:7px 12px; outline:none;"
+				class="flex-1 text-[13px] text-primary bg-[#f9f9f9] border border-border rounded py-[7px] px-3 outline-none"
 			/>
-			<span style="font-size:12px; color:#aaaaaa; white-space:nowrap;">
+			<span class="text-xs text-muted-foreground whitespace-nowrap">
 				{total} total
 			</span>
 		</div>
 
 		<!-- Scrollable table wrapper -->
 		<div
-			style="overflow-x:auto; overflow-y:auto; max-height:calc(100vh - 280px); opacity:{loadingPage
-				? 0.5
-				: 1}; transition:opacity 0.15s;"
+			class="overflow-x-auto overflow-y-auto max-h-[calc(100vh-280px)] transition-opacity"
+			class:opacity-50={loadingPage}
 		>
 			{#if users.length === 0}
-				<div style="padding:48px; text-align:center; font-size:13px; color:#aaaaaa;">
+				<div class="py-12 text-center text-[13px] text-muted-foreground">
 					No results
 				</div>
 			{:else}
-				<table style="width:100%; border-collapse:collapse;">
+				<table class="w-full border-collapse">
 					<thead>
-						<tr
-							style="border-bottom:1px solid #e0e0e0; position:sticky; top:0; z-index:1; background:#f9f9f9;"
-						>
+						<tr class="border-b border-border sticky top-0 z-[1] bg-[#f9f9f9]">
 							{#each ['Name', 'Email', 'Role', 'Status', 'Pending', 'Decision', 'Created', ''] as col}
-								<th
-									style="padding:10px 14px; text-align:left; font-size:11px; font-weight:600; letter-spacing:0.06em; text-transform:uppercase; color:#aaaaaa; white-space:nowrap; background:#f9f9f9;"
-								>
+								<th class="px-[14px] py-[10px] text-left text-[11px] font-semibold tracking-[0.06em] uppercase text-muted-foreground whitespace-nowrap bg-[#f9f9f9]">
 									{col}
 								</th>
 							{/each}
@@ -284,68 +268,51 @@
 					</thead>
 					<tbody>
 						{#each users as user (user.uid)}
-							<tr
-								style="border-bottom:1px solid #f0f0f0; transition:background 0.1s;"
-								onmouseenter={(e) =>
-									((e.currentTarget as HTMLElement).style.background = '#fafafa')}
-								onmouseleave={(e) => ((e.currentTarget as HTMLElement).style.background = '')}
-							>
-								<td
-									style="padding:11px 14px; font-size:13px; font-weight:500; color:#191919; white-space:nowrap;"
-								>
+							<tr class="border-b border-[#f0f0f0] hover:bg-[#fafafa] transition-colors">
+								<td class="px-[14px] py-[11px] text-[13px] font-medium text-primary whitespace-nowrap">
 									{user.name}
 								</td>
-								<td style="padding:11px 14px; font-size:12px; color:#aaaaaa;">
+								<td class="px-[14px] py-[11px] text-xs text-muted-foreground">
 									{user.email}
 								</td>
-								<td style="padding:11px 14px; font-size:13px; color:#333;">
+								<td class="px-[14px] py-[11px] text-[13px] text-[#333]">
 									{#if user.roles.length}
 										{user.roles[0].charAt(0) + user.roles[0].slice(1).toLowerCase()}
 									{:else}
 										—
 									{/if}
 								</td>
-								<td style="padding:11px 14px;">
-									<span
-										style="font-size:11px; font-weight:600; letter-spacing:0.05em; text-transform:uppercase; color:#555;"
-									>
+								<td class="px-[14px] py-[11px]">
+									<span class="text-[11px] font-semibold tracking-[0.05em] uppercase text-[#555]">
 										{user.status.charAt(0) +
 											user.status.slice(1).toLowerCase().replace(/_/g, ' ')}
 									</span>
 								</td>
-								<td style="padding:11px 14px;">
+								<td class="px-[14px] py-[11px]">
 									{#if user.pendingDecision}
-										<span
-											style="display:inline-block; padding:2px 7px; border-radius:4px; font-size:11px; font-weight:600; background:{DECISION_BG[user.pendingDecision] ??
-												'#e5e7eb'}; color:{DECISION_FG[user.pendingDecision] ?? '#374151'};"
-										>
+										<span class="inline-block px-[7px] py-0.5 rounded text-[11px] font-semibold {DECISION_CLASS[user.pendingDecision] ?? 'bg-[#e5e7eb] text-[#374151]'}">
 											{decLabel(user.pendingDecision)}
 										</span>
 									{:else}
-										<span style="font-size:12px; color:#cccccc;">—</span>
+										<span class="text-xs text-[#cccccc]">—</span>
 									{/if}
 								</td>
-								<td style="padding:11px 14px;">
+								<td class="px-[14px] py-[11px]">
 									{#if user.activeDecision}
-										<span
-											style="display:inline-block; padding:2px 7px; border-radius:4px; font-size:11px; font-weight:600; background:{DECISION_BG[user.activeDecision] ??
-												'#e5e7eb'}; color:{DECISION_FG[user.activeDecision] ?? '#374151'};"
-										>
+										<span class="inline-block px-[7px] py-0.5 rounded text-[11px] font-semibold {DECISION_CLASS[user.activeDecision] ?? 'bg-[#e5e7eb] text-[#374151]'}">
 											{decLabel(user.activeDecision)}
 										</span>
 									{:else}
-										<span style="font-size:12px; color:#cccccc;">—</span>
+										<span class="text-xs text-[#cccccc]">—</span>
 									{/if}
 								</td>
-								<td
-									style="padding:11px 14px; font-size:12px; color:#aaaaaa; font-family:'DM Mono', monospace; white-space:nowrap;"
-								>
+								<td class="px-[14px] py-[11px] text-xs text-muted-foreground font-mono whitespace-nowrap">
 									{formatDate(user.createdAt)}
 								</td>
-								<td style="padding:11px 14px;">
+								<td class="px-[14px] py-[11px]">
 									<button
 										onclick={() => openModal(user)}
-										style="font-size:12px; color:#191919; background:none; border:1px solid #e0e0e0; border-radius:4px; padding:4px 10px; cursor:pointer;"
+										class="text-xs text-primary bg-transparent border border-border rounded px-[10px] py-1 cursor-pointer"
 									>
 										Edit
 									</button>
@@ -362,38 +329,26 @@
 <!-- Pagination bar -->
 {#if totalPages > 1}
 	<div
-		style="display:flex; align-items:center; justify-content:center; gap:16px; margin-top:16px; opacity:{loadingPage
-			? 0.5
-			: 1}; transition:opacity 0.15s; pointer-events:{loadingPage ? 'none' : 'auto'};"
+		class="flex items-center justify-center gap-4 mt-4 transition-opacity"
+		class:opacity-50={loadingPage}
+		class:pointer-events-none={loadingPage}
 	>
 		<button
 			onclick={() => loadPage(page - 1)}
 			disabled={page <= 1 || loadingPage}
-			style="font-size:13px; font-weight:500; color:{page <= 1
-				? '#cccccc'
-				: '#191919'}; background:#fff; border:1px solid #e0e0e0; border-radius:6px; padding:7px 14px; cursor:{page <=
-			1
-				? 'default'
-				: 'pointer'};"
+			class="text-[13px] font-medium bg-white border border-border rounded-md py-[7px] px-[14px] {page <= 1 ? 'text-[#cccccc] cursor-default' : 'text-primary cursor-pointer'}"
 		>
 			← Previous
 		</button>
 
-		<span
-			style="font-size:13px; color:#aaaaaa; font-family:'DM Mono', monospace; white-space:nowrap;"
-		>
+		<span class="text-[13px] text-muted-foreground font-mono whitespace-nowrap">
 			{loadingPage ? 'Loading…' : `Page ${page} of ${totalPages}`}
 		</span>
 
 		<button
 			onclick={() => loadPage(page + 1)}
 			disabled={page >= totalPages || loadingPage}
-			style="font-size:13px; font-weight:500; color:{page >= totalPages
-				? '#cccccc'
-				: '#191919'}; background:#fff; border:1px solid #e0e0e0; border-radius:6px; padding:7px 14px; cursor:{page >=
-			totalPages
-				? 'default'
-				: 'pointer'};"
+			class="text-[13px] font-medium bg-white border border-border rounded-md py-[7px] px-[14px] {page >= totalPages ? 'text-[#cccccc] cursor-default' : 'text-primary cursor-pointer'}"
 		>
 			Next →
 		</button>
@@ -405,7 +360,7 @@
 	<div
 		role="presentation"
 		onclick={closeModal}
-		style="position:fixed; inset:0; background:rgba(0,0,0,0.45); z-index:100; display:flex; align-items:center; justify-content:center;"
+		class="fixed inset-0 bg-black/45 z-[100] flex items-center justify-center"
 	>
 		<div
 			role="dialog"
@@ -414,19 +369,17 @@
 			tabindex="-1"
 			onclick={(e) => e.stopPropagation()}
 			onkeydown={(e) => e.key === 'Escape' && closeModal()}
-			style="background:#fff; border-radius:8px; width:560px; max-width:calc(100vw - 48px); max-height:calc(100vh - 80px); overflow-y:auto; box-shadow:0 8px 32px rgba(0,0,0,0.18); display:flex; flex-direction:column;"
+			class="bg-white rounded-lg w-[560px] max-w-[calc(100vw-48px)] max-h-[calc(100vh-80px)] overflow-y-auto shadow-[0_8px_32px_rgba(0,0,0,0.18)] flex flex-col"
 		>
 			<!-- Header -->
-			<div
-				style="display:flex; align-items:flex-start; justify-content:space-between; padding:20px 24px 16px; border-bottom:1px solid #e0e0e0; flex-shrink:0;"
-			>
+			<div class="flex items-start justify-between px-6 pt-5 pb-4 border-b border-border shrink-0">
 				<div>
-					<div style="font-size:17px; font-weight:700; color:#191919;">{selectedUser.name}</div>
-					<div style="font-size:12px; color:#aaaaaa; margin-top:2px;">{selectedUser.email}</div>
+					<div class="text-[17px] font-bold text-primary">{selectedUser.name}</div>
+					<div class="text-xs text-muted-foreground mt-0.5">{selectedUser.email}</div>
 				</div>
 				<button
 					onclick={closeModal}
-					style="font-size:20px; line-height:1; background:none; border:none; color:#aaaaaa; cursor:pointer; padding:0; margin-top:-2px;"
+					class="text-xl leading-none bg-transparent border-none text-muted-foreground cursor-pointer p-0 -mt-0.5"
 					aria-label="Close"
 				>
 					×
@@ -434,27 +387,21 @@
 			</div>
 
 			<!-- Info row -->
-			<div style="padding:16px 24px; border-bottom:1px solid #f0f0f0;">
-				<div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+			<div class="px-6 py-4 border-b border-[#f0f0f0]">
+				<div class="grid grid-cols-2 gap-[10px]">
 					<div>
-						<div
-							style="font-size:10px; font-weight:700; letter-spacing:0.1em; text-transform:uppercase; color:#aaaaaa; margin-bottom:3px;"
-						>
+						<div class="text-[10px] font-bold tracking-widest uppercase text-muted-foreground mb-[3px]">
 							Created
 						</div>
-						<div style="font-size:13px; color:#333; font-family:'DM Mono', monospace;">
+						<div class="text-[13px] text-[#333] font-mono">
 							{formatDate(selectedUser.createdAt)}
 						</div>
 					</div>
 					<div>
-						<div
-							style="font-size:10px; font-weight:700; letter-spacing:0.1em; text-transform:uppercase; color:#aaaaaa; margin-bottom:3px;"
-						>
+						<div class="text-[10px] font-bold tracking-widest uppercase text-muted-foreground mb-[3px]">
 							UID
 						</div>
-						<div
-							style="font-size:11px; color:#aaaaaa; font-family:'DM Mono', monospace; word-break:break-all;"
-						>
+						<div class="text-[11px] text-muted-foreground font-mono break-all">
 							{selectedUser.uid}
 						</div>
 					</div>
@@ -462,24 +409,20 @@
 			</div>
 
 			<!-- Edit fields -->
-			<div style="padding:20px 24px; display:flex; flex-direction:column; gap:20px;">
+			<div class="px-6 py-5 flex flex-col gap-5">
 				<!-- Roles -->
 				<div>
-					<div
-						style="font-size:10px; font-weight:700; letter-spacing:0.1em; text-transform:uppercase; color:#aaaaaa; margin-bottom:10px;"
-					>
+					<div class="text-[10px] font-bold tracking-widest uppercase text-muted-foreground mb-[10px]">
 						Roles
 					</div>
-					<div style="display:flex; flex-wrap:wrap; gap:10px 16px;">
+					<div class="flex flex-wrap gap-[10px_16px]">
 						{#each ALL_ROLES as role}
-							<label
-								style="display:flex; align-items:center; gap:6px; font-size:13px; color:#333; cursor:pointer;"
-							>
+							<label class="flex items-center gap-1.5 text-[13px] text-[#333] cursor-pointer">
 								<input
 									type="checkbox"
 									checked={editRoles.includes(role)}
 									onchange={() => toggleEditRole(role)}
-									style="accent-color:#191919; cursor:pointer;"
+									class="accent-primary cursor-pointer"
 								/>
 								{role.charAt(0) + role.slice(1).toLowerCase()}
 							</label>
@@ -488,16 +431,14 @@
 				</div>
 
 				<!-- Status + Decisions row -->
-				<div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px;">
+				<div class="grid grid-cols-3 gap-3">
 					<div>
-						<div
-							style="font-size:10px; font-weight:700; letter-spacing:0.1em; text-transform:uppercase; color:#aaaaaa; margin-bottom:6px;"
-						>
+						<div class="text-[10px] font-bold tracking-widest uppercase text-muted-foreground mb-1.5">
 							Status
 						</div>
 						<select
 							bind:value={editStatus}
-							style="width:100%; font-size:13px; color:#191919; background:#fff; border:1px solid #e0e0e0; border-radius:5px; padding:6px 8px; cursor:pointer; outline:none;"
+							class="w-full text-[13px] text-primary bg-white border border-border rounded px-2 py-1.5 cursor-pointer outline-none"
 						>
 							{#each ALL_STATUSES as s}
 								<option value={s}
@@ -507,14 +448,12 @@
 						</select>
 					</div>
 					<div>
-						<div
-							style="font-size:10px; font-weight:700; letter-spacing:0.1em; text-transform:uppercase; color:#aaaaaa; margin-bottom:6px;"
-						>
+						<div class="text-[10px] font-bold tracking-widest uppercase text-muted-foreground mb-1.5">
 							Pending Decision
 						</div>
 						<select
 							bind:value={editPending}
-							style="width:100%; font-size:13px; color:#191919; background:#fff; border:1px solid #e0e0e0; border-radius:5px; padding:6px 8px; cursor:pointer; outline:none;"
+							class="w-full text-[13px] text-primary bg-white border border-border rounded px-2 py-1.5 cursor-pointer outline-none"
 						>
 							<option value="">None</option>
 							{#each DECISION_VALUES as d}
@@ -523,14 +462,12 @@
 						</select>
 					</div>
 					<div>
-						<div
-							style="font-size:10px; font-weight:700; letter-spacing:0.1em; text-transform:uppercase; color:#aaaaaa; margin-bottom:6px;"
-						>
+						<div class="text-[10px] font-bold tracking-widest uppercase text-muted-foreground mb-1.5">
 							Active Decision
 						</div>
 						<select
 							bind:value={editActive}
-							style="width:100%; font-size:13px; color:#191919; background:#fff; border:1px solid #e0e0e0; border-radius:5px; padding:6px 8px; cursor:pointer; outline:none;"
+							class="w-full text-[13px] text-primary bg-white border border-border rounded px-2 py-1.5 cursor-pointer outline-none"
 						>
 							<option value="">None</option>
 							{#each DECISION_VALUES as d}
@@ -542,15 +479,12 @@
 			</div>
 
 			<!-- Footer -->
-			<div
-				style="padding:16px 24px; border-top:1px solid #e0e0e0; display:flex; justify-content:flex-end; flex-shrink:0;"
-			>
+			<div class="px-6 py-4 border-t border-border flex justify-end shrink-0">
 				<button
 					onclick={saveAll}
 					disabled={saving}
-					style="font-size:13px; font-weight:600; color:#fff; background:#191919; border:none; border-radius:6px; padding:9px 20px; cursor:pointer; opacity:{saving
-						? 0.6
-						: 1};"
+					class="text-[13px] font-semibold text-white bg-primary border-none rounded-md py-[9px] px-5 cursor-pointer"
+					class:opacity-60={saving}
 				>
 					{saving ? 'Saving…' : 'Save Changes'}
 				</button>
@@ -564,7 +498,7 @@
 	<div
 		in:fly={{ x: 60, duration: 280 }}
 		out:fly={{ x: 60, duration: 200 }}
-		style="position:fixed; bottom:28px; right:28px; z-index:200;"
+		class="fixed bottom-7 right-7 z-[200]"
 	>
 		<Toast message={toast.message} type={toast.type} />
 	</div>
