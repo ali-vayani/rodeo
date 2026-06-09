@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { mockDeep, mockReset, type DeepMockProxy } from 'vitest-mock-extended';
 import type { PrismaClient } from '$lib/generated/prisma/client';
-import { UserStatus, DecisionStatus, BlacklistType, QuestionType, Role } from '$lib/generated/prisma/client';
+import { UserStatus, DecisionStatus, QuestionType, Role } from '$lib/generated/prisma/client';
 import { createTestCaller, hackerUser, appliedHacker, mockSettings } from '../test-utils';
 
 vi.mock('$lib/server/db', async () => {
@@ -135,7 +135,7 @@ describe('application.submit', () => {
 		db.question.findMany.mockResolvedValue([] as never);
 		db.applicationResponse.findMany.mockResolvedValue([] as never);
 		db.blacklist.findMany.mockResolvedValue([
-			{ id: 'bl-1', type: BlacklistType.EMAIL, value: hackerUser.email, createdAt: new Date() }
+			{ id: 'bl-1', name: 'Bad Actor', email: hackerUser.email, reason: null, createdAt: new Date() }
 		] as never);
 		db.user.update.mockResolvedValue({
 			...hackerUser,
@@ -159,7 +159,7 @@ describe('application.submit', () => {
 		db.question.findMany.mockResolvedValue([] as never);
 		db.applicationResponse.findMany.mockResolvedValue([] as never);
 		db.blacklist.findMany.mockResolvedValue([
-			{ id: 'bl-2', type: BlacklistType.NAME, value: 'hacker', createdAt: new Date() }
+			{ id: 'bl-2', name: 'hacker', email: 'other@example.com', reason: null, createdAt: new Date() }
 		] as never);
 		db.user.update.mockResolvedValue({ ...hackerUser, status: UserStatus.APPLIED } as never);
 		db.settings.findFirst.mockResolvedValue(null);

@@ -1,10 +1,10 @@
 import { z } from 'zod';
-import { BlacklistType } from '$lib/generated/prisma/client';
 import { router, adminProcedure } from '../init';
 
 const entryInput = z.object({
-	type: z.nativeEnum(BlacklistType),
-	value: z.string().min(1)
+	name: z.string().min(1),
+	email: z.string().email({ error: 'Please enter a valid email address' }),
+	reason: z.string().optional()
 });
 
 export const blacklistRouter = router({
@@ -19,7 +19,7 @@ export const blacklistRouter = router({
 	addBulk: adminProcedure
 		.input(z.array(entryInput))
 		.mutation(async ({ ctx, input }) => {
-			return ctx.prisma.blacklist.createMany({ data: input, skipDuplicates: true });
+			return ctx.prisma.blacklist.createMany({ data: input });
 		}),
 
 	remove: adminProcedure

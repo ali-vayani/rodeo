@@ -59,11 +59,6 @@ enum InvitationStatus {
   DECLINED
 }
 
-enum BlacklistType {
-  EMAIL
-  NAME
-}
-
 // Models
 // -----------------------------------------------------------------------------
 
@@ -119,10 +114,11 @@ model Settings {
 }
 
 model Blacklist {
-  id        String       @id @default(cuid())
-  type      BlacklistType
-  value     String
-  createdAt DateTime     @default(now())
+  id        String   @id @default(cuid())
+  name      String
+  email     String
+  reason    String?
+  createdAt DateTime @default(now())
 }
 
 model Question {

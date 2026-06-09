@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { TRPCError } from '@trpc/server';
-import { UserStatus, DecisionStatus, BlacklistType } from '$lib/generated/prisma/client';
+import { UserStatus, DecisionStatus } from '$lib/generated/prisma/client';
 import { router, authedProcedure } from '../init';
 import { sendTemplatedEmail } from '$lib/server/email';
 
@@ -152,15 +152,11 @@ export const applicationRouter = router({
 
 		// Blacklist check
 		const blacklist = await ctx.prisma.blacklist.findMany();
-		const isBlacklisted = blacklist.some((entry) => {
-			if (entry.type === BlacklistType.EMAIL) {
-				return entry.value.toLowerCase() === user.email.toLowerCase();
-			}
-			if (entry.type === BlacklistType.NAME) {
-				return user.name.toLowerCase().includes(entry.value.toLowerCase());
-			}
-			return false;
-		});
+		const isBlacklisted = blacklist.some(
+			(entry) =>
+				entry.email.toLowerCase() === user.email.toLowerCase() ||
+				user.name.toLowerCase().includes(entry.name.toLowerCase())
+		);
 
 		// Update user status and optionally set pendingDecision
 		const updatedUser = await ctx.prisma.user.update({

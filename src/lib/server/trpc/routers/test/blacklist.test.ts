@@ -1,7 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { mockDeep, mockReset, type DeepMockProxy } from 'vitest-mock-extended';
 import type { PrismaClient } from '$lib/generated/prisma/client';
-import { BlacklistType } from '$lib/generated/prisma/client';
 import { createTestCaller, adminUser, hackerUser } from '../test-utils';
 
 vi.mock('$lib/server/db', async () => {
@@ -16,8 +15,9 @@ beforeEach(() => mockReset(db));
 
 const entry = {
 	id: 'bl-1',
-	type: BlacklistType.EMAIL,
-	value: 'bad@example.com',
+	name: 'Bad Actor',
+	email: 'bad@example.com',
+	reason: 'spam',
 	createdAt: new Date('2024-01-01')
 };
 
@@ -39,26 +39,34 @@ describe('blacklist.add', () => {
 	it('creates one entry', async () => {
 		const caller = createTestCaller(db, adminUser);
 		db.blacklist.create.mockResolvedValue(entry);
-		const result = await caller.blacklist.add({ type: BlacklistType.EMAIL, value: 'bad@example.com' });
+		const result = await caller.blacklist.add({ name: 'Bad Actor', email: 'bad@example.com', reason: 'spam' });
 		expect(result).toEqual(entry);
 		expect(db.blacklist.create).toHaveBeenCalledWith(
-			expect.objectContaining({ data: { type: BlacklistType.EMAIL, value: 'bad@example.com' } })
+			expect.objectContaining({ data: { name: 'Bad Actor', email: 'bad@example.com', reason: 'spam' } })
 		);
+	});
+
+	it('creates entry without reason', async () => {
+		const caller = createTestCaller(db, adminUser);
+		const noReason = { ...entry, reason: null };
+		db.blacklist.create.mockResolvedValue(noReason);
+		const result = await caller.blacklist.add({ name: 'Bad Actor', email: 'bad@example.com' });
+		expect(result).toEqual(noReason);
 	});
 });
 
 describe('blacklist.addBulk', () => {
-	it('creates many entries with skipDuplicates', async () => {
+	it('creates many entries', async () => {
 		const caller = createTestCaller(db, adminUser);
 		db.blacklist.createMany.mockResolvedValue({ count: 2 });
 		const entries = [
-			{ type: BlacklistType.EMAIL, value: 'a@example.com' },
-			{ type: BlacklistType.NAME, value: 'spammer' }
+			{ name: 'Spammer One', email: 'a@example.com' },
+			{ name: 'Spammer Two', email: 'b@example.com', reason: 'fraud' }
 		];
 		const result = await caller.blacklist.addBulk(entries);
 		expect(result).toEqual({ count: 2 });
 		expect(db.blacklist.createMany).toHaveBeenCalledWith(
-			expect.objectContaining({ data: entries, skipDuplicates: true })
+			expect.objectContaining({ data: entries })
 		);
 	});
 });
