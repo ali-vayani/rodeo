@@ -131,52 +131,7 @@
       </div>
     </section>
 
-    <!-- ── Stats panel (collapsible) ── -->
-    <section class="stats-section">
-      <button class="stats-toggle" onclick={() => statsOpen = !statsOpen}>
-        <span class="stats-toggle-left">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-            <rect x="2" y="3" width="6" height="18"></rect>
-            <rect x="9" y="8" width="6" height="13"></rect>
-            <rect x="16" y="13" width="6" height="8"></rect>
-          </svg>
-          Scan Counts
-        </span>
-        <span class="stats-toggle-right">
-          <span class="stats-total-badge">{totalScanned} total</span>
-          <svg
-            class="stats-chevron"
-            class:open={statsOpen}
-            width="14" height="14" viewBox="0 0 24 24" fill="none"
-            stroke="currentColor" stroke-width="2.5"
-            stroke-linecap="round" stroke-linejoin="round"
-          >
-            <polyline points="6 9 12 15 18 9"></polyline>
-          </svg>
-        </span>
-      </button>
-
-      {#if statsOpen}
-        <div class="stats-panel">
-          {#each groups as g (g)}
-            {@const count = scanCounts[g] ?? 0}
-            {@const pct = Math.round((count / totalRegistered) * 100)}
-            <div class="stat-row" class:stat-row-active={g === selectedGroup}>
-              <div class="stat-row-top">
-                <span class="stat-name">{g}</span>
-                <span class="stat-count">
-                  <span class="stat-count-num">{count}</span>
-                  <span class="stat-count-total">/ {totalRegistered}</span>
-                </span>
-              </div>
-              <div class="stat-bar-track">
-                <div class="stat-bar-fill" style="width: {pct}%"></div>
-              </div>
-            </div>
-          {/each}
-        </div>
-      {/if}
-    </section>
+    
 
     <!-- ── Viewfinder ── -->
     <section class="viewfinder-section">
