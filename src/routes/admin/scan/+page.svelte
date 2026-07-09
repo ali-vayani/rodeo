@@ -1,6 +1,16 @@
 <script lang="ts">
+  import { onMount, onDestroy, untrack } from 'svelte';
+  import { Html5Qrcode } from 'html5-qrcode';
+  import { createClient } from '$lib/trpc/client';
+  import ScanConfirmDialog from '$lib/components/admin/ScanConfirmDialog.svelte';
+  import type { PageData } from './$types';
+
+  let { data }: { data: PageData } = $props();
+
+  const trpc = createClient();
+
   // --- Types ---
-  interface Attendee {
+  interface LastScan {
     name: string;
     role: string;
     school: string;
@@ -13,84 +23,180 @@
   }
 
   type ScanState = 'idle' | 'success' | 'error' | 'duplicate';
-
-  // --- State ---
-  let selectedGroup = $state('Check-in');
-  let manualInput = $state('');
-  let scanState = $state<ScanState>('idle');
-  let lastScan = $state<Attendee | null>(null);
-  let errorMsg = $state('');
-  let showManual = $state(false);
-  let statsOpen = $state(false);
-
-  let recentScans = $state<ScanEntry[]>([
-    { name: 'Alex Chen',   time: '2:14 PM', group: 'Check-in' },
-    { name: 'Jordan Lee',  time: '2:11 PM', group: 'Check-in' },
-    { name: 'Sam Torres',  time: '2:09 PM', group: 'Check-in' },
-  ]);
-
-  const groups = ['Check-in', 'Lunch Day 1', 'Lunch Day 2', 'Workshop A', 'Workshop B'];
-
-  // Scan counts per group
-  let scanCounts = $state<Record<string, number>>({
-    'Check-in':    542,
-    'Lunch Day 1': 530,
-    'Lunch Day 2': 0,
-    'Workshop A':  214,
-    'Workshop B':  189,
-  });
-
-  // Total registered (simulated)
-  const totalRegistered = 600;
-
-  const fakeAttendees: Record<string, Attendee> = {
-    'alex@example.com':   { name: 'Alex Chen',   role: 'Hacker',    school: 'UT Austin' },
-    'jordan@example.com': { name: 'Jordan Lee',   role: 'Mentor',    school: 'Stanford'  },
-    'sam@example.com':    { name: 'Sam Torres',   role: 'Volunteer', school: 'MIT'       },
-    'duplicate':          { name: 'Jordan Lee',   role: 'Mentor',    school: 'Stanford'  },
-  };
+  type LookupResult = Awaited<ReturnType<typeof trpc.scan.lookup.query>>;
 
   function formatTime(date: Date): string {
     return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
   }
 
-  function handleManualLookup() {
-    const key = manualInput.trim().toLowerCase();
-    if (!key) return;
+  function toScanEntry(scan: (typeof data.recentScans)[number]): ScanEntry {
+    return { name: scan.user.name, time: formatTime(new Date(scan.timestamp)), group: scan.action };
+  }
 
-    const attendee = fakeAttendees[key];
-    if (!attendee) {
-      scanState = 'error';
-      errorMsg = 'No matching attendee found.';
-      lastScan = null;
-    } else if (key === 'duplicate') {
-      scanState = 'duplicate';
-      errorMsg = `${attendee.name} — already scanned for ${selectedGroup}.`;
-      lastScan = attendee;
-    } else {
-      scanState = 'success';
-      lastScan = attendee;
-      const entry: ScanEntry = { name: attendee.name, time: formatTime(new Date()), group: selectedGroup };
-      recentScans = [entry, ...recentScans].slice(0, 20);
-      scanCounts[selectedGroup] = (scanCounts[selectedGroup] ?? 0) + 1;
+  function primaryRole(roles: string[]): string {
+    if (!roles.length) return 'Attendee';
+    const r = roles[0];
+    return r.charAt(0) + r.slice(1).toLowerCase();
+  }
+
+  // --- State seeded from SSR load ---
+  let scanActions = $state(untrack(() => [...data.scanActions]));
+  let selectedAction = $state(untrack(() => data.scanActions[0] ?? 'Check-In'));
+  let scanCounts = $state<Record<string, number>>(untrack(() => ({ ...data.scanCounts })));
+  let recentScans = $state<ScanEntry[]>(untrack(() => data.recentScans.map(toScanEntry)));
+
+  let manualInput = $state('');
+  let scanState = $state<ScanState>('idle');
+  let lastScan = $state<LastScan | null>(null);
+  let errorMsg = $state('');
+  let showManual = $state(false);
+
+  // --- Camera ---
+  let html5QrCode: Html5Qrcode | null = null;
+  let cameraStarted = $state(false);
+  let cameraError = $state('');
+
+  // --- Lookup / confirm dialog ---
+  let dialogOpen = $state(false);
+  let dialogUser = $state<LookupResult | null>(null);
+  let lookupLoading = $state(false);
+  let isConfirming = $state(false);
+
+  // --- Camera lifecycle ---
+  onMount(async () => {
+    try {
+      html5QrCode = new Html5Qrcode('reader');
+      await html5QrCode.start(
+        { facingMode: 'environment' },
+        {
+          fps: 5,
+          qrbox: (viewfinderWidth: number, viewfinderHeight: number) => {
+            const size = Math.floor(Math.min(viewfinderWidth, viewfinderHeight) * 0.7);
+            return { width: size, height: size };
+          }
+        },
+        onScanSuccess,
+        undefined
+      );
+      cameraStarted = true;
+    } catch {
+      cameraError = 'Camera unavailable — use manual entry below.';
+      showManual = true;
     }
+  });
+
+  onDestroy(() => {
+    if (html5QrCode && cameraStarted) {
+      html5QrCode
+        .stop()
+        .then(() => html5QrCode?.clear())
+        .catch(() => {});
+    }
+  });
+
+  function onScanSuccess(decodedText: string) {
+    if (!html5QrCode) return;
+    // Must pause synchronously, before any await, or html5-qrcode keeps firing
+    // this callback every frame while the code stays in view.
+    html5QrCode.pause(true);
+    handleDetected(decodedText);
+  }
+
+  function resumeScanning() {
+    if (!html5QrCode || !cameraStarted) return;
+    try {
+      html5QrCode.resume();
+    } catch {
+      // already running — ignore
+    }
+  }
+
+  // --- Lookup flow (shared by camera detection + manual entry) ---
+  async function handleDetected(userCode: string) {
+    const code = userCode.trim();
+    if (!code || dialogOpen || lookupLoading) return;
+
+    lookupLoading = true;
     manualInput = '';
     showManual = false;
+
+    try {
+      const result = await trpc.scan.lookup.query({ userCode: code, action: selectedAction });
+      scanState = 'idle';
+      dialogUser = result;
+      dialogOpen = true;
+    } catch (e: any) {
+      scanState = 'error';
+      errorMsg = e.message ?? 'No matching attendee found.';
+      lastScan = null;
+      resumeScanning();
+    } finally {
+      lookupLoading = false;
+    }
+  }
+
+  function handleManualLookup() {
+    if (cameraStarted) html5QrCode?.pause(true);
+    handleDetected(manualInput);
   }
 
   function handleKeydown(e: KeyboardEvent) {
     if (e.key === 'Enter') handleManualLookup();
   }
 
+  function toggleManual() {
+    showManual = !showManual;
+    if (!showManual) manualInput = '';
+  }
+
+  // --- Confirm dialog actions ---
+  async function confirmScan() {
+    if (!dialogUser) return;
+    isConfirming = true;
+    try {
+      const result = await trpc.scan.scanUser.mutate({
+        userCode: dialogUser.user.uid,
+        action: selectedAction
+      });
+
+      scanState = result.isDuplicate ? 'duplicate' : 'success';
+      lastScan = {
+        name: result.user.name,
+        role: primaryRole(result.user.roles),
+        school: result.user.university ?? '—'
+      };
+      recentScans = [
+        { name: result.user.name, time: formatTime(new Date(result.scan.timestamp)), group: selectedAction },
+        ...recentScans
+      ].slice(0, 20);
+      scanCounts[selectedAction] = (scanCounts[selectedAction] ?? 0) + 1;
+
+      dialogOpen = false;
+      dialogUser = null;
+      // Camera stays paused until "Scan Next" is tapped.
+    } catch (e: any) {
+      scanState = 'error';
+      errorMsg = e.message ?? 'Failed to record scan';
+      lastScan = null;
+      dialogOpen = false;
+      dialogUser = null;
+      resumeScanning();
+    } finally {
+      isConfirming = false;
+    }
+  }
+
+  function cancelScan() {
+    dialogOpen = false;
+    dialogUser = null;
+    resumeScanning();
+  }
+
   function scanNext() {
     scanState = 'idle';
     lastScan = null;
     errorMsg = '';
-  }
-
-  function toggleManual() {
-    showManual = !showManual;
-    if (!showManual) manualInput = '';
+    resumeScanning();
   }
 
   const totalScanned = $derived(Object.values(scanCounts).reduce((a, b) => a + b, 0));
@@ -118,11 +224,11 @@
 
     <!-- ── Group selector ── -->
     <section class="section">
-      <label class="field-label" for="group-select">Scan Group</label>
+      <label class="field-label" for="group-select">Scan Action</label>
       <div class="select-wrap">
-        <select id="group-select" class="group-select" bind:value={selectedGroup}>
-          {#each groups as g (g)}
-            <option value={g}>{g}</option>
+        <select id="group-select" class="group-select" bind:value={selectedAction}>
+          {#each scanActions as action (action)}
+            <option value={action}>{action}</option>
           {/each}
         </select>
         <svg class="select-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
@@ -131,7 +237,11 @@
       </div>
     </section>
 
-    
+    {#if cameraError}
+      <section class="section" style="padding-top: 0; padding-bottom: 8px;">
+        <div class="camera-error-banner">{cameraError}</div>
+      </section>
+    {/if}
 
     <!-- ── Viewfinder ── -->
     <section class="viewfinder-section">
@@ -140,29 +250,24 @@
         class:vf-success={scanState === 'success'}
         class:vf-error={scanState === 'error' || scanState === 'duplicate'}
       >
-        <!-- Corner brackets -->
+        <div class="qr-reader-wrap">
+          <div id="reader"></div>
+        </div>
+
+        <!-- Guide overlay: corners + crosshair, always visible above the video -->
         <div class="corner tl"></div>
         <div class="corner tr"></div>
         <div class="corner bl"></div>
         <div class="corner br"></div>
+        <div class="guide-line guide-h"></div>
+        <div class="guide-line guide-v"></div>
 
-        {#if scanState === 'idle'}
-          <div class="vf-idle">
-            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="color:#d1d1d1;">
-              <rect x="3" y="3" width="5" height="5" rx="0.5"></rect>
-              <rect x="16" y="3" width="5" height="5" rx="0.5"></rect>
-              <rect x="3" y="16" width="5" height="5" rx="0.5"></rect>
-              <rect x="10" y="10" width="4" height="4" rx="0.5"></rect>
-              <line x1="16" y1="10" x2="16" y2="10.01"></line>
-              <line x1="21" y1="10" x2="21" y2="10.01"></line>
-              <line x1="16" y1="16" x2="21" y2="21"></line>
-              <line x1="16" y1="21" x2="21" y2="16"></line>
-            </svg>
-            <span class="vf-hint">Align QR code within frame</span>
-          </div>
+        <!-- Status banner, anchored to the bottom edge so the camera stays visible -->
+        <div class="vf-banner" class:vf-banner-success={scanState === 'success'} class:vf-banner-warn={scanState === 'duplicate'} class:vf-banner-err={scanState === 'error'}>
+          {#if lookupLoading}
+            <span class="vf-hint">Looking up…</span>
 
-        {:else if scanState === 'success'}
-          <div class="vf-result">
+          {:else if scanState === 'success'}
             <div class="vf-status-row success">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                 <polyline points="20 6 9 17 4 12"></polyline>
@@ -170,12 +275,9 @@
               Scan successful
             </div>
             <div class="vf-name">{lastScan?.name}</div>
-            <div class="vf-meta">{lastScan?.role} · {lastScan?.school}</div>
-            <div class="vf-badge success-badge">Checked in — {selectedGroup}</div>
-          </div>
+            <div class="vf-meta">{lastScan?.role} · {lastScan?.school} · Checked in — {selectedAction}</div>
 
-        {:else if scanState === 'duplicate'}
-          <div class="vf-result">
+          {:else if scanState === 'duplicate'}
             <div class="vf-status-row warn">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
@@ -185,12 +287,9 @@
               Already scanned
             </div>
             <div class="vf-name">{lastScan?.name}</div>
-            <div class="vf-meta">{lastScan?.role} · {lastScan?.school}</div>
-            <div class="vf-badge warn-badge">Duplicate — {selectedGroup}</div>
-          </div>
+            <div class="vf-meta">{lastScan?.role} · {lastScan?.school} · Duplicate — {selectedAction}</div>
 
-        {:else if scanState === 'error'}
-          <div class="vf-result">
+          {:else if scanState === 'error'}
             <div class="vf-status-row err">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                 <circle cx="12" cy="12" r="10"></circle>
@@ -199,10 +298,12 @@
               </svg>
               Not found
             </div>
-            <div class="vf-name" style="font-size: 1rem;">Unknown QR code</div>
             <div class="vf-meta">{errorMsg}</div>
-          </div>
-        {/if}
+
+          {:else}
+            <span class="vf-hint">Align QR code within frame</span>
+          {/if}
+        </div>
       </div>
     </section>
 
@@ -240,7 +341,7 @@
             <input
               class="manual-input"
               type="text"
-              placeholder="Email or QR code…"
+              placeholder="User ID or RC- code…"
               bind:value={manualInput}
               onkeydown={handleKeydown}
               autofocus
@@ -287,14 +388,26 @@
 
   <!-- ── Stats footer ── -->
 <footer class="stats-footer">
-  {#each groups as g (g)}
-    <button class="stat-chip" class:stat-chip-active={g === selectedGroup} onclick={() => selectedGroup = g}>
-      <span class="stat-chip-name">{g}</span>
-      <span class="stat-chip-count">{scanCounts[g] ?? 0}</span>
+  {#each scanActions as action (action)}
+    <button class="stat-chip" class:stat-chip-active={action === selectedAction} onclick={() => selectedAction = action}>
+      <span class="stat-chip-name">{action}</span>
+      <span class="stat-chip-count">{scanCounts[action] ?? 0}</span>
     </button>
   {/each}
 </footer>
 </div>
+
+<ScanConfirmDialog
+  isOpen={dialogOpen}
+  user={dialogUser?.user ?? null}
+  action={selectedAction}
+  isDuplicate={dialogUser?.isDuplicate ?? false}
+  scanCountForAction={dialogUser?.scanCountForAction ?? 0}
+  warning={dialogUser?.warning ?? null}
+  {isConfirming}
+  onConfirm={confirmScan}
+  onCancel={cancelScan}
+/>
 
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -555,7 +668,7 @@
     border-radius: 10px;
     position: relative;
     background: #fff;
-    min-height: 200px;
+    aspect-ratio: 1 / 1;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -570,39 +683,102 @@
     border-color: #e0e0e0;
   }
 
-  /* Corner brackets */
+  /* Camera video feed. html5-qrcode is given the inner #reader div and sets
+     position/width/height on it via inline styles once it starts — those
+     inline styles beat any CSS we write for #reader itself, so absolute
+     positioning is applied to this untouched wrapper instead. */
+  .qr-reader-wrap {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+  }
+  .qr-reader-wrap :global(#reader) {
+    width: 100% !important;
+    height: 100% !important;
+  }
+  .qr-reader-wrap :global(video),
+  .qr-reader-wrap :global(canvas) {
+    width: 100% !important;
+    height: 100% !important;
+    object-fit: cover;
+    border-radius: inherit;
+  }
+
+  .camera-error-banner {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.72rem;
+    color: #92400e;
+    background: #fffbeb;
+    border: 1px solid #fde68a;
+    border-radius: 8px;
+    padding: 8px 12px;
+  }
+
+  /* Corner brackets — layered above the video feed */
   .corner {
     position: absolute;
+    z-index: 1;
     width: 16px;
     height: 16px;
-    border-color: #c8c8c8;
+    border-color: rgba(255,255,255,0.85);
     border-style: solid;
+    filter: drop-shadow(0 0 2px rgba(0,0,0,0.45));
   }
   .corner.tl { top: 10px;    left: 10px;    border-width: 2px 0 0 2px; border-radius: 2px 0 0 0; }
   .corner.tr { top: 10px;    right: 10px;   border-width: 2px 2px 0 0; border-radius: 0 2px 0 0; }
   .corner.bl { bottom: 10px; left: 10px;    border-width: 0 0 2px 2px; border-radius: 0 0 0 2px; }
   .corner.br { bottom: 10px; right: 10px;   border-width: 0 2px 2px 0; border-radius: 0 0 2px 0; }
 
-  /* Idle */
-  .vf-idle {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 10px;
-    padding: 40px 0;
+  /* Guide crosshair — thin lines through the center, layered above the video feed */
+  .guide-line {
+    position: absolute;
+    z-index: 1;
+    background: rgba(255, 255, 255, 0.35);
+    filter: drop-shadow(0 0 1px rgba(0,0,0,0.35));
+  }
+  .guide-line.guide-h {
+    left: 20%;
+    right: 20%;
+    top: 50%;
+    height: 1px;
+  }
+  .guide-line.guide-v {
+    top: 20%;
+    bottom: 20%;
+    left: 50%;
+    width: 1px;
+  }
+
+  /* Status banner — anchored to the bottom edge so the camera stays visible behind it */
+  .vf-banner {
+    position: absolute;
+    z-index: 2;
+    left: 10px;
+    right: 10px;
+    bottom: 10px;
+    text-align: center;
+    padding: 10px 14px;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.9);
+    backdrop-filter: blur(4px);
+    transition: background 0.15s;
+  }
+  .vf-banner-success {
+    background: rgba(25, 25, 25, 0.92);
+  }
+  .vf-banner-warn {
+    background: rgba(254, 243, 199, 0.95);
+    border: 1px solid #fde68a;
+  }
+  .vf-banner-err {
+    background: rgba(254, 226, 226, 0.95);
+    border: 1px solid #fecaca;
   }
   .vf-hint {
     font-family: 'DM Mono', monospace;
     font-size: 0.68rem;
-    color: #aaa;
+    color: #555;
     letter-spacing: 0.04em;
-  }
-
-  /* Result states */
-  .vf-result {
-    text-align: center;
-    padding: 28px 20px;
-    width: 100%;
   }
   .vf-status-row {
     display: inline-flex;
@@ -612,53 +788,27 @@
     font-size: 0.68rem;
     font-weight: 500;
     letter-spacing: 0.05em;
-    margin-bottom: 10px;
-    padding: 3px 10px;
-    border-radius: 20px;
-  }
-  .vf-status-row.success {
-    background: rgba(25,25,25,0.06);
-    color: #191919;
-  }
-  .vf-status-row.warn {
-    background: #fef3c7;
-    color: #92400e;
-  }
-  .vf-status-row.err {
-    background: #fee2e2;
-    color: #991b1b;
-  }
-  .vf-name {
-    font-size: 1.4rem;
-    font-weight: 700;
-    color: #191919;
-    line-height: 1.15;
     margin-bottom: 4px;
-    letter-spacing: -0.02em;
   }
+  .vf-status-row.success { color: #fff; }
+  .vf-status-row.warn { color: #92400e; }
+  .vf-status-row.err { color: #991b1b; }
+  .vf-name {
+    font-size: 1.05rem;
+    font-weight: 700;
+    line-height: 1.2;
+    letter-spacing: -0.01em;
+    color: #191919;
+  }
+  .vf-banner-success .vf-name { color: #fff; }
   .vf-meta {
     font-family: 'DM Mono', monospace;
-    font-size: 0.7rem;
-    color: #888;
-    margin-bottom: 14px;
-  }
-  .vf-badge {
-    display: inline-block;
-    font-family: 'DM Mono', monospace;
     font-size: 0.68rem;
-    letter-spacing: 0.08em;
-    padding: 4px 14px;
-    border-radius: 4px;
+    color: #888;
   }
-  .success-badge {
-    background: #191919;
-    color: #fff;
-  }
-  .warn-badge {
-    background: #fff;
-    color: #92400e;
-    border: 1px solid #fde68a;
-  }
+  .vf-banner-success .vf-meta { color: #ccc; }
+  .vf-banner-warn .vf-meta { color: #92400e; }
+  .vf-banner-err .vf-meta { color: #991b1b; }
 
   /* ── Primary button ── */
   .btn-primary {

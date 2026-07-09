@@ -2,8 +2,91 @@ import { z } from 'zod';
 import { TRPCError } from '@trpc/server';
 import { router, adminProcedure } from '../init';
 import { createLog } from '$lib/server/log';
+import { Role, UserStatus, type PrismaClient } from '$lib/generated/prisma/client';
+
+// Shared by `lookup` below; `scanUser` keeps its own inline logic unchanged.
+async function assertValidAction(prisma: PrismaClient, action: string): Promise<void> {
+	const settings = await prisma.settings.findFirst();
+	if (settings && !settings.scanActions.includes(action)) {
+		throw new TRPCError({
+			code: 'BAD_REQUEST',
+			message: `Invalid scan action "${action}". Valid actions: ${settings.scanActions.join(', ')}`
+		});
+	}
+}
+
+async function resolveUserByCode(prisma: PrismaClient, userCode: string) {
+	const user = await prisma.user.findFirst({
+		where: {
+			OR: [{ uid: userCode }, { uid: { endsWith: userCode.replace(/^RC-/i, '') } }]
+		}
+	});
+	if (!user) {
+		throw new TRPCError({ code: 'NOT_FOUND', message: 'User not found.' });
+	}
+	return user;
+}
+
+async function isDuplicateToday(
+	prisma: PrismaClient,
+	userId: string,
+	action: string
+): Promise<boolean> {
+	const startOfDay = new Date();
+	startOfDay.setHours(0, 0, 0, 0);
+
+	const duplicate = await prisma.scan.findFirst({
+		where: { userId, action, timestamp: { gte: startOfDay } }
+	});
+
+	return !!duplicate;
+}
 
 export const scanRouter = router({
+	lookup: adminProcedure
+		.input(
+			z.object({
+				userCode: z.string().min(1),
+				action: z.string().min(1)
+			})
+		)
+		.query(async ({ ctx, input }) => {
+			await assertValidAction(ctx.prisma, input.action);
+			const user = await resolveUserByCode(ctx.prisma, input.userCode);
+
+			const [isDuplicate, scanCountForAction] = await Promise.all([
+				isDuplicateToday(ctx.prisma, user.uid, input.action),
+				ctx.prisma.scan.count({ where: { userId: user.uid, action: input.action } })
+			]);
+
+			const isUnconfirmedHacker =
+				user.roles.includes(Role.HACKER) &&
+				user.status !== UserStatus.CONFIRMED &&
+				user.status !== UserStatus.CHECKED_IN;
+
+			return {
+				user,
+				isDuplicate,
+				scanCountForAction,
+				warning: isUnconfirmedHacker ? ('UNCONFIRMED_HACKER' as const) : null
+			};
+		}),
+
+	getCounts: adminProcedure.query(async ({ ctx }) => {
+		const [settings, grouped] = await Promise.all([
+			ctx.prisma.settings.findFirst(),
+			ctx.prisma.scan.groupBy({ by: ['action'], _count: { action: true } })
+		]);
+		const actions = settings?.scanActions ?? ['Check-In'];
+
+		const counts: Record<string, number> = {};
+		for (const action of actions) counts[action] = 0;
+		// Also surfaces retired actions with historical scans that are no longer in settings — intentional.
+		for (const row of grouped) counts[row.action] = row._count.action;
+
+		return counts;
+	}),
+
 	scanUser: adminProcedure
 		.input(
 			z.object({
