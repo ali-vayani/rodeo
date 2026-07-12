@@ -3,10 +3,7 @@ import { createClient } from '$lib/trpc/client';
 
 type UserWithStatus = { status: UserStatus };
 
-export function createDeclineHandler(options: {
-	user: UserWithStatus;
-	onSuccess?: () => void;
-}) {
+export function createDeclineHandler(options: { user: UserWithStatus; onSuccess?: () => void }) {
 	const trpc = createClient();
 	let declining = $state(false);
 

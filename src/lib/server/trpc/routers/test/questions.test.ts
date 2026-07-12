@@ -113,7 +113,11 @@ describe('questions.update', () => {
 	it('updates existing question', async () => {
 		const caller = createTestCaller(db, adminUser);
 		db.question.update.mockResolvedValue({ ...hackerQuestion, title: 'Updated' });
-		const result = await caller.questions.update({ id: 'q-hacker', ...questionInput, title: 'Updated' });
+		const result = await caller.questions.update({
+			id: 'q-hacker',
+			...questionInput,
+			title: 'Updated'
+		});
 		expect(result.title).toBe('Updated');
 		expect(db.question.update).toHaveBeenCalledWith(
 			expect.objectContaining({ where: { id: 'q-hacker' } })

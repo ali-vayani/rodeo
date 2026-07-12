@@ -3,10 +3,7 @@ import { createClient } from '$lib/trpc/client';
 
 type UserWithStatus = { status: UserStatus };
 
-export function createRsvpHandler(options: {
-	user: UserWithStatus;
-	onSuccess?: () => void;
-}) {
+export function createRsvpHandler(options: { user: UserWithStatus; onSuccess?: () => void }) {
 	const trpc = createClient();
 	let rsvping = $state(false);
 

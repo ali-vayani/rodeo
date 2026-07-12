@@ -31,32 +31,32 @@
 	}
 </script>
 
-<div class="bg-white border border-border rounded-md px-6 py-5 h-full flex flex-col">
-	<div class="text-[11px] font-bold tracking-[0.12em] uppercase text-muted-foreground mb-4 shrink-0">
+<div class="flex h-full flex-col rounded-md border border-border bg-white px-6 py-5">
+	<div
+		class="mb-4 shrink-0 text-[11px] font-bold tracking-[0.12em] text-muted-foreground uppercase"
+	>
 		Recent Activity
 	</div>
 
 	{#if entries.length === 0}
-		<div class="text-[13px] text-muted-foreground text-center py-6">
-			No activity yet
-		</div>
+		<div class="py-6 text-center text-[13px] text-muted-foreground">No activity yet</div>
 	{:else}
 		<div class="flex-1 overflow-y-auto">
 			{#each entries as entry}
-				<div class="flex items-start gap-[10px] py-[10px] border-b border-[#f0f0f0]">
+				<div class="flex items-start gap-[10px] border-b border-[#f0f0f0] py-[10px]">
 					<div
-						class="size-1.5 shrink-0 mt-1 rounded-full"
+						class="mt-1 size-1.5 shrink-0 rounded-full"
 						style="background:{isNotable(entry.action) ? '#191919' : '#cccccc'}"
 					></div>
-					<div class="flex-1 min-w-0">
-						<div class="text-[13px] text-[#333] leading-[1.4]">
+					<div class="min-w-0 flex-1">
+						<div class="text-[13px] leading-[1.4] text-[#333]">
 							{#if entry.user}
 								<span class="font-medium">{entry.user.name}</span>
 							{/if}
 							{entry.action}
 						</div>
 					</div>
-					<div class="text-[11px] text-muted-foreground shrink-0 font-mono">
+					<div class="shrink-0 font-mono text-[11px] text-muted-foreground">
 						{formatRelative(entry.timestamp)}
 					</div>
 				</div>

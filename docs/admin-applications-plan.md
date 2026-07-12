@@ -269,19 +269,15 @@ Shows detailed list of changes with question titles:
 ```typescript
 // Track changes by comparing workingQuestions with original questions
 const pendingChanges = $derived(() => {
-  const added = workingQuestions.filter(
-    (q) => !q.id || q.id.startsWith("temp-"),
-  );
-  const deleted = questions.filter(
-    (q) => !workingQuestions.find((wq) => wq.id === q.id),
-  );
-  const modified = workingQuestions.filter((wq) => {
-    const original = questions.find((q) => q.id === wq.id);
-    return original && JSON.stringify(original) !== JSON.stringify(wq);
-  });
-  const reordered = workingQuestions.some((q, i) => q.order !== i);
+	const added = workingQuestions.filter((q) => !q.id || q.id.startsWith('temp-'));
+	const deleted = questions.filter((q) => !workingQuestions.find((wq) => wq.id === q.id));
+	const modified = workingQuestions.filter((wq) => {
+		const original = questions.find((q) => q.id === wq.id);
+		return original && JSON.stringify(original) !== JSON.stringify(wq);
+	});
+	const reordered = workingQuestions.some((q, i) => q.order !== i);
 
-  return { added, modified, deleted: deleted.map((q) => q.id), reordered };
+	return { added, modified, deleted: deleted.map((q) => q.id), reordered };
 });
 ```
 

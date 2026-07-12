@@ -27,9 +27,7 @@ export const scheduleRouter = router({
 			return ctx.prisma.schedule.update({ where: { id }, data });
 		}),
 
-	delete: adminProcedure
-		.input(z.object({ id: z.string() }))
-		.mutation(async ({ ctx, input }) => {
-			return ctx.prisma.schedule.delete({ where: { id: input.id } });
-		})
+	delete: adminProcedure.input(z.object({ id: z.string() })).mutation(async ({ ctx, input }) => {
+		return ctx.prisma.schedule.delete({ where: { id: input.id } });
+	})
 });

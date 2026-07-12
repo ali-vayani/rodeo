@@ -80,18 +80,16 @@ export const userRouter = router({
 			return { users, total, page, pageSize };
 		}),
 
-	getById: adminProcedure
-		.input(z.object({ uid: z.string() }))
-		.query(async ({ ctx, input }) => {
-			return ctx.prisma.user.findUniqueOrThrow({
-				where: { uid: input.uid },
-				include: {
-					application: { include: { question: true } },
-					team: { include: { members: true } },
-					scans: { orderBy: { timestamp: 'desc' } }
-				}
-			});
-		}),
+	getById: adminProcedure.input(z.object({ uid: z.string() })).query(async ({ ctx, input }) => {
+		return ctx.prisma.user.findUniqueOrThrow({
+			where: { uid: input.uid },
+			include: {
+				application: { include: { question: true } },
+				team: { include: { members: true } },
+				scans: { orderBy: { timestamp: 'desc' } }
+			}
+		});
+	}),
 
 	updateRole: adminProcedure
 		.input(z.object({ uid: z.string(), roles: z.array(z.nativeEnum(Role)) }))

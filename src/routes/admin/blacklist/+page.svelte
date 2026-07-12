@@ -74,7 +74,10 @@
 
 	// --- CSV Export ---
 	function exportCsv() {
-		const rows = ['name,email,reason', ...entries.map((e) => `${e.name},${e.email},${e.reason ?? ''}`)];
+		const rows = [
+			'name,email,reason',
+			...entries.map((e) => `${e.name},${e.email},${e.reason ?? ''}`)
+		];
 		const blob = new Blob([rows.join('\n')], { type: 'text/csv' });
 		const url = URL.createObjectURL(blob);
 		const a = document.createElement('a');
@@ -131,53 +134,56 @@
 
 	// --- Helpers ---
 	function formatDate(d: Date | string): string {
-		return new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+		return new Date(d).toLocaleDateString('en-US', {
+			month: 'short',
+			day: 'numeric',
+			year: 'numeric'
+		});
 	}
 </script>
 
 <!-- Header -->
-<div class="flex items-center justify-between mb-6">
+<div class="mb-6 flex items-center justify-between">
 	<h1 class="text-[22px] font-bold text-primary">Blacklist</h1>
 </div>
 
 <!-- Main card -->
-<div class="bg-white border border-border rounded-md overflow-hidden">
-
+<div class="overflow-hidden rounded-md border border-border bg-white">
 	<!-- Count bar -->
-	<div class="px-4 py-2 border-b border-border">
-		<span class="font-mono text-[9px] uppercase tracking-[0.1em] text-muted-foreground">
+	<div class="border-b border-border px-4 py-2">
+		<span class="font-mono text-[9px] tracking-[0.1em] text-muted-foreground uppercase">
 			BLACKLIST — {entries.length} ENTRIES
 		</span>
 	</div>
 
 	<!-- Add row -->
-	<div class="px-4 py-3 border-b border-border">
+	<div class="border-b border-border px-4 py-3">
 		<div class="grid grid-cols-[1fr_1fr_1fr_auto] gap-2">
 			<input
 				type="text"
 				placeholder="name *"
 				bind:value={addName}
 				onkeydown={onAddKeydown}
-				class="font-mono text-[11px] text-primary bg-[#f9f9f9] border border-border rounded px-2 py-[6px] outline-none focus:border-primary placeholder:text-[#bbb]"
+				class="rounded border border-border bg-[#f9f9f9] px-2 py-[6px] font-mono text-[11px] text-primary outline-none placeholder:text-[#bbb] focus:border-primary"
 			/>
 			<input
 				type="email"
 				placeholder="email address *"
 				bind:value={addEmail}
 				onkeydown={onAddKeydown}
-				class="font-mono text-[11px] text-primary bg-[#f9f9f9] border border-border rounded px-2 py-[6px] outline-none focus:border-primary placeholder:text-[#bbb]"
+				class="rounded border border-border bg-[#f9f9f9] px-2 py-[6px] font-mono text-[11px] text-primary outline-none placeholder:text-[#bbb] focus:border-primary"
 			/>
 			<input
 				type="text"
 				placeholder="reason (optional)"
 				bind:value={addReason}
 				onkeydown={onAddKeydown}
-				class="font-mono text-[11px] text-primary bg-[#f9f9f9] border border-border rounded px-2 py-[6px] outline-none focus:border-primary placeholder:text-[#bbb]"
+				class="rounded border border-border bg-[#f9f9f9] px-2 py-[6px] font-mono text-[11px] text-primary outline-none placeholder:text-[#bbb] focus:border-primary"
 			/>
 			<button
 				onclick={addEntry}
 				disabled={adding || !addName.trim() || !addEmail.trim()}
-				class="font-mono text-[11px] font-medium text-primary bg-white border border-border rounded px-3 py-[6px] cursor-pointer whitespace-nowrap disabled:opacity-40 disabled:cursor-default hover:bg-[#fafafa] transition-colors"
+				class="cursor-pointer rounded border border-border bg-white px-3 py-[6px] font-mono text-[11px] font-medium whitespace-nowrap text-primary transition-colors hover:bg-[#fafafa] disabled:cursor-default disabled:opacity-40"
 			>
 				{adding ? '…' : '+ADD'}
 			</button>
@@ -185,30 +191,30 @@
 	</div>
 
 	<!-- Toolbar -->
-	<div class="flex items-center gap-2 px-4 py-2 border-b border-border">
+	<div class="flex items-center gap-2 border-b border-border px-4 py-2">
 		<input
 			type="text"
 			placeholder="search by name or email…"
 			bind:value={search}
-			class="font-mono text-[11px] text-primary bg-[#f9f9f9] border border-border rounded px-2 py-[5px] flex-1 outline-none focus:border-primary placeholder:text-[#bbb]"
+			class="flex-1 rounded border border-border bg-[#f9f9f9] px-2 py-[5px] font-mono text-[11px] text-primary outline-none placeholder:text-[#bbb] focus:border-primary"
 		/>
 		<button
 			onclick={exportCsv}
-			class="font-mono text-[11px] text-primary bg-white border border-border rounded px-3 py-[5px] cursor-pointer hover:bg-[#fafafa] transition-colors whitespace-nowrap"
+			class="cursor-pointer rounded border border-border bg-white px-3 py-[5px] font-mono text-[11px] whitespace-nowrap text-primary transition-colors hover:bg-[#fafafa]"
 		>
 			↓ CSV
 		</button>
 		<button
 			onclick={importCsv}
 			disabled={importing}
-			class="font-mono text-[11px] text-primary bg-white border border-border rounded px-3 py-[5px] cursor-pointer hover:bg-[#fafafa] transition-colors whitespace-nowrap disabled:opacity-40 disabled:cursor-default"
+			class="cursor-pointer rounded border border-border bg-white px-3 py-[5px] font-mono text-[11px] whitespace-nowrap text-primary transition-colors hover:bg-[#fafafa] disabled:cursor-default disabled:opacity-40"
 		>
 			{importing ? '…' : '↑ Import'}
 		</button>
 	</div>
 
 	<!-- Table -->
-	<div class="overflow-x-auto overflow-y-auto max-h-[calc(100vh-340px)]">
+	<div class="max-h-[calc(100vh-340px)] overflow-x-auto overflow-y-auto">
 		{#if filtered.length === 0}
 			<div class="py-12 text-center font-mono text-[11px] text-muted-foreground">
 				{search.trim() ? 'No matching entries' : 'No entries yet'}
@@ -216,9 +222,11 @@
 		{:else}
 			<table class="w-full border-collapse">
 				<thead>
-					<tr class="border-b border-border sticky top-0 z-[1] bg-[#f9f9f9]">
+					<tr class="sticky top-0 z-[1] border-b border-border bg-[#f9f9f9]">
 						{#each ['NAME', 'EMAIL', 'REASON', 'ADDED', ''] as col}
-							<th class="px-[14px] py-[9px] text-left font-mono text-[9px] font-medium tracking-[0.1em] uppercase text-muted-foreground bg-[#f9f9f9] whitespace-nowrap">
+							<th
+								class="bg-[#f9f9f9] px-[14px] py-[9px] text-left font-mono text-[9px] font-medium tracking-[0.1em] whitespace-nowrap text-muted-foreground uppercase"
+							>
 								{col}
 							</th>
 						{/each}
@@ -226,7 +234,9 @@
 				</thead>
 				<tbody>
 					{#each filtered as entry (entry.id)}
-						<tr class="border-b border-[#f0f0f0] hover:bg-[#fafafa] transition-colors even:bg-[#fafafa]">
+						<tr
+							class="border-b border-[#f0f0f0] transition-colors even:bg-[#fafafa] hover:bg-[#fafafa]"
+						>
 							<td class="px-[14px] py-[10px] font-mono text-[12px] text-primary">
 								{entry.name}
 							</td>
@@ -236,13 +246,15 @@
 							<td class="px-[14px] py-[10px] font-mono text-[11px] text-muted-foreground">
 								{entry.reason ?? '—'}
 							</td>
-							<td class="px-[14px] py-[10px] font-mono text-[11px] text-muted-foreground whitespace-nowrap">
+							<td
+								class="px-[14px] py-[10px] font-mono text-[11px] whitespace-nowrap text-muted-foreground"
+							>
 								{formatDate(entry.createdAt)}
 							</td>
 							<td class="px-[14px] py-[10px] text-right">
 								<button
 									onclick={() => removeEntry(entry.id)}
-									class="font-mono text-[11px] text-[#bbb] hover:text-destructive cursor-pointer bg-transparent border-none p-0 transition-colors"
+									class="cursor-pointer border-none bg-transparent p-0 font-mono text-[11px] text-[#bbb] transition-colors hover:text-destructive"
 									aria-label="Remove entry"
 								>
 									✕
@@ -261,7 +273,7 @@
 	<div
 		in:fly={{ x: 60, duration: 280 }}
 		out:fly={{ x: 60, duration: 200 }}
-		class="fixed bottom-7 right-7 z-[200]"
+		class="fixed right-7 bottom-7 z-[200]"
 	>
 		<Toast message={toast.message} type={toast.type} />
 	</div>

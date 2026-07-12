@@ -35,15 +35,17 @@
 	}
 </script>
 
-<div class="bg-white border border-border rounded-md overflow-hidden">
+<div class="overflow-hidden rounded-md border border-border bg-white">
 	{#if users.length === 0}
 		<div class="py-12 text-center text-[13px] text-muted-foreground">No results</div>
 	{:else}
 		<table class="w-full border-collapse">
 			<thead>
-				<tr class="bg-[#f9f9f9] border-b border-border">
+				<tr class="border-b border-border bg-[#f9f9f9]">
 					{#each ['Name', 'Email', 'Role', 'Status', 'Pending', 'Decision', 'Created', ''] as col}
-						<th class="px-[14px] py-[10px] text-left text-[11px] font-semibold tracking-[0.06em] uppercase text-muted-foreground whitespace-nowrap">
+						<th
+							class="px-[14px] py-[10px] text-left text-[11px] font-semibold tracking-[0.06em] whitespace-nowrap text-muted-foreground uppercase"
+						>
 							{col}
 						</th>
 					{/each}
@@ -51,8 +53,8 @@
 			</thead>
 			<tbody>
 				{#each users as user (user.uid)}
-					<tr class="border-b border-[#f0f0f0] hover:bg-[#fafafa] transition-colors">
-						<td class="px-[14px] py-[11px] text-[13px] font-medium text-primary whitespace-nowrap">
+					<tr class="border-b border-[#f0f0f0] transition-colors hover:bg-[#fafafa]">
+						<td class="px-[14px] py-[11px] text-[13px] font-medium whitespace-nowrap text-primary">
 							{user.name}
 						</td>
 						<td class="px-[14px] py-[11px] text-xs text-muted-foreground">
@@ -62,13 +64,17 @@
 							{primaryRole(user.roles)}
 						</td>
 						<td class="px-[14px] py-[11px]">
-							<span class="text-[11px] font-semibold tracking-[0.05em] uppercase text-[#555]">
+							<span class="text-[11px] font-semibold tracking-[0.05em] text-[#555] uppercase">
 								{statusLabel(user.status)}
 							</span>
 						</td>
 						<td class="px-[14px] py-[11px]">
 							{#if user.pendingDecision}
-								<span class="inline-block px-[7px] py-0.5 rounded text-[11px] font-semibold {DECISION_CLASS[user.pendingDecision] ?? 'bg-[#e5e7eb] text-[#374151]'}">
+								<span
+									class="inline-block rounded px-[7px] py-0.5 text-[11px] font-semibold {DECISION_CLASS[
+										user.pendingDecision
+									] ?? 'bg-[#e5e7eb] text-[#374151]'}"
+								>
 									{statusLabel(user.pendingDecision)}
 								</span>
 							{:else}
@@ -77,20 +83,26 @@
 						</td>
 						<td class="px-[14px] py-[11px]">
 							{#if user.activeDecision}
-								<span class="inline-block px-[7px] py-0.5 rounded text-[11px] font-semibold {DECISION_CLASS[user.activeDecision] ?? 'bg-[#e5e7eb] text-[#374151]'}">
+								<span
+									class="inline-block rounded px-[7px] py-0.5 text-[11px] font-semibold {DECISION_CLASS[
+										user.activeDecision
+									] ?? 'bg-[#e5e7eb] text-[#374151]'}"
+								>
 									{statusLabel(user.activeDecision)}
 								</span>
 							{:else}
 								<span class="text-xs text-[#cccccc]">—</span>
 							{/if}
 						</td>
-						<td class="px-[14px] py-[11px] text-xs text-muted-foreground font-mono whitespace-nowrap">
+						<td
+							class="px-[14px] py-[11px] font-mono text-xs whitespace-nowrap text-muted-foreground"
+						>
 							{formatDate(user.createdAt)}
 						</td>
 						<td class="px-[14px] py-[11px]">
 							<button
 								onclick={() => onEdit(user)}
-								class="text-xs text-primary bg-transparent border border-border rounded px-[10px] py-1 cursor-pointer"
+								class="cursor-pointer rounded border border-border bg-transparent px-[10px] py-1 text-xs text-primary"
 							>
 								Edit
 							</button>

@@ -4,13 +4,7 @@ import { UserStatus, Role } from '$lib/generated/prisma/client';
 
 export const dashboardRouter = router({
 	stats: adminProcedure.query(async ({ ctx }) => {
-		const [
-			total,
-			byStatus,
-			byDecision,
-			byRole,
-			recentActivity
-		] = await Promise.all([
+		const [total, byStatus, byDecision, byRole, recentActivity] = await Promise.all([
 			ctx.prisma.user.count(),
 
 			ctx.prisma.user.groupBy({

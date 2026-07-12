@@ -44,17 +44,15 @@
 			{value}
 			oninput={(e) => onchange((e.target as HTMLInputElement).value)}
 		/>
-
 	{:else if question.type === QuestionType.LONG_TEXT}
 		<textarea
 			id={inputId}
 			class="{inputClass} resize-none"
 			rows={4}
 			placeholder={question.placeholder ?? ''}
-			value={value}
+			{value}
 			oninput={(e) => onchange((e.target as HTMLTextAreaElement).value)}
 		></textarea>
-
 	{:else if question.type === QuestionType.NUMBER}
 		<input
 			id={inputId}
@@ -66,7 +64,6 @@
 			{value}
 			oninput={(e) => onchange((e.target as HTMLInputElement).value)}
 		/>
-
 	{:else if question.type === QuestionType.CHECKBOX}
 		<label class="flex cursor-pointer items-center gap-2 text-sm text-primary">
 			<input
@@ -77,7 +74,6 @@
 			/>
 			{question.placeholder ?? 'Yes'}
 		</label>
-
 	{:else if question.type === QuestionType.MULTIPLE_CHOICE}
 		<div class="flex flex-col gap-2">
 			{#each question.options as option}
@@ -94,14 +90,15 @@
 				</label>
 			{/each}
 		</div>
-
 	{:else if question.type === QuestionType.DROPDOWN}
 		<select
 			id={inputId}
 			class={inputClass}
 			onchange={(e) => onchange((e.target as HTMLSelectElement).value)}
 		>
-			<option value="" disabled selected={!value}>{question.placeholder ?? 'Select an option'}</option>
+			<option value="" disabled selected={!value}
+				>{question.placeholder ?? 'Select an option'}</option
+			>
 			{#each question.options as option}
 				<option value={option} selected={value === option}>{option}</option>
 			{/each}

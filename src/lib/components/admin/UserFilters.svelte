@@ -30,27 +30,29 @@
 	}
 </script>
 
-<div class="w-[200px] shrink-0 bg-white border-r border-border px-4 py-5 overflow-y-auto">
-	<div class="text-[10px] font-bold tracking-[0.12em] uppercase text-muted-foreground mb-3">
+<div class="w-[200px] shrink-0 overflow-y-auto border-r border-border bg-white px-4 py-5">
+	<div class="mb-3 text-[10px] font-bold tracking-[0.12em] text-muted-foreground uppercase">
 		Filters
 	</div>
 
 	<!-- Role -->
 	<div class="mb-5">
-		<div class="flex items-center justify-between mb-2">
-			<span class="text-[10px] font-bold tracking-widest uppercase text-muted-foreground">Role</span>
+		<div class="mb-2 flex items-center justify-between">
+			<span class="text-[10px] font-bold tracking-widest text-muted-foreground uppercase">Role</span
+			>
 			<button
 				onclick={onClearRole}
-				class="text-[10px] text-muted-foreground bg-transparent border-none cursor-pointer p-0 leading-none hover:text-primary transition-colors"
-			>clear</button>
+				class="cursor-pointer border-none bg-transparent p-0 text-[10px] leading-none text-muted-foreground transition-colors hover:text-primary"
+				>clear</button
+			>
 		</div>
 		{#each ROLES as role}
-			<label class="flex items-center gap-2 cursor-pointer py-[3px] text-xs text-[#333]">
+			<label class="flex cursor-pointer items-center gap-2 py-[3px] text-xs text-[#333]">
 				<input
 					type="checkbox"
 					checked={roleFilter[role] ?? true}
 					onchange={() => onToggleRole(role)}
-					class="accent-primary cursor-pointer"
+					class="cursor-pointer accent-primary"
 				/>
 				{label(role)}
 			</label>
@@ -59,20 +61,23 @@
 
 	<!-- Status -->
 	<div class="mb-5">
-		<div class="flex items-center justify-between mb-2">
-			<span class="text-[10px] font-bold tracking-widest uppercase text-muted-foreground">Status</span>
+		<div class="mb-2 flex items-center justify-between">
+			<span class="text-[10px] font-bold tracking-widest text-muted-foreground uppercase"
+				>Status</span
+			>
 			<button
 				onclick={onClearStatus}
-				class="text-[10px] text-muted-foreground bg-transparent border-none cursor-pointer p-0 leading-none hover:text-primary transition-colors"
-			>clear</button>
+				class="cursor-pointer border-none bg-transparent p-0 text-[10px] leading-none text-muted-foreground transition-colors hover:text-primary"
+				>clear</button
+			>
 		</div>
 		{#each STATUSES as status}
-			<label class="flex items-center gap-2 cursor-pointer py-[3px] text-xs text-[#333]">
+			<label class="flex cursor-pointer items-center gap-2 py-[3px] text-xs text-[#333]">
 				<input
 					type="checkbox"
 					checked={statusFilter[status] ?? true}
 					onchange={() => onToggleStatus(status)}
-					class="accent-primary cursor-pointer"
+					class="cursor-pointer accent-primary"
 				/>
 				{label(status)}
 			</label>
@@ -81,20 +86,23 @@
 
 	<!-- Decision -->
 	<div>
-		<div class="flex items-center justify-between mb-2">
-			<span class="text-[10px] font-bold tracking-widest uppercase text-muted-foreground">Decision</span>
+		<div class="mb-2 flex items-center justify-between">
+			<span class="text-[10px] font-bold tracking-widest text-muted-foreground uppercase"
+				>Decision</span
+			>
 			<button
 				onclick={onClearDecision}
-				class="text-[10px] text-muted-foreground bg-transparent border-none cursor-pointer p-0 leading-none hover:text-primary transition-colors"
-			>clear</button>
+				class="cursor-pointer border-none bg-transparent p-0 text-[10px] leading-none text-muted-foreground transition-colors hover:text-primary"
+				>clear</button
+			>
 		</div>
 		{#each DECISIONS as decision}
-			<label class="flex items-center gap-2 cursor-pointer py-[3px] text-xs text-[#333]">
+			<label class="flex cursor-pointer items-center gap-2 py-[3px] text-xs text-[#333]">
 				<input
 					type="checkbox"
 					checked={decisionFilter[decision] ?? true}
 					onchange={() => onToggleDecision(decision)}
-					class="accent-primary cursor-pointer"
+					class="cursor-pointer accent-primary"
 				/>
 				{decision === 'NONE' ? 'None' : label(decision)}
 			</label>

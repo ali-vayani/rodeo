@@ -36,37 +36,62 @@ describe('blacklist.list', () => {
 });
 
 describe('blacklist.add', () => {
-	it('creates one entry', async () => {
+	it('upserts one entry by normalized email', async () => {
 		const caller = createTestCaller(db, adminUser);
-		db.blacklist.create.mockResolvedValue(entry);
-		const result = await caller.blacklist.add({ name: 'Bad Actor', email: 'bad@example.com', reason: 'spam' });
+		db.blacklist.upsert.mockResolvedValue(entry);
+		const result = await caller.blacklist.add({
+			name: 'Bad Actor',
+			email: 'bad@example.com',
+			reason: 'spam'
+		});
 		expect(result).toEqual(entry);
-		expect(db.blacklist.create).toHaveBeenCalledWith(
-			expect.objectContaining({ data: { name: 'Bad Actor', email: 'bad@example.com', reason: 'spam' } })
+		expect(db.blacklist.upsert).toHaveBeenCalledWith(
+			expect.objectContaining({
+				where: { email: 'bad@example.com' },
+				create: { name: 'Bad Actor', email: 'bad@example.com', reason: 'spam' },
+				update: { name: 'Bad Actor', reason: 'spam' }
+			})
 		);
 	});
 
-	it('creates entry without reason', async () => {
+	it('normalizes email (lowercase) before upserting', async () => {
+		const caller = createTestCaller(db, adminUser);
+		db.blacklist.upsert.mockResolvedValue(entry);
+		await caller.blacklist.add({ name: 'Bad Actor', email: 'BAD@Example.COM', reason: 'spam' });
+		expect(db.blacklist.upsert).toHaveBeenCalledWith(
+			expect.objectContaining({
+				where: { email: 'bad@example.com' },
+				create: expect.objectContaining({ email: 'bad@example.com' })
+			})
+		);
+	});
+
+	it('upserts entry without reason', async () => {
 		const caller = createTestCaller(db, adminUser);
 		const noReason = { ...entry, reason: null };
-		db.blacklist.create.mockResolvedValue(noReason);
+		db.blacklist.upsert.mockResolvedValue(noReason);
 		const result = await caller.blacklist.add({ name: 'Bad Actor', email: 'bad@example.com' });
 		expect(result).toEqual(noReason);
 	});
 });
 
 describe('blacklist.addBulk', () => {
-	it('creates many entries', async () => {
+	it('creates many entries with normalized emails, skipping duplicates', async () => {
 		const caller = createTestCaller(db, adminUser);
 		db.blacklist.createMany.mockResolvedValue({ count: 2 });
-		const entries = [
-			{ name: 'Spammer One', email: 'a@example.com' },
-			{ name: 'Spammer Two', email: 'b@example.com', reason: 'fraud' }
-		];
-		const result = await caller.blacklist.addBulk(entries);
+		const result = await caller.blacklist.addBulk([
+			{ name: 'Spammer One', email: 'A@Example.com' },
+			{ name: 'Spammer Two', email: 'B@Example.com', reason: 'fraud' }
+		]);
 		expect(result).toEqual({ count: 2 });
 		expect(db.blacklist.createMany).toHaveBeenCalledWith(
-			expect.objectContaining({ data: entries })
+			expect.objectContaining({
+				data: [
+					{ name: 'Spammer One', email: 'a@example.com' },
+					{ name: 'Spammer Two', email: 'b@example.com', reason: 'fraud' }
+				],
+				skipDuplicates: true
+			})
 		);
 	});
 });

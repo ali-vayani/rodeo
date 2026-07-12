@@ -116,7 +116,7 @@ model Settings {
 model Blacklist {
   id        String   @id @default(cuid())
   name      String
-  email     String
+  email     String   @unique // stored normalized (trimmed + lowercased); B-tree index enables O(log n) lookups
   reason    String?
   createdAt DateTime @default(now())
 }

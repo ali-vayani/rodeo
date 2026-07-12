@@ -34,15 +34,15 @@
 
 <div class="max-w-[560px]">
 	<div class="mb-5">
-		<div class="text-[10px] font-bold tracking-widest uppercase text-muted-foreground mb-1.5">
+		<div class="mb-1.5 text-[10px] font-bold tracking-widest text-muted-foreground uppercase">
 			Timezone
 		</div>
-		<div class="text-xs text-muted-foreground mb-2">
+		<div class="mb-2 text-xs text-muted-foreground">
 			Used to display and interpret all dates and schedule times across the platform.
 		</div>
 		<select
 			bind:value={localTimezone}
-			class="w-full text-[13px] text-primary bg-white border border-border rounded px-3 py-[7px] outline-none cursor-pointer"
+			class="w-full cursor-pointer rounded border border-border bg-white px-3 py-[7px] text-[13px] text-primary outline-none"
 		>
 			{#each TIMEZONES as tz}
 				<option value={tz.value}>{tz.label} — {tz.value}</option>
@@ -56,7 +56,7 @@
 	<button
 		onclick={() => onSave({ timezone: localTimezone })}
 		disabled={saving}
-		class="text-[13px] font-semibold text-white bg-primary border-none rounded-md py-[9px] px-[18px] cursor-pointer disabled:opacity-50"
+		class="cursor-pointer rounded-md border-none bg-primary px-[18px] py-[9px] text-[13px] font-semibold text-white disabled:opacity-50"
 	>
 		{saving ? 'Saving…' : 'Save Changes'}
 	</button>

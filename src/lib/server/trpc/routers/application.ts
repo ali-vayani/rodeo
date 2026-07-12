@@ -29,14 +29,17 @@ export const applicationRouter = router({
 		)
 		.mutation(async ({ ctx, input }) => {
 			// eslint-disable-next-line @typescript-eslint/no-explicit-any
-			const question = await (ctx.prisma.question.findUnique as any)({
+			const question = (await (ctx.prisma.question.findUnique as any)({
 				where: { id: input.questionId },
 				select: { linkedField: true }
-			}) as { linkedField?: string | null } | null;
+			})) as { linkedField?: string | null } | null;
 
 			// Write through to the user record for linked fields
 			const LINKED_USER_FIELDS = ['name', 'university', 'year'] as const;
-			if (question?.linkedField && (LINKED_USER_FIELDS as readonly string[]).includes(question.linkedField)) {
+			if (
+				question?.linkedField &&
+				(LINKED_USER_FIELDS as readonly string[]).includes(question.linkedField)
+			) {
 				await ctx.prisma.user.update({
 					where: { uid: ctx.user.uid },
 					data: { [question.linkedField]: input.value }
@@ -75,7 +78,7 @@ export const applicationRouter = router({
 		}
 
 		if (user.status === UserStatus.CONFIRMED) {
-			throw new TRPCError({ code: 'BAD_REQUEST', message: 'You have already RSVP\'d.' });
+			throw new TRPCError({ code: 'BAD_REQUEST', message: "You have already RSVP'd." });
 		}
 
 		return ctx.prisma.user.update({
@@ -150,20 +153,12 @@ export const applicationRouter = router({
 			});
 		}
 
-		// Blacklist check
-		const blacklist = await ctx.prisma.blacklist.findMany();
-		const isBlacklisted = blacklist.some(
-			(entry) =>
-				entry.email.toLowerCase() === user.email.toLowerCase() ||
-				user.name.toLowerCase().includes(entry.name.toLowerCase())
-		);
-
-		// Update user status and optionally set pendingDecision
+		// Blacklist status is surfaced to reviewers at read-time (see admissions.list);
+		// applying does not auto-set a decision.
 		const updatedUser = await ctx.prisma.user.update({
 			where: { uid: ctx.user.uid },
 			data: {
-				status: UserStatus.APPLIED,
-				...(isBlacklisted && { pendingDecision: DecisionStatus.REJECTED })
+				status: UserStatus.APPLIED
 			}
 		});
 
@@ -174,7 +169,9 @@ export const applicationRouter = router({
 				name: user.name,
 				hackathon_start: settings.hackathonStartDate.toLocaleDateString(),
 				rsvp_deadline: settings.RSVPDeadline.toLocaleDateString()
-			}).catch(() => {/* fire-and-forget */});
+			}).catch(() => {
+				/* fire-and-forget */
+			});
 		}
 
 		return updatedUser;

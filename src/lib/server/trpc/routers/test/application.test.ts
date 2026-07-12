@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { mockDeep, mockReset, type DeepMockProxy } from 'vitest-mock-extended';
 import type { PrismaClient } from '$lib/generated/prisma/client';
-import { UserStatus, DecisionStatus, QuestionType, Role } from '$lib/generated/prisma/client';
+import { UserStatus, QuestionType, Role } from '$lib/generated/prisma/client';
 import { createTestCaller, hackerUser, appliedHacker, mockSettings } from '../test-utils';
 
 vi.mock('$lib/server/db', async () => {
@@ -102,7 +102,6 @@ describe('application.submit', () => {
 		db.user.findUniqueOrThrow.mockResolvedValue(hackerUser as never);
 		db.question.findMany.mockResolvedValue([] as never);
 		db.applicationResponse.findMany.mockResolvedValue([] as never);
-		db.blacklist.findMany.mockResolvedValue([] as never);
 		db.user.update.mockResolvedValue({ ...hackerUser, status: UserStatus.APPLIED } as never);
 		db.settings.findFirst.mockResolvedValue(null);
 
@@ -129,48 +128,20 @@ describe('application.submit', () => {
 		});
 	});
 
-	it('auto-sets pendingDecision=REJECTED for blacklisted email', async () => {
+	it('does not auto-set a decision or query the blacklist on submit', async () => {
 		const caller = createTestCaller(db, hackerUser);
 		db.user.findUniqueOrThrow.mockResolvedValue(hackerUser as never);
 		db.question.findMany.mockResolvedValue([] as never);
 		db.applicationResponse.findMany.mockResolvedValue([] as never);
-		db.blacklist.findMany.mockResolvedValue([
-			{ id: 'bl-1', name: 'Bad Actor', email: hackerUser.email, reason: null, createdAt: new Date() }
-		] as never);
-		db.user.update.mockResolvedValue({
-			...hackerUser,
-			status: UserStatus.APPLIED,
-			pendingDecision: DecisionStatus.REJECTED
-		} as never);
-		db.settings.findFirst.mockResolvedValue(null);
-
-		await caller.application.submit();
-
-		expect(db.user.update).toHaveBeenCalledWith(
-			expect.objectContaining({
-				data: expect.objectContaining({ pendingDecision: DecisionStatus.REJECTED })
-			})
-		);
-	});
-
-	it('auto-sets pendingDecision=REJECTED for blacklisted name', async () => {
-		const caller = createTestCaller(db, hackerUser);
-		db.user.findUniqueOrThrow.mockResolvedValue(hackerUser as never);
-		db.question.findMany.mockResolvedValue([] as never);
-		db.applicationResponse.findMany.mockResolvedValue([] as never);
-		db.blacklist.findMany.mockResolvedValue([
-			{ id: 'bl-2', name: 'hacker', email: 'other@example.com', reason: null, createdAt: new Date() }
-		] as never);
 		db.user.update.mockResolvedValue({ ...hackerUser, status: UserStatus.APPLIED } as never);
 		db.settings.findFirst.mockResolvedValue(null);
 
 		await caller.application.submit();
 
-		expect(db.user.update).toHaveBeenCalledWith(
-			expect.objectContaining({
-				data: expect.objectContaining({ pendingDecision: DecisionStatus.REJECTED })
-			})
-		);
+		// Blacklist status is now surfaced at read-time in admissions, not at submit.
+		expect(db.blacklist.findMany).not.toHaveBeenCalled();
+		const updateArg = db.user.update.mock.calls[0]?.[0];
+		expect(updateArg?.data).not.toHaveProperty('pendingDecision');
 	});
 
 	it('calls sendTemplatedEmail on success when submitTemplate is set', async () => {
@@ -178,7 +149,6 @@ describe('application.submit', () => {
 		db.user.findUniqueOrThrow.mockResolvedValue(hackerUser as never);
 		db.question.findMany.mockResolvedValue([] as never);
 		db.applicationResponse.findMany.mockResolvedValue([] as never);
-		db.blacklist.findMany.mockResolvedValue([] as never);
 		db.user.update.mockResolvedValue({ ...hackerUser, status: UserStatus.APPLIED } as never);
 		db.settings.findFirst.mockResolvedValue(mockSettings);
 

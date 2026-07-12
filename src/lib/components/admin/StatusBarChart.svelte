@@ -20,8 +20,8 @@
 	const rsvpPct = $derived(accepted > 0 ? Math.round((confirmed / accepted) * 100) : 0);
 </script>
 
-<div class="bg-white border border-border rounded-md px-6 py-5 h-full">
-	<div class="text-[11px] font-bold tracking-[0.12em] uppercase text-muted-foreground mb-4">
+<div class="h-full rounded-md border border-border bg-white px-6 py-5">
+	<div class="mb-4 text-[11px] font-bold tracking-[0.12em] text-muted-foreground uppercase">
 		Role Breakdown
 	</div>
 
@@ -30,33 +30,31 @@
 			{@const count = byRole[role.key] ?? 0}
 			{@const pct = (count / maxCount) * 100}
 			<div class="flex items-center gap-[10px]">
-				<div class="w-[72px] text-right text-xs text-[#555] shrink-0">
+				<div class="w-[72px] shrink-0 text-right text-xs text-[#555]">
 					{role.label}
 				</div>
-				<div class="flex-1 bg-muted border border-border rounded-sm h-[10px] overflow-hidden">
-					<div class="h-full bg-primary rounded-sm" style="width:{pct}%"></div>
+				<div class="h-[10px] flex-1 overflow-hidden rounded-sm border border-border bg-muted">
+					<div class="h-full rounded-sm bg-primary" style="width:{pct}%"></div>
 				</div>
-				<div class="w-9 text-xs font-semibold text-primary shrink-0">
+				<div class="w-9 shrink-0 text-xs font-semibold text-primary">
 					{count}
 				</div>
 			</div>
 		{/each}
 	</div>
 
-	<div class="border-t border-border my-4"></div>
+	<div class="my-4 border-t border-border"></div>
 
 	<div class="flex items-center gap-[10px]">
-		<div class="w-[72px] text-right text-xs text-[#555] shrink-0">
-			RSVP Rate
+		<div class="w-[72px] shrink-0 text-right text-xs text-[#555]">RSVP Rate</div>
+		<div class="h-[10px] flex-1 overflow-hidden rounded-sm border border-border bg-muted">
+			<div class="h-full rounded-sm bg-primary" style="width:{rsvpPct}%"></div>
 		</div>
-		<div class="flex-1 bg-muted border border-border rounded-sm h-[10px] overflow-hidden">
-			<div class="h-full bg-primary rounded-sm" style="width:{rsvpPct}%"></div>
-		</div>
-		<div class="w-9 text-xs font-semibold text-primary shrink-0">
+		<div class="w-9 shrink-0 text-xs font-semibold text-primary">
 			{rsvpPct}%
 		</div>
 	</div>
-	<div class="text-[11px] text-muted-foreground mt-1.5 pl-[82px]">
+	<div class="mt-1.5 pl-[82px] text-[11px] text-muted-foreground">
 		{confirmed}/{accepted} accepted confirmed
 	</div>
 </div>
