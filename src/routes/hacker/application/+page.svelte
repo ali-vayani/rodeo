@@ -113,7 +113,7 @@
 	let joining = $state(false);
 	let joinError = $state<string | null>(null);
 	let joinSuccess = $state(false);
-	let canJoinTeam = $derived(currentState === "rsvpd" || currentState === "checked-in");
+	let canJoinTeam = $derived(currentState === 'rsvpd' || currentState === 'checked-in');
 
 	async function handleJoinTeam() {
 		if (!joinTeam || !canJoinTeam) return;
@@ -134,7 +134,7 @@
 	<!-- Team invite link banner -->
 	{#if joinTeam && !joinSuccess && canJoinTeam}
 		<div class="mb-6 rounded border border-border bg-white p-5">
-			<p class="mb-0.5 text-xs font-medium uppercase tracking-widest text-muted-foreground">
+			<p class="mb-0.5 text-xs font-medium tracking-widest text-muted-foreground uppercase">
 				Team Invitation
 			</p>
 			<p class="mb-3 text-base font-semibold text-primary">
@@ -151,7 +151,7 @@
 					type="button"
 					onclick={handleJoinTeam}
 					disabled={joining}
-					class="rounded px-4 py-2 text-sm font-medium bg-primary text-white transition-opacity disabled:opacity-60"
+					class="rounded bg-primary px-4 py-2 text-sm font-medium text-white transition-opacity disabled:opacity-60"
 				>
 					{joining ? 'Joining…' : 'Join team'}
 				</button>
@@ -168,7 +168,9 @@
 		<div class="mb-6 rounded border border-border bg-white p-5">
 			<p class="text-sm font-medium text-primary">
 				You joined <strong>{joinTeam.teamName}</strong>.
-				<a href="/hacker/account" class="ml-1 underline text-muted-foreground">Go to your account →</a>
+				<a href="/hacker/account" class="ml-1 text-muted-foreground underline"
+					>Go to your account →</a
+				>
 			</p>
 		</div>
 	{/if}
@@ -230,12 +232,14 @@
 						type="button"
 						onclick={handleSubmit}
 						disabled={submitting || !canSubmit}
-						class="rounded px-5 py-2 text-sm font-medium bg-primary text-white transition-opacity disabled:opacity-40"
+						class="rounded bg-primary px-5 py-2 text-sm font-medium text-white transition-opacity disabled:opacity-40"
 					>
 						{submitting ? 'Submitting…' : 'Submit Application'}
 					</button>
 					{#if !canSubmit && requiredQuestions.length > 0}
-						<span class="text-xs text-muted-foreground">Answer all required questions to submit</span>
+						<span class="text-xs text-muted-foreground"
+							>Answer all required questions to submit</span
+						>
 					{/if}
 				</div>
 			</div>
@@ -244,7 +248,6 @@
 				<p class="mt-3 text-sm text-destructive">{submitError}</p>
 			{/if}
 		</div>
-
 	{:else}
 		<!-- Non-filling states -->
 		<div class="mb-6">

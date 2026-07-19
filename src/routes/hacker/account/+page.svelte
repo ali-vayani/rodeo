@@ -23,7 +23,8 @@
 
 	const APPLICATION_ROLES: Role[] = ['HACKER', 'JUDGE', 'MENTOR', 'VOLUNTEER'];
 
-	const primaryRole = user.roles.find((r) => APPLICATION_ROLES.includes(r as Role)) ?? user.roles[0];
+	const primaryRole =
+		user.roles.find((r) => APPLICATION_ROLES.includes(r as Role)) ?? user.roles[0];
 
 	const decisionLabel = $derived(getApplicationStateLabel(user));
 
@@ -60,22 +61,22 @@
 		<!-- Left column: profile + QR (QR only when confirmed/checked in) -->
 		<div class="flex flex-col gap-4">
 			<div class="rounded border border-border bg-white p-6">
-				<p class="mb-4 text-xs font-medium uppercase tracking-widest text-muted-foreground">
+				<p class="mb-4 text-xs font-medium tracking-widest text-muted-foreground uppercase">
 					PROFILE
 				</p>
 
 				<div class="mb-5 flex items-start gap-4">
 					<div
-						class="flex h-14 w-14 shrink-0 items-center justify-center text-base font-semibold bg-primary text-white"
+						class="flex h-14 w-14 shrink-0 items-center justify-center bg-primary text-base font-semibold text-white"
 					>
 						{initials(user.name)}
 					</div>
 					<div>
-						<p class="text-base font-bold leading-tight text-primary">{user.name}</p>
+						<p class="text-base leading-tight font-bold text-primary">{user.name}</p>
 						<p class="mb-2 text-xs text-muted-foreground">{user.email}</p>
 						{#if primaryRole}
 							<span
-								class="rounded border border-primary px-2 py-0.5 font-mono text-xs font-medium uppercase tracking-wide text-primary"
+								class="rounded border border-primary px-2 py-0.5 font-mono text-xs font-medium tracking-wide text-primary uppercase"
 							>
 								{primaryRole}
 							</span>
@@ -100,7 +101,9 @@
 						<div class="flex justify-between py-2.5 text-sm">
 							<span class="text-muted-foreground">Status</span>
 							<span
-								class="rounded px-2 py-0.5 font-mono text-xs font-semibold uppercase tracking-wide {statusClass(decisionLabel)}"
+								class="rounded px-2 py-0.5 font-mono text-xs font-semibold tracking-wide uppercase {statusClass(
+									decisionLabel
+								)}"
 							>
 								{decisionLabel}
 							</span>

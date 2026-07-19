@@ -31,9 +31,7 @@ export const emailRouter = router({
 				return { sent: 0 };
 			}
 
-			await Promise.allSettled(
-				users.map((u) => sendEmail({ to: u.email, subject, body }))
-			);
+			await Promise.allSettled(users.map((u) => sendEmail({ to: u.email, subject, body })));
 
 			await ctx.prisma.emailLog.create({
 				data: {

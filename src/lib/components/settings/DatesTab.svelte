@@ -40,9 +40,7 @@
 	// Derived validation errors — only check a constraint when both dates are filled in
 	let errors = $derived({
 		appOpen:
-			appOpen && appClose && appOpen >= appClose
-				? 'Must be before Applications Close'
-				: null,
+			appOpen && appClose && appOpen >= appClose ? 'Must be before Applications Close' : null,
 
 		decisionRelease: decisionRelease
 			? appClose && decisionRelease <= appClose
@@ -78,75 +76,85 @@
 </script>
 
 <div class="max-w-[560px]">
-	<div class="space-y-4 mb-5">
+	<div class="mb-5 space-y-4">
 		<div>
-			<div class="text-[10px] font-bold tracking-widest uppercase text-muted-foreground mb-1.5">
+			<div class="mb-1.5 text-[10px] font-bold tracking-widest text-muted-foreground uppercase">
 				Applications Open
 			</div>
 			<input
 				type="datetime-local"
 				bind:value={appOpen}
-				class="w-full text-[13px] text-primary bg-white border rounded px-3 py-[7px] outline-none font-mono {errors.appOpen ? 'border-destructive' : 'border-border'}"
+				class="w-full rounded border bg-white px-3 py-[7px] font-mono text-[13px] text-primary outline-none {errors.appOpen
+					? 'border-destructive'
+					: 'border-border'}"
 			/>
 			{#if errors.appOpen}
-				<div class="text-xs text-destructive mt-1">{errors.appOpen}</div>
+				<div class="mt-1 text-xs text-destructive">{errors.appOpen}</div>
 			{/if}
 		</div>
 
 		<div>
-			<div class="text-[10px] font-bold tracking-widest uppercase text-muted-foreground mb-1.5">
+			<div class="mb-1.5 text-[10px] font-bold tracking-widest text-muted-foreground uppercase">
 				Applications Close
 			</div>
 			<input
 				type="datetime-local"
 				bind:value={appClose}
-				class="w-full text-[13px] text-primary bg-white border border-border rounded px-3 py-[7px] outline-none font-mono"
+				class="w-full rounded border border-border bg-white px-3 py-[7px] font-mono text-[13px] text-primary outline-none"
 			/>
 		</div>
 
 		<div>
-			<div class="text-[10px] font-bold tracking-widest uppercase text-muted-foreground mb-1.5">
+			<div class="mb-1.5 text-[10px] font-bold tracking-widest text-muted-foreground uppercase">
 				Decision Release
-				<span class="font-normal normal-case tracking-normal text-muted-foreground"> — optional</span>
+				<span class="font-normal tracking-normal text-muted-foreground normal-case">
+					— optional</span
+				>
 			</div>
-			<div class="text-xs text-muted-foreground mb-1.5">
+			<div class="mb-1.5 text-xs text-muted-foreground">
 				Must fall after Applications Close and before RSVP Deadline.
 			</div>
 			<input
 				type="datetime-local"
 				bind:value={decisionRelease}
-				class="w-full text-[13px] text-primary bg-white border rounded px-3 py-[7px] outline-none font-mono {errors.decisionRelease ? 'border-destructive' : 'border-border'}"
+				class="w-full rounded border bg-white px-3 py-[7px] font-mono text-[13px] text-primary outline-none {errors.decisionRelease
+					? 'border-destructive'
+					: 'border-border'}"
 			/>
 			{#if errors.decisionRelease}
-				<div class="text-xs text-destructive mt-1">{errors.decisionRelease}</div>
+				<div class="mt-1 text-xs text-destructive">{errors.decisionRelease}</div>
 			{/if}
 		</div>
 
 		<div>
-			<div class="text-[10px] font-bold tracking-widest uppercase text-muted-foreground mb-1.5">
+			<div class="mb-1.5 text-[10px] font-bold tracking-widest text-muted-foreground uppercase">
 				RSVP Deadline
 			</div>
 			<input
 				type="datetime-local"
 				bind:value={rsvpDeadline}
-				class="w-full text-[13px] text-primary bg-white border rounded px-3 py-[7px] outline-none font-mono {errors.rsvpDeadline ? 'border-destructive' : 'border-border'}"
+				class="w-full rounded border bg-white px-3 py-[7px] font-mono text-[13px] text-primary outline-none {errors.rsvpDeadline
+					? 'border-destructive'
+					: 'border-border'}"
 			/>
 			{#if errors.rsvpDeadline}
-				<div class="text-xs text-destructive mt-1">{errors.rsvpDeadline}</div>
+				<div class="mt-1 text-xs text-destructive">{errors.rsvpDeadline}</div>
 			{/if}
 		</div>
 
 		<div>
-			<div class="text-[10px] font-bold tracking-widest uppercase text-muted-foreground mb-1.5">
+			<div class="mb-1.5 text-[10px] font-bold tracking-widest text-muted-foreground uppercase">
 				Event Start
 			</div>
 			<input
 				type="datetime-local"
 				bind:value={eventStart}
-				class="w-full text-[13px] text-primary bg-white border rounded px-3 py-[7px] outline-none font-mono {errors.eventStart ? 'border-destructive' : 'border-border'}"
+				class="w-full rounded border bg-white px-3 py-[7px] font-mono text-[13px] text-primary outline-none {errors.eventStart
+					? 'border-destructive'
+					: 'border-border'}"
 			/>
 			{#if errors.eventStart}
-				<div class="text-xs text-destructive mt-1">{errors.eventStart}</div>
+				<div class="mt-1 text-xs text-destructive">{errors.eventStart}</div>
 			{/if}
 		</div>
 	</div>
@@ -154,7 +162,7 @@
 	<button
 		onclick={handleSave}
 		disabled={saving || hasErrors}
-		class="text-[13px] font-semibold text-white bg-primary border-none rounded-md py-[9px] px-[18px] cursor-pointer disabled:opacity-50"
+		class="cursor-pointer rounded-md border-none bg-primary px-[18px] py-[9px] text-[13px] font-semibold text-white disabled:opacity-50"
 	>
 		{saving ? 'Saving…' : 'Save Dates'}
 	</button>

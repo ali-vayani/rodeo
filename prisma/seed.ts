@@ -1,6 +1,12 @@
 import 'dotenv/config';
 import { PrismaPg } from '@prisma/adapter-pg';
-import { PrismaClient, Role, UserStatus, DecisionStatus, QuestionType } from '../src/lib/generated/prisma/client';
+import {
+	PrismaClient,
+	Role,
+	UserStatus,
+	DecisionStatus,
+	QuestionType
+} from '../src/lib/generated/prisma/client';
 
 const connectionString = process.env.DATABASE_URL;
 if (!connectionString) {
@@ -270,7 +276,13 @@ const questions = [
 		type: QuestionType.MULTIPLE_CHOICE,
 		required: true,
 		targetRole: [Role.VOLUNTEER],
-		options: ['Friday evening setup', 'Saturday morning', 'Saturday afternoon', 'Sunday morning', 'Sunday breakdown'],
+		options: [
+			'Friday evening setup',
+			'Saturday morning',
+			'Saturday afternoon',
+			'Sunday morning',
+			'Sunday breakdown'
+		],
 		order: 50
 	},
 	{
@@ -278,7 +290,7 @@ const questions = [
 		type: QuestionType.LONG_TEXT,
 		required: false,
 		targetRole: [Role.VOLUNTEER],
-		placeholder: 'Tell us about events you\'ve helped run before',
+		placeholder: "Tell us about events you've helped run before",
 		order: 51
 	}
 ];
@@ -318,7 +330,10 @@ async function main() {
 
 main()
 	.catch((e: unknown) => {
-		const code = typeof e === 'object' && e !== null && 'code' in e ? String((e as { code: unknown }).code) : '';
+		const code =
+			typeof e === 'object' && e !== null && 'code' in e
+				? String((e as { code: unknown }).code)
+				: '';
 		if (code === 'P2021') {
 			console.error(
 				'No tables in this database yet. Create them first, then seed again:\n' +

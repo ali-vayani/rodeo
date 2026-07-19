@@ -70,9 +70,9 @@ describe('schedule.update', () => {
 
 	it('throws FORBIDDEN for non-admin', async () => {
 		const caller = createTestCaller(db, hackerUser);
-		await expect(
-			caller.schedule.update({ id: 'sched-1', ...eventInput })
-		).rejects.toMatchObject({ code: 'FORBIDDEN' });
+		await expect(caller.schedule.update({ id: 'sched-1', ...eventInput })).rejects.toMatchObject({
+			code: 'FORBIDDEN'
+		});
 	});
 });
 

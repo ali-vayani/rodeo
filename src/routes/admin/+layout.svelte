@@ -19,9 +19,7 @@
 
 <div class="flex min-h-screen">
 	<!-- Sidebar -->
-	<nav
-		class="fixed top-0 left-0 flex h-full w-[210px] flex-col border-r border-border bg-white"
-	>
+	<nav class="fixed top-0 left-0 flex h-full w-[210px] flex-col border-r border-border bg-white">
 		<div class="px-5 py-5">
 			<span class="font-mono text-lg font-medium text-primary">rodeo</span>
 		</div>
@@ -30,7 +28,10 @@
 				<li>
 					<a
 						href={link.href}
-						class="block rounded px-3 py-2 text-sm transition-colors {page.url.pathname === link.href ? 'bg-primary text-white' : 'text-primary'}"
+						class="block rounded px-3 py-2 text-sm transition-colors {page.url.pathname ===
+						link.href
+							? 'bg-primary text-white'
+							: 'text-primary'}"
 					>
 						{link.label}
 					</a>

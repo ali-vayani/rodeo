@@ -1,11 +1,9 @@
 <div class="flex min-h-screen items-center justify-center bg-white">
 	<div class="text-center">
-		<p class="font-mono text-xs uppercase tracking-widest text-muted-foreground">
+		<p class="font-mono text-xs tracking-widest text-muted-foreground uppercase">
 			Hackathon Management
 		</p>
-		<h1 class="mt-1 font-mono text-3xl font-bold uppercase tracking-widest text-primary">
-			RODEO
-		</h1>
+		<h1 class="mt-1 font-mono text-3xl font-bold tracking-widest text-primary uppercase">RODEO</h1>
 		<p class="mt-2 text-sm text-muted-foreground">Sign in to access your portal</p>
 
 		<a

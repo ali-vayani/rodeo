@@ -47,9 +47,7 @@ describe('log.list', () => {
 
 		expect(result.page).toBe(3);
 		expect(result.pageSize).toBe(10);
-		expect(db.log.findMany).toHaveBeenCalledWith(
-			expect.objectContaining({ skip: 20, take: 10 })
-		);
+		expect(db.log.findMany).toHaveBeenCalledWith(expect.objectContaining({ skip: 20, take: 10 }));
 	});
 
 	it('throws FORBIDDEN for non-admin', async () => {

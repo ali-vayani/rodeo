@@ -18,6 +18,7 @@
 			status: string;
 			pendingDecision: string | null;
 			activeDecision: string | null;
+			blacklisted: boolean;
 			createdAt: Date | string;
 			application: Array<{ value: string; question: { title: string; order: number } }>;
 		};
@@ -46,7 +47,11 @@
 	}
 
 	function formatDate(d: Date | string): string {
-		return new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+		return new Date(d).toLocaleDateString('en-US', {
+			month: 'short',
+			day: 'numeric',
+			year: 'numeric'
+		});
 	}
 
 	let sortedResponses = $derived(
@@ -54,29 +59,46 @@
 	);
 </script>
 
-<div class="flex flex-col h-full">
+<div class="flex h-full flex-col">
 	<!-- Header -->
-	<div class="px-6 pb-4 pt-5 border-b border-border shrink-0">
+	<div class="shrink-0 border-b border-border px-6 pt-5 pb-4">
 		<div class="flex items-start justify-between gap-3">
 			<div>
-				<div class="text-[18px] font-bold text-primary leading-[1.2]">
+				<div class="text-[18px] leading-[1.2] font-bold text-primary">
 					{applicant.name}
 				</div>
-				<div class="text-[13px] text-muted-foreground mt-[3px]">{applicant.email}</div>
+				<div class="mt-[3px] text-[13px] text-muted-foreground">{applicant.email}</div>
 			</div>
-			<div class="flex gap-1.5 flex-wrap justify-end shrink-0">
+			<div class="flex shrink-0 flex-wrap justify-end gap-1.5">
+				{#if applicant.blacklisted}
+					<span
+						class="inline-flex items-center gap-1 rounded bg-red-600 px-2 py-[3px] text-[11px] font-bold tracking-[0.04em] text-white uppercase"
+					>
+						⚠ Blacklisted
+					</span>
+				{/if}
 				{#if applicant.roles.length}
-					<span class="inline-block px-2 py-[3px] rounded text-[11px] font-semibold tracking-[0.04em] uppercase bg-[#f0f0f0] text-[#555]">
+					<span
+						class="inline-block rounded bg-[#f0f0f0] px-2 py-[3px] text-[11px] font-semibold tracking-[0.04em] text-[#555] uppercase"
+					>
 						{roleLabel(applicant.roles[0])}
 					</span>
 				{/if}
 				{#if applicant.pendingDecision}
-					<span class="inline-block px-2 py-[3px] rounded text-[11px] font-semibold {DECISION_CLASS[applicant.pendingDecision] ?? 'bg-[#e5e7eb] text-[#374151]'}">
+					<span
+						class="inline-block rounded px-2 py-[3px] text-[11px] font-semibold {DECISION_CLASS[
+							applicant.pendingDecision
+						] ?? 'bg-[#e5e7eb] text-[#374151]'}"
+					>
 						Pending: {decLabel(applicant.pendingDecision)}
 					</span>
 				{/if}
 				{#if applicant.activeDecision}
-					<span class="inline-block px-2 py-[3px] rounded text-[11px] font-semibold opacity-70 {DECISION_CLASS[applicant.activeDecision] ?? 'bg-[#e5e7eb] text-[#374151]'}">
+					<span
+						class="inline-block rounded px-2 py-[3px] text-[11px] font-semibold opacity-70 {DECISION_CLASS[
+							applicant.activeDecision
+						] ?? 'bg-[#e5e7eb] text-[#374151]'}"
+					>
 						Active: {decLabel(applicant.activeDecision)}
 					</span>
 				{/if}
@@ -85,9 +107,9 @@
 	</div>
 
 	<!-- Info grid -->
-	<div class="px-6 py-4 border-b border-[#f0f0f0] shrink-0 grid grid-cols-2 gap-3">
+	<div class="grid shrink-0 grid-cols-2 gap-3 border-b border-[#f0f0f0] px-6 py-4">
 		<div>
-			<div class="text-[10px] font-bold tracking-widest uppercase text-muted-foreground mb-[3px]">
+			<div class="mb-[3px] text-[10px] font-bold tracking-widest text-muted-foreground uppercase">
 				Role
 			</div>
 			<div class="text-[13px] text-[#333]">
@@ -95,7 +117,7 @@
 			</div>
 		</div>
 		<div>
-			<div class="text-[10px] font-bold tracking-widest uppercase text-muted-foreground mb-[3px]">
+			<div class="mb-[3px] text-[10px] font-bold tracking-widest text-muted-foreground uppercase">
 				Status
 			</div>
 			<div class="text-[13px] text-[#333]">
@@ -103,18 +125,18 @@
 			</div>
 		</div>
 		<div>
-			<div class="text-[10px] font-bold tracking-widest uppercase text-muted-foreground mb-[3px]">
+			<div class="mb-[3px] text-[10px] font-bold tracking-widest text-muted-foreground uppercase">
 				Applied
 			</div>
-			<div class="text-[13px] text-[#333] font-mono">
+			<div class="font-mono text-[13px] text-[#333]">
 				{formatDate(applicant.createdAt)}
 			</div>
 		</div>
 		<div>
-			<div class="text-[10px] font-bold tracking-widest uppercase text-muted-foreground mb-[3px]">
+			<div class="mb-[3px] text-[10px] font-bold tracking-widest text-muted-foreground uppercase">
 				UID
 			</div>
-			<div class="text-[11px] text-muted-foreground font-mono break-all">
+			<div class="font-mono text-[11px] break-all text-muted-foreground">
 				{applicant.uid}
 			</div>
 		</div>
@@ -125,16 +147,18 @@
 		{#if sortedResponses.length === 0}
 			<div class="text-[13px] text-muted-foreground italic">No application responses.</div>
 		{:else}
-			<div class="text-[10px] font-bold tracking-widest uppercase text-muted-foreground mb-[14px]">
+			<div class="mb-[14px] text-[10px] font-bold tracking-widest text-muted-foreground uppercase">
 				Application Responses
 			</div>
 			<div class="flex flex-col gap-5">
 				{#each sortedResponses as response (response.question.title)}
 					<div>
-						<div class="text-xs font-semibold text-[#555] mb-1.5">
+						<div class="mb-1.5 text-xs font-semibold text-[#555]">
 							{response.question.title}
 						</div>
-						<div class="text-[13px] text-primary bg-[#f9f9f9] border border-border rounded px-3 py-[10px] whitespace-pre-wrap break-words leading-[1.5]">
+						<div
+							class="rounded border border-border bg-[#f9f9f9] px-3 py-[10px] text-[13px] leading-[1.5] break-words whitespace-pre-wrap text-primary"
+						>
 							{response.value || '—'}
 						</div>
 					</div>

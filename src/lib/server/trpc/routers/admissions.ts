@@ -9,7 +9,7 @@ export const admissionsRouter = router({
 	/**
 	 * list all users with optional filters
 	 * TODO: add more filters like status, team, group, etc.
-	 * 
+	 *
 	 * @param roles - filter by roles
 	 * @param decision - filter by decision (pending & active)
 	 * @param search - search by name or email
@@ -26,14 +26,12 @@ export const admissionsRouter = router({
 		.query(async ({ ctx, input }) => {
 			const { roles, decision, noDecision, search } = input;
 
-			return ctx.prisma.user.findMany({
+			const users = await ctx.prisma.user.findMany({
 				where: {
 					...(roles?.length && { roles: { hasSome: roles } }),
 					...(noDecision && { pendingDecision: null, activeDecision: null }),
-					...(decision !== undefined && {	OR: [
-							{ pendingDecision: decision },
-							{ activeDecision: decision }
-						]
+					...(decision !== undefined && {
+						OR: [{ pendingDecision: decision }, { activeDecision: decision }]
 					}),
 					...(search && {
 						OR: [
@@ -47,11 +45,27 @@ export const admissionsRouter = router({
 				},
 				orderBy: { createdAt: 'desc' }
 			});
+
+			// Flag applicants whose email is on the blacklist. Query WHERE email IN (…) so
+			// Postgres uses the unique index and we only scan this page's emails, not the whole table.
+			const emails = users.map((u) => u.email.toLowerCase());
+			const blacklisted = new Set(
+				emails.length
+					? (
+							await ctx.prisma.blacklist.findMany({
+								where: { email: { in: emails } },
+								select: { email: true }
+							})
+						).map((b) => b.email)
+					: []
+			);
+
+			return users.map((u) => ({ ...u, blacklisted: blacklisted.has(u.email.toLowerCase()) }));
 		}),
 
 	/**
 	 * set a decision for a user
-	 * 
+	 *
 	 * @param uid - the user's uid
 	 * @param decision - the decision to set
 	 */
@@ -80,64 +94,64 @@ export const admissionsRouter = router({
 			})
 		)
 		.mutation(async ({ ctx, input }) => {
-		const restrictToUids = Boolean(input.uids?.length);
+			const restrictToUids = Boolean(input.uids?.length);
 
-		const users = await ctx.prisma.user.findMany({
-			where: {
-				pendingDecision: { not: null },
-				...(restrictToUids && { uid: { in: input.uids } })
-			}
-		});
-
-		if (users.length === 0) {
-			throw new TRPCError({
-				code: 'BAD_REQUEST',
-				message: restrictToUids
-					? 'No pending decisions to release for the selected users.'
-					: 'No pending decisions to release.'
+			const users = await ctx.prisma.user.findMany({
+				where: {
+					pendingDecision: { not: null },
+					...(restrictToUids && { uid: { in: input.uids } })
+				}
 			});
-		}
 
-		// Fetch settings for email templates
-		const settings = await ctx.prisma.settings.findFirst();
+			if (users.length === 0) {
+				throw new TRPCError({
+					code: 'BAD_REQUEST',
+					message: restrictToUids
+						? 'No pending decisions to release for the selected users.'
+						: 'No pending decisions to release.'
+				});
+			}
 
-		// Apply all pending decisions to active decisions in a transaction
-		await ctx.prisma.$transaction(
-			users.map((u) =>
-				ctx.prisma.user.update({
-					where: { uid: u.uid },
-					data: {
-						activeDecision: u.pendingDecision,
-						pendingDecision: null
-					}
-				})
-			)
-		);
+			// Fetch settings for email templates
+			const settings = await ctx.prisma.settings.findFirst();
 
-		// Send emails per decision type (fire-and-forget in dev)
-		if (settings) {
-			const templateMap: Record<string, string> = {
-				[DecisionStatus.ACCEPTED]: settings.acceptTemplate,
-				[DecisionStatus.REJECTED]: settings.rejectTemplate,
-				[DecisionStatus.WAITLISTED]: settings.waitlistTemplate,
-				[DecisionStatus.PENDING]: ''
-			};
-
-			await Promise.allSettled(
-				users
-					.filter((u) => u.pendingDecision && templateMap[u.pendingDecision])
-					.map((u) =>
-						sendTemplatedEmail(u.email, templateMap[u.pendingDecision!], {
-							name: u.name,
-							hackathon_start: settings.hackathonStartDate.toLocaleDateString(),
-							rsvp_deadline: settings.RSVPDeadline.toLocaleDateString()
-						})
-					)
+			// Apply all pending decisions to active decisions in a transaction
+			await ctx.prisma.$transaction(
+				users.map((u) =>
+					ctx.prisma.user.update({
+						where: { uid: u.uid },
+						data: {
+							activeDecision: u.pendingDecision,
+							pendingDecision: null
+						}
+					})
+				)
 			);
-		}
 
-		await createLog(ctx.prisma, `Released decisions for ${users.length} users`, ctx.user.uid);
+			// Send emails per decision type (fire-and-forget in dev)
+			if (settings) {
+				const templateMap: Record<string, string> = {
+					[DecisionStatus.ACCEPTED]: settings.acceptTemplate,
+					[DecisionStatus.REJECTED]: settings.rejectTemplate,
+					[DecisionStatus.WAITLISTED]: settings.waitlistTemplate,
+					[DecisionStatus.PENDING]: ''
+				};
 
-		return { released: users.length };
-	})
+				await Promise.allSettled(
+					users
+						.filter((u) => u.pendingDecision && templateMap[u.pendingDecision])
+						.map((u) =>
+							sendTemplatedEmail(u.email, templateMap[u.pendingDecision!], {
+								name: u.name,
+								hackathon_start: settings.hackathonStartDate.toLocaleDateString(),
+								rsvp_deadline: settings.RSVPDeadline.toLocaleDateString()
+							})
+						)
+				);
+			}
+
+			await createLog(ctx.prisma, `Released decisions for ${users.length} users`, ctx.user.uid);
+
+			return { released: users.length };
+		})
 });
