@@ -201,6 +201,101 @@ describe('scan.lookup', () => {
 	});
 });
 
+describe('scan.lookupByEmail', () => {
+	it('returns user, isDuplicate=false, warning=null for a normal confirmed hacker', async () => {
+		const caller = createTestCaller(db, adminUser);
+		db.settings.findFirst.mockResolvedValue(mockSettings);
+		db.user.findUnique.mockResolvedValue(confirmedHacker as never);
+		db.scan.findFirst.mockResolvedValue(null);
+		db.scan.count.mockResolvedValue(2);
+
+		const result = await caller.scan.lookupByEmail({
+			email: confirmedHacker.email,
+			action: 'Check-In'
+		});
+
+		expect(result.user).toMatchObject({ uid: confirmedHacker.uid });
+		expect(result.isDuplicate).toBe(false);
+		expect(result.scanCountForAction).toBe(2);
+		expect(result.warning).toBeNull();
+	});
+
+	it('normalizes email casing/whitespace before lookup', async () => {
+		const caller = createTestCaller(db, adminUser);
+		db.settings.findFirst.mockResolvedValue(mockSettings);
+		db.user.findUnique.mockResolvedValue(confirmedHacker as never);
+		db.scan.findFirst.mockResolvedValue(null);
+		db.scan.count.mockResolvedValue(0);
+
+		await caller.scan.lookupByEmail({
+			email: `  ${confirmedHacker.email.toUpperCase()}  `,
+			action: 'Check-In'
+		});
+
+		expect(db.user.findUnique).toHaveBeenCalledWith({
+			where: { email: confirmedHacker.email }
+		});
+	});
+
+	it('throws NOT_FOUND for unknown email', async () => {
+		const caller = createTestCaller(db, adminUser);
+		db.settings.findFirst.mockResolvedValue(mockSettings);
+		db.user.findUnique.mockResolvedValue(null);
+
+		await expect(
+			caller.scan.lookupByEmail({ email: 'nobody@example.com', action: 'Check-In' })
+		).rejects.toMatchObject({ code: 'NOT_FOUND' });
+	});
+
+	it('throws BAD_REQUEST for invalid action not in settings', async () => {
+		const caller = createTestCaller(db, adminUser);
+		db.settings.findFirst.mockResolvedValue(mockSettings);
+
+		await expect(
+			caller.scan.lookupByEmail({ email: hackerUser.email, action: 'Lunch' })
+		).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+	});
+
+	it('sets isDuplicate=true without creating a scan row', async () => {
+		const caller = createTestCaller(db, adminUser);
+		db.settings.findFirst.mockResolvedValue(mockSettings);
+		db.user.findUnique.mockResolvedValue(confirmedHacker as never);
+		db.scan.findFirst.mockResolvedValue(mockScan as never);
+		db.scan.count.mockResolvedValue(1);
+
+		const result = await caller.scan.lookupByEmail({
+			email: confirmedHacker.email,
+			action: 'Check-In'
+		});
+
+		expect(result.isDuplicate).toBe(true);
+		expect(db.scan.create).not.toHaveBeenCalled();
+	});
+
+	it('sets warning=UNCONFIRMED_HACKER for a hacker who has not confirmed', async () => {
+		const caller = createTestCaller(db, adminUser);
+		db.settings.findFirst.mockResolvedValue(mockSettings);
+		db.user.findUnique.mockResolvedValue(hackerUser as never); // status CREATED
+		db.scan.findFirst.mockResolvedValue(null);
+		db.scan.count.mockResolvedValue(0);
+
+		const result = await caller.scan.lookupByEmail({
+			email: hackerUser.email,
+			action: 'Check-In'
+		});
+
+		expect(result.warning).toBe('UNCONFIRMED_HACKER');
+	});
+
+	it('throws FORBIDDEN for non-admin', async () => {
+		const caller = createTestCaller(db, hackerUser);
+
+		await expect(
+			caller.scan.lookupByEmail({ email: hackerUser.email, action: 'Check-In' })
+		).rejects.toMatchObject({ code: 'FORBIDDEN' });
+	});
+});
+
 describe('scan.getCounts', () => {
 	it('zero-fills configured actions with no scans', async () => {
 		const caller = createTestCaller(db, adminUser);

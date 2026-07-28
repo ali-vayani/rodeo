@@ -27,6 +27,14 @@ async function resolveUserByCode(prisma: PrismaClient, userCode: string) {
 	return user;
 }
 
+async function resolveUserByEmail(prisma: PrismaClient, email: string) {
+	const user = await prisma.user.findUnique({ where: { email: email.trim().toLowerCase() } });
+	if (!user) {
+		throw new TRPCError({ code: 'NOT_FOUND', message: 'User not found.' });
+	}
+	return user;
+}
+
 async function isDuplicateToday(
 	prisma: PrismaClient,
 	userId: string,
@@ -53,6 +61,35 @@ export const scanRouter = router({
 		.query(async ({ ctx, input }) => {
 			await assertValidAction(ctx.prisma, input.action);
 			const user = await resolveUserByCode(ctx.prisma, input.userCode);
+
+			const [isDuplicate, scanCountForAction] = await Promise.all([
+				isDuplicateToday(ctx.prisma, user.uid, input.action),
+				ctx.prisma.scan.count({ where: { userId: user.uid, action: input.action } })
+			]);
+
+			const isUnconfirmedHacker =
+				user.roles.includes(Role.HACKER) &&
+				user.status !== UserStatus.CONFIRMED &&
+				user.status !== UserStatus.CHECKED_IN;
+
+			return {
+				user,
+				isDuplicate,
+				scanCountForAction,
+				warning: isUnconfirmedHacker ? ('UNCONFIRMED_HACKER' as const) : null
+			};
+		}),
+
+	lookupByEmail: adminProcedure
+		.input(
+			z.object({
+				email: z.string().min(1),
+				action: z.string().min(1)
+			})
+		)
+		.query(async ({ ctx, input }) => {
+			await assertValidAction(ctx.prisma, input.action);
+			const user = await resolveUserByEmail(ctx.prisma, input.email);
 
 			const [isDuplicate, scanCountForAction] = await Promise.all([
 				isDuplicateToday(ctx.prisma, user.uid, input.action),

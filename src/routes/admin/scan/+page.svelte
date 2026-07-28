@@ -135,9 +135,28 @@
     }
   }
 
-  function handleManualLookup() {
+  async function handleManualLookup() {
+    const email = manualInput.trim();
+    if (!email || dialogOpen || lookupLoading) return;
     if (cameraStarted) html5QrCode?.pause(true);
-    handleDetected(manualInput);
+
+    lookupLoading = true;
+    manualInput = '';
+    showManual = false;
+
+    try {
+      const result = await trpc.scan.lookupByEmail.query({ email, action: selectedAction });
+      scanState = 'idle';
+      dialogUser = result;
+      dialogOpen = true;
+    } catch (e: any) {
+      scanState = 'error';
+      errorMsg = e.message ?? 'No matching attendee found.';
+      lastScan = null;
+      resumeScanning();
+    } finally {
+      lookupLoading = false;
+    }
   }
 
   function handleKeydown(e: KeyboardEvent) {
@@ -340,8 +359,8 @@
           <div class="manual-row">
             <input
               class="manual-input"
-              type="text"
-              placeholder="User ID or RC- code…"
+              type="email"
+              placeholder="Email address…"
               bind:value={manualInput}
               onkeydown={handleKeydown}
               autofocus
