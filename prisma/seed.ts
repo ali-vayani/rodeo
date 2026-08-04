@@ -22,6 +22,12 @@ const users = [
 		status: UserStatus.CREATED
 	},
 	{
+		name: 'Admin User 2',
+		email: 'admin2@yopmail.com',
+		roles: [Role.ADMIN],
+		status: UserStatus.CREATED
+	},
+	{
 		name: 'Organizer User',
 		email: 'organizer@yopmail.com',
 		roles: [Role.ORGANIZER],
@@ -32,6 +38,31 @@ const users = [
 		email: 'hacker.filling@yopmail.com',
 		roles: [Role.HACKER],
 		status: UserStatus.CREATED
+	},
+	// Hackers in the admissions queue — submitted, no decision yet
+	{
+		name: 'Harshadeep From MLH',
+		email: 'hacker.queue1@yopmail.com',
+		roles: [Role.HACKER],
+		status: UserStatus.APPLIED,
+		university: 'University of Texas at Austin',
+		year: 'Sophomore'
+	},
+	{
+		name: 'JAY PATIL',
+		email: 'hacker.queue2@yopmail.com',
+		roles: [Role.HACKER],
+		status: UserStatus.APPLIED,
+		university: 'Texas A&M University',
+		year: 'Junior'
+	},
+	{
+		name: 'Adam',
+		email: 'hacker.queue3@yopmail.com',
+		roles: [Role.HACKER],
+		status: UserStatus.APPLIED,
+		university: 'UT Dallas',
+		year: 'Senior'
 	},
 	{
 		name: 'Hacker (Applied)',
@@ -284,6 +315,61 @@ const questions = [
 ];
 
 // ---------------------------------------------------------------------------
+// Application responses for queued hackers
+// ---------------------------------------------------------------------------
+
+const queueResponses: Record<string, Record<string, string>> = {
+	'hacker.queue1@yopmail.com': {
+		'Full Name': 'Jamie Chen',
+		'University': 'University of Texas at Austin',
+		'Year': 'Sophomore',
+		'Phone Number': '(512) 555-0111',
+		'T-Shirt Size': 'S',
+		'Dietary Restrictions': 'Vegetarian',
+		'Major / Field of Study': 'Computer Science',
+		'How many hackathons have you attended?': 'This is my first!',
+		'GitHub / Portfolio URL': 'https://github.com/jamiechen',
+		'Why do you want to attend?':
+			"I've always been passionate about building technology that makes a real difference. This hackathon is the perfect opportunity to collaborate with like-minded developers and ship something impactful in 24 hours. I've been preparing for months.",
+		'What do you hope to build or learn?':
+			'I want to build a mental health check-in app that uses NLP to help users track their mood over time and surface relevant resources automatically.',
+		'Do you need travel reimbursement?': 'false'
+	},
+	'hacker.queue2@yopmail.com': {
+		'Full Name': 'Marcus Rivera',
+		'University': 'Texas A&M University',
+		'Year': 'Junior',
+		'Phone Number': '(979) 555-0188',
+		'T-Shirt Size': 'L',
+		'Dietary Restrictions': 'None',
+		'Major / Field of Study': 'Electrical Engineering',
+		'How many hackathons have you attended?': '3–5',
+		'GitHub / Portfolio URL': 'https://github.com/marcusrivera',
+		'Why do you want to attend?':
+			"Hardware and software don't get to collaborate often enough. I want to bring an embedded systems perspective to a traditionally software-focused event and show what's possible when you combine the two.",
+		'What do you hope to build or learn?':
+			'An IoT device that monitors air quality on campus in real time and pushes alerts when readings spike above safe thresholds.',
+		'Do you need travel reimbursement?': 'true'
+	},
+	'hacker.queue3@yopmail.com': {
+		'Full Name': 'Priya Nair',
+		'University': 'UT Dallas',
+		'Year': 'Senior',
+		'Phone Number': '(214) 555-0147',
+		'T-Shirt Size': 'XS',
+		'Dietary Restrictions': 'Gluten-free',
+		'Major / Field of Study': 'Data Science',
+		'How many hackathons have you attended?': '6–10',
+		'GitHub / Portfolio URL': 'https://github.com/priyanair',
+		'Why do you want to attend?':
+			"I've attended several regional hackathons but this one has the strongest alumni network and sponsor lineup I've seen. I'm looking for a co-founder as much as a project, and this is the right room for that.",
+		'What do you hope to build or learn?':
+			'A pipeline that ingests public city council meeting transcripts, extracts action items with an LLM, and auto-files public records requests for follow-up.',
+		'Do you need travel reimbursement?': 'false'
+	}
+};
+
+// ---------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------
 
@@ -300,7 +386,6 @@ async function main() {
 
 	console.log('\nSeeding questions...');
 	for (const q of questions) {
-		// Match on title + targetRole combo to avoid duplicates on re-seed
 		const existing = await prisma.question.findFirst({
 			where: { title: q.title, targetRole: { equals: q.targetRole } }
 		});
@@ -313,7 +398,23 @@ async function main() {
 		}
 	}
 
-	console.log(`\nDone. ${users.length} users, ${questions.length} questions.`);
+	console.log('\nSeeding application responses...');
+	for (const [email, responses] of Object.entries(queueResponses)) {
+		const user = await prisma.user.findUnique({ where: { email } });
+		if (!user) continue;
+		for (const [title, value] of Object.entries(responses)) {
+			const question = await prisma.question.findFirst({ where: { title } });
+			if (!question) continue;
+			await prisma.applicationResponse.upsert({
+				where: { userId_questionId: { userId: user.uid, questionId: question.id } },
+				update: { value },
+				create: { userId: user.uid, questionId: question.id, value }
+			});
+		}
+		console.log(`  ✓ ${email} (${Object.keys(responses).length} responses)`);
+	}
+
+	console.log(`\nDone.`);
 }
 
 main()

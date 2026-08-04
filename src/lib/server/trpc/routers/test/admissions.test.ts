@@ -1,10 +1,13 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { mockDeep, mockReset, type DeepMockProxy } from "vitest-mock-extended";
 import type { PrismaClient } from "$lib/generated/prisma/client";
 import { Role, DecisionStatus } from "$lib/generated/prisma/client";
+import { CLAIM_TTL_MS } from "$lib/admissions/lock";
 import {
   createTestCaller,
   adminUser,
+  adminUser2,
+  claimedHacker,
   hackerUser,
   mockSettings,
 } from "../test-utils";
@@ -22,10 +25,41 @@ const { prisma } = await import("$lib/server/db");
 const db = prisma as DeepMockProxy<PrismaClient>;
 const { sendTemplatedEmail } = await import("$lib/server/email");
 
+/**
+ * Frozen clock. Nothing in the router uses timers — we only need Date.now() to be
+ * deterministic so the exact staleThreshold Date can be asserted against the mock.
+ */
+const NOW = new Date("2024-06-01T12:00:00Z");
+
 beforeEach(() => {
   mockReset(db);
   vi.mocked(sendTemplatedEmail).mockClear();
+  vi.useFakeTimers();
+  vi.setSystemTime(NOW);
 });
+
+afterEach(() => {
+  vi.useRealTimers();
+});
+
+/** Mirrors the router's `claimableBy` predicate: unclaimed, mine, or stale. */
+function claimableWhere(uid: string, adminUid: string) {
+  return {
+    uid,
+    OR: [
+      { claimedBy: null },
+      { claimedBy: adminUid },
+      { claimedAt: { lt: new Date(NOW.getTime() - CLAIM_TTL_MS) } },
+    ],
+  };
+}
+
+/** Prisma's "where clause matched no row" error, as thrown by `update`. */
+function recordNotFound() {
+  return Object.assign(new Error("No record was found for an update."), {
+    code: "P2025",
+  });
+}
 
 const pendingUser = {
   ...hackerUser,
@@ -77,8 +111,213 @@ describe("admissions.list", () => {
   });
 });
 
+describe("admissions.claim", () => {
+  /** claim issues two updateMany calls: [0] drop my other claims, [1] the CAS. */
+  function mockClaimResult(count: number) {
+    db.user.updateMany
+      .mockResolvedValueOnce({ count: 0 } as never)
+      .mockResolvedValueOnce({ count } as never);
+  }
+
+  it("claims an unclaimed applicant", async () => {
+    const caller = createTestCaller(db, adminUser);
+    mockClaimResult(1);
+
+    const result = await caller.admissions.claim({ uid: hackerUser.uid });
+
+    expect(result).toEqual({
+      claimed: true,
+      claimerName: null,
+      expiresInMs: CLAIM_TTL_MS,
+    });
+  });
+
+  it("releases this admin's other claims first", async () => {
+    const caller = createTestCaller(db, adminUser);
+    mockClaimResult(1);
+
+    await caller.admissions.claim({ uid: hackerUser.uid });
+
+    expect(db.user.updateMany.mock.calls[0]?.[0]).toEqual({
+      where: { claimedBy: adminUser.uid, uid: { not: hackerUser.uid } },
+      data: { claimedBy: null, claimedAt: null },
+    });
+  });
+
+  it("uses the lenient claimable predicate for the CAS", async () => {
+    const caller = createTestCaller(db, adminUser);
+    mockClaimResult(1);
+
+    await caller.admissions.claim({ uid: hackerUser.uid });
+
+    expect(db.user.updateMany.mock.calls[1]?.[0]).toEqual({
+      where: claimableWhere(hackerUser.uid, adminUser.uid),
+      data: { claimedBy: adminUser.uid, claimedAt: NOW },
+    });
+  });
+
+  it("reports the holder when another admin has a fresh claim", async () => {
+    const caller = createTestCaller(db, adminUser);
+    mockClaimResult(0);
+    db.user.findUnique.mockResolvedValue({
+      claimer: { name: adminUser2.name },
+    } as never);
+
+    const result = await caller.admissions.claim({ uid: claimedHacker.uid });
+
+    expect(result).toEqual({
+      claimed: false,
+      claimerName: "Second Admin",
+      expiresInMs: null,
+    });
+  });
+
+  it("falls back to a generic holder name when the claimer is missing", async () => {
+    const caller = createTestCaller(db, adminUser);
+    mockClaimResult(0);
+    db.user.findUnique.mockResolvedValue({ claimer: null } as never);
+
+    const result = await caller.admissions.claim({ uid: claimedHacker.uid });
+
+    expect(result.claimerName).toBe("Another admin");
+  });
+
+  it("throws FORBIDDEN for non-admins", async () => {
+    const caller = createTestCaller(db, hackerUser);
+    await expect(
+      caller.admissions.claim({ uid: hackerUser.uid }),
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+  });
+});
+
+describe("admissions.heartbeat", () => {
+  it("refreshes a claim this admin holds", async () => {
+    const caller = createTestCaller(db, adminUser);
+    db.user.updateMany.mockResolvedValue({ count: 1 } as never);
+
+    const result = await caller.admissions.heartbeat({ uid: hackerUser.uid });
+
+    expect(result).toEqual({ refreshed: true, expiresInMs: CLAIM_TTL_MS });
+    expect(db.user.updateMany).toHaveBeenCalledWith({
+      where: { uid: hackerUser.uid, claimedBy: adminUser.uid },
+      data: { claimedAt: NOW },
+    });
+  });
+
+  it("reports not refreshed when the claim has moved on", async () => {
+    const caller = createTestCaller(db, adminUser);
+    db.user.updateMany.mockResolvedValue({ count: 0 } as never);
+
+    const result = await caller.admissions.heartbeat({ uid: hackerUser.uid });
+
+    expect(result).toEqual({ refreshed: false, expiresInMs: null });
+  });
+
+  it("throws FORBIDDEN for non-admins", async () => {
+    const caller = createTestCaller(db, hackerUser);
+    await expect(
+      caller.admissions.heartbeat({ uid: hackerUser.uid }),
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+  });
+});
+
+describe("admissions.releaseClaim", () => {
+  it("is scoped to this admin's own claim", async () => {
+    const caller = createTestCaller(db, adminUser);
+    db.user.updateMany.mockResolvedValue({ count: 1 } as never);
+
+    const result = await caller.admissions.releaseClaim({
+      uid: hackerUser.uid,
+    });
+
+    expect(result).toEqual({ ok: true });
+    expect(db.user.updateMany).toHaveBeenCalledWith({
+      where: { uid: hackerUser.uid, claimedBy: adminUser.uid },
+      data: { claimedBy: null, claimedAt: null },
+    });
+  });
+
+  it("is a no-op when someone else holds the claim", async () => {
+    const caller = createTestCaller(db, adminUser);
+    db.user.updateMany.mockResolvedValue({ count: 0 } as never);
+
+    const result = await caller.admissions.releaseClaim({
+      uid: claimedHacker.uid,
+    });
+
+    expect(result).toEqual({ ok: true });
+  });
+
+  it("throws FORBIDDEN for non-admins", async () => {
+    const caller = createTestCaller(db, hackerUser);
+    await expect(
+      caller.admissions.releaseClaim({ uid: hackerUser.uid }),
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+  });
+});
+
+describe("admissions.presence", () => {
+  it("only considers claims that have not gone stale", async () => {
+    const caller = createTestCaller(db, adminUser);
+    db.user.findMany.mockResolvedValue([] as never);
+
+    await caller.admissions.presence();
+
+    expect(db.user.findMany.mock.calls[0]?.[0]?.where).toEqual({
+      claimedBy: { not: null },
+      claimedAt: { gt: new Date(NOW.getTime() - CLAIM_TTL_MS) },
+    });
+  });
+
+  it("returns remaining lock time as a duration", async () => {
+    const caller = createTestCaller(db, adminUser);
+    db.user.findMany.mockResolvedValue([
+      {
+        uid: claimedHacker.uid,
+        claimedBy: adminUser2.uid,
+        claimedAt: new Date(NOW.getTime() - 30_000),
+        claimer: { name: adminUser2.name },
+      },
+    ] as never);
+
+    const result = await caller.admissions.presence();
+
+    expect(result).toEqual([
+      {
+        uid: claimedHacker.uid,
+        claimedBy: adminUser2.uid,
+        claimerName: "Second Admin",
+        expiresInMs: CLAIM_TTL_MS - 30_000,
+      },
+    ]);
+  });
+
+  it("falls back to a generic name when the claimer is missing", async () => {
+    const caller = createTestCaller(db, adminUser);
+    db.user.findMany.mockResolvedValue([
+      {
+        uid: claimedHacker.uid,
+        claimedBy: adminUser2.uid,
+        claimedAt: NOW,
+        claimer: null,
+      },
+    ] as never);
+
+    const result = await caller.admissions.presence();
+
+    expect(result[0]?.claimerName).toBe("Admin");
+  });
+
+  it("throws FORBIDDEN for non-admins", async () => {
+    const caller = createTestCaller(db, hackerUser);
+    await expect(caller.admissions.presence()).rejects.toMatchObject({
+      code: "FORBIDDEN",
+    });
+  });
+});
+
 describe("admissions.setDecision", () => {
-  it("sets pendingDecision only", async () => {
+  it("sets pendingDecision and releases the claim", async () => {
     const caller = createTestCaller(db, adminUser);
     db.user.update.mockResolvedValue({
       ...hackerUser,
@@ -92,8 +331,12 @@ describe("admissions.setDecision", () => {
 
     expect(result.pendingDecision).toBe(DecisionStatus.ACCEPTED);
     expect(db.user.update).toHaveBeenCalledWith({
-      where: { uid: hackerUser.uid },
-      data: { pendingDecision: DecisionStatus.ACCEPTED },
+      where: claimableWhere(hackerUser.uid, adminUser.uid),
+      data: {
+        pendingDecision: DecisionStatus.ACCEPTED,
+        claimedBy: null,
+        claimedAt: null,
+      },
     });
   });
 
@@ -108,6 +351,90 @@ describe("admissions.setDecision", () => {
 
     const callArg = db.user.update.mock.calls[0]?.[0];
     expect(callArg?.data).not.toHaveProperty("activeDecision");
+  });
+
+  it("throws CONFLICT naming the holder when another admin has it locked", async () => {
+    const caller = createTestCaller(db, adminUser);
+    db.user.update.mockRejectedValue(recordNotFound());
+    db.user.findUnique.mockResolvedValue({
+      name: claimedHacker.name,
+      claimer: { name: adminUser2.name },
+    } as never);
+    db.log.create.mockResolvedValue({} as never);
+
+    await expect(
+      caller.admissions.setDecision({
+        uid: claimedHacker.uid,
+        decision: DecisionStatus.ACCEPTED,
+      }),
+    ).rejects.toMatchObject({
+      code: "CONFLICT",
+      message: expect.stringContaining("Second Admin"),
+    });
+  });
+
+  it("logs an audit entry when a decision is blocked", async () => {
+    const caller = createTestCaller(db, adminUser);
+    db.user.update.mockRejectedValue(recordNotFound());
+    db.user.findUnique.mockResolvedValue({
+      name: claimedHacker.name,
+      claimer: { name: adminUser2.name },
+    } as never);
+    db.log.create.mockResolvedValue({} as never);
+
+    await expect(
+      caller.admissions.setDecision({
+        uid: claimedHacker.uid,
+        decision: DecisionStatus.ACCEPTED,
+      }),
+    ).rejects.toThrow();
+
+    expect(db.log.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          action: expect.stringContaining("Decision blocked"),
+          userId: adminUser.uid,
+        }),
+      }),
+    );
+  });
+
+  it("throws NOT_FOUND when the applicant does not exist", async () => {
+    const caller = createTestCaller(db, adminUser);
+    db.user.update.mockRejectedValue(recordNotFound());
+    db.user.findUnique.mockResolvedValue(null as never);
+
+    await expect(
+      caller.admissions.setDecision({
+        uid: "ghost-uid",
+        decision: DecisionStatus.ACCEPTED,
+      }),
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+  });
+
+  it("re-throws errors that are not a missed where clause", async () => {
+    const caller = createTestCaller(db, adminUser);
+    db.user.update.mockRejectedValue(
+      Object.assign(new Error("connection lost"), { code: "P1001" }),
+    );
+
+    await expect(
+      caller.admissions.setDecision({
+        uid: hackerUser.uid,
+        decision: DecisionStatus.ACCEPTED,
+      }),
+    ).rejects.toThrow("connection lost");
+    expect(db.user.findUnique).not.toHaveBeenCalled();
+  });
+
+  it("throws FORBIDDEN for non-admins", async () => {
+    const caller = createTestCaller(db, hackerUser);
+    await expect(
+      caller.admissions.setDecision({
+        uid: hackerUser.uid,
+        decision: DecisionStatus.ACCEPTED,
+      }),
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
   });
 });
 
@@ -128,9 +455,24 @@ describe("admissions.release", () => {
         data: {
           activeDecision: pendingUser.pendingDecision,
           pendingDecision: null,
+          claimedBy: null,
+          claimedAt: null,
         },
       }),
     );
+  });
+
+  it("clears the review claim on promoted users", async () => {
+    const caller = createTestCaller(db, adminUser);
+    db.user.findMany.mockResolvedValue([pendingUser] as never);
+    db.settings.findFirst.mockResolvedValue(null);
+    db.log.create.mockResolvedValue({} as never);
+    db.$transaction.mockResolvedValue([]);
+
+    await caller.admissions.release({});
+
+    const data = db.user.update.mock.calls[0]?.[0]?.data;
+    expect(data).toMatchObject({ claimedBy: null, claimedAt: null });
   });
 
   it("creates log entry after release", async () => {

@@ -85,8 +85,19 @@ model User {
   status          UserStatus          @default(CREATED)
   createdAt       DateTime            @default(now())
 
+  // Presence lock: which admin is currently reviewing this applicant
+  claimedBy       String?
+  claimedAt       DateTime?
+  claimer         User?               @relation("ApplicationClaims", fields: [claimedBy], references: [uid])
+  claims          User[]              @relation("ApplicationClaims")
+
   invitations Invitation[]
   logs        Log[]
+
+  // Supports `claim`'s drop-my-other-claims lookup and the `presence` scan.
+  // claimedAt is deliberately NOT indexed — heartbeat rewrites it every 30s per
+  // active reviewer, which would be pure index churn on a hot write path.
+  @@index([claimedBy])
 }
 
 model ApplicationResponse {

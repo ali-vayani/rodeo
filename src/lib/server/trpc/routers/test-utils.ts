@@ -26,6 +26,16 @@ export const adminUser: User = {
   teamId: null,
   groupId: null,
   createdAt: new Date("2024-01-01"),
+  claimedBy: null,
+  claimedAt: null,
+};
+
+/** A second admin, for exercising review-lock contention between two reviewers. */
+export const adminUser2: User = {
+  ...adminUser,
+  uid: "admin2-uid",
+  name: "Second Admin",
+  email: "admin2@example.com",
 };
 
 export const organizerUser: User = {
@@ -41,6 +51,8 @@ export const organizerUser: User = {
   teamId: null,
   groupId: null,
   createdAt: new Date("2024-01-01"),
+  claimedBy: null,
+  claimedAt: null,
 };
 
 export const hackerUser: User = {
@@ -56,6 +68,17 @@ export const hackerUser: User = {
   teamId: null,
   groupId: null,
   createdAt: new Date("2024-01-01"),
+  claimedBy: null,
+  claimedAt: null,
+};
+
+/** An applicant currently locked by `adminUser2`. Override claimedAt per test. */
+export const claimedHacker: User = {
+  ...hackerUser,
+  uid: "claimed-uid",
+  email: "claimed@example.com",
+  claimedBy: adminUser2.uid,
+  claimedAt: new Date("2024-01-01"),
 };
 
 export const appliedHacker: User = {

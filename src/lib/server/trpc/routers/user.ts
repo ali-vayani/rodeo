@@ -80,18 +80,16 @@ export const userRouter = router({
 			return { users, total, page, pageSize };
 		}),
 
-	getById: adminProcedure
-		.input(z.object({ uid: z.string() }))
-		.query(async ({ ctx, input }) => {
-			return ctx.prisma.user.findUniqueOrThrow({
-				where: { uid: input.uid },
-				include: {
-					application: { include: { question: true } },
-					team: { include: { members: true } },
-					scans: { orderBy: { timestamp: 'desc' } }
-				}
-			});
-		}),
+	getById: adminProcedure.input(z.object({ uid: z.string() })).query(async ({ ctx, input }) => {
+		return ctx.prisma.user.findUniqueOrThrow({
+			where: { uid: input.uid },
+			include: {
+				application: { include: { question: true } },
+				team: { include: { members: true } },
+				scans: { orderBy: { timestamp: 'desc' } }
+			}
+		});
+	}),
 
 	updateRole: adminProcedure
 		.input(z.object({ uid: z.string(), roles: z.array(z.nativeEnum(Role)) }))
@@ -111,6 +109,13 @@ export const userRouter = router({
 			});
 		}),
 
+	/**
+	 * Manual decision override from /admin/users.
+	 *
+	 * Intentionally NOT guarded by the admissions review lock — this is the escape
+	 * hatch if a claim ever wedges. It does clear the claim, so the applicant stops
+	 * showing as "being reviewed" once overridden.
+	 */
 	updateDecisions: adminProcedure
 		.input(
 			z.object({
@@ -122,7 +127,12 @@ export const userRouter = router({
 		.mutation(async ({ ctx, input }) => {
 			return ctx.prisma.user.update({
 				where: { uid: input.uid },
-				data: { pendingDecision: input.pendingDecision, activeDecision: input.activeDecision }
+				data: {
+					pendingDecision: input.pendingDecision,
+					activeDecision: input.activeDecision,
+					claimedBy: null,
+					claimedAt: null
+				}
 			});
 		}),
 
