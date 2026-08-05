@@ -3,6 +3,7 @@ import { TRPCError } from '@trpc/server';
 import { UserStatus, DecisionStatus, BlacklistType } from '$lib/generated/prisma/client';
 import { router, authedProcedure } from '../init';
 import { sendTemplatedEmail } from '$lib/server/email';
+import { buildTemplateVars } from '$lib/email/variables';
 
 export const applicationRouter = router({
 	/**
@@ -78,10 +79,23 @@ export const applicationRouter = router({
 			throw new TRPCError({ code: 'BAD_REQUEST', message: 'You have already RSVP\'d.' });
 		}
 
-		return ctx.prisma.user.update({
+		const updated = await ctx.prisma.user.update({
 			where: { uid: ctx.user.uid },
 			data: { status: UserStatus.CONFIRMED }
 		});
+
+		const settings = await ctx.prisma.settings.findFirst();
+		if (settings?.confirmTemplate) {
+			await sendTemplatedEmail(
+				user.email,
+				{ subject: settings.confirmSubject, body: settings.confirmTemplate },
+				buildTemplateVars(user, settings)
+			).catch(() => {
+				/* fire-and-forget */
+			});
+		}
+
+		return updated;
 	}),
 
 	/**
@@ -103,10 +117,23 @@ export const applicationRouter = router({
 			throw new TRPCError({ code: 'BAD_REQUEST', message: 'You have already declined.' });
 		}
 
-		return ctx.prisma.user.update({
+		const updated = await ctx.prisma.user.update({
 			where: { uid: ctx.user.uid },
 			data: { status: UserStatus.DECLINED }
 		});
+
+		const settings = await ctx.prisma.settings.findFirst();
+		if (settings?.declineTemplate) {
+			await sendTemplatedEmail(
+				user.email,
+				{ subject: settings.declineSubject, body: settings.declineTemplate },
+				buildTemplateVars(user, settings)
+			).catch(() => {
+				/* fire-and-forget */
+			});
+		}
+
+		return updated;
 	}),
 
 	/**
@@ -174,11 +201,11 @@ export const applicationRouter = router({
 		// Send confirmation email
 		const settings = await ctx.prisma.settings.findFirst();
 		if (settings?.submitTemplate) {
-			await sendTemplatedEmail(user.email, settings.submitTemplate, {
-				name: user.name,
-				hackathon_start: settings.hackathonStartDate.toLocaleDateString(),
-				rsvp_deadline: settings.RSVPDeadline.toLocaleDateString()
-			}).catch(() => {/* fire-and-forget */});
+			await sendTemplatedEmail(
+				user.email,
+				{ subject: settings.submitSubject, body: settings.submitTemplate },
+				buildTemplateVars(user, settings)
+			).catch(() => {/* fire-and-forget */});
 		}
 
 		return updatedUser;
