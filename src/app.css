@@ -1,3 +1,6 @@
+/* Must stay first: CSS drops any @import that follows another statement, which
+   was silently killing the webfonts and falling the whole app back to system-ui. */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap');
 @import 'tailwindcss';
 
 @theme {
@@ -13,8 +16,6 @@
 	--font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
 	--font-mono: 'DM Mono', ui-monospace, monospace;
 }
-
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap');
 
 * {
 	box-sizing: border-box;
