@@ -1,4 +1,7 @@
 <script lang="ts">
+	import BlacklistBadge from './BlacklistBadge.svelte';
+	import type { BlacklistMatch } from '$lib/blacklist/match';
+
 	let {
 		applicants,
 		selectedUid,
@@ -19,6 +22,7 @@
 			email: string;
 			roles: string[];
 			pendingDecision: string | null;
+			blacklistMatch: BlacklistMatch | null;
 			createdAt: Date | string;
 		}>;
 		selectedUid: string | null;
@@ -139,6 +143,7 @@
 								{applicant.name}
 							</span>
 							<div class="flex shrink-0 items-center gap-1">
+								<BlacklistBadge match={applicant.blacklistMatch} />
 								{#if applicant.uid === selfClaimUid}
 									<span
 										title="You are reviewing this applicant"

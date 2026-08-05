@@ -1,7 +1,8 @@
 import { z } from 'zod';
 import { TRPCError } from '@trpc/server';
-import { UserStatus, DecisionStatus, BlacklistType } from '$lib/generated/prisma/client';
+import { UserStatus, DecisionStatus } from '$lib/generated/prisma/client';
 import { router, authedProcedure } from '../init';
+import { normalizeEmail } from '$lib/blacklist/match';
 import { sendTemplatedEmail } from '$lib/server/email';
 import { buildTemplateVars } from '$lib/email/variables';
 
@@ -177,16 +178,15 @@ export const applicationRouter = router({
 			});
 		}
 
-		// Blacklist check
-		const blacklist = await ctx.prisma.blacklist.findMany();
-		const isBlacklisted = blacklist.some((entry) => {
-			if (entry.type === BlacklistType.EMAIL) {
-				return entry.value.toLowerCase() === user.email.toLowerCase();
-			}
-			if (entry.type === BlacklistType.NAME) {
-				return user.name.toLowerCase().includes(entry.value.toLowerCase());
-			}
-			return false;
+		// Blacklist check.
+		//
+		// Only an exact email match auto-rejects. A blacklisted *name* is a heuristic --
+		// `admissions.list` matches names tolerantly enough to catch misspellings -- so it is
+		// surfaced as a flag for a human reviewer there and deliberately decides nothing here.
+		// A typo must never cost someone their application.
+		const blacklistedEmail = await ctx.prisma.blacklist.findUnique({
+			where: { email: normalizeEmail(user.email) },
+			select: { id: true }
 		});
 
 		// Update user status and optionally set pendingDecision
@@ -194,7 +194,7 @@ export const applicationRouter = router({
 			where: { uid: ctx.user.uid },
 			data: {
 				status: UserStatus.APPLIED,
-				...(isBlacklisted && { pendingDecision: DecisionStatus.REJECTED })
+				...(blacklistedEmail && { pendingDecision: DecisionStatus.REJECTED })
 			}
 		});
 
