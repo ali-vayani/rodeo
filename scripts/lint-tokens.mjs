@@ -20,7 +20,9 @@ const ROOT = new URL('..', import.meta.url).pathname;
 const SCOPES = [
 	'src/lib/components/ui',
 	'src/lib/components/patterns',
-	'src/routes/design'
+	'src/routes/design',
+	'src/routes/admin/blacklist',
+	'src/lib/components/blacklist'
 	// Pages are appended here as they migrate. Everything not listed still
 	// predates the design system — see docs/component-library-plan.md for the
 	// remaining queue.
@@ -41,8 +43,11 @@ const RULES = [
 	},
 	{
 		name: 'arbitrary value',
+		// Deliberately excludes grid-cols/grid-rows: a `1fr 1.2fr auto` template is
+		// layout structure, not a design value, and there is no sensible token for
+		// "this column should be a bit wider than that one".
 		pattern:
-			/\b(?:text|p[xytblrse]?|m[xytblrse]?|gap|space-[xy]|w|h|size|min-w|max-w|min-h|max-h|top|right|bottom|left|inset|rounded(?:-[a-z]+)?|border(?:-[lrtbxy])?|tracking|leading|shadow|z|opacity|translate-[xy]|grid-cols)-\[[^\]]+\]/g,
+			/\b(?:text|p[xytblrse]?|m[xytblrse]?|gap|space-[xy]|w|h|size|min-w|max-w|min-h|max-h|top|right|bottom|left|inset|rounded(?:-[a-z]+)?|border(?:-[lrtbxy])?|tracking|leading|shadow|z|opacity|translate-[xy])-\[[^\]]+\]/g,
 		hint: 'add a token to app.css, or use a named Tailwind class'
 	}
 ];
