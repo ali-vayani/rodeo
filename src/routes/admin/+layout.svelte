@@ -1,26 +1,37 @@
 <script lang="ts">
 	import { page } from '$app/state';
 	import { resolve } from '$app/paths';
+	import type { Snippet } from 'svelte';
+	import type { LayoutData } from './$types';
+	import { canAccess } from '$lib/auth/permissions';
 
-	let { children } = $props();
+	let { children, data }: { children: Snippet; data: LayoutData } = $props();
 
 	// `as const` so each href stays a literal: `resolve` is typed against the
 	// generated route union, and a widened `string` would fail to typecheck —
 	// which is the whole point, since it also catches a link to a route that
-	// doesn't exist.
+	// doesn't exist. The section literals stay narrow too, so `canAccess`
+	// typechecks them against AdminSection.
 	const links = [
-		{ href: '/admin/dashboard', label: 'Dashboard' },
-		{ href: '/admin/users', label: 'Users' },
-		{ href: '/admin/admissions', label: 'Admissions' },
-		{ href: '/admin/scan', label: 'Scan' },
-		{ href: '/admin/email-templates', label: 'Email Templates' },
-		{ href: '/admin/custom-email', label: 'Custom Email' },
-		{ href: '/admin/application-editor', label: 'Application Editor' },
-		{ href: '/admin/schedule', label: 'Schedule' },
-		{ href: '/admin/blacklist', label: 'Blacklist' },
-		{ href: '/admin/logs', label: 'Activity Log' },
-		{ href: '/admin/settings', label: 'Settings' }
+		{ href: '/admin/dashboard', label: 'Dashboard', section: 'dashboard' },
+		{ href: '/admin/users', label: 'Users', section: 'users' },
+		{ href: '/admin/admissions', label: 'Admissions', section: 'admissions' },
+		{ href: '/admin/scan', label: 'Scan', section: 'scan' },
+		{ href: '/admin/email-templates', label: 'Email Templates', section: 'email' },
+		{ href: '/admin/custom-email', label: 'Custom Email', section: 'email' },
+		{
+			href: '/admin/application-editor',
+			label: 'Application Editor',
+			section: 'application-editor'
+		},
+		{ href: '/admin/schedule', label: 'Schedule', section: 'schedule' },
+		{ href: '/admin/blacklist', label: 'Blacklist', section: 'blacklist' },
+		{ href: '/admin/logs', label: 'Activity Log', section: 'logs' },
+		{ href: '/admin/settings', label: 'Settings', section: 'settings' }
 	] as const;
+
+	// Cosmetic only — hooks.server.ts is what actually denies these routes.
+	const visibleLinks = $derived(links.filter((l) => canAccess(data.roles, l.section)));
 </script>
 
 <div class="flex min-h-screen">
@@ -30,7 +41,7 @@
 			<span class="font-mono text-lg font-medium text-primary">rodeo</span>
 		</div>
 		<ul class="mt-1 flex flex-1 flex-col gap-0.5 px-3">
-			{#each links as link (link.href)}
+			{#each visibleLinks as link (link.href)}
 				<li>
 					<a
 						href={resolve(link.href)}

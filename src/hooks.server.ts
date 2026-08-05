@@ -2,11 +2,14 @@ import { redirect } from '@sveltejs/kit';
 import type { Handle } from '@sveltejs/kit';
 import { getSession } from '$lib/server/auth';
 import { validateEnv } from '$lib/server/env';
-import { Role } from '$lib/generated/prisma/client';
+import {
+	canAccess,
+	canAccessHackerPortal,
+	hasPortalAccess,
+	sectionForPath
+} from '$lib/auth/permissions';
 
 validateEnv();
-
-const ADMIN_ROLES: Role[] = [Role.ADMIN, Role.ORGANIZER];
 
 export const handle: Handle = async ({ event, resolve }) => {
 	event.locals.user = await getSession(event);
@@ -16,8 +19,7 @@ export const handle: Handle = async ({ event, resolve }) => {
 
 	// Redirect authenticated users away from login
 	if (pathname === '/login' && user) {
-		const isAdmin = user.roles.some((r) => ADMIN_ROLES.includes(r));
-		redirect(302, isAdmin ? '/admin/dashboard' : '/hacker/application');
+		redirect(302, hasPortalAccess(user.roles) ? '/admin/dashboard' : '/hacker/application');
 	}
 
 	// Guard /hacker/* and /admin/* routes
@@ -27,9 +29,19 @@ export const handle: Handle = async ({ event, resolve }) => {
 			redirect(302, `/login?redirectTo=${redirectTo}`);
 		}
 
-		// Non-admin trying to access /admin/*
-		if (pathname.startsWith('/admin/') && !user.roles.some((r) => ADMIN_ROLES.includes(r))) {
-			redirect(302, '/hacker/application');
+		// Organizers are staff, not attendees — they have no application to fill out.
+		if (pathname.startsWith('/hacker/') && !canAccessHackerPortal(user.roles)) {
+			redirect(302, '/admin/dashboard');
+		}
+
+		if (pathname.startsWith('/admin/')) {
+			if (!hasPortalAccess(user.roles)) redirect(302, '/hacker/application');
+
+			// Per-section check, so an organizer can't reach an admin-only page just by
+			// typing the URL. Guarding here rather than per-route also covers pages that
+			// have no +page.server.ts of their own.
+			const section = sectionForPath(pathname);
+			if (section && !canAccess(user.roles, section)) redirect(302, '/admin/dashboard');
 		}
 	}
 

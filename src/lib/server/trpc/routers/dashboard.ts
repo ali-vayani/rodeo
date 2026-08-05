@@ -1,9 +1,17 @@
 import { z } from 'zod';
-import { router, adminProcedure } from '../init';
+import { router, adminProcedure, portalProcedure } from '../init';
+import { isAdmin } from '$lib/auth/permissions';
 import { UserStatus, Role } from '$lib/generated/prisma/client';
 
 export const dashboardRouter = router({
-	stats: adminProcedure.query(async ({ ctx }) => {
+	/**
+	 * Organizers get the aggregates — counts and charts name nobody — but not
+	 * `recentActivity`, which is a log of named users. It comes back null for them
+	 * rather than being dropped, so the shape stays the same for every caller and the
+	 * dashboard can just check for it.
+	 */
+	stats: portalProcedure.query(async ({ ctx }) => {
+		const showActivity = isAdmin(ctx.user.roles);
 		const [total, byStatus, byDecision, byRole, recentActivity] = await Promise.all([
 			ctx.prisma.user.count(),
 
@@ -23,10 +31,12 @@ export const dashboardRouter = router({
 
 			// No `include: { actor: true }`: the feed renders `actorName`, which is
 			// snapshotted on the row precisely so it doesn't need the join.
-			ctx.prisma.log.findMany({
-				take: 20,
-				orderBy: { timestamp: 'desc' }
-			})
+			showActivity
+				? ctx.prisma.log.findMany({
+						take: 20,
+						orderBy: { timestamp: 'desc' }
+					})
+				: null
 		]);
 
 		// Flatten role counts (users have multiple roles)
@@ -57,6 +67,7 @@ export const dashboardRouter = router({
 		};
 	}),
 
+	/** Named applicants — admin only. The dashboard skips this call for organizers. */
 	recentApplicants: adminProcedure
 		.input(z.object({ amount: z.number().int().min(1).max(100).default(10) }))
 		.query(async ({ ctx, input }) => {

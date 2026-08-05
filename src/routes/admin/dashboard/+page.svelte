@@ -31,12 +31,21 @@
 		<StatCard label="Pending" value={pending} />
 	</div>
 
-	<!-- Bar chart + activity feed -->
-	<div class="mb-5 grid grid-cols-[2fr_1fr] items-stretch gap-3">
+	<!-- Bar chart + activity feed. Both named-user panels are absent for organizers,
+	     so the chart takes the full width rather than leaving a gap. -->
+	<div
+		class="mb-5 grid items-stretch gap-3 {data.stats.recentActivity
+			? 'grid-cols-[2fr_1fr]'
+			: 'grid-cols-1'}"
+	>
 		<StatusBarChart byRole={data.stats.byRole} {accepted} confirmed={confirmedCount} />
-		<ActivityFeed entries={data.stats.recentActivity} />
+		{#if data.stats.recentActivity}
+			<ActivityFeed entries={data.stats.recentActivity} />
+		{/if}
 	</div>
 
 	<!-- Recent applicants table -->
-	<ApplicantTable applicants={data.recentApplicants} />
+	{#if data.recentApplicants}
+		<ApplicantTable applicants={data.recentApplicants} />
+	{/if}
 </div>

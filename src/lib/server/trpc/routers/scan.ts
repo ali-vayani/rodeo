@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { TRPCError } from '@trpc/server';
-import { router, adminProcedure } from '../init';
+import { router, portalProcedure } from '../init';
 import { logAction } from '$lib/server/log';
 import { Role, UserStatus, type PrismaClient } from '$lib/generated/prisma/client';
 
@@ -51,7 +51,7 @@ async function isDuplicateToday(
 }
 
 export const scanRouter = router({
-	lookup: adminProcedure
+	lookup: portalProcedure
 		.input(
 			z.object({
 				userCode: z.string().min(1),
@@ -80,7 +80,7 @@ export const scanRouter = router({
 			};
 		}),
 
-	lookupByEmail: adminProcedure
+	lookupByEmail: portalProcedure
 		.input(
 			z.object({
 				email: z.string().min(1),
@@ -109,7 +109,7 @@ export const scanRouter = router({
 			};
 		}),
 
-	getCounts: adminProcedure.query(async ({ ctx }) => {
+	getCounts: portalProcedure.query(async ({ ctx }) => {
 		const [settings, grouped] = await Promise.all([
 			ctx.prisma.settings.findFirst(),
 			ctx.prisma.scan.groupBy({ by: ['action'], _count: { action: true } })
@@ -124,7 +124,7 @@ export const scanRouter = router({
 		return counts;
 	}),
 
-	scanUser: adminProcedure
+	scanUser: portalProcedure
 		.input(
 			z.object({
 				userCode: z.string().min(1),
@@ -181,7 +181,7 @@ export const scanRouter = router({
 			return { scan, user, isDuplicate: !!duplicate };
 		}),
 
-	getRecent: adminProcedure
+	getRecent: portalProcedure
 		.input(z.object({ limit: z.number().int().min(1).max(100).default(20) }))
 		.query(async ({ ctx, input }) => {
 			return ctx.prisma.scan.findMany({
@@ -191,7 +191,7 @@ export const scanRouter = router({
 			});
 		}),
 
-	getHistory: adminProcedure
+	getHistory: portalProcedure
 		.input(z.object({ userId: z.string() }))
 		.query(async ({ ctx, input }) => {
 			return ctx.prisma.scan.findMany({

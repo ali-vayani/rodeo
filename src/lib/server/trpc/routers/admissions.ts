@@ -6,6 +6,7 @@ import { logAction } from '$lib/server/log';
 import { sendTemplatedEmail } from '$lib/server/email';
 import { buildTemplateVars } from '$lib/email/variables';
 import { CLAIM_TTL_MS } from '$lib/admissions/lock';
+import { narrowToApplicants } from '$lib/admissions/roles';
 import { prepareBlacklist, matchApplicant } from '$lib/blacklist/match';
 
 /**
@@ -39,12 +40,16 @@ function isRecordNotFound(e: unknown): boolean {
 
 export const admissionsRouter = router({
 	/**
-	 * list all users with optional filters
+	 * List applicants with optional filters.
+	 *
+	 * Scoped to APPLICANT_ROLES — never staff. An ADMIN or ORGANIZER has no application
+	 * to review, so returning one here would put a row in the queue that a reviewer can
+	 * neither judge nor clear.
 	 *
 	 * Each row carries a `blacklistMatch`, computed here rather than stored, so that entries
 	 * added after someone applied still show up against them.
 	 *
-	 * @param roles - filter by roles
+	 * @param roles - narrow further within the applicant roles; staff roles match nothing
 	 * @param decision - filter by decision (pending & active)
 	 * @param search - search by name or email
 	 */
@@ -60,9 +65,14 @@ export const admissionsRouter = router({
 		.query(async ({ ctx, input }) => {
 			const { roles, decision, noDecision, search } = input;
 
+			// Always bounded to roles that actually apply, so staff accounts stay out of the
+			// queue even on the "All" tab, which sends no role filter of its own.
+			const applicantRoles = narrowToApplicants(roles);
+			if (applicantRoles.length === 0) return [];
+
 			const users = await ctx.prisma.user.findMany({
 				where: {
-					...(roles?.length && { roles: { hasSome: roles } }),
+					roles: { hasSome: applicantRoles },
 					...(noDecision && { pendingDecision: null, activeDecision: null }),
 					...(decision !== undefined && {
 						OR: [{ pendingDecision: decision }, { activeDecision: decision }]
