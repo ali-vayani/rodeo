@@ -3,26 +3,231 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap');
 @import 'tailwindcss';
 
-@theme {
-	--color-primary: #191919;
-	--color-primary-foreground: #ffffff;
-	--color-background: #ffffff;
-	--color-card: #ffffff;
-	--color-muted: #f4f4f4;
-	--color-muted-foreground: #aaaaaa;
-	--color-border: #e0e0e0;
-	--color-destructive: #b00000;
+/* ═══════════════════════════════════════════════════════════════════════════
+   RODEO DESIGN TOKENS
 
+   This file is the ONLY place a hex code, px value, or shadow is allowed to
+   appear. Everything below becomes a Tailwind utility — `--color-red-50`
+   gives you `bg-red-50`, `--text-base` gives you `text-base`, `--radius-lg`
+   gives you `rounded-lg`. If a component needs a value that isn't here, add
+   it here first; never reach for `text-[13px]` or `bg-[#191919]` at a call
+   site.
+
+   See docs/design-language.md for the reasoning and the component specs.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+@theme {
+	/* ── Neutrals ────────────────────────────────────────────────────────────
+	   Rodeo's spine. A real ramp exists so nobody has to freehand #333/#666/
+	   #888/#bbb again (the old codebase had eight undeclared grays). */
+	--color-neutral-25: #fafafa; /* row hover */
+	--color-neutral-50: #f4f4f4; /* page bg, header bars, inset wells */
+	--color-neutral-100: #f0f0f0; /* row dividers */
+	--color-neutral-200: #e0e0e0; /* default hairline border */
+	--color-neutral-300: #d0d0d0; /* emphasized border, pressed states */
+	--color-neutral-400: #aaaaaa; /* placeholders, disabled text */
+	--color-neutral-500: #8a8a8a; /* tertiary text, icons */
+	--color-neutral-600: #6b6b6b; /* secondary text — AA on white (5.1:1) */
+	--color-neutral-700: #555555; /* strong secondary text */
+	--color-neutral-900: #191919; /* ink */
+
+	/* ── Semantic surfaces & text ───────────────────────────────────────────
+	   Role-named aliases over the ramp. Prefer these at call sites: they say
+	   what a color is FOR, so a future palette change is a one-line edit. */
+	--color-primary: #191919; /* never #000 — see PLAN.md constraint #7 */
+	--color-primary-hover: #2e2e2e;
+	--color-primary-foreground: #ffffff;
+
+	--color-background: #f4f4f4; /* the page itself */
+	--color-card: #ffffff; /* raised surfaces */
+	--color-muted: #f4f4f4; /* inset wells, card header bars */
+	--color-surface-hover: #fafafa; /* table row hover */
+
+	--color-foreground: #191919; /* primary text */
+	--color-foreground-secondary: #6b6b6b; /* secondary text — was #aaa, which
+	                                          failed WCAG at 2.3:1 */
+	--color-foreground-tertiary: #8a8a8a; /* captions, timestamps */
+	--color-muted-foreground: #6b6b6b; /* back-compat alias of -secondary */
+	--color-faint: #aaaaaa; /* placeholders & disabled ONLY — never body text */
+
+	--color-border: #e0e0e0;
+	--color-border-subtle: #f0f0f0;
+	--color-border-strong: #d0d0d0;
+
+	--color-overlay: rgb(25 25 25 / 0.45); /* modal scrim */
+
+	/* ── Status ramps ───────────────────────────────────────────────────────
+	   Rodeo is monochrome, so color carries exactly one meaning: status. Four
+	   rungs each — 50 fills, 200 outlines, 500 is the solid dot/bar, 700 is
+	   text on the 50 fill. Muted on purpose; saturated status colors read as
+	   alarms, and most of these are just facts. */
+	--color-success-50: #ecfdf3;
+	--color-success-200: #abefc6;
+	--color-success-500: #17b26a;
+	--color-success-700: #067647;
+
+	--color-warning-50: #fffaeb;
+	--color-warning-200: #fedf89;
+	--color-warning-500: #f79009;
+	--color-warning-700: #b54708;
+
+	--color-danger-50: #fef3f2;
+	--color-danger-200: #fecdca;
+	--color-danger-500: #f04438;
+	--color-danger-700: #b42318;
+
+	--color-info-50: #eff8ff;
+	--color-info-200: #b2ddff;
+	--color-info-500: #2e90fa;
+	--color-info-700: #175cd3;
+
+	/* Destructive actions (delete, release, blacklist) share the danger ramp
+	   so there is one red in the product, not two. Replaces the old #b00000. */
+	--color-destructive: #b42318;
+	--color-destructive-hover: #912018;
+	--color-destructive-foreground: #ffffff;
+
+	/* ── Typography ─────────────────────────────────────────────────────────
+	   Inter for prose and UI, DM Mono for anything the eye scans as data:
+	   IDs, timestamps, counts, codes, and the uppercase eyebrow labels. */
 	--font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
 	--font-mono: 'DM Mono', ui-monospace, monospace;
+
+	/* Compact scale — 13px base. Tuned for admissions triage and the scan log,
+	   where rows-on-screen matters more than roominess. Note this redefines
+	   Tailwind's defaults: `text-sm` is 12px here, not 14px. */
+	--text-2xs: 10px; /* eyebrows, table headers */
+	--text-2xs--line-height: 1.4;
+	--text-xs: 11px; /* meta, helper text, badges */
+	--text-xs--line-height: 1.45;
+	--text-sm: 12px; /* dense secondary */
+	--text-sm--line-height: 1.5;
+	--text-base: 13px; /* body default */
+	--text-base--line-height: 1.55;
+	--text-md: 14px; /* comfortable body — hacker portal, long-form */
+	--text-md--line-height: 1.6;
+	--text-lg: 15px; /* card and section titles */
+	--text-lg--line-height: 1.5;
+	--text-xl: 17px; /* modal titles */
+	--text-xl--line-height: 1.4;
+	--text-2xl: 22px; /* page titles */
+	--text-2xl--line-height: 1.3;
+	--text-2xl--letter-spacing: -0.01em;
+	--text-3xl: 28px; /* stat values */
+	--text-3xl--line-height: 1.2;
+	--text-3xl--letter-spacing: -0.02em;
+
+	/* One eyebrow tracking, replacing the five in circulation (0.05em, 0.06em,
+	   0.08em, 0.1em, 0.12em). */
+	--tracking-eyebrow: 0.08em;
+
+	/* ── Radius ─────────────────────────────────────────────────────────────
+	   Tighter than Tailwind's defaults. Stripe's dashboard reads crisp because
+	   controls are barely rounded and only containers soften. */
+	--radius-sm: 4px; /* badges, chips, checkboxes */
+	--radius-md: 6px; /* buttons, inputs, selects */
+	--radius-lg: 8px; /* cards, panels, toasts */
+	--radius-xl: 12px; /* modals */
+
+	/* ── Elevation ──────────────────────────────────────────────────────────
+	   Shadows are tinted with the ink (25 25 25) rather than pure black, so
+	   they read as depth instead of dirt. Kept very low-opacity — the border
+	   does most of the work and the shadow just lifts the edge. */
+	--shadow-xs: 0 1px 1px rgb(25 25 25 / 0.04);
+	--shadow-sm: 0 1px 2px rgb(25 25 25 / 0.04), 0 2px 6px rgb(25 25 25 / 0.03);
+	--shadow-md: 0 2px 4px rgb(25 25 25 / 0.05), 0 8px 20px rgb(25 25 25 / 0.06);
+	--shadow-lg: 0 8px 32px rgb(25 25 25 / 0.14), 0 2px 8px rgb(25 25 25 / 0.06);
+
+	/* Focus halos. Every interactive primitive uses one of these on
+	   `focus-visible` — the app currently has zero focus styles. */
+	--shadow-ring: 0 0 0 3px rgb(25 25 25 / 0.1);
+	--shadow-ring-danger: 0 0 0 3px rgb(240 68 56 / 0.18);
+
+	/* ── Sizing ─────────────────────────────────────────────────────────────
+	   Control heights come off the 4px spacing base: sm = h-7 (28px),
+	   md = h-8 (32px), lg = h-10 (40px). No token needed.
+
+	   Modal widths do need names, so `max-w-modal-md` replaces the six
+	   hand-written `w-[440px]`/`w-[480px]`/`w-[560px]` panels. */
+	--container-modal-sm: 400px;
+	--container-modal-md: 480px;
+	--container-modal-lg: 560px;
+	--container-modal-xl: 720px;
+
+	--container-sidebar: 210px; /* both app layouts */
+	--container-prose: 640px; /* email previews, long-form hacker copy */
+
+	/* ── Motion ─────────────────────────────────────────────────────────────
+	   Fast and unfussy. Anything slower than 200ms feels laggy in a tool
+	   people use for six hours straight at a check-in desk.
+
+	   Durations come from Tailwind's built-in scale — `duration-150` for
+	   hovers, `duration-200` for panels. There is no `--duration-*` theme
+	   namespace in v4, so naming them here would produce a broken `.duration-`
+	   rule rather than a utility. */
+	--ease-out-quick: cubic-bezier(0.16, 1, 0.3, 1);
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   BASE
+   ═══════════════════════════════════════════════════════════════════════════ */
 
 * {
 	box-sizing: border-box;
 }
 
 body {
-	background-color: var(--color-muted);
+	background-color: var(--color-background);
+	color: var(--color-foreground);
 	font-family: var(--font-sans);
+	font-size: var(--text-base);
+	line-height: 1.55;
 	margin: 0;
+	-webkit-font-smoothing: antialiased;
+	-moz-osx-font-smoothing: grayscale;
+}
+
+/* Kill the default focus ring everywhere; every primitive opts back in with a
+   `focus-visible:shadow-ring` halo. Mouse users see nothing, keyboard users
+   get a consistent, on-brand indicator. */
+:focus-visible {
+	outline: none;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   LAYOUT UTILITIES
+
+   Viewport-relative sizing is the one thing the token system can't express —
+   `--container-*` only makes max-widths, and there is no height namespace. So
+   the handful of `vh`/`calc()` frames we need live here as named utilities
+   instead of as `h-[calc(100vh-136px)]` scattered through the routes.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Scrollable region inside a modal — caps the panel below the viewport. */
+@utility panel-scroll {
+	max-height: 70vh;
+	overflow-y: auto;
+}
+
+/* Modal panel width: fill the viewport minus a gutter, up to its max-w token.
+   Needs calc() against a percentage, which no theme namespace can express. */
+@utility modal-panel-w {
+	width: calc(100% - 2rem);
+}
+
+/* Toasts sit above modals (z-50) so feedback fired from inside a dialog is
+   still visible. Tailwind's z scale stops at 50 and there is no z namespace. */
+@utility z-toast {
+	z-index: 200;
+}
+
+/* Full-height work surface below the app chrome: the admissions split pane,
+   the users table, the scan log. One number, one place. */
+@utility workspace-h {
+	height: calc(100vh - 8.5rem);
+}
+
+@utility workspace-max-h {
+	max-height: calc(100vh - 8.5rem);
+	overflow-y: auto;
 }

@@ -7,7 +7,7 @@
 	import DatesTab from '$lib/components/settings/DatesTab.svelte';
 	import ScanGroupsTab from '$lib/components/settings/ScanGroupsTab.svelte';
 	import DangerZoneTab from '$lib/components/settings/DangerZoneTab.svelte';
-	import Toast from '$lib/components/ui/Toast.svelte';
+	import Toast from '$lib/components/legacy/Toast.svelte';
 
 	let { data }: { data: PageData } = $props();
 
@@ -93,25 +93,25 @@
 </script>
 
 <!-- Page header -->
-<div class="flex items-center justify-between mb-4">
+<div class="mb-4 flex items-center justify-between">
 	<h1 class="text-[22px] font-bold text-primary">Settings</h1>
 </div>
 
 <!-- Main card: sidebar + scrollable content -->
-<div class="flex bg-white border border-border rounded-md overflow-hidden h-[calc(100vh-136px)]">
+<div class="flex h-[calc(100vh-136px)] overflow-hidden rounded-md border border-border bg-white">
 	<!-- Vertical sidebar (layout 5) -->
-	<div class="w-[160px] shrink-0 bg-muted border-r border-border flex flex-col">
+	<div class="flex w-[160px] shrink-0 flex-col border-r border-border bg-muted">
 		<div
-			class="px-3 py-[11px] text-[10px] font-bold tracking-widest text-muted-foreground uppercase border-b border-border"
+			class="border-b border-border px-3 py-[11px] text-[10px] font-bold tracking-widest text-muted-foreground uppercase"
 		>
 			Settings
 		</div>
 		{#each sections as section}
 			<button
 				onclick={() => scrollToSection(section.id)}
-				class="px-4 py-[11px] text-[13px] text-left border-b border-border cursor-pointer transition-colors {activeSection ===
+				class="cursor-pointer border-b border-border px-4 py-[11px] text-left text-[13px] transition-colors {activeSection ===
 				section.id
-					? 'bg-white text-primary font-semibold'
+					? 'bg-white font-semibold text-primary'
 					: 'bg-transparent text-primary hover:bg-[#ebebeb]'}"
 			>
 				{section.label}
@@ -123,12 +123,12 @@
 	<div
 		bind:this={scrollContainer}
 		onscroll={handleScroll}
-		class="flex-1 overflow-y-auto p-8 space-y-5"
+		class="flex-1 space-y-5 overflow-y-auto p-8"
 	>
 		<!-- General section (layout 2 bordered block) -->
-		<div id="section-general" class="border border-border rounded-md overflow-hidden">
+		<div id="section-general" class="overflow-hidden rounded-md border border-border">
 			<div class="border-b border-border bg-muted px-4 py-[9px]">
-				<span class="text-[10px] font-bold tracking-widest uppercase text-muted-foreground">
+				<span class="text-[10px] font-bold tracking-widest text-muted-foreground uppercase">
 					General
 				</span>
 			</div>
@@ -138,9 +138,9 @@
 		</div>
 
 		<!-- Dates section -->
-		<div id="section-dates" class="border border-border rounded-md overflow-hidden">
+		<div id="section-dates" class="overflow-hidden rounded-md border border-border">
 			<div class="border-b border-border bg-muted px-4 py-[9px]">
-				<span class="text-[10px] font-bold tracking-widest uppercase text-muted-foreground">
+				<span class="text-[10px] font-bold tracking-widest text-muted-foreground uppercase">
 					Dates
 				</span>
 			</div>
@@ -158,9 +158,9 @@
 		</div>
 
 		<!-- Scan Groups section -->
-		<div id="section-scan-groups" class="border border-border rounded-md overflow-hidden">
+		<div id="section-scan-groups" class="overflow-hidden rounded-md border border-border">
 			<div class="border-b border-border bg-muted px-4 py-[9px]">
-				<span class="text-[10px] font-bold tracking-widest uppercase text-muted-foreground">
+				<span class="text-[10px] font-bold tracking-widest text-muted-foreground uppercase">
 					Scan Groups
 				</span>
 			</div>
@@ -170,9 +170,9 @@
 		</div>
 
 		<!-- Danger Zone section -->
-		<div id="section-danger" class="border border-[#fca5a5] rounded-md overflow-hidden">
+		<div id="section-danger" class="overflow-hidden rounded-md border border-[#fca5a5]">
 			<div class="border-b border-[#fca5a5] bg-[#fff3f3] px-4 py-[9px]">
-				<span class="text-[10px] font-mono tracking-[0.1em] uppercase text-destructive font-medium">
+				<span class="font-mono text-[10px] font-medium tracking-[0.1em] text-destructive uppercase">
 					Danger Zone
 				</span>
 			</div>
@@ -191,7 +191,7 @@
 	<div
 		in:fly={{ x: 60, duration: 280 }}
 		out:fly={{ x: 60, duration: 200 }}
-		class="fixed bottom-7 right-7 z-[200]"
+		class="fixed right-7 bottom-7 z-[200]"
 	>
 		<Toast message={toast.message} type={toast.type} />
 	</div>

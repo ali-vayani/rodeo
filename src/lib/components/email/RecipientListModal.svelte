@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { createClient } from '$lib/trpc/client';
 	import type { RecipientParams } from '$lib/admin/filters';
+	import { EmptyState, Input, Modal } from '$lib/components/ui';
 
 	const PAGE_SIZE = 100;
 
@@ -85,90 +86,60 @@
 	// Mirrors Toast's success/error palette so feedback reads the same everywhere.
 	let copyClass = $derived(
 		copyState === 'copied'
-			? 'border-[#16a34a] bg-[#f0fdf4] text-[#16a34a]'
+			? 'border-success-200 bg-success-50 text-success-700'
 			: copyState === 'failed'
-				? 'border-destructive bg-[#fff1f2] text-destructive'
-				: 'border-border bg-white text-primary hover:bg-muted active:bg-[#ebebeb]'
+				? 'border-destructive bg-danger-50 text-destructive'
+				: 'border-border bg-card text-foreground hover:bg-muted active:bg-neutral-100'
 	);
 </script>
 
-{#if open}
-	<div
-		role="presentation"
-		onclick={onClose}
-		class="fixed inset-0 z-[100] flex items-center justify-center bg-black/45"
-	>
-		<div
-			role="dialog"
-			aria-modal="true"
-			aria-label="All recipients"
-			tabindex="-1"
-			onclick={(e) => e.stopPropagation()}
-			onkeydown={(e) => e.key === 'Escape' && onClose()}
-			class="flex max-h-[80vh] w-[560px] max-w-[calc(100vw-48px)] flex-col overflow-hidden rounded-lg bg-white shadow-[0_8px_32px_rgba(0,0,0,0.18)]"
+<Modal
+	{open}
+	title="Recipients"
+	description="{total} user{total === 1 ? '' : 's'} match the current selection"
+	size="lg"
+	bodyClass="p-0"
+	{onClose}
+>
+	<div class="flex items-center gap-2 border-b border-border px-6 py-3">
+		<Input bind:value={search} placeholder="Filter this list…" aria-label="Filter recipients" />
+		<button
+			onclick={copyAll}
+			disabled={filtered.length === 0}
+			aria-live="polite"
+			class="flex h-8 shrink-0 cursor-pointer items-center gap-1.5 rounded-md border px-3.5 text-base font-medium whitespace-nowrap transition-colors duration-150 focus-visible:shadow-ring disabled:opacity-50 {copyClass}"
 		>
-			<div class="flex items-center justify-between border-b border-border px-6 pt-5 pb-4">
-				<div>
-					<div class="text-[15px] font-semibold text-primary">Recipients</div>
-					<div class="mt-0.5 text-xs text-muted-foreground">
-						{total} user{total === 1 ? '' : 's'} match the current selection
-					</div>
-				</div>
-				<button
-					onclick={onClose}
-					aria-label="Close"
-					class="cursor-pointer border-none bg-transparent text-[18px] leading-none text-muted-foreground hover:text-primary"
-				>
-					×
-				</button>
-			</div>
-
-			<div class="flex items-center gap-2 border-b border-border px-6 py-3">
-				<input
-					bind:value={search}
-					placeholder="Filter this list…"
-					aria-label="Filter recipients"
-					class="flex-1 rounded border border-border bg-white px-3 py-[6px] text-[13px] text-primary outline-none focus:border-primary"
-				/>
-				<button
-					onclick={copyAll}
-					disabled={filtered.length === 0}
-					aria-live="polite"
-					class="flex shrink-0 cursor-pointer items-center gap-1.5 rounded-md border px-[14px] py-[6px] text-[13px] font-medium whitespace-nowrap transition-colors disabled:opacity-50 {copyClass}"
-				>
-					{#if copyState === 'copied'}
-						<span class="text-[11px] leading-none font-extrabold">✓</span>
-					{:else if copyState === 'failed'}
-						<span class="text-[11px] leading-none font-extrabold">✕</span>
-					{/if}
-					{copyLabel}
-				</button>
-			</div>
-
-			<div class="min-h-0 flex-1 overflow-y-auto px-6 py-3">
-				{#if loading}
-					<div class="py-6 text-center text-xs text-muted-foreground">Loading…</div>
-				{:else if error}
-					<div class="py-6 text-center text-xs text-destructive">{error}</div>
-				{:else if filtered.length === 0}
-					<div class="py-6 text-center text-xs text-muted-foreground">No matches.</div>
-				{:else}
-					<ul class="space-y-1">
-						{#each filtered as r (r.uid)}
-							<li class="flex items-baseline justify-between gap-4 py-[3px] text-[13px]">
-								<span class="truncate text-primary">{r.name}</span>
-								<span class="shrink-0 font-mono text-[12px] text-muted-foreground">{r.email}</span>
-							</li>
-						{/each}
-					</ul>
-				{/if}
-			</div>
-
-			{#if total > PAGE_SIZE}
-				<div class="border-t border-border px-6 py-3 text-xs text-muted-foreground">
-					Showing the first {PAGE_SIZE} of {total}.
-				</div>
+			{#if copyState === 'copied'}
+				<span class="text-xs leading-none font-extrabold">✓</span>
+			{:else if copyState === 'failed'}
+				<span class="text-xs leading-none font-extrabold">✕</span>
 			{/if}
-		</div>
+			{copyLabel}
+		</button>
 	</div>
-{/if}
+
+	<div class="panel-scroll px-6 py-3">
+		{#if loading}
+			<EmptyState compact message="Loading…" />
+		{:else if error}
+			<p class="m-0 py-6 text-center text-xs text-destructive">{error}</p>
+		{:else if filtered.length === 0}
+			<EmptyState compact message="No matches." />
+		{:else}
+			<ul class="m-0 list-none space-y-1 p-0">
+				{#each filtered as r (r.uid)}
+					<li class="flex items-baseline justify-between gap-4 py-0.5 text-base">
+						<span class="truncate text-foreground">{r.name}</span>
+						<span class="shrink-0 font-mono text-sm text-foreground-secondary">{r.email}</span>
+					</li>
+				{/each}
+			</ul>
+		{/if}
+
+		{#if total > PAGE_SIZE}
+			<p class="mt-3 mb-0 border-t border-border-subtle pt-3 text-xs text-foreground-secondary">
+				Showing the first {PAGE_SIZE} of {total}.
+			</p>
+		{/if}
+	</div>
+</Modal>

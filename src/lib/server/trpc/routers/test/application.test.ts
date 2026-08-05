@@ -2,7 +2,13 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { mockDeep, mockReset, type DeepMockProxy } from 'vitest-mock-extended';
 import type { PrismaClient } from '$lib/generated/prisma/client';
 import { UserStatus, DecisionStatus, QuestionType, Role } from '$lib/generated/prisma/client';
-import { createTestCaller, hackerUser, appliedHacker, acceptedHacker, mockSettings } from '../test-utils';
+import {
+	createTestCaller,
+	hackerUser,
+	appliedHacker,
+	acceptedHacker,
+	mockSettings
+} from '../test-utils';
 
 vi.mock('$lib/server/db', async () => {
 	const { mockDeep } = await import('vitest-mock-extended');

@@ -6,7 +6,7 @@
 	import { EMAIL_TEMPLATES, type TemplateKey } from '$lib/email/templates';
 	import TemplateEditor from '$lib/components/email/TemplateEditor.svelte';
 	import EmailPreview from '$lib/components/email/EmailPreview.svelte';
-	import Toast from '$lib/components/ui/Toast.svelte';
+	import Toast from '$lib/components/legacy/Toast.svelte';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();

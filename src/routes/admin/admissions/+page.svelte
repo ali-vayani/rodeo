@@ -6,7 +6,7 @@
 	import ApplicantList from '$lib/components/admissions/ApplicantList.svelte';
 	import ApplicantDetail from '$lib/components/admissions/ApplicantDetail.svelte';
 	import IdleWarningModal from '$lib/components/admissions/IdleWarningModal.svelte';
-	import Toast from '$lib/components/ui/Toast.svelte';
+	import Toast from '$lib/components/legacy/Toast.svelte';
 	import { createReviewSession, pickNextUnlocked } from '$lib/admissions/reviewSession.svelte';
 	import { PRESENCE_POLL_MS } from '$lib/admissions/lock';
 

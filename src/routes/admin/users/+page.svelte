@@ -4,7 +4,7 @@
 	import { fly } from 'svelte/transition';
 	import { createClient } from '$lib/trpc/client';
 	import UserFilters from '$lib/components/admin/UserFilters.svelte';
-	import Toast from '$lib/components/ui/Toast.svelte';
+	import Toast from '$lib/components/legacy/Toast.svelte';
 	import {
 		ALL_ROLES,
 		ALL_STATUSES,
@@ -196,12 +196,12 @@
 </script>
 
 <!-- Header -->
-<div class="flex items-center justify-between mb-6">
+<div class="mb-6 flex items-center justify-between">
 	<h1 class="text-[22px] font-bold text-primary">Users</h1>
 	<button
 		onclick={exportCsv}
 		disabled={exporting}
-		class="text-[13px] font-medium text-primary bg-white border border-border rounded-md py-[7px] px-[14px] cursor-pointer"
+		class="cursor-pointer rounded-md border border-border bg-white px-[14px] py-[7px] text-[13px] font-medium text-primary"
 		class:opacity-60={exporting}
 	>
 		{exporting ? 'Exporting…' : 'Export CSV'}
@@ -209,7 +209,7 @@
 </div>
 
 <!-- Layout: filter sidebar + table area -->
-<div class="flex bg-white border border-border rounded-md overflow-hidden">
+<div class="flex overflow-hidden rounded-md border border-border bg-white">
 	<UserFilters
 		{roleFilter}
 		onToggleRole={toggleRole}
@@ -223,36 +223,36 @@
 	/>
 
 	<!-- Table area -->
-	<div class="flex-1 min-w-0 flex flex-col">
+	<div class="flex min-w-0 flex-1 flex-col">
 		<!-- Search + count bar -->
-		<div class="flex items-center gap-3 px-4 py-3 border-b border-border">
+		<div class="flex items-center gap-3 border-b border-border px-4 py-3">
 			<input
 				type="text"
 				placeholder="Search by name or email…"
 				bind:value={search}
 				oninput={onSearchInput}
-				class="flex-1 text-[13px] text-primary bg-[#f9f9f9] border border-border rounded py-[7px] px-3 outline-none"
+				class="flex-1 rounded border border-border bg-[#f9f9f9] px-3 py-[7px] text-[13px] text-primary outline-none"
 			/>
-			<span class="text-xs text-muted-foreground whitespace-nowrap">
+			<span class="text-xs whitespace-nowrap text-muted-foreground">
 				{total} total
 			</span>
 		</div>
 
 		<!-- Scrollable table wrapper -->
 		<div
-			class="overflow-x-auto overflow-y-auto max-h-[calc(100vh-280px)] transition-opacity"
+			class="max-h-[calc(100vh-280px)] overflow-x-auto overflow-y-auto transition-opacity"
 			class:opacity-50={loadingPage}
 		>
 			{#if users.length === 0}
-				<div class="py-12 text-center text-[13px] text-muted-foreground">
-					No results
-				</div>
+				<div class="py-12 text-center text-[13px] text-muted-foreground">No results</div>
 			{:else}
 				<table class="w-full border-collapse">
 					<thead>
-						<tr class="border-b border-border sticky top-0 z-[1] bg-[#f9f9f9]">
+						<tr class="sticky top-0 z-[1] border-b border-border bg-[#f9f9f9]">
 							{#each ['Name', 'Email', 'Role', 'Status', 'Pending', 'Decision', 'Created', ''] as col}
-								<th class="px-[14px] py-[10px] text-left text-[11px] font-semibold tracking-[0.06em] uppercase text-muted-foreground whitespace-nowrap bg-[#f9f9f9]">
+								<th
+									class="bg-[#f9f9f9] px-[14px] py-[10px] text-left text-[11px] font-semibold tracking-[0.06em] whitespace-nowrap text-muted-foreground uppercase"
+								>
 									{col}
 								</th>
 							{/each}
@@ -260,8 +260,10 @@
 					</thead>
 					<tbody>
 						{#each users as user (user.uid)}
-							<tr class="border-b border-[#f0f0f0] hover:bg-[#fafafa] transition-colors">
-								<td class="px-[14px] py-[11px] text-[13px] font-medium text-primary whitespace-nowrap">
+							<tr class="border-b border-[#f0f0f0] transition-colors hover:bg-[#fafafa]">
+								<td
+									class="px-[14px] py-[11px] text-[13px] font-medium whitespace-nowrap text-primary"
+								>
 									{user.name}
 								</td>
 								<td class="px-[14px] py-[11px] text-xs text-muted-foreground">
@@ -275,14 +277,17 @@
 									{/if}
 								</td>
 								<td class="px-[14px] py-[11px]">
-									<span class="text-[11px] font-semibold tracking-[0.05em] uppercase text-[#555]">
-										{user.status.charAt(0) +
-											user.status.slice(1).toLowerCase().replace(/_/g, ' ')}
+									<span class="text-[11px] font-semibold tracking-[0.05em] text-[#555] uppercase">
+										{user.status.charAt(0) + user.status.slice(1).toLowerCase().replace(/_/g, ' ')}
 									</span>
 								</td>
 								<td class="px-[14px] py-[11px]">
 									{#if user.pendingDecision}
-										<span class="inline-block px-[7px] py-0.5 rounded text-[11px] font-semibold {DECISION_CLASS[user.pendingDecision] ?? 'bg-[#e5e7eb] text-[#374151]'}">
+										<span
+											class="inline-block rounded px-[7px] py-0.5 text-[11px] font-semibold {DECISION_CLASS[
+												user.pendingDecision
+											] ?? 'bg-[#e5e7eb] text-[#374151]'}"
+										>
 											{decLabel(user.pendingDecision)}
 										</span>
 									{:else}
@@ -291,20 +296,26 @@
 								</td>
 								<td class="px-[14px] py-[11px]">
 									{#if user.activeDecision}
-										<span class="inline-block px-[7px] py-0.5 rounded text-[11px] font-semibold {DECISION_CLASS[user.activeDecision] ?? 'bg-[#e5e7eb] text-[#374151]'}">
+										<span
+											class="inline-block rounded px-[7px] py-0.5 text-[11px] font-semibold {DECISION_CLASS[
+												user.activeDecision
+											] ?? 'bg-[#e5e7eb] text-[#374151]'}"
+										>
 											{decLabel(user.activeDecision)}
 										</span>
 									{:else}
 										<span class="text-xs text-[#cccccc]">—</span>
 									{/if}
 								</td>
-								<td class="px-[14px] py-[11px] text-xs text-muted-foreground font-mono whitespace-nowrap">
+								<td
+									class="px-[14px] py-[11px] font-mono text-xs whitespace-nowrap text-muted-foreground"
+								>
 									{formatDate(user.createdAt)}
 								</td>
 								<td class="px-[14px] py-[11px]">
 									<button
 										onclick={() => openModal(user)}
-										class="text-xs text-primary bg-transparent border border-border rounded px-[10px] py-1 cursor-pointer"
+										class="cursor-pointer rounded border border-border bg-transparent px-[10px] py-1 text-xs text-primary"
 									>
 										Edit
 									</button>
@@ -321,26 +332,32 @@
 <!-- Pagination bar -->
 {#if totalPages > 1}
 	<div
-		class="flex items-center justify-center gap-4 mt-4 transition-opacity"
+		class="mt-4 flex items-center justify-center gap-4 transition-opacity"
 		class:opacity-50={loadingPage}
 		class:pointer-events-none={loadingPage}
 	>
 		<button
 			onclick={() => loadPage(page - 1)}
 			disabled={page <= 1 || loadingPage}
-			class="text-[13px] font-medium bg-white border border-border rounded-md py-[7px] px-[14px] {page <= 1 ? 'text-[#cccccc] cursor-default' : 'text-primary cursor-pointer'}"
+			class="rounded-md border border-border bg-white px-[14px] py-[7px] text-[13px] font-medium {page <=
+			1
+				? 'cursor-default text-[#cccccc]'
+				: 'cursor-pointer text-primary'}"
 		>
 			← Previous
 		</button>
 
-		<span class="text-[13px] text-muted-foreground font-mono whitespace-nowrap">
+		<span class="font-mono text-[13px] whitespace-nowrap text-muted-foreground">
 			{loadingPage ? 'Loading…' : `Page ${page} of ${totalPages}`}
 		</span>
 
 		<button
 			onclick={() => loadPage(page + 1)}
 			disabled={page >= totalPages || loadingPage}
-			class="text-[13px] font-medium bg-white border border-border rounded-md py-[7px] px-[14px] {page >= totalPages ? 'text-[#cccccc] cursor-default' : 'text-primary cursor-pointer'}"
+			class="rounded-md border border-border bg-white px-[14px] py-[7px] text-[13px] font-medium {page >=
+			totalPages
+				? 'cursor-default text-[#cccccc]'
+				: 'cursor-pointer text-primary'}"
 		>
 			Next →
 		</button>
@@ -352,7 +369,7 @@
 	<div
 		role="presentation"
 		onclick={closeModal}
-		class="fixed inset-0 bg-black/45 z-[100] flex items-center justify-center"
+		class="fixed inset-0 z-[100] flex items-center justify-center bg-black/45"
 	>
 		<div
 			role="dialog"
@@ -361,17 +378,17 @@
 			tabindex="-1"
 			onclick={(e) => e.stopPropagation()}
 			onkeydown={(e) => e.key === 'Escape' && closeModal()}
-			class="bg-white rounded-lg w-[560px] max-w-[calc(100vw-48px)] max-h-[calc(100vh-80px)] overflow-y-auto shadow-[0_8px_32px_rgba(0,0,0,0.18)] flex flex-col"
+			class="flex max-h-[calc(100vh-80px)] w-[560px] max-w-[calc(100vw-48px)] flex-col overflow-y-auto rounded-lg bg-white shadow-[0_8px_32px_rgba(0,0,0,0.18)]"
 		>
 			<!-- Header -->
-			<div class="flex items-start justify-between px-6 pt-5 pb-4 border-b border-border shrink-0">
+			<div class="flex shrink-0 items-start justify-between border-b border-border px-6 pt-5 pb-4">
 				<div>
 					<div class="text-[17px] font-bold text-primary">{selectedUser.name}</div>
-					<div class="text-xs text-muted-foreground mt-0.5">{selectedUser.email}</div>
+					<div class="mt-0.5 text-xs text-muted-foreground">{selectedUser.email}</div>
 				</div>
 				<button
 					onclick={closeModal}
-					class="text-xl leading-none bg-transparent border-none text-muted-foreground cursor-pointer p-0 -mt-0.5"
+					class="-mt-0.5 cursor-pointer border-none bg-transparent p-0 text-xl leading-none text-muted-foreground"
 					aria-label="Close"
 				>
 					×
@@ -379,21 +396,25 @@
 			</div>
 
 			<!-- Info row -->
-			<div class="px-6 py-4 border-b border-[#f0f0f0]">
+			<div class="border-b border-[#f0f0f0] px-6 py-4">
 				<div class="grid grid-cols-2 gap-[10px]">
 					<div>
-						<div class="text-[10px] font-bold tracking-widest uppercase text-muted-foreground mb-[3px]">
+						<div
+							class="mb-[3px] text-[10px] font-bold tracking-widest text-muted-foreground uppercase"
+						>
 							Created
 						</div>
-						<div class="text-[13px] text-[#333] font-mono">
+						<div class="font-mono text-[13px] text-[#333]">
 							{formatDate(selectedUser.createdAt)}
 						</div>
 					</div>
 					<div>
-						<div class="text-[10px] font-bold tracking-widest uppercase text-muted-foreground mb-[3px]">
+						<div
+							class="mb-[3px] text-[10px] font-bold tracking-widest text-muted-foreground uppercase"
+						>
 							UID
 						</div>
-						<div class="text-[11px] text-muted-foreground font-mono break-all">
+						<div class="font-mono text-[11px] break-all text-muted-foreground">
 							{selectedUser.uid}
 						</div>
 					</div>
@@ -401,20 +422,22 @@
 			</div>
 
 			<!-- Edit fields -->
-			<div class="px-6 py-5 flex flex-col gap-5">
+			<div class="flex flex-col gap-5 px-6 py-5">
 				<!-- Roles -->
 				<div>
-					<div class="text-[10px] font-bold tracking-widest uppercase text-muted-foreground mb-[10px]">
+					<div
+						class="mb-[10px] text-[10px] font-bold tracking-widest text-muted-foreground uppercase"
+					>
 						Roles
 					</div>
 					<div class="flex flex-wrap gap-[10px_16px]">
 						{#each ALL_ROLES as role}
-							<label class="flex items-center gap-1.5 text-[13px] text-[#333] cursor-pointer">
+							<label class="flex cursor-pointer items-center gap-1.5 text-[13px] text-[#333]">
 								<input
 									type="checkbox"
 									checked={editRoles.includes(role)}
 									onchange={() => toggleEditRole(role)}
-									class="accent-primary cursor-pointer"
+									class="cursor-pointer accent-primary"
 								/>
 								{role.charAt(0) + role.slice(1).toLowerCase()}
 							</label>
@@ -425,12 +448,14 @@
 				<!-- Status + Decisions row -->
 				<div class="grid grid-cols-3 gap-3">
 					<div>
-						<div class="text-[10px] font-bold tracking-widest uppercase text-muted-foreground mb-1.5">
+						<div
+							class="mb-1.5 text-[10px] font-bold tracking-widest text-muted-foreground uppercase"
+						>
 							Status
 						</div>
 						<select
 							bind:value={editStatus}
-							class="w-full text-[13px] text-primary bg-white border border-border rounded px-2 py-1.5 cursor-pointer outline-none"
+							class="w-full cursor-pointer rounded border border-border bg-white px-2 py-1.5 text-[13px] text-primary outline-none"
 						>
 							{#each ALL_STATUSES as s}
 								<option value={s}
@@ -440,12 +465,14 @@
 						</select>
 					</div>
 					<div>
-						<div class="text-[10px] font-bold tracking-widest uppercase text-muted-foreground mb-1.5">
+						<div
+							class="mb-1.5 text-[10px] font-bold tracking-widest text-muted-foreground uppercase"
+						>
 							Pending Decision
 						</div>
 						<select
 							bind:value={editPending}
-							class="w-full text-[13px] text-primary bg-white border border-border rounded px-2 py-1.5 cursor-pointer outline-none"
+							class="w-full cursor-pointer rounded border border-border bg-white px-2 py-1.5 text-[13px] text-primary outline-none"
 						>
 							<option value="">None</option>
 							{#each DECISION_VALUES as d}
@@ -454,12 +481,14 @@
 						</select>
 					</div>
 					<div>
-						<div class="text-[10px] font-bold tracking-widest uppercase text-muted-foreground mb-1.5">
+						<div
+							class="mb-1.5 text-[10px] font-bold tracking-widest text-muted-foreground uppercase"
+						>
 							Active Decision
 						</div>
 						<select
 							bind:value={editActive}
-							class="w-full text-[13px] text-primary bg-white border border-border rounded px-2 py-1.5 cursor-pointer outline-none"
+							class="w-full cursor-pointer rounded border border-border bg-white px-2 py-1.5 text-[13px] text-primary outline-none"
 						>
 							<option value="">None</option>
 							{#each DECISION_VALUES as d}
@@ -471,11 +500,11 @@
 			</div>
 
 			<!-- Footer -->
-			<div class="px-6 py-4 border-t border-border flex justify-end shrink-0">
+			<div class="flex shrink-0 justify-end border-t border-border px-6 py-4">
 				<button
 					onclick={saveAll}
 					disabled={saving}
-					class="text-[13px] font-semibold text-white bg-primary border-none rounded-md py-[9px] px-5 cursor-pointer"
+					class="cursor-pointer rounded-md border-none bg-primary px-5 py-[9px] text-[13px] font-semibold text-white"
 					class:opacity-60={saving}
 				>
 					{saving ? 'Saving…' : 'Save Changes'}
@@ -490,7 +519,7 @@
 	<div
 		in:fly={{ x: 60, duration: 280 }}
 		out:fly={{ x: 60, duration: 200 }}
-		class="fixed bottom-7 right-7 z-[200]"
+		class="fixed right-7 bottom-7 z-[200]"
 	>
 		<Toast message={toast.message} type={toast.type} />
 	</div>

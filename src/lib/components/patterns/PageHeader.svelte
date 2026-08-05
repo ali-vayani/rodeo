@@ -1,0 +1,47 @@
+<script lang="ts">
+	import type { Snippet } from 'svelte';
+	import { cn } from '$lib/utils';
+
+	let {
+		title,
+		subtitle = undefined,
+		class: className = '',
+		meta,
+		actions,
+		description
+	}: {
+		title: string;
+		subtitle?: string;
+		class?: string;
+		/** Small right-aligned status text — a count, a last-updated stamp. */
+		meta?: Snippet;
+		/** Buttons, right-aligned. */
+		actions?: Snippet;
+		/** Richer subtitle when a plain string isn't enough. */
+		description?: Snippet;
+	} = $props();
+</script>
+
+<!--
+	Replaces 16 page-title rows written in three competing styles: bold at 22px
+	(8 uses), semibold at 24px (5 uses), and one extrabold that reached for a raw
+	ink hex instead of the token.
+-->
+<div class={cn('mb-5 flex items-start justify-between gap-4', className)}>
+	<div class="min-w-0">
+		<h1 class="m-0 text-2xl font-bold text-foreground">{title}</h1>
+		{#if description}
+			<div class="mt-1 text-base text-foreground-secondary">{@render description()}</div>
+		{:else if subtitle}
+			<p class="mt-1 mb-0 text-base text-foreground-secondary">{subtitle}</p>
+		{/if}
+	</div>
+
+	{#if actions || meta}
+		<div class="flex shrink-0 items-center gap-3">
+			{#if meta}<span class="font-mono text-xs text-foreground-tertiary">{@render meta()}</span
+				>{/if}
+			{#if actions}{@render actions()}{/if}
+		</div>
+	{/if}
+</div>

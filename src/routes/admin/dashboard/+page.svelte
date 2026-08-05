@@ -23,7 +23,7 @@
 	</div>
 
 	<!-- Stat cards -->
-	<div class="grid grid-cols-5 gap-3 mb-5">
+	<div class="mb-5 grid grid-cols-5 gap-3">
 		<StatCard label="Total" value={data.stats.total} />
 		<StatCard label="Accepted" value={accepted} />
 		<StatCard label="Waitlisted" value={waitlisted} />
@@ -32,7 +32,7 @@
 	</div>
 
 	<!-- Bar chart + activity feed -->
-	<div class="grid grid-cols-[2fr_1fr] gap-3 mb-5 items-stretch">
+	<div class="mb-5 grid grid-cols-[2fr_1fr] items-stretch gap-3">
 		<StatusBarChart byRole={data.stats.byRole} {accepted} confirmed={confirmedCount} />
 		<ActivityFeed entries={data.stats.recentActivity} />
 	</div>

@@ -1,429 +1,1090 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>RODEO — ADMIN CUSTOM EMAIL</title>
-<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Playfair+Display:wght@400;700;900&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
-<style>
-  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: 'DM Mono', monospace; background: #fff; color: #000; }
-  .top-bar { border-bottom: 2px solid #000; padding: 12px 24px; display: flex; justify-content: space-between; align-items: center; }
-  .top-bar-title { font-family: 'DM Mono', monospace; font-size: 13px; font-weight: 500; letter-spacing: 0.08em; }
-  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0; border-left: 1px solid #000; border-top: 1px solid #000; }
-  .cell { border-right: 1px solid #000; border-bottom: 1px solid #000; }
-  .cell-label { font-family: 'DM Mono', monospace; font-size: 11px; padding: 8px 12px; border-bottom: 1px solid #000; display: flex; justify-content: space-between; align-items: center; background: #f4f4f4; }
-  .cell-num { font-size: 20px; font-weight: 700; line-height: 1; }
-  .cell-desc { font-size: 10px; color: #555; text-transform: uppercase; letter-spacing: 0.06em; }
-  .cell-frame { height: 400px; overflow: hidden; padding: 16px; position: relative; background: #fff; }
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<title>RODEO — ADMIN CUSTOM EMAIL</title>
+		<link
+			href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Playfair+Display:wght@400;700;900&family=Inter:wght@400;500;600&display=swap"
+			rel="stylesheet"
+		/>
+		<style>
+			*,
+			*::before,
+			*::after {
+				box-sizing: border-box;
+				margin: 0;
+				padding: 0;
+			}
+			body {
+				font-family: 'DM Mono', monospace;
+				background: #fff;
+				color: #000;
+			}
+			.top-bar {
+				border-bottom: 2px solid #000;
+				padding: 12px 24px;
+				display: flex;
+				justify-content: space-between;
+				align-items: center;
+			}
+			.top-bar-title {
+				font-family: 'DM Mono', monospace;
+				font-size: 13px;
+				font-weight: 500;
+				letter-spacing: 0.08em;
+			}
+			.grid {
+				display: grid;
+				grid-template-columns: repeat(3, 1fr);
+				gap: 0;
+				border-left: 1px solid #000;
+				border-top: 1px solid #000;
+			}
+			.cell {
+				border-right: 1px solid #000;
+				border-bottom: 1px solid #000;
+			}
+			.cell-label {
+				font-family: 'DM Mono', monospace;
+				font-size: 11px;
+				padding: 8px 12px;
+				border-bottom: 1px solid #000;
+				display: flex;
+				justify-content: space-between;
+				align-items: center;
+				background: #f4f4f4;
+			}
+			.cell-num {
+				font-size: 20px;
+				font-weight: 700;
+				line-height: 1;
+			}
+			.cell-desc {
+				font-size: 10px;
+				color: #555;
+				text-transform: uppercase;
+				letter-spacing: 0.06em;
+			}
+			.cell-frame {
+				height: 400px;
+				overflow: hidden;
+				padding: 16px;
+				position: relative;
+				background: #fff;
+			}
 
-  /* VAR 1: EDITORIAL */
-  .v1 { font-family: 'Playfair Display', serif; }
-  .v1-title { font-size: 14px; font-weight: 900; letter-spacing: -0.02em; margin-bottom: 2px; }
-  .v1-subtitle { font-family: 'DM Mono', monospace; font-size: 9px; color: #aaa; text-transform: uppercase; margin-bottom: 10px; }
-  .v1-label { font-family: 'DM Mono', monospace; font-size: 9px; text-transform: uppercase; letter-spacing: 0.06em; color: #aaa; margin-bottom: 3px; }
-  .v1-input { font-family: 'Playfair Display', serif; font-size: 11px; width: 100%; border: none; border-bottom: 1px solid #000; padding: 4px 0; background: transparent; outline: none; margin-bottom: 8px; }
-  .v1-toolbar { display: flex; gap: 2px; margin-bottom: 4px; }
-  .v1-tbtn { font-family: 'DM Mono', monospace; font-size: 9px; padding: 2px 6px; border: 1px solid #000; background: #fff; cursor: pointer; }
-  .v1-textarea { font-family: 'Playfair Display', serif; font-size: 10px; width: 100%; height: 70px; border: 1px solid #e0e0e0; padding: 6px; resize: none; outline: none; line-height: 1.5; }
-  .v1-recipient-bar { background: #f4f4f4; border: 1px solid #e0e0e0; padding: 8px; margin-top: 8px; }
-  .v1-rec-label { font-family: 'DM Mono', monospace; font-size: 9px; text-transform: uppercase; color: #aaa; margin-bottom: 5px; }
-  .v1-filters { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 5px; }
-  .v1-filter-group { display: flex; gap: 0; }
-  .v1-filter-btn { font-family: 'DM Mono', monospace; font-size: 8px; padding: 2px 6px; border: 1px solid #e0e0e0; border-right: none; background: #fff; cursor: pointer; }
-  .v1-filter-btn:last-child { border-right: 1px solid #e0e0e0; }
-  .v1-filter-btn.active { background: #000; color: #fff; border-color: #000; }
-  .v1-count { font-family: 'DM Mono', monospace; font-size: 10px; font-weight: 500; }
-  .v1-actions { display: flex; gap: 6px; margin-top: 8px; }
-  .v1-btn { font-family: 'DM Mono', monospace; font-size: 9px; padding: 5px 10px; background: #fff; border: 1px solid #000; cursor: pointer; }
-  .v1-btn-primary { background: #000; color: #fff; }
+			/* VAR 1: EDITORIAL */
+			.v1 {
+				font-family: 'Playfair Display', serif;
+			}
+			.v1-title {
+				font-size: 14px;
+				font-weight: 900;
+				letter-spacing: -0.02em;
+				margin-bottom: 2px;
+			}
+			.v1-subtitle {
+				font-family: 'DM Mono', monospace;
+				font-size: 9px;
+				color: #aaa;
+				text-transform: uppercase;
+				margin-bottom: 10px;
+			}
+			.v1-label {
+				font-family: 'DM Mono', monospace;
+				font-size: 9px;
+				text-transform: uppercase;
+				letter-spacing: 0.06em;
+				color: #aaa;
+				margin-bottom: 3px;
+			}
+			.v1-input {
+				font-family: 'Playfair Display', serif;
+				font-size: 11px;
+				width: 100%;
+				border: none;
+				border-bottom: 1px solid #000;
+				padding: 4px 0;
+				background: transparent;
+				outline: none;
+				margin-bottom: 8px;
+			}
+			.v1-toolbar {
+				display: flex;
+				gap: 2px;
+				margin-bottom: 4px;
+			}
+			.v1-tbtn {
+				font-family: 'DM Mono', monospace;
+				font-size: 9px;
+				padding: 2px 6px;
+				border: 1px solid #000;
+				background: #fff;
+				cursor: pointer;
+			}
+			.v1-textarea {
+				font-family: 'Playfair Display', serif;
+				font-size: 10px;
+				width: 100%;
+				height: 70px;
+				border: 1px solid #e0e0e0;
+				padding: 6px;
+				resize: none;
+				outline: none;
+				line-height: 1.5;
+			}
+			.v1-recipient-bar {
+				background: #f4f4f4;
+				border: 1px solid #e0e0e0;
+				padding: 8px;
+				margin-top: 8px;
+			}
+			.v1-rec-label {
+				font-family: 'DM Mono', monospace;
+				font-size: 9px;
+				text-transform: uppercase;
+				color: #aaa;
+				margin-bottom: 5px;
+			}
+			.v1-filters {
+				display: flex;
+				gap: 6px;
+				flex-wrap: wrap;
+				margin-bottom: 5px;
+			}
+			.v1-filter-group {
+				display: flex;
+				gap: 0;
+			}
+			.v1-filter-btn {
+				font-family: 'DM Mono', monospace;
+				font-size: 8px;
+				padding: 2px 6px;
+				border: 1px solid #e0e0e0;
+				border-right: none;
+				background: #fff;
+				cursor: pointer;
+			}
+			.v1-filter-btn:last-child {
+				border-right: 1px solid #e0e0e0;
+			}
+			.v1-filter-btn.active {
+				background: #000;
+				color: #fff;
+				border-color: #000;
+			}
+			.v1-count {
+				font-family: 'DM Mono', monospace;
+				font-size: 10px;
+				font-weight: 500;
+			}
+			.v1-actions {
+				display: flex;
+				gap: 6px;
+				margin-top: 8px;
+			}
+			.v1-btn {
+				font-family: 'DM Mono', monospace;
+				font-size: 9px;
+				padding: 5px 10px;
+				background: #fff;
+				border: 1px solid #000;
+				cursor: pointer;
+			}
+			.v1-btn-primary {
+				background: #000;
+				color: #fff;
+			}
 
-  /* VAR 2: BRUTALIST */
-  .v2 { font-family: 'Arial Black', Arial, sans-serif; }
-  .v2-header { background: #000; color: #fff; font-size: 13px; font-weight: 900; text-transform: uppercase; padding: 6px 8px; letter-spacing: 0.04em; margin-bottom: 6px; }
-  .v2-subject-block { border: 3px solid #000; margin-bottom: 6px; }
-  .v2-block-label { font-size: 8px; font-weight: 900; text-transform: uppercase; background: #000; color: #fff; padding: 3px 6px; letter-spacing: 0.06em; }
-  .v2-block-input { font-family: 'Arial Black', Arial, sans-serif; font-size: 10px; font-weight: 700; width: 100%; border: none; padding: 5px 6px; outline: none; background: #fff; }
-  .v2-toolbar { display: flex; gap: 0; }
-  .v2-tbtn { font-size: 9px; font-weight: 900; padding: 3px 7px; border: 3px solid #000; border-right: none; background: #fff; cursor: pointer; }
-  .v2-tbtn:last-child { border-right: 3px solid #000; }
-  .v2-textarea { width: 100%; height: 55px; border: 3px solid #000; border-top: none; font-family: 'Arial Black', Arial, sans-serif; font-size: 9px; padding: 5px; resize: none; outline: none; font-weight: 400; }
-  .v2-targeting { border: 3px solid #000; padding: 6px; margin-top: 6px; }
-  .v2-targeting-label { font-size: 8px; font-weight: 900; text-transform: uppercase; background: #000; color: #fff; padding: 2px 5px; margin: -6px -6px 6px -6px; }
-  .v2-target-row { display: flex; gap: 0; margin-bottom: 4px; }
-  .v2-target-btn { font-size: 8px; font-weight: 700; text-transform: uppercase; padding: 3px 6px; border: 2px solid #000; border-right: none; cursor: pointer; background: #fff; }
-  .v2-target-btn:last-child { border-right: 2px solid #000; }
-  .v2-target-btn.active { background: #000; color: #fff; }
-  .v2-count { font-size: 11px; font-weight: 900; text-transform: uppercase; margin: 4px 0; }
-  .v2-send-btn { width: 100%; font-family: 'Arial Black', Arial, sans-serif; font-size: 12px; font-weight: 900; text-transform: uppercase; padding: 7px; background: #000; color: #fff; border: 3px solid #000; cursor: pointer; letter-spacing: 0.06em; margin-top: 5px; }
+			/* VAR 2: BRUTALIST */
+			.v2 {
+				font-family: 'Arial Black', Arial, sans-serif;
+			}
+			.v2-header {
+				background: #000;
+				color: #fff;
+				font-size: 13px;
+				font-weight: 900;
+				text-transform: uppercase;
+				padding: 6px 8px;
+				letter-spacing: 0.04em;
+				margin-bottom: 6px;
+			}
+			.v2-subject-block {
+				border: 3px solid #000;
+				margin-bottom: 6px;
+			}
+			.v2-block-label {
+				font-size: 8px;
+				font-weight: 900;
+				text-transform: uppercase;
+				background: #000;
+				color: #fff;
+				padding: 3px 6px;
+				letter-spacing: 0.06em;
+			}
+			.v2-block-input {
+				font-family: 'Arial Black', Arial, sans-serif;
+				font-size: 10px;
+				font-weight: 700;
+				width: 100%;
+				border: none;
+				padding: 5px 6px;
+				outline: none;
+				background: #fff;
+			}
+			.v2-toolbar {
+				display: flex;
+				gap: 0;
+			}
+			.v2-tbtn {
+				font-size: 9px;
+				font-weight: 900;
+				padding: 3px 7px;
+				border: 3px solid #000;
+				border-right: none;
+				background: #fff;
+				cursor: pointer;
+			}
+			.v2-tbtn:last-child {
+				border-right: 3px solid #000;
+			}
+			.v2-textarea {
+				width: 100%;
+				height: 55px;
+				border: 3px solid #000;
+				border-top: none;
+				font-family: 'Arial Black', Arial, sans-serif;
+				font-size: 9px;
+				padding: 5px;
+				resize: none;
+				outline: none;
+				font-weight: 400;
+			}
+			.v2-targeting {
+				border: 3px solid #000;
+				padding: 6px;
+				margin-top: 6px;
+			}
+			.v2-targeting-label {
+				font-size: 8px;
+				font-weight: 900;
+				text-transform: uppercase;
+				background: #000;
+				color: #fff;
+				padding: 2px 5px;
+				margin: -6px -6px 6px -6px;
+			}
+			.v2-target-row {
+				display: flex;
+				gap: 0;
+				margin-bottom: 4px;
+			}
+			.v2-target-btn {
+				font-size: 8px;
+				font-weight: 700;
+				text-transform: uppercase;
+				padding: 3px 6px;
+				border: 2px solid #000;
+				border-right: none;
+				cursor: pointer;
+				background: #fff;
+			}
+			.v2-target-btn:last-child {
+				border-right: 2px solid #000;
+			}
+			.v2-target-btn.active {
+				background: #000;
+				color: #fff;
+			}
+			.v2-count {
+				font-size: 11px;
+				font-weight: 900;
+				text-transform: uppercase;
+				margin: 4px 0;
+			}
+			.v2-send-btn {
+				width: 100%;
+				font-family: 'Arial Black', Arial, sans-serif;
+				font-size: 12px;
+				font-weight: 900;
+				text-transform: uppercase;
+				padding: 7px;
+				background: #000;
+				color: #fff;
+				border: 3px solid #000;
+				cursor: pointer;
+				letter-spacing: 0.06em;
+				margin-top: 5px;
+			}
 
-  /* VAR 3: MINIMAL */
-  .v3 { font-family: system-ui, -apple-system, sans-serif; }
-  .v3-title { font-size: 12px; font-weight: 600; margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid #e0e0e0; }
-  .v3-label { font-family: 'DM Mono', monospace; font-size: 9px; text-transform: uppercase; letter-spacing: 0.07em; color: #aaa; margin-bottom: 3px; }
-  .v3-input { font-size: 11px; width: 100%; border: none; border-bottom: 1px solid #e0e0e0; padding: 4px 0; outline: none; background: transparent; font-family: system-ui, sans-serif; margin-bottom: 8px; }
-  .v3-input:focus { border-bottom-color: #000; }
-  .v3-toolbar { display: flex; gap: 6px; margin-bottom: 4px; }
-  .v3-tbtn { font-size: 10px; color: #aaa; cursor: pointer; padding: 2px 4px; border: none; background: none; }
-  .v3-textarea { font-size: 10px; width: 100%; height: 65px; border: none; border-bottom: 1px solid #e0e0e0; padding: 4px 0; resize: none; outline: none; font-family: system-ui, sans-serif; line-height: 1.6; margin-bottom: 8px; }
-  .v3-filter-row { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 4px; }
-  .v3-filter-chip { font-family: 'DM Mono', monospace; font-size: 8px; padding: 2px 7px; border: 1px solid #e0e0e0; cursor: pointer; }
-  .v3-filter-chip.active { border-color: #000; background: #000; color: #fff; }
-  .v3-count { font-family: 'DM Mono', monospace; font-size: 10px; color: #555; margin: 5px 0; }
-  .v3-actions { display: flex; gap: 8px; }
-  .v3-btn { font-family: 'DM Mono', monospace; font-size: 9px; padding: 5px 12px; border: 1px solid #000; background: #fff; cursor: pointer; }
-  .v3-btn-fill { background: #000; color: #fff; }
+			/* VAR 3: MINIMAL */
+			.v3 {
+				font-family:
+					system-ui,
+					-apple-system,
+					sans-serif;
+			}
+			.v3-title {
+				font-size: 12px;
+				font-weight: 600;
+				margin-bottom: 10px;
+				padding-bottom: 8px;
+				border-bottom: 1px solid #e0e0e0;
+			}
+			.v3-label {
+				font-family: 'DM Mono', monospace;
+				font-size: 9px;
+				text-transform: uppercase;
+				letter-spacing: 0.07em;
+				color: #aaa;
+				margin-bottom: 3px;
+			}
+			.v3-input {
+				font-size: 11px;
+				width: 100%;
+				border: none;
+				border-bottom: 1px solid #e0e0e0;
+				padding: 4px 0;
+				outline: none;
+				background: transparent;
+				font-family: system-ui, sans-serif;
+				margin-bottom: 8px;
+			}
+			.v3-input:focus {
+				border-bottom-color: #000;
+			}
+			.v3-toolbar {
+				display: flex;
+				gap: 6px;
+				margin-bottom: 4px;
+			}
+			.v3-tbtn {
+				font-size: 10px;
+				color: #aaa;
+				cursor: pointer;
+				padding: 2px 4px;
+				border: none;
+				background: none;
+			}
+			.v3-textarea {
+				font-size: 10px;
+				width: 100%;
+				height: 65px;
+				border: none;
+				border-bottom: 1px solid #e0e0e0;
+				padding: 4px 0;
+				resize: none;
+				outline: none;
+				font-family: system-ui, sans-serif;
+				line-height: 1.6;
+				margin-bottom: 8px;
+			}
+			.v3-filter-row {
+				display: flex;
+				gap: 4px;
+				flex-wrap: wrap;
+				margin-bottom: 4px;
+			}
+			.v3-filter-chip {
+				font-family: 'DM Mono', monospace;
+				font-size: 8px;
+				padding: 2px 7px;
+				border: 1px solid #e0e0e0;
+				cursor: pointer;
+			}
+			.v3-filter-chip.active {
+				border-color: #000;
+				background: #000;
+				color: #fff;
+			}
+			.v3-count {
+				font-family: 'DM Mono', monospace;
+				font-size: 10px;
+				color: #555;
+				margin: 5px 0;
+			}
+			.v3-actions {
+				display: flex;
+				gap: 8px;
+			}
+			.v3-btn {
+				font-family: 'DM Mono', monospace;
+				font-size: 9px;
+				padding: 5px 12px;
+				border: 1px solid #000;
+				background: #fff;
+				cursor: pointer;
+			}
+			.v3-btn-fill {
+				background: #000;
+				color: #fff;
+			}
 
-  /* VAR 4: SYSTEMATIC */
-  .v4 { font-family: 'DM Mono', monospace; }
-  .v4-section-label { font-size: 8px; text-transform: uppercase; letter-spacing: 0.07em; color: #aaa; margin-bottom: 4px; }
-  .v4-matrix { width: 100%; border-collapse: collapse; margin-bottom: 8px; font-size: 8px; }
-  .v4-matrix th { background: #f4f4f4; border: 1px solid #e0e0e0; padding: 3px 6px; text-align: left; font-size: 8px; text-transform: uppercase; letter-spacing: 0.04em; }
-  .v4-matrix td { border: 1px solid #e0e0e0; padding: 3px 6px; }
-  .v4-matrix td.on { background: #000; color: #fff; text-align: center; }
-  .v4-matrix td.off { text-align: center; color: #aaa; }
-  .v4-field { margin-bottom: 6px; }
-  .v4-field-label { font-size: 8px; text-transform: uppercase; letter-spacing: 0.06em; color: #aaa; margin-bottom: 2px; }
-  .v4-field-input { font-family: 'DM Mono', monospace; font-size: 10px; width: 100%; border: 1px solid #e0e0e0; padding: 4px 6px; outline: none; }
-  .v4-field-input:focus { border-color: #000; }
-  .v4-textarea { font-family: 'DM Mono', monospace; font-size: 9px; width: 100%; height: 60px; border: 1px solid #e0e0e0; padding: 5px; resize: none; outline: none; line-height: 1.5; }
-  .v4-count-row { display: flex; justify-content: space-between; align-items: center; margin: 5px 0; padding: 4px 6px; background: #f4f4f4; border: 1px solid #e0e0e0; font-size: 9px; }
-  .v4-actions { display: flex; gap: 4px; }
-  .v4-btn { font-family: 'DM Mono', monospace; font-size: 8px; text-transform: uppercase; padding: 4px 8px; background: #000; color: #fff; border: 1px solid #000; cursor: pointer; }
-  .v4-btn-outline { background: #fff; color: #000; }
+			/* VAR 4: SYSTEMATIC */
+			.v4 {
+				font-family: 'DM Mono', monospace;
+			}
+			.v4-section-label {
+				font-size: 8px;
+				text-transform: uppercase;
+				letter-spacing: 0.07em;
+				color: #aaa;
+				margin-bottom: 4px;
+			}
+			.v4-matrix {
+				width: 100%;
+				border-collapse: collapse;
+				margin-bottom: 8px;
+				font-size: 8px;
+			}
+			.v4-matrix th {
+				background: #f4f4f4;
+				border: 1px solid #e0e0e0;
+				padding: 3px 6px;
+				text-align: left;
+				font-size: 8px;
+				text-transform: uppercase;
+				letter-spacing: 0.04em;
+			}
+			.v4-matrix td {
+				border: 1px solid #e0e0e0;
+				padding: 3px 6px;
+			}
+			.v4-matrix td.on {
+				background: #000;
+				color: #fff;
+				text-align: center;
+			}
+			.v4-matrix td.off {
+				text-align: center;
+				color: #aaa;
+			}
+			.v4-field {
+				margin-bottom: 6px;
+			}
+			.v4-field-label {
+				font-size: 8px;
+				text-transform: uppercase;
+				letter-spacing: 0.06em;
+				color: #aaa;
+				margin-bottom: 2px;
+			}
+			.v4-field-input {
+				font-family: 'DM Mono', monospace;
+				font-size: 10px;
+				width: 100%;
+				border: 1px solid #e0e0e0;
+				padding: 4px 6px;
+				outline: none;
+			}
+			.v4-field-input:focus {
+				border-color: #000;
+			}
+			.v4-textarea {
+				font-family: 'DM Mono', monospace;
+				font-size: 9px;
+				width: 100%;
+				height: 60px;
+				border: 1px solid #e0e0e0;
+				padding: 5px;
+				resize: none;
+				outline: none;
+				line-height: 1.5;
+			}
+			.v4-count-row {
+				display: flex;
+				justify-content: space-between;
+				align-items: center;
+				margin: 5px 0;
+				padding: 4px 6px;
+				background: #f4f4f4;
+				border: 1px solid #e0e0e0;
+				font-size: 9px;
+			}
+			.v4-actions {
+				display: flex;
+				gap: 4px;
+			}
+			.v4-btn {
+				font-family: 'DM Mono', monospace;
+				font-size: 8px;
+				text-transform: uppercase;
+				padding: 4px 8px;
+				background: #000;
+				color: #fff;
+				border: 1px solid #000;
+				cursor: pointer;
+			}
+			.v4-btn-outline {
+				background: #fff;
+				color: #000;
+			}
 
-  /* VAR 5: DASHBOARD */
-  .v5-wrap { display: flex; height: 100%; font-family: 'Inter', sans-serif; }
-  .v5-sidebar { width: 100px; border-right: 1px solid #e0e0e0; flex-shrink: 0; padding: 10px 0; }
-  .v5-sidebar-header { font-family: 'DM Mono', monospace; font-size: 8px; text-transform: uppercase; letter-spacing: 0.06em; padding: 0 10px 6px; color: #aaa; border-bottom: 1px solid #e0e0e0; margin-bottom: 6px; }
-  .v5-sidebar-section { font-family: 'DM Mono', monospace; font-size: 8px; text-transform: uppercase; letter-spacing: 0.04em; color: #aaa; padding: 6px 10px 3px; }
-  .v5-filter-item { font-size: 9px; padding: 4px 10px; cursor: pointer; color: #555; display: flex; justify-content: space-between; align-items: center; }
-  .v5-filter-item.active { background: #f4f4f4; font-weight: 600; color: #000; }
-  .v5-filter-count { font-family: 'DM Mono', monospace; font-size: 8px; color: #aaa; }
-  .v5-main { flex: 1; padding: 10px; overflow: hidden; display: flex; flex-direction: column; }
-  .v5-main-header { font-size: 11px; font-weight: 600; margin-bottom: 8px; padding-bottom: 6px; border-bottom: 1px solid #e0e0e0; }
-  .v5-label { font-family: 'DM Mono', monospace; font-size: 8px; text-transform: uppercase; letter-spacing: 0.06em; color: #aaa; margin-bottom: 2px; }
-  .v5-input { font-family: 'Inter', sans-serif; font-size: 10px; width: 100%; border: 1px solid #e0e0e0; padding: 4px 6px; outline: none; border-radius: 2px; margin-bottom: 6px; }
-  .v5-toolbar { display: flex; gap: 3px; margin-bottom: 4px; }
-  .v5-tbtn { font-family: 'DM Mono', monospace; font-size: 9px; padding: 2px 5px; border: 1px solid #e0e0e0; background: #fff; cursor: pointer; border-radius: 2px; }
-  .v5-textarea { font-family: 'Inter', sans-serif; font-size: 9px; width: 100%; height: 65px; border: 1px solid #e0e0e0; padding: 5px 6px; resize: none; outline: none; line-height: 1.5; border-radius: 2px; }
-  .v5-count-badge { display: inline-block; background: #f4f4f4; border: 1px solid #e0e0e0; padding: 3px 8px; font-family: 'DM Mono', monospace; font-size: 9px; margin: 6px 0; border-radius: 2px; }
-  .v5-actions { display: flex; gap: 4px; margin-top: auto; padding-top: 6px; }
-  .v5-btn { font-family: 'DM Mono', monospace; font-size: 8px; padding: 4px 8px; border: 1px solid #000; background: #000; color: #fff; cursor: pointer; border-radius: 2px; }
-  .v5-btn-outline { background: #fff; color: #000; }
+			/* VAR 5: DASHBOARD */
+			.v5-wrap {
+				display: flex;
+				height: 100%;
+				font-family: 'Inter', sans-serif;
+			}
+			.v5-sidebar {
+				width: 100px;
+				border-right: 1px solid #e0e0e0;
+				flex-shrink: 0;
+				padding: 10px 0;
+			}
+			.v5-sidebar-header {
+				font-family: 'DM Mono', monospace;
+				font-size: 8px;
+				text-transform: uppercase;
+				letter-spacing: 0.06em;
+				padding: 0 10px 6px;
+				color: #aaa;
+				border-bottom: 1px solid #e0e0e0;
+				margin-bottom: 6px;
+			}
+			.v5-sidebar-section {
+				font-family: 'DM Mono', monospace;
+				font-size: 8px;
+				text-transform: uppercase;
+				letter-spacing: 0.04em;
+				color: #aaa;
+				padding: 6px 10px 3px;
+			}
+			.v5-filter-item {
+				font-size: 9px;
+				padding: 4px 10px;
+				cursor: pointer;
+				color: #555;
+				display: flex;
+				justify-content: space-between;
+				align-items: center;
+			}
+			.v5-filter-item.active {
+				background: #f4f4f4;
+				font-weight: 600;
+				color: #000;
+			}
+			.v5-filter-count {
+				font-family: 'DM Mono', monospace;
+				font-size: 8px;
+				color: #aaa;
+			}
+			.v5-main {
+				flex: 1;
+				padding: 10px;
+				overflow: hidden;
+				display: flex;
+				flex-direction: column;
+			}
+			.v5-main-header {
+				font-size: 11px;
+				font-weight: 600;
+				margin-bottom: 8px;
+				padding-bottom: 6px;
+				border-bottom: 1px solid #e0e0e0;
+			}
+			.v5-label {
+				font-family: 'DM Mono', monospace;
+				font-size: 8px;
+				text-transform: uppercase;
+				letter-spacing: 0.06em;
+				color: #aaa;
+				margin-bottom: 2px;
+			}
+			.v5-input {
+				font-family: 'Inter', sans-serif;
+				font-size: 10px;
+				width: 100%;
+				border: 1px solid #e0e0e0;
+				padding: 4px 6px;
+				outline: none;
+				border-radius: 2px;
+				margin-bottom: 6px;
+			}
+			.v5-toolbar {
+				display: flex;
+				gap: 3px;
+				margin-bottom: 4px;
+			}
+			.v5-tbtn {
+				font-family: 'DM Mono', monospace;
+				font-size: 9px;
+				padding: 2px 5px;
+				border: 1px solid #e0e0e0;
+				background: #fff;
+				cursor: pointer;
+				border-radius: 2px;
+			}
+			.v5-textarea {
+				font-family: 'Inter', sans-serif;
+				font-size: 9px;
+				width: 100%;
+				height: 65px;
+				border: 1px solid #e0e0e0;
+				padding: 5px 6px;
+				resize: none;
+				outline: none;
+				line-height: 1.5;
+				border-radius: 2px;
+			}
+			.v5-count-badge {
+				display: inline-block;
+				background: #f4f4f4;
+				border: 1px solid #e0e0e0;
+				padding: 3px 8px;
+				font-family: 'DM Mono', monospace;
+				font-size: 9px;
+				margin: 6px 0;
+				border-radius: 2px;
+			}
+			.v5-actions {
+				display: flex;
+				gap: 4px;
+				margin-top: auto;
+				padding-top: 6px;
+			}
+			.v5-btn {
+				font-family: 'DM Mono', monospace;
+				font-size: 8px;
+				padding: 4px 8px;
+				border: 1px solid #000;
+				background: #000;
+				color: #fff;
+				cursor: pointer;
+				border-radius: 2px;
+			}
+			.v5-btn-outline {
+				background: #fff;
+				color: #000;
+			}
 
-  /* VAR 6: FORM-FIRST */
-  .v6 { font-family: 'Inter', sans-serif; }
-  .v6-progress { display: flex; gap: 0; margin-bottom: 12px; }
-  .v6-step { flex: 1; text-align: center; font-family: 'DM Mono', monospace; font-size: 8px; padding: 5px 2px; border: 1px solid #e0e0e0; border-right: none; color: #aaa; line-height: 1.3; }
-  .v6-step:last-child { border-right: 1px solid #e0e0e0; }
-  .v6-step.active { background: #000; color: #fff; border-color: #000; }
-  .v6-step.done { background: #f4f4f4; color: #555; }
-  .v6-section-title { font-family: 'DM Mono', monospace; font-size: 10px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 8px; }
-  .v6-filter-group { margin-bottom: 8px; }
-  .v6-filter-label { font-family: 'DM Mono', monospace; font-size: 8px; text-transform: uppercase; color: #aaa; margin-bottom: 4px; }
-  .v6-filter-row { display: flex; gap: 4px; flex-wrap: wrap; }
-  .v6-filter-btn { font-family: 'DM Mono', monospace; font-size: 8px; padding: 4px 8px; border: 1px solid #e0e0e0; background: #fff; cursor: pointer; }
-  .v6-filter-btn.active { background: #000; color: #fff; border-color: #000; }
-  .v6-count-block { border: 2px solid #000; padding: 10px; text-align: center; margin: 10px 0; }
-  .v6-count-num { font-family: 'DM Mono', monospace; font-size: 22px; font-weight: 700; }
-  .v6-count-label { font-family: 'DM Mono', monospace; font-size: 9px; color: #aaa; text-transform: uppercase; }
-  .v6-btn-next { width: 100%; font-family: 'DM Mono', monospace; font-size: 10px; font-weight: 500; text-transform: uppercase; padding: 9px; background: #000; color: #fff; border: none; cursor: pointer; letter-spacing: 0.06em; }
-</style>
-</head>
-<body>
-<div class="top-bar">
-  <span class="top-bar-title">RODEO — ADMIN CUSTOM EMAIL</span>
-  <span style="font-family:'DM Mono',monospace;font-size:11px;color:#aaa;">6 variations</span>
-</div>
+			/* VAR 6: FORM-FIRST */
+			.v6 {
+				font-family: 'Inter', sans-serif;
+			}
+			.v6-progress {
+				display: flex;
+				gap: 0;
+				margin-bottom: 12px;
+			}
+			.v6-step {
+				flex: 1;
+				text-align: center;
+				font-family: 'DM Mono', monospace;
+				font-size: 8px;
+				padding: 5px 2px;
+				border: 1px solid #e0e0e0;
+				border-right: none;
+				color: #aaa;
+				line-height: 1.3;
+			}
+			.v6-step:last-child {
+				border-right: 1px solid #e0e0e0;
+			}
+			.v6-step.active {
+				background: #000;
+				color: #fff;
+				border-color: #000;
+			}
+			.v6-step.done {
+				background: #f4f4f4;
+				color: #555;
+			}
+			.v6-section-title {
+				font-family: 'DM Mono', monospace;
+				font-size: 10px;
+				font-weight: 500;
+				text-transform: uppercase;
+				letter-spacing: 0.06em;
+				margin-bottom: 8px;
+			}
+			.v6-filter-group {
+				margin-bottom: 8px;
+			}
+			.v6-filter-label {
+				font-family: 'DM Mono', monospace;
+				font-size: 8px;
+				text-transform: uppercase;
+				color: #aaa;
+				margin-bottom: 4px;
+			}
+			.v6-filter-row {
+				display: flex;
+				gap: 4px;
+				flex-wrap: wrap;
+			}
+			.v6-filter-btn {
+				font-family: 'DM Mono', monospace;
+				font-size: 8px;
+				padding: 4px 8px;
+				border: 1px solid #e0e0e0;
+				background: #fff;
+				cursor: pointer;
+			}
+			.v6-filter-btn.active {
+				background: #000;
+				color: #fff;
+				border-color: #000;
+			}
+			.v6-count-block {
+				border: 2px solid #000;
+				padding: 10px;
+				text-align: center;
+				margin: 10px 0;
+			}
+			.v6-count-num {
+				font-family: 'DM Mono', monospace;
+				font-size: 22px;
+				font-weight: 700;
+			}
+			.v6-count-label {
+				font-family: 'DM Mono', monospace;
+				font-size: 9px;
+				color: #aaa;
+				text-transform: uppercase;
+			}
+			.v6-btn-next {
+				width: 100%;
+				font-family: 'DM Mono', monospace;
+				font-size: 10px;
+				font-weight: 500;
+				text-transform: uppercase;
+				padding: 9px;
+				background: #000;
+				color: #fff;
+				border: none;
+				cursor: pointer;
+				letter-spacing: 0.06em;
+			}
+		</style>
+	</head>
+	<body>
+		<div class="top-bar">
+			<span class="top-bar-title">RODEO — ADMIN CUSTOM EMAIL</span>
+			<span style="font-family: 'DM Mono', monospace; font-size: 11px; color: #aaa"
+				>6 variations</span
+			>
+		</div>
 
-<div class="grid">
+		<div class="grid">
+			<!-- CELL 1: EDITORIAL -->
+			<div class="cell">
+				<div class="cell-label">
+					<span class="cell-num">01</span>
+					<span class="cell-desc">Editorial</span>
+				</div>
+				<div class="cell-frame">
+					<div class="v1">
+						<div class="v1-title">Compose Custom Email</div>
+						<div class="v1-subtitle">Send to filtered recipients</div>
+						<div class="v1-label">Subject</div>
+						<input class="v1-input" type="text" value="Important update from the Rodeo team" />
+						<div class="v1-toolbar">
+							<button class="v1-tbtn"><b>B</b></button>
+							<button class="v1-tbtn"><i>I</i></button>
+							<button class="v1-tbtn"><u>U</u></button>
+							<button class="v1-tbtn">Link</button>
+						</div>
+						<textarea class="v1-textarea">
+Hi {{first_name}},
 
-  <!-- CELL 1: EDITORIAL -->
-  <div class="cell">
-    <div class="cell-label">
-      <span class="cell-num">01</span>
-      <span class="cell-desc">Editorial</span>
-    </div>
-    <div class="cell-frame">
-      <div class="v1">
-        <div class="v1-title">Compose Custom Email</div>
-        <div class="v1-subtitle">Send to filtered recipients</div>
-        <div class="v1-label">Subject</div>
-        <input class="v1-input" type="text" value="Important update from the Rodeo team" />
-        <div class="v1-toolbar">
-          <button class="v1-tbtn"><b>B</b></button>
-          <button class="v1-tbtn"><i>I</i></button>
-          <button class="v1-tbtn"><u>U</u></button>
-          <button class="v1-tbtn">Link</button>
-        </div>
-        <textarea class="v1-textarea">Hi {{first_name}},
+We have an important update regarding Rodeo 2025. Please read carefully and reach out if you have any questions.</textarea
+						>
+						<div style="margin-top: 8px">
+							<div class="v1-rec-label">Recipients</div>
+							<div class="v1-filters">
+								<div>
+									<div
+										style="
+											font-family: 'DM Mono', monospace;
+											font-size: 8px;
+											color: #aaa;
+											margin-bottom: 2px;
+										"
+									>
+										Status
+									</div>
+									<div class="v1-filter-group">
+										<button class="v1-filter-btn active">All</button>
+										<button class="v1-filter-btn">Accepted</button>
+										<button class="v1-filter-btn">Waitlisted</button>
+										<button class="v1-filter-btn">Pending</button>
+									</div>
+								</div>
+							</div>
+							<div style="display: flex; justify-content: space-between; align-items: center">
+								<span class="v1-count">~312 recipients</span>
+								<div class="v1-actions">
+									<button class="v1-btn">Preview</button>
+									<button class="v1-btn v1-btn-primary">Send Email</button>
+								</div>
+							</div>
+						</div>
+					</div>
+				</div>
+			</div>
 
-We have an important update regarding Rodeo 2025. Please read carefully and reach out if you have any questions.</textarea>
-        <div style="margin-top:8px;">
-          <div class="v1-rec-label">Recipients</div>
-          <div class="v1-filters">
-            <div>
-              <div style="font-family:'DM Mono',monospace;font-size:8px;color:#aaa;margin-bottom:2px;">Status</div>
-              <div class="v1-filter-group">
-                <button class="v1-filter-btn active">All</button>
-                <button class="v1-filter-btn">Accepted</button>
-                <button class="v1-filter-btn">Waitlisted</button>
-                <button class="v1-filter-btn">Pending</button>
-              </div>
-            </div>
-          </div>
-          <div style="display:flex;justify-content:space-between;align-items:center;">
-            <span class="v1-count">~312 recipients</span>
-            <div class="v1-actions">
-              <button class="v1-btn">Preview</button>
-              <button class="v1-btn v1-btn-primary">Send Email</button>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- CELL 2: BRUTALIST -->
-  <div class="cell">
-    <div class="cell-label">
-      <span class="cell-num">02</span>
-      <span class="cell-desc">Brutalist</span>
-    </div>
-    <div class="cell-frame">
-      <div class="v2">
-        <div class="v2-header">Custom Email Blast</div>
-        <div class="v2-subject-block">
-          <div class="v2-block-label">Subject</div>
-          <input class="v2-block-input" type="text" value="Important update from Rodeo team" />
-        </div>
-        <div class="v2-toolbar">
-          <button class="v2-tbtn"><b>B</b></button>
-          <button class="v2-tbtn"><i>I</i></button>
-          <button class="v2-tbtn"><u>U</u></button>
-          <button class="v2-tbtn">LINK</button>
-        </div>
-        <textarea class="v2-textarea">Hi {{first_name}},
+			<!-- CELL 2: BRUTALIST -->
+			<div class="cell">
+				<div class="cell-label">
+					<span class="cell-num">02</span>
+					<span class="cell-desc">Brutalist</span>
+				</div>
+				<div class="cell-frame">
+					<div class="v2">
+						<div class="v2-header">Custom Email Blast</div>
+						<div class="v2-subject-block">
+							<div class="v2-block-label">Subject</div>
+							<input class="v2-block-input" type="text" value="Important update from Rodeo team" />
+						</div>
+						<div class="v2-toolbar">
+							<button class="v2-tbtn"><b>B</b></button>
+							<button class="v2-tbtn"><i>I</i></button>
+							<button class="v2-tbtn"><u>U</u></button>
+							<button class="v2-tbtn">LINK</button>
+						</div>
+						<textarea class="v2-textarea">
+Hi {{first_name}},
 
 Important update regarding Rodeo 2025. Details to follow.
 
-— The Rodeo Team</textarea>
-        <div class="v2-targeting">
-          <div class="v2-targeting-label">Targeting</div>
-          <div style="font-size:8px;font-weight:700;text-transform:uppercase;margin-bottom:2px;">Status</div>
-          <div class="v2-target-row">
-            <button class="v2-target-btn active">ALL</button>
-            <button class="v2-target-btn">ACCEPTED</button>
-            <button class="v2-target-btn">WAITLISTED</button>
-            <button class="v2-target-btn">REJECTED</button>
-          </div>
-          <div class="v2-count">~312 RECIPIENTS</div>
-        </div>
-        <button class="v2-send-btn">Send to 312 People →</button>
-      </div>
-    </div>
-  </div>
+— The Rodeo Team</textarea
+						>
+						<div class="v2-targeting">
+							<div class="v2-targeting-label">Targeting</div>
+							<div
+								style="
+									font-size: 8px;
+									font-weight: 700;
+									text-transform: uppercase;
+									margin-bottom: 2px;
+								"
+							>
+								Status
+							</div>
+							<div class="v2-target-row">
+								<button class="v2-target-btn active">ALL</button>
+								<button class="v2-target-btn">ACCEPTED</button>
+								<button class="v2-target-btn">WAITLISTED</button>
+								<button class="v2-target-btn">REJECTED</button>
+							</div>
+							<div class="v2-count">~312 RECIPIENTS</div>
+						</div>
+						<button class="v2-send-btn">Send to 312 People →</button>
+					</div>
+				</div>
+			</div>
 
-  <!-- CELL 3: MINIMAL -->
-  <div class="cell">
-    <div class="cell-label">
-      <span class="cell-num">03</span>
-      <span class="cell-desc">Minimal</span>
-    </div>
-    <div class="cell-frame">
-      <div class="v3">
-        <div class="v3-title">Custom Email</div>
-        <div class="v3-label">Subject</div>
-        <input class="v3-input" type="text" value="Important update from the Rodeo team" />
-        <div class="v3-toolbar">
-          <button class="v3-tbtn"><b>B</b></button>
-          <button class="v3-tbtn"><i>I</i></button>
-          <button class="v3-tbtn"><u>U</u></button>
-          <button class="v3-tbtn">↗</button>
-        </div>
-        <textarea class="v3-textarea">Hi {{first_name}},
+			<!-- CELL 3: MINIMAL -->
+			<div class="cell">
+				<div class="cell-label">
+					<span class="cell-num">03</span>
+					<span class="cell-desc">Minimal</span>
+				</div>
+				<div class="cell-frame">
+					<div class="v3">
+						<div class="v3-title">Custom Email</div>
+						<div class="v3-label">Subject</div>
+						<input class="v3-input" type="text" value="Important update from the Rodeo team" />
+						<div class="v3-toolbar">
+							<button class="v3-tbtn"><b>B</b></button>
+							<button class="v3-tbtn"><i>I</i></button>
+							<button class="v3-tbtn"><u>U</u></button>
+							<button class="v3-tbtn">↗</button>
+						</div>
+						<textarea class="v3-textarea">
+Hi {{first_name}},
 
-We have an important update regarding Rodeo 2025. Please read carefully.</textarea>
-        <div class="v3-label" style="margin-top:4px;">Status</div>
-        <div class="v3-filter-row" style="margin-bottom:4px;">
-          <span class="v3-filter-chip active">All</span>
-          <span class="v3-filter-chip">Accepted</span>
-          <span class="v3-filter-chip">Waitlisted</span>
-          <span class="v3-filter-chip">Rejected</span>
-          <span class="v3-filter-chip">Pending</span>
-        </div>
-        <div class="v3-label">Role</div>
-        <div class="v3-filter-row">
-          <span class="v3-filter-chip active">All</span>
-          <span class="v3-filter-chip">Hacker</span>
-          <span class="v3-filter-chip">Mentor</span>
-          <span class="v3-filter-chip">Judge</span>
-        </div>
-        <div class="v3-count" style="margin:6px 0;">~312 recipients</div>
-        <div class="v3-actions">
-          <button class="v3-btn">Preview</button>
-          <button class="v3-btn v3-btn-fill">Send Email</button>
-        </div>
-      </div>
-    </div>
-  </div>
+We have an important update regarding Rodeo 2025. Please read carefully.</textarea
+						>
+						<div class="v3-label" style="margin-top: 4px">Status</div>
+						<div class="v3-filter-row" style="margin-bottom: 4px">
+							<span class="v3-filter-chip active">All</span>
+							<span class="v3-filter-chip">Accepted</span>
+							<span class="v3-filter-chip">Waitlisted</span>
+							<span class="v3-filter-chip">Rejected</span>
+							<span class="v3-filter-chip">Pending</span>
+						</div>
+						<div class="v3-label">Role</div>
+						<div class="v3-filter-row">
+							<span class="v3-filter-chip active">All</span>
+							<span class="v3-filter-chip">Hacker</span>
+							<span class="v3-filter-chip">Mentor</span>
+							<span class="v3-filter-chip">Judge</span>
+						</div>
+						<div class="v3-count" style="margin: 6px 0">~312 recipients</div>
+						<div class="v3-actions">
+							<button class="v3-btn">Preview</button>
+							<button class="v3-btn v3-btn-fill">Send Email</button>
+						</div>
+					</div>
+				</div>
+			</div>
 
-  <!-- CELL 4: SYSTEMATIC -->
-  <div class="cell">
-    <div class="cell-label">
-      <span class="cell-num">04</span>
-      <span class="cell-desc">Systematic</span>
-    </div>
-    <div class="cell-frame">
-      <div class="v4">
-        <div class="v4-section-label">Recipient Matrix</div>
-        <table class="v4-matrix">
-          <thead>
-            <tr>
-              <th>Filter</th>
-              <th>All</th>
-              <th>Accepted</th>
-              <th>Waitlisted</th>
-              <th>Rejected</th>
-              <th>Pending</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td style="font-size:8px;">Hacker</td>
-              <td class="on">✓</td>
-              <td class="off">–</td>
-              <td class="off">–</td>
-              <td class="off">–</td>
-              <td class="off">–</td>
-            </tr>
-            <tr>
-              <td style="font-size:8px;">Mentor</td>
-              <td class="on">✓</td>
-              <td class="off">–</td>
-              <td class="off">–</td>
-              <td class="off">–</td>
-              <td class="off">–</td>
-            </tr>
-            <tr>
-              <td style="font-size:8px;">Judge</td>
-              <td class="on">✓</td>
-              <td class="off">–</td>
-              <td class="off">–</td>
-              <td class="off">–</td>
-              <td class="off">–</td>
-            </tr>
-          </tbody>
-        </table>
-        <div class="v4-field">
-          <div class="v4-field-label">Subject Line</div>
-          <input class="v4-field-input" type="text" value="Important update from the Rodeo team" />
-        </div>
-        <textarea class="v4-textarea">Hi {{first_name}}, We have an important update regarding Rodeo 2025.</textarea>
-        <div class="v4-count-row">
-          <span>Estimated Recipients</span>
-          <span style="font-weight:500;">~312</span>
-        </div>
-        <div class="v4-actions" style="margin-top:5px;">
-          <button class="v4-btn">Preview</button>
-          <button class="v4-btn">Send → 312</button>
-          <button class="v4-btn v4-btn-outline">Discard</button>
-        </div>
-      </div>
-    </div>
-  </div>
+			<!-- CELL 4: SYSTEMATIC -->
+			<div class="cell">
+				<div class="cell-label">
+					<span class="cell-num">04</span>
+					<span class="cell-desc">Systematic</span>
+				</div>
+				<div class="cell-frame">
+					<div class="v4">
+						<div class="v4-section-label">Recipient Matrix</div>
+						<table class="v4-matrix">
+							<thead>
+								<tr>
+									<th>Filter</th>
+									<th>All</th>
+									<th>Accepted</th>
+									<th>Waitlisted</th>
+									<th>Rejected</th>
+									<th>Pending</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td style="font-size: 8px">Hacker</td>
+									<td class="on">✓</td>
+									<td class="off">–</td>
+									<td class="off">–</td>
+									<td class="off">–</td>
+									<td class="off">–</td>
+								</tr>
+								<tr>
+									<td style="font-size: 8px">Mentor</td>
+									<td class="on">✓</td>
+									<td class="off">–</td>
+									<td class="off">–</td>
+									<td class="off">–</td>
+									<td class="off">–</td>
+								</tr>
+								<tr>
+									<td style="font-size: 8px">Judge</td>
+									<td class="on">✓</td>
+									<td class="off">–</td>
+									<td class="off">–</td>
+									<td class="off">–</td>
+									<td class="off">–</td>
+								</tr>
+							</tbody>
+						</table>
+						<div class="v4-field">
+							<div class="v4-field-label">Subject Line</div>
+							<input
+								class="v4-field-input"
+								type="text"
+								value="Important update from the Rodeo team"
+							/>
+						</div>
+						<textarea class="v4-textarea">
+Hi {{first_name}}, We have an important update regarding Rodeo 2025.</textarea
+						>
+						<div class="v4-count-row">
+							<span>Estimated Recipients</span>
+							<span style="font-weight: 500">~312</span>
+						</div>
+						<div class="v4-actions" style="margin-top: 5px">
+							<button class="v4-btn">Preview</button>
+							<button class="v4-btn">Send → 312</button>
+							<button class="v4-btn v4-btn-outline">Discard</button>
+						</div>
+					</div>
+				</div>
+			</div>
 
-  <!-- CELL 5: DASHBOARD -->
-  <div class="cell">
-    <div class="cell-label">
-      <span class="cell-num">05</span>
-      <span class="cell-desc">Dashboard</span>
-    </div>
-    <div class="cell-frame" style="padding:0;">
-      <div class="v5-wrap">
-        <div class="v5-sidebar">
-          <div class="v5-sidebar-header">Recipients</div>
-          <div class="v5-sidebar-section">Status</div>
-          <div class="v5-filter-item active">All <span class="v5-filter-count">312</span></div>
-          <div class="v5-filter-item">Accepted <span class="v5-filter-count">142</span></div>
-          <div class="v5-filter-item">Waitlisted <span class="v5-filter-count">89</span></div>
-          <div class="v5-filter-item">Rejected <span class="v5-filter-count">45</span></div>
-          <div class="v5-filter-item">Pending <span class="v5-filter-count">36</span></div>
-          <div class="v5-sidebar-section">Role</div>
-          <div class="v5-filter-item active">All</div>
-          <div class="v5-filter-item">Hacker</div>
-          <div class="v5-filter-item">Mentor</div>
-          <div class="v5-filter-item">Judge</div>
-          <div class="v5-filter-item">Volunteer</div>
-        </div>
-        <div class="v5-main">
-          <div class="v5-main-header">Compose Email</div>
-          <div class="v5-label">Subject</div>
-          <input class="v5-input" type="text" value="Important update from the Rodeo team" />
-          <div class="v5-toolbar">
-            <button class="v5-tbtn"><b>B</b></button>
-            <button class="v5-tbtn"><i>I</i></button>
-            <button class="v5-tbtn"><u>U</u></button>
-            <button class="v5-tbtn">Link</button>
-          </div>
-          <textarea class="v5-textarea">Hi {{first_name}},
+			<!-- CELL 5: DASHBOARD -->
+			<div class="cell">
+				<div class="cell-label">
+					<span class="cell-num">05</span>
+					<span class="cell-desc">Dashboard</span>
+				</div>
+				<div class="cell-frame" style="padding: 0">
+					<div class="v5-wrap">
+						<div class="v5-sidebar">
+							<div class="v5-sidebar-header">Recipients</div>
+							<div class="v5-sidebar-section">Status</div>
+							<div class="v5-filter-item active">All <span class="v5-filter-count">312</span></div>
+							<div class="v5-filter-item">Accepted <span class="v5-filter-count">142</span></div>
+							<div class="v5-filter-item">Waitlisted <span class="v5-filter-count">89</span></div>
+							<div class="v5-filter-item">Rejected <span class="v5-filter-count">45</span></div>
+							<div class="v5-filter-item">Pending <span class="v5-filter-count">36</span></div>
+							<div class="v5-sidebar-section">Role</div>
+							<div class="v5-filter-item active">All</div>
+							<div class="v5-filter-item">Hacker</div>
+							<div class="v5-filter-item">Mentor</div>
+							<div class="v5-filter-item">Judge</div>
+							<div class="v5-filter-item">Volunteer</div>
+						</div>
+						<div class="v5-main">
+							<div class="v5-main-header">Compose Email</div>
+							<div class="v5-label">Subject</div>
+							<input class="v5-input" type="text" value="Important update from the Rodeo team" />
+							<div class="v5-toolbar">
+								<button class="v5-tbtn"><b>B</b></button>
+								<button class="v5-tbtn"><i>I</i></button>
+								<button class="v5-tbtn"><u>U</u></button>
+								<button class="v5-tbtn">Link</button>
+							</div>
+							<textarea class="v5-textarea">
+Hi {{first_name}},
 
-We have an important update regarding Rodeo 2025. Please read carefully.</textarea>
-          <div class="v5-count-badge">~312 recipients selected</div>
-          <div class="v5-actions">
-            <button class="v5-btn">Preview</button>
-            <button class="v5-btn">Send Email</button>
-            <button class="v5-btn v5-btn-outline">Save Draft</button>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
+We have an important update regarding Rodeo 2025. Please read carefully.</textarea
+							>
+							<div class="v5-count-badge">~312 recipients selected</div>
+							<div class="v5-actions">
+								<button class="v5-btn">Preview</button>
+								<button class="v5-btn">Send Email</button>
+								<button class="v5-btn v5-btn-outline">Save Draft</button>
+							</div>
+						</div>
+					</div>
+				</div>
+			</div>
 
-  <!-- CELL 6: FORM-FIRST -->
-  <div class="cell">
-    <div class="cell-label">
-      <span class="cell-num">06</span>
-      <span class="cell-desc">Form-first</span>
-    </div>
-    <div class="cell-frame">
-      <div class="v6">
-        <div class="v6-progress">
-          <div class="v6-step active">1<br>Recipients</div>
-          <div class="v6-step">2<br>Compose</div>
-          <div class="v6-step">3<br>Confirm</div>
-        </div>
-        <div class="v6-section-title">Select Recipients</div>
-        <div class="v6-filter-group">
-          <div class="v6-filter-label">Status</div>
-          <div class="v6-filter-row">
-            <button class="v6-filter-btn active">All</button>
-            <button class="v6-filter-btn">Accepted</button>
-            <button class="v6-filter-btn">Waitlisted</button>
-            <button class="v6-filter-btn">Rejected</button>
-            <button class="v6-filter-btn">Pending</button>
-          </div>
-        </div>
-        <div class="v6-filter-group">
-          <div class="v6-filter-label">Role</div>
-          <div class="v6-filter-row">
-            <button class="v6-filter-btn active">All</button>
-            <button class="v6-filter-btn">Hacker</button>
-            <button class="v6-filter-btn">Mentor</button>
-            <button class="v6-filter-btn">Judge</button>
-            <button class="v6-filter-btn">Volunteer</button>
-          </div>
-        </div>
-        <div class="v6-count-block">
-          <div class="v6-count-num">312</div>
-          <div class="v6-count-label">Estimated Recipients</div>
-        </div>
-        <button class="v6-btn-next">Next: Compose Email →</button>
-      </div>
-    </div>
-  </div>
-
-</div>
-</body>
+			<!-- CELL 6: FORM-FIRST -->
+			<div class="cell">
+				<div class="cell-label">
+					<span class="cell-num">06</span>
+					<span class="cell-desc">Form-first</span>
+				</div>
+				<div class="cell-frame">
+					<div class="v6">
+						<div class="v6-progress">
+							<div class="v6-step active">1<br />Recipients</div>
+							<div class="v6-step">2<br />Compose</div>
+							<div class="v6-step">3<br />Confirm</div>
+						</div>
+						<div class="v6-section-title">Select Recipients</div>
+						<div class="v6-filter-group">
+							<div class="v6-filter-label">Status</div>
+							<div class="v6-filter-row">
+								<button class="v6-filter-btn active">All</button>
+								<button class="v6-filter-btn">Accepted</button>
+								<button class="v6-filter-btn">Waitlisted</button>
+								<button class="v6-filter-btn">Rejected</button>
+								<button class="v6-filter-btn">Pending</button>
+							</div>
+						</div>
+						<div class="v6-filter-group">
+							<div class="v6-filter-label">Role</div>
+							<div class="v6-filter-row">
+								<button class="v6-filter-btn active">All</button>
+								<button class="v6-filter-btn">Hacker</button>
+								<button class="v6-filter-btn">Mentor</button>
+								<button class="v6-filter-btn">Judge</button>
+								<button class="v6-filter-btn">Volunteer</button>
+							</div>
+						</div>
+						<div class="v6-count-block">
+							<div class="v6-count-num">312</div>
+							<div class="v6-count-label">Estimated Recipients</div>
+						</div>
+						<button class="v6-btn-next">Next: Compose Email →</button>
+					</div>
+				</div>
+			</div>
+		</div>
+	</body>
 </html>

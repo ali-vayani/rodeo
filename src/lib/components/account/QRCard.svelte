@@ -31,7 +31,7 @@
 </script>
 
 <div class="rounded border border-border bg-white p-6">
-	<p class="mb-4 text-xs font-medium uppercase tracking-widest text-muted-foreground">
+	<p class="mb-4 text-xs font-medium tracking-widest text-muted-foreground uppercase">
 		CHECK-IN QR CODE
 	</p>
 

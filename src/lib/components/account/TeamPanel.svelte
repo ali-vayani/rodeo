@@ -159,7 +159,7 @@
 </script>
 
 <div class="rounded border border-border bg-white p-6">
-	<p class="mb-4 text-xs font-medium uppercase tracking-widest text-muted-foreground">TEAM</p>
+	<p class="mb-4 text-xs font-medium tracking-widest text-muted-foreground uppercase">TEAM</p>
 
 	{#if team}
 		<!-- Team name -->
@@ -171,7 +171,10 @@
 				<div class="flex items-center gap-3">
 					<!-- Avatar -->
 					<div
-						class="flex h-8 w-8 shrink-0 items-center justify-center text-xs font-semibold {member.uid === uid ? 'bg-primary text-white' : 'bg-muted text-primary border border-border'}"
+						class="flex h-8 w-8 shrink-0 items-center justify-center text-xs font-semibold {member.uid ===
+						uid
+							? 'bg-primary text-white'
+							: 'border border-border bg-muted text-primary'}"
 					>
 						{initials(member.name)}
 					</div>
@@ -196,13 +199,13 @@
 				{#each team.invitations as inv (inv.id)}
 					<div class="flex items-center gap-2 py-1">
 						<div
-							class="flex h-6 w-6 shrink-0 items-center justify-center text-[10px] font-semibold bg-muted text-muted-foreground border border-border"
+							class="flex h-6 w-6 shrink-0 items-center justify-center border border-border bg-muted text-[10px] font-semibold text-muted-foreground"
 						>
 							{inv.user ? initials(inv.user.name) : '?'}
 						</div>
 						<span class="truncate text-xs text-muted-foreground">{inv.email}</span>
 						<span
-							class="ml-auto shrink-0 rounded px-1.5 py-0.5 font-mono text-[10px] bg-muted text-muted-foreground"
+							class="ml-auto shrink-0 rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground"
 						>
 							invited
 						</span>
@@ -230,7 +233,7 @@
 						type="button"
 						onclick={inviteMember}
 						disabled={inviting || !inviteEmail.trim()}
-						class="rounded px-4 py-1.5 text-sm font-medium bg-primary text-white transition-opacity disabled:opacity-40"
+						class="rounded bg-primary px-4 py-1.5 text-sm font-medium text-white transition-opacity disabled:opacity-40"
 					>
 						{inviting ? '…' : 'Add'}
 					</button>
@@ -254,7 +257,7 @@
 				<button
 					type="button"
 					onclick={copyInviteLink}
-					class="w-full rounded border border-border px-3 py-1.5 text-left text-xs text-primary font-mono transition-colors hover:bg-[#f4f4f4]"
+					class="w-full rounded border border-border px-3 py-1.5 text-left font-mono text-xs text-primary transition-colors hover:bg-[#f4f4f4]"
 				>
 					{linkCopied ? '✓ Copied!' : 'Copy invite link'}
 				</button>
@@ -275,7 +278,7 @@
 						type="button"
 						onclick={leaveTeam}
 						disabled={leaving}
-						class="rounded px-3 py-1.5 text-xs font-medium bg-destructive text-white transition-opacity disabled:opacity-40"
+						class="rounded bg-destructive px-3 py-1.5 text-xs font-medium text-white transition-opacity disabled:opacity-40"
 					>
 						{leaving ? 'Leaving…' : 'Yes, leave'}
 					</button>
@@ -318,7 +321,7 @@
 							type="button"
 							onclick={createTeam}
 							disabled={creating || !teamNameInput.trim()}
-							class="rounded px-4 py-2 text-sm font-medium bg-primary text-white transition-opacity disabled:opacity-40"
+							class="rounded bg-primary px-4 py-2 text-sm font-medium text-white transition-opacity disabled:opacity-40"
 						>
 							{creating ? 'Creating…' : 'Create team'}
 						</button>
@@ -342,7 +345,7 @@
 				<button
 					type="button"
 					onclick={() => (showCreateForm = true)}
-					class="rounded px-4 py-2 text-sm font-medium bg-primary text-white"
+					class="rounded bg-primary px-4 py-2 text-sm font-medium text-white"
 				>
 					Create team
 				</button>
@@ -353,16 +356,14 @@
 	<!-- Pending received invitations -->
 	{#if pendingInvitations.length > 0}
 		<div class={team ? 'mt-5 border-t border-border pt-4' : ''}>
-			<p class="mb-3 text-xs font-medium uppercase tracking-widest text-muted-foreground">
+			<p class="mb-3 text-xs font-medium tracking-widest text-muted-foreground uppercase">
 				Team Invitations
 			</p>
 			{#if respondError}
 				<p class="mb-2 text-xs text-destructive">{respondError}</p>
 			{/if}
 			{#each pendingInvitations as inv (inv.id)}
-				<div
-					class="mb-3 rounded border border-border bg-muted p-3 last:mb-0"
-				>
+				<div class="mb-3 rounded border border-border bg-muted p-3 last:mb-0">
 					<p class="mb-0.5 text-sm font-medium text-primary">{inv.team.teamName}</p>
 					<p class="mb-3 text-xs text-muted-foreground">
 						{inv.team.members.length} member{inv.team.members.length === 1 ? '' : 's'} ·
@@ -373,7 +374,7 @@
 							type="button"
 							onclick={() => acceptInvite(inv.id)}
 							disabled={respondingTo === inv.id}
-							class="rounded px-3 py-1.5 text-xs font-medium bg-primary text-white transition-opacity disabled:opacity-40"
+							class="rounded bg-primary px-3 py-1.5 text-xs font-medium text-white transition-opacity disabled:opacity-40"
 						>
 							{respondingTo === inv.id ? '…' : 'Accept'}
 						</button>
@@ -409,7 +410,7 @@
 									type="button"
 									onclick={createTeam}
 									disabled={creating || !teamNameInput.trim()}
-									class="rounded px-4 py-1.5 text-xs font-medium bg-primary text-white transition-opacity disabled:opacity-40"
+									class="rounded bg-primary px-4 py-1.5 text-xs font-medium text-white transition-opacity disabled:opacity-40"
 								>
 									{creating ? 'Creating…' : 'Create team'}
 								</button>

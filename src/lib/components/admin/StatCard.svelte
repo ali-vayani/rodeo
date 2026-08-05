@@ -3,10 +3,10 @@
 </script>
 
 <div class="min-w-0 rounded-md border border-border bg-white px-5 py-4">
-	<div class="text-[28px] font-bold leading-none text-primary">
+	<div class="text-[28px] leading-none font-bold text-primary">
 		{value.toLocaleString()}
 	</div>
-	<div class="mt-1.5 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
+	<div class="mt-1.5 text-[11px] font-semibold tracking-widest text-muted-foreground uppercase">
 		{label}
 	</div>
 </div>

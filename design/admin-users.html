@@ -1,1407 +1,1678 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>RODEO — ADMIN USERS</title>
-<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Playfair+Display:wght@400;700;900&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
-<style>
-  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
-  body {
-    font-family: 'DM Mono', monospace;
-    background: #fff;
-    color: #000;
-    min-height: 100vh;
-  }
-
-  .topbar {
-    font-family: 'DM Mono', monospace;
-    font-size: 12px;
-    font-weight: 500;
-    letter-spacing: 0.15em;
-    padding: 12px 20px;
-    border-bottom: 2px solid #000;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    background: #fff;
-  }
-
-  .topbar-title { font-size: 13px; font-weight: 700; letter-spacing: 0.2em; }
-  .topbar-sub { font-size: 10px; color: #aaa; letter-spacing: 0.1em; }
-
-  .grid {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 0;
-    border-left: 1px solid #000;
-    border-top: 1px solid #000;
-  }
-
-  .cell {
-    border-right: 1px solid #000;
-    border-bottom: 1px solid #000;
-  }
-
-  .cell-label {
-    font-family: 'DM Mono', monospace;
-    font-size: 11px;
-    padding: 8px 12px;
-    border-bottom: 1px solid #000;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    background: #f4f4f4;
-  }
-
-  .cell-num { font-size: 20px; font-weight: 700; line-height: 1; }
-  .cell-desc { font-size: 10px; color: #555; letter-spacing: 0.05em; }
-
-  .cell-frame {
-    height: 400px;
-    overflow: hidden;
-    padding: 16px;
-    position: relative;
-    background: #fff;
-  }
-
-  /* ===================== VAR 1: EDITORIAL ===================== */
-  .v1 .cell-frame {
-    font-family: 'Playfair Display', serif;
-    padding: 20px 18px;
-  }
-
-  .v1-header {
-    border-bottom: 3px double #000;
-    margin-bottom: 12px;
-    padding-bottom: 8px;
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-end;
-  }
-
-  .v1-title {
-    font-family: 'DM Mono', monospace;
-    font-size: 8px;
-    letter-spacing: 0.2em;
-    text-transform: uppercase;
-    color: #aaa;
-    margin-bottom: 2px;
-  }
-
-  .v1-headline {
-    font-family: 'Playfair Display', serif;
-    font-size: 20px;
-    font-weight: 900;
-    line-height: 1;
-  }
-
-  .v1-controls {
-    display: flex;
-    gap: 6px;
-    margin-bottom: 10px;
-    align-items: center;
-  }
-
-  .v1-search {
-    border: none;
-    border-bottom: 1.5px solid #000;
-    padding: 4px 0;
-    font-family: 'DM Mono', monospace;
-    font-size: 9px;
-    width: 120px;
-    outline: none;
-    background: transparent;
-  }
-
-  .v1-btn {
-    font-family: 'DM Mono', monospace;
-    font-size: 8px;
-    padding: 4px 8px;
-    border: 1px solid #000;
-    background: transparent;
-    cursor: pointer;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-  }
-
-  .v1-btn-dark { background: #000; color: #fff; }
-
-  .v1-table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 9px;
-  }
-
-  .v1-table th {
-    font-family: 'DM Mono', monospace;
-    font-size: 8px;
-    font-weight: 500;
-    color: #aaa;
-    text-transform: uppercase;
-    letter-spacing: 0.1em;
-    padding: 4px 0;
-    border-bottom: 2px solid #000;
-    text-align: left;
-  }
-
-  .v1-table td {
-    padding: 7px 4px 7px 0;
-    border-bottom: 1px solid #e0e0e0;
-    vertical-align: middle;
-  }
-
-  .v1-name {
-    font-family: 'Playfair Display', serif;
-    font-size: 11px;
-    font-weight: 700;
-  }
-
-  .v1-email {
-    font-family: 'DM Mono', monospace;
-    font-size: 8px;
-    color: #aaa;
-    display: block;
-  }
-
-  .v1-badge {
-    font-family: 'DM Mono', monospace;
-    font-size: 8px;
-    padding: 2px 5px;
-    border: 1px solid #000;
-  }
-
-  .v1-badge-dark { background: #000; color: #fff; border-color: #000; }
-  .v1-badge-wait { background: transparent; border: 1px solid #000; }
-  .v1-badge-rej { background: #f4f4f4; color: #aaa; border-color: #e0e0e0; }
-  .v1-badge-pend { border: 1px dashed #aaa; color: #aaa; }
-
-  .v1-pagination {
-    display: flex;
-    gap: 4px;
-    margin-top: 10px;
-    font-family: 'DM Mono', monospace;
-    font-size: 8px;
-    align-items: center;
-  }
-
-  .v1-page {
-    width: 20px;
-    height: 20px;
-    border: 1px solid #e0e0e0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-  }
-
-  .v1-page.active { border-color: #000; font-weight: 700; }
-
-  /* ===================== VAR 2: BRUTALIST ===================== */
-  .v2 .cell-frame {
-    font-family: 'Arial Black', 'Impact', sans-serif;
-    background: #fff;
-    padding: 10px;
-  }
-
-  .v2-topbar {
-    background: #000;
-    color: #fff;
-    font-size: 9px;
-    font-weight: 900;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-    padding: 4px 8px;
-    margin-bottom: 8px;
-    display: flex;
-    justify-content: space-between;
-  }
-
-  .v2-controls {
-    display: flex;
-    gap: 0;
-    margin-bottom: 8px;
-    border: 3px solid #000;
-  }
-
-  .v2-search-input {
-    flex: 1;
-    border: none;
-    padding: 5px 8px;
-    font-family: 'DM Mono', monospace;
-    font-size: 9px;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    outline: none;
-  }
-
-  .v2-search-btn {
-    background: #000;
-    color: #fff;
-    border: none;
-    padding: 5px 10px;
-    font-family: 'DM Mono', monospace;
-    font-size: 8px;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.1em;
-    cursor: pointer;
-  }
-
-  .v2-table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 8px;
-    border: 3px solid #000;
-    margin-bottom: 8px;
-  }
-
-  .v2-table th {
-    background: #000;
-    color: #fff;
-    font-family: 'DM Mono', monospace;
-    font-size: 7px;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.1em;
-    padding: 4px 6px;
-    border-right: 2px solid #fff;
-    text-align: left;
-  }
-
-  .v2-table td {
-    padding: 5px 6px;
-    border-bottom: 2px solid #000;
-    border-right: 2px solid #000;
-    font-family: 'DM Mono', monospace;
-    font-size: 8px;
-    text-transform: uppercase;
-    vertical-align: middle;
-  }
-
-  .v2-badge {
-    font-size: 7px;
-    padding: 2px 4px;
-    font-weight: 900;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    border: 2px solid #000;
-    display: inline-block;
-  }
-
-  .v2-badge-dark { background: #000; color: #fff; }
-  .v2-badge-wait { background: #fff; border: 2px solid #000; }
-  .v2-badge-rej { background: #f4f4f4; border: 2px solid #aaa; color: #aaa; }
-  .v2-badge-pend { background: #fff; border: 2px dashed #000; }
-
-  .v2-cb { width: 12px; height: 12px; border: 2px solid #000; display: inline-block; vertical-align: middle; }
-
-  .v2-footer {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    font-family: 'DM Mono', monospace;
-    font-size: 8px;
-  }
-
-  .v2-dl-btn {
-    font-family: 'DM Mono', monospace;
-    font-size: 8px;
-    font-weight: 900;
-    text-transform: uppercase;
-    padding: 4px 10px;
-    background: #000;
-    color: #fff;
-    border: none;
-    cursor: pointer;
-    letter-spacing: 0.1em;
-  }
-
-  /* ===================== VAR 3: MINIMAL ===================== */
-  .v3 .cell-frame {
-    font-family: system-ui, -apple-system, sans-serif;
-    padding: 22px 20px;
-  }
-
-  .v3-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-end;
-    margin-bottom: 16px;
-    border-bottom: 1px solid #000;
-    padding-bottom: 10px;
-  }
-
-  .v3-title {
-    font-size: 9px;
-    color: #aaa;
-    letter-spacing: 0.15em;
-    text-transform: uppercase;
-  }
-
-  .v3-count { font-size: 22px; font-weight: 300; line-height: 1; }
-
-  .v3-filters {
-    display: flex;
-    gap: 12px;
-    margin-bottom: 12px;
-    font-size: 9px;
-  }
-
-  .v3-filter-item { color: #aaa; cursor: pointer; letter-spacing: 0.05em; }
-  .v3-filter-item.active { color: #000; font-weight: 600; border-bottom: 1px solid #000; }
-
-  .v3-table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 9px;
-  }
-
-  .v3-table th {
-    font-size: 8px;
-    color: #aaa;
-    font-weight: 400;
-    text-transform: uppercase;
-    letter-spacing: 0.1em;
-    padding: 3px 0;
-    border-bottom: 1px solid #e0e0e0;
-    text-align: left;
-  }
-
-  .v3-table td {
-    padding: 8px 0;
-    border-bottom: 1px solid #f4f4f4;
-    font-size: 9px;
-    vertical-align: middle;
-  }
-
-  .v3-name { font-size: 10px; font-weight: 500; }
-  .v3-email { font-size: 8px; color: #aaa; display: block; margin-top: 1px; }
-
-  .v3-badge {
-    font-size: 8px;
-    padding: 2px 6px;
-  }
-
-  .v3-badge-dark { background: #000; color: #fff; }
-  .v3-badge-wait { border: 1px solid #000; }
-  .v3-badge-rej { color: #aaa; }
-  .v3-badge-pend { border: 1px dashed #aaa; color: #aaa; }
-
-  .v3-actions { font-size: 8px; color: #aaa; }
-  .v3-actions a { color: #000; text-decoration: none; margin-right: 6px; }
-
-  .v3-pagination {
-    margin-top: 10px;
-    font-size: 8px;
-    color: #aaa;
-    display: flex;
-    gap: 10px;
-  }
-
-  .v3-pagination span { color: #000; font-weight: 500; }
-
-  /* ===================== VAR 4: SYSTEMATIC ===================== */
-  .v4 .cell-frame {
-    font-family: 'DM Mono', monospace;
-    padding: 0;
-    display: flex;
-    flex-direction: column;
-    font-size: 9px;
-  }
-
-  .v4-toolbar {
-    padding: 7px 10px;
-    border-bottom: 1px solid #000;
-    display: flex;
-    gap: 6px;
-    align-items: center;
-    background: #f4f4f4;
-    flex-shrink: 0;
-  }
-
-  .v4-search {
-    border: 1px solid #000;
-    padding: 3px 6px;
-    font-family: 'DM Mono', monospace;
-    font-size: 8px;
-    outline: none;
-    flex: 1;
-  }
-
-  .v4-select {
-    border: 1px solid #000;
-    padding: 3px 4px;
-    font-family: 'DM Mono', monospace;
-    font-size: 8px;
-    outline: none;
-    background: #fff;
-  }
-
-  .v4-btn {
-    font-family: 'DM Mono', monospace;
-    font-size: 8px;
-    padding: 3px 8px;
-    border: 1px solid #000;
-    background: #000;
-    color: #fff;
-    cursor: pointer;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-  }
-
-  .v4-table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 8px;
-    flex: 1;
-  }
-
-  .v4-table thead { background: #000; color: #fff; }
-
-  .v4-table th {
-    padding: 4px 6px;
-    font-size: 7px;
-    font-weight: 500;
-    text-align: left;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    border-right: 1px solid #333;
-  }
-
-  .v4-table td {
-    padding: 5px 6px;
-    border-bottom: 1px solid #e0e0e0;
-    border-right: 1px solid #f4f4f4;
-    vertical-align: middle;
-  }
-
-  .v4-table tr:hover td { background: #f4f4f4; }
-
-  .v4-cb {
-    width: 10px;
-    height: 10px;
-    border: 1px solid #000;
-    display: inline-block;
-    vertical-align: middle;
-    margin-right: 2px;
-  }
-
-  .v4-badge {
-    font-size: 7px;
-    padding: 1px 4px;
-    letter-spacing: 0.05em;
-    display: inline-block;
-  }
-
-  .v4-badge-dark { background: #000; color: #fff; }
-  .v4-badge-wait { border: 1px solid #000; }
-  .v4-badge-rej { background: #f4f4f4; color: #aaa; }
-  .v4-badge-pend { border: 1px dashed #aaa; color: #aaa; }
-
-  .v4-action-link {
-    font-size: 7px;
-    color: #000;
-    text-decoration: underline;
-    cursor: pointer;
-    margin-right: 4px;
-  }
-
-  .v4-footer {
-    padding: 5px 10px;
-    border-top: 1px solid #000;
-    display: flex;
-    justify-content: space-between;
-    font-size: 8px;
-    background: #f4f4f4;
-    flex-shrink: 0;
-  }
-
-  .v4-page-btn {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 18px;
-    height: 18px;
-    border: 1px solid #e0e0e0;
-    font-size: 8px;
-    cursor: pointer;
-    margin-left: 2px;
-  }
-
-  .v4-page-btn.active { border-color: #000; font-weight: 700; background: #000; color: #fff; }
-
-  /* ===================== VAR 5: DASHBOARD ===================== */
-  .v5 .cell-frame {
-    font-family: 'Inter', sans-serif;
-    background: #f4f4f4;
-    padding: 0;
-    display: flex;
-    overflow: hidden;
-  }
-
-  .v5-sidebar {
-    width: 72px;
-    background: #000;
-    color: #fff;
-    padding: 12px 0;
-    flex-shrink: 0;
-    display: flex;
-    flex-direction: column;
-  }
-
-  .v5-sidebar-logo {
-    font-family: 'DM Mono', monospace;
-    font-size: 9px;
-    font-weight: 700;
-    letter-spacing: 0.1em;
-    padding: 0 8px 10px;
-    border-bottom: 1px solid #333;
-    margin-bottom: 8px;
-  }
-
-  .v5-nav-item {
-    font-size: 8px;
-    padding: 5px 8px;
-    color: #aaa;
-    cursor: pointer;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-  }
-
-  .v5-nav-item.active { background: #fff; color: #000; font-weight: 600; }
-
-  .v5-main {
-    flex: 1;
-    padding: 12px 10px;
-    overflow: hidden;
-  }
-
-  .v5-top {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 10px;
-  }
-
-  .v5-page-title { font-size: 11px; font-weight: 600; }
-
-  .v5-top-btn {
-    font-family: 'DM Mono', monospace;
-    font-size: 8px;
-    padding: 4px 8px;
-    border: 1px solid #000;
-    background: #fff;
-    cursor: pointer;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-  }
-
-  .v5-search-row {
-    display: flex;
-    gap: 4px;
-    margin-bottom: 8px;
-  }
-
-  .v5-search {
-    flex: 1;
-    border: 1px solid #e0e0e0;
-    padding: 5px 8px;
-    font-family: 'Inter', sans-serif;
-    font-size: 8px;
-    outline: none;
-    background: #fff;
-  }
-
-  .v5-cards-grid {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 6px;
-  }
-
-  .v5-user-card {
-    background: #fff;
-    border: 1px solid #e0e0e0;
-    padding: 8px;
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-  }
-
-  .v5-card-top {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-  }
-
-  .v5-avatar {
-    width: 24px;
-    height: 24px;
-    border-radius: 50%;
-    background: #e0e0e0;
-    border: 1px solid #aaa;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 8px;
-    font-weight: 700;
-    flex-shrink: 0;
-  }
-
-  .v5-card-info { flex: 1; }
-  .v5-card-name { font-size: 9px; font-weight: 600; line-height: 1; }
-  .v5-card-email { font-size: 7px; color: #aaa; margin-top: 1px; }
-
-  .v5-card-meta {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    font-size: 7px;
-    color: #555;
-  }
-
-  .v5-badge {
-    font-size: 7px;
-    padding: 1px 5px;
-    font-weight: 500;
-  }
-
-  .v5-badge-dark { background: #000; color: #fff; }
-  .v5-badge-wait { border: 1px solid #000; }
-  .v5-badge-rej { color: #aaa; border: 1px solid #e0e0e0; }
-  .v5-badge-pend { border: 1px dashed #aaa; color: #aaa; }
-
-  .v5-footer {
-    margin-top: 8px;
-    display: flex;
-    justify-content: space-between;
-    font-size: 8px;
-    color: #aaa;
-  }
-
-  /* ===================== VAR 6: FORM-FIRST ===================== */
-  .v6 .cell-frame {
-    font-family: 'Inter', sans-serif;
-    background: #fff;
-    padding: 20px 18px;
-  }
-
-  .v6-step-label {
-    font-family: 'DM Mono', monospace;
-    font-size: 9px;
-    color: #aaa;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-    margin-bottom: 6px;
-  }
-
-  .v6-headline {
-    font-size: 15px;
-    font-weight: 700;
-    letter-spacing: -0.02em;
-    margin-bottom: 12px;
-    line-height: 1.2;
-  }
-
-  .v6-search-wrap {
-    position: relative;
-    margin-bottom: 10px;
-  }
-
-  .v6-search-label {
-    font-family: 'DM Mono', monospace;
-    font-size: 8px;
-    color: #aaa;
-    text-transform: uppercase;
-    letter-spacing: 0.1em;
-    display: block;
-    margin-bottom: 4px;
-  }
-
-  .v6-search-input {
-    width: 100%;
-    border: 2px solid #000;
-    padding: 9px 12px;
-    font-family: 'Inter', sans-serif;
-    font-size: 11px;
-    outline: none;
-    background: #fff;
-  }
-
-  .v6-search-input:focus { border-color: #000; background: #f4f4f4; }
-
-  .v6-filters {
-    display: flex;
-    gap: 6px;
-    margin-bottom: 12px;
-  }
-
-  .v6-filter-pill {
-    font-family: 'DM Mono', monospace;
-    font-size: 8px;
-    padding: 4px 10px;
-    border: 1px solid #000;
-    cursor: pointer;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    background: #fff;
-  }
-
-  .v6-filter-pill.active { background: #000; color: #fff; }
-
-  .v6-result-count {
-    font-family: 'DM Mono', monospace;
-    font-size: 9px;
-    color: #aaa;
-    margin-bottom: 8px;
-    letter-spacing: 0.05em;
-  }
-
-  .v6-user-list { display: flex; flex-direction: column; gap: 4px; }
-
-  .v6-user-row {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 8px 10px;
-    border: 1px solid #e0e0e0;
-    cursor: pointer;
-  }
-
-  .v6-user-row:hover { border-color: #000; background: #f4f4f4; }
-  .v6-user-row.selected { border-color: #000; background: #f4f4f4; border-width: 2px; }
-
-  .v6-user-check {
-    width: 14px;
-    height: 14px;
-    border: 1.5px solid #000;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 9px;
-    flex-shrink: 0;
-  }
-
-  .v6-user-check.checked { background: #000; color: #fff; }
-
-  .v6-user-name { font-size: 10px; font-weight: 600; flex: 1; }
-  .v6-user-role { font-size: 8px; color: #555; font-family: 'DM Mono', monospace; }
-
-  .v6-user-badge {
-    font-size: 8px;
-    padding: 2px 6px;
-  }
-
-  .v6-badge-dark { background: #000; color: #fff; }
-  .v6-badge-wait { border: 1px solid #000; }
-  .v6-badge-pend { border: 1px dashed #aaa; color: #aaa; }
-
-  .v6-bulk-bar {
-    display: flex;
-    gap: 6px;
-    margin-top: 10px;
-    padding-top: 10px;
-    border-top: 1px solid #e0e0e0;
-    align-items: center;
-  }
-
-  .v6-bulk-label {
-    font-family: 'DM Mono', monospace;
-    font-size: 9px;
-    color: #aaa;
-    flex: 1;
-  }
-
-  .v6-bulk-btn {
-    font-family: 'DM Mono', monospace;
-    font-size: 8px;
-    padding: 5px 10px;
-    border: 1px solid #000;
-    background: #000;
-    color: #fff;
-    cursor: pointer;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-  }
-
-  .v6-bulk-btn-outline {
-    font-family: 'DM Mono', monospace;
-    font-size: 8px;
-    padding: 5px 10px;
-    border: 1px solid #000;
-    background: #fff;
-    color: #000;
-    cursor: pointer;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-  }
-</style>
-</head>
-<body>
-
-<div class="topbar">
-  <span class="topbar-title">RODEO — ADMIN USERS</span>
-  <span class="topbar-sub">6 VARIATIONS · USER MANAGEMENT TABLE</span>
-</div>
-
-<div class="grid">
-
-  <!-- VARIATION 01: EDITORIAL -->
-  <div class="cell v1">
-    <div class="cell-label">
-      <div>
-        <span class="cell-num">01</span>
-      </div>
-      <span class="cell-desc">EDITORIAL — name as hero, sparse columns</span>
-    </div>
-    <div class="cell-frame">
-      <div class="v1-header">
-        <div>
-          <div class="v1-title">User Management</div>
-          <div class="v1-headline">Users</div>
-        </div>
-        <div style="font-family:'DM Mono',monospace; font-size:9px; color:#aaa;">847 total</div>
-      </div>
-
-      <div class="v1-controls">
-        <input class="v1-search" type="text" placeholder="Search by name or email..." value="alex">
-        <button class="v1-btn">Filter</button>
-        <button class="v1-btn v1-btn-dark">↓ CSV</button>
-      </div>
-
-      <table class="v1-table">
-        <thead>
-          <tr>
-            <th>Name</th>
-            <th>Role</th>
-            <th>Status</th>
-            <th>Applied</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td>
-              <div class="v1-name">Alex Chen</div>
-              <span class="v1-email">alex@mit.edu</span>
-            </td>
-            <td style="font-family:'DM Mono',monospace; font-size:8px;">Hacker</td>
-            <td><span class="v1-badge v1-badge-dark">Accepted</span></td>
-            <td style="font-family:'DM Mono',monospace; font-size:8px; color:#aaa;">Nov 3</td>
-            <td style="font-family:'DM Mono',monospace; font-size:8px;"><a href="#" style="color:#000;">Edit</a></td>
-          </tr>
-          <tr>
-            <td>
-              <div class="v1-name">Jordan Lee</div>
-              <span class="v1-email">jlee@stanford.edu</span>
-            </td>
-            <td style="font-family:'DM Mono',monospace; font-size:8px;">Mentor</td>
-            <td><span class="v1-badge v1-badge-pend">Pending</span></td>
-            <td style="font-family:'DM Mono',monospace; font-size:8px; color:#aaa;">Nov 4</td>
-            <td style="font-family:'DM Mono',monospace; font-size:8px;"><a href="#" style="color:#000;">Edit</a></td>
-          </tr>
-          <tr>
-            <td>
-              <div class="v1-name">Sam Rivera</div>
-              <span class="v1-email">srivera@cmu.edu</span>
-            </td>
-            <td style="font-family:'DM Mono',monospace; font-size:8px;">Judge</td>
-            <td><span class="v1-badge v1-badge-dark">Accepted</span></td>
-            <td style="font-family:'DM Mono',monospace; font-size:8px; color:#aaa;">Nov 2</td>
-            <td style="font-family:'DM Mono',monospace; font-size:8px;"><a href="#" style="color:#000;">Edit</a></td>
-          </tr>
-          <tr>
-            <td>
-              <div class="v1-name">Casey Kim</div>
-              <span class="v1-email">ckim@gatech.edu</span>
-            </td>
-            <td style="font-family:'DM Mono',monospace; font-size:8px;">Hacker</td>
-            <td><span class="v1-badge v1-badge-wait">Waitlisted</span></td>
-            <td style="font-family:'DM Mono',monospace; font-size:8px; color:#aaa;">Nov 5</td>
-            <td style="font-family:'DM Mono',monospace; font-size:8px;"><a href="#" style="color:#000;">Edit</a></td>
-          </tr>
-          <tr>
-            <td>
-              <div class="v1-name">Morgan Park</div>
-              <span class="v1-email">mpark@usc.edu</span>
-            </td>
-            <td style="font-family:'DM Mono',monospace; font-size:8px;">Volunteer</td>
-            <td><span class="v1-badge v1-badge-rej">Rejected</span></td>
-            <td style="font-family:'DM Mono',monospace; font-size:8px; color:#aaa;">Nov 1</td>
-            <td style="font-family:'DM Mono',monospace; font-size:8px;"><a href="#" style="color:#000;">Edit</a></td>
-          </tr>
-        </tbody>
-      </table>
-
-      <div class="v1-pagination">
-        <span style="color:#aaa; margin-right:4px;">Page</span>
-        <div class="v1-page active">1</div>
-        <div class="v1-page">2</div>
-        <div class="v1-page">3</div>
-        <span style="color:#aaa; margin-left:4px;">of 170</span>
-      </div>
-    </div>
-  </div>
-
-  <!-- VARIATION 02: BRUTALIST -->
-  <div class="cell v2">
-    <div class="cell-label">
-      <div>
-        <span class="cell-num">02</span>
-      </div>
-      <span class="cell-desc">BRUTALIST — dense table, ALL CAPS status blocks</span>
-    </div>
-    <div class="cell-frame">
-      <div class="v2-topbar">
-        <span>■ USER MANAGEMENT — 847 RECORDS</span>
-        <span>LIVE DB</span>
-      </div>
-
-      <div class="v2-controls">
-        <input class="v2-search-input" type="text" placeholder="SEARCH USERS...">
-        <button class="v2-search-btn">GO</button>
-      </div>
-
-      <table class="v2-table">
-        <thead>
-          <tr>
-            <th style="width:14px;"></th>
-            <th>NAME</th>
-            <th>ROLE</th>
-            <th>STATUS</th>
-            <th>DATE</th>
-            <th>ACT</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td><span class="v2-cb"></span></td>
-            <td style="font-weight:900; font-size:8px;">ALEX CHEN<br><span style="font-weight:400; color:#aaa; font-size:7px;">alex@mit.edu</span></td>
-            <td>HACKER</td>
-            <td><span class="v2-badge v2-badge-dark">ACCEPT</span></td>
-            <td>NOV 3</td>
-            <td style="font-size:7px; text-decoration:underline; cursor:pointer;">EDIT</td>
-          </tr>
-          <tr>
-            <td><span class="v2-cb"></span></td>
-            <td style="font-weight:900; font-size:8px;">JORDAN LEE<br><span style="font-weight:400; color:#aaa; font-size:7px;">jlee@stanford.edu</span></td>
-            <td>MENTOR</td>
-            <td><span class="v2-badge v2-badge-pend">PEND</span></td>
-            <td>NOV 4</td>
-            <td style="font-size:7px; text-decoration:underline; cursor:pointer;">EDIT</td>
-          </tr>
-          <tr>
-            <td><span class="v2-cb"></span></td>
-            <td style="font-weight:900; font-size:8px;">SAM RIVERA<br><span style="font-weight:400; color:#aaa; font-size:7px;">srivera@cmu.edu</span></td>
-            <td>JUDGE</td>
-            <td><span class="v2-badge v2-badge-dark">ACCEPT</span></td>
-            <td>NOV 2</td>
-            <td style="font-size:7px; text-decoration:underline; cursor:pointer;">EDIT</td>
-          </tr>
-          <tr>
-            <td><span class="v2-cb"></span></td>
-            <td style="font-weight:900; font-size:8px;">CASEY KIM<br><span style="font-weight:400; color:#aaa; font-size:7px;">ckim@gatech.edu</span></td>
-            <td>HACKER</td>
-            <td><span class="v2-badge v2-badge-wait">WAIT</span></td>
-            <td>NOV 5</td>
-            <td style="font-size:7px; text-decoration:underline; cursor:pointer;">EDIT</td>
-          </tr>
-          <tr>
-            <td><span class="v2-cb"></span></td>
-            <td style="font-weight:900; font-size:8px;">MORGAN PARK<br><span style="font-weight:400; color:#aaa; font-size:7px;">mpark@usc.edu</span></td>
-            <td>VOLUNTEER</td>
-            <td><span class="v2-badge v2-badge-rej">REJECT</span></td>
-            <td>NOV 1</td>
-            <td style="font-size:7px; text-decoration:underline; cursor:pointer;">EDIT</td>
-          </tr>
-        </tbody>
-      </table>
-
-      <div class="v2-footer">
-        <span style="font-size:7px; text-transform:uppercase;">2 SELECTED</span>
-        <div style="display:flex; gap:4px;">
-          <button style="font-family:'DM Mono',monospace; font-size:7px; padding:3px 6px; border:2px solid #000; background:#fff; cursor:pointer; text-transform:uppercase; font-weight:700;">BULK EDIT</button>
-          <button class="v2-dl-btn">↓ CSV</button>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- VARIATION 03: MINIMAL -->
-  <div class="cell v3">
-    <div class="cell-label">
-      <div>
-        <span class="cell-num">03</span>
-      </div>
-      <span class="cell-desc">MINIMAL — ultra-light, hairline separators</span>
-    </div>
-    <div class="cell-frame">
-      <div class="v3-header">
-        <div>
-          <div class="v3-title">Users</div>
-          <div class="v3-count">847</div>
-        </div>
-        <div style="font-size:9px; color:#aaa; display:flex; gap:8px; align-items:center; font-family:'DM Mono',monospace;">
-          <span style="cursor:pointer; color:#000;">↓ CSV</span>
-        </div>
-      </div>
-
-      <div class="v3-filters">
-        <span class="v3-filter-item active">All</span>
-        <span class="v3-filter-item">Hackers</span>
-        <span class="v3-filter-item">Mentors</span>
-        <span class="v3-filter-item">Judges</span>
-        <span class="v3-filter-item">Accepted</span>
-        <span class="v3-filter-item">Pending</span>
-      </div>
-
-      <table class="v3-table">
-        <thead>
-          <tr>
-            <th>Name</th>
-            <th>Role</th>
-            <th>Status</th>
-            <th>Applied</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td>
-              <span class="v3-name">Alex Chen</span>
-              <span class="v3-email">alex@mit.edu</span>
-            </td>
-            <td style="font-size:8px; color:#555;">Hacker</td>
-            <td><span class="v3-badge v3-badge-dark">Accepted</span></td>
-            <td style="font-size:8px; color:#aaa;">Nov 3</td>
-            <td class="v3-actions"><a href="#">Edit</a></td>
-          </tr>
-          <tr>
-            <td>
-              <span class="v3-name">Jordan Lee</span>
-              <span class="v3-email">jlee@stanford.edu</span>
-            </td>
-            <td style="font-size:8px; color:#555;">Mentor</td>
-            <td><span class="v3-badge v3-badge-pend">Pending</span></td>
-            <td style="font-size:8px; color:#aaa;">Nov 4</td>
-            <td class="v3-actions"><a href="#">Edit</a></td>
-          </tr>
-          <tr>
-            <td>
-              <span class="v3-name">Sam Rivera</span>
-              <span class="v3-email">srivera@cmu.edu</span>
-            </td>
-            <td style="font-size:8px; color:#555;">Judge</td>
-            <td><span class="v3-badge v3-badge-dark">Accepted</span></td>
-            <td style="font-size:8px; color:#aaa;">Nov 2</td>
-            <td class="v3-actions"><a href="#">Edit</a></td>
-          </tr>
-          <tr>
-            <td>
-              <span class="v3-name">Casey Kim</span>
-              <span class="v3-email">ckim@gatech.edu</span>
-            </td>
-            <td style="font-size:8px; color:#555;">Hacker</td>
-            <td><span class="v3-badge v3-badge-wait">Waitlisted</span></td>
-            <td style="font-size:8px; color:#aaa;">Nov 5</td>
-            <td class="v3-actions"><a href="#">Edit</a></td>
-          </tr>
-          <tr>
-            <td>
-              <span class="v3-name">Morgan Park</span>
-              <span class="v3-email">mpark@usc.edu</span>
-            </td>
-            <td style="font-size:8px; color:#555;">Volunteer</td>
-            <td><span class="v3-badge v3-badge-rej">Rejected</span></td>
-            <td style="font-size:8px; color:#aaa;">Nov 1</td>
-            <td class="v3-actions"><a href="#">Edit</a></td>
-          </tr>
-        </tbody>
-      </table>
-
-      <div class="v3-pagination">
-        <span style="cursor:pointer;">← Prev</span>
-        <span>Page <span>1</span> of 170</span>
-        <span style="cursor:pointer;">Next →</span>
-      </div>
-    </div>
-  </div>
-
-  <!-- VARIATION 04: SYSTEMATIC -->
-  <div class="cell v4">
-    <div class="cell-label">
-      <div>
-        <span class="cell-num">04</span>
-      </div>
-      <span class="cell-desc">SYSTEMATIC — full table, filter sidebar</span>
-    </div>
-    <div class="cell-frame">
-      <div class="v4-toolbar">
-        <input class="v4-search" type="text" placeholder="search name / email..." value="">
-        <select class="v4-select">
-          <option>ALL ROLES</option>
-          <option>HACKER</option>
-          <option>MENTOR</option>
-          <option>JUDGE</option>
-          <option>VOLUNTEER</option>
-        </select>
-        <select class="v4-select">
-          <option>ALL STATUS</option>
-          <option>ACCEPTED</option>
-          <option>WAITLIST</option>
-          <option>REJECTED</option>
-          <option>PENDING</option>
-        </select>
-        <button class="v4-btn">↓ CSV</button>
-      </div>
-
-      <table class="v4-table">
-        <thead>
-          <tr>
-            <th style="width:14px;"><span class="v4-cb"></span></th>
-            <th>NAME</th>
-            <th>EMAIL</th>
-            <th>ROLE</th>
-            <th>STATUS</th>
-            <th>APPLIED</th>
-            <th>ACTIONS</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td><span class="v4-cb"></span></td>
-            <td style="font-weight:600; font-size:9px;">Alex Chen</td>
-            <td style="color:#aaa; font-size:8px;">alex@mit.edu</td>
-            <td>Hacker</td>
-            <td><span class="v4-badge v4-badge-dark">Accepted</span></td>
-            <td style="color:#aaa;">Nov 3</td>
-            <td>
-              <span class="v4-action-link">Edit</span>
-              <span class="v4-action-link">Del</span>
-            </td>
-          </tr>
-          <tr>
-            <td><span class="v4-cb"></span></td>
-            <td style="font-weight:600; font-size:9px;">Jordan Lee</td>
-            <td style="color:#aaa; font-size:8px;">jlee@stanford.edu</td>
-            <td>Mentor</td>
-            <td><span class="v4-badge v4-badge-pend">Pending</span></td>
-            <td style="color:#aaa;">Nov 4</td>
-            <td>
-              <span class="v4-action-link">Edit</span>
-              <span class="v4-action-link">Del</span>
-            </td>
-          </tr>
-          <tr>
-            <td><span class="v4-cb"></span></td>
-            <td style="font-weight:600; font-size:9px;">Sam Rivera</td>
-            <td style="color:#aaa; font-size:8px;">srivera@cmu.edu</td>
-            <td>Judge</td>
-            <td><span class="v4-badge v4-badge-dark">Accepted</span></td>
-            <td style="color:#aaa;">Nov 2</td>
-            <td>
-              <span class="v4-action-link">Edit</span>
-              <span class="v4-action-link">Del</span>
-            </td>
-          </tr>
-          <tr>
-            <td><span class="v4-cb"></span></td>
-            <td style="font-weight:600; font-size:9px;">Casey Kim</td>
-            <td style="color:#aaa; font-size:8px;">ckim@gatech.edu</td>
-            <td>Hacker</td>
-            <td><span class="v4-badge v4-badge-wait">Waitlisted</span></td>
-            <td style="color:#aaa;">Nov 5</td>
-            <td>
-              <span class="v4-action-link">Edit</span>
-              <span class="v4-action-link">Del</span>
-            </td>
-          </tr>
-          <tr>
-            <td><span class="v4-cb"></span></td>
-            <td style="font-weight:600; font-size:9px;">Morgan Park</td>
-            <td style="color:#aaa; font-size:8px;">mpark@usc.edu</td>
-            <td>Volunteer</td>
-            <td><span class="v4-badge v4-badge-rej">Rejected</span></td>
-            <td style="color:#aaa;">Nov 1</td>
-            <td>
-              <span class="v4-action-link">Edit</span>
-              <span class="v4-action-link">Del</span>
-            </td>
-          </tr>
-        </tbody>
-      </table>
-
-      <div class="v4-footer">
-        <span>5 of 847 results · 0 selected</span>
-        <div>
-          <span class="v4-page-btn active">1</span>
-          <span class="v4-page-btn">2</span>
-          <span class="v4-page-btn">3</span>
-          <span class="v4-page-btn">…</span>
-          <span class="v4-page-btn">170</span>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- VARIATION 05: DASHBOARD -->
-  <div class="cell v5">
-    <div class="cell-label">
-      <div>
-        <span class="cell-num">05</span>
-      </div>
-      <span class="cell-desc">DASHBOARD — card grid, avatar placeholders</span>
-    </div>
-    <div class="cell-frame">
-      <div class="v5-sidebar">
-        <div class="v5-sidebar-logo">RODEO</div>
-        <div class="v5-nav-item">Overview</div>
-        <div class="v5-nav-item active">Users</div>
-        <div class="v5-nav-item">RSVPs</div>
-        <div class="v5-nav-item">Roles</div>
-        <div class="v5-nav-item">Export</div>
-      </div>
-      <div class="v5-main">
-        <div class="v5-top">
-          <div class="v5-page-title">Users</div>
-          <button class="v5-top-btn">↓ CSV</button>
-        </div>
-        <div class="v5-search-row">
-          <input class="v5-search" type="text" placeholder="Search name or email...">
-          <select style="border:1px solid #e0e0e0; padding:5px 4px; font-family:'DM Mono',monospace; font-size:8px; background:#fff; outline:none;">
-            <option>All Roles</option>
-            <option>Hackers</option>
-            <option>Mentors</option>
-          </select>
-        </div>
-        <div class="v5-cards-grid">
-          <div class="v5-user-card">
-            <div class="v5-card-top">
-              <div class="v5-avatar">AC</div>
-              <div class="v5-card-info">
-                <div class="v5-card-name">Alex Chen</div>
-                <div class="v5-card-email">alex@mit.edu</div>
-              </div>
-            </div>
-            <div class="v5-card-meta">
-              <span>Hacker · Nov 3</span>
-              <span class="v5-badge v5-badge-dark">Accepted</span>
-            </div>
-          </div>
-          <div class="v5-user-card">
-            <div class="v5-card-top">
-              <div class="v5-avatar">JL</div>
-              <div class="v5-card-info">
-                <div class="v5-card-name">Jordan Lee</div>
-                <div class="v5-card-email">jlee@stanford.edu</div>
-              </div>
-            </div>
-            <div class="v5-card-meta">
-              <span>Mentor · Nov 4</span>
-              <span class="v5-badge v5-badge-pend">Pending</span>
-            </div>
-          </div>
-          <div class="v5-user-card">
-            <div class="v5-card-top">
-              <div class="v5-avatar">SR</div>
-              <div class="v5-card-info">
-                <div class="v5-card-name">Sam Rivera</div>
-                <div class="v5-card-email">srivera@cmu.edu</div>
-              </div>
-            </div>
-            <div class="v5-card-meta">
-              <span>Judge · Nov 2</span>
-              <span class="v5-badge v5-badge-dark">Accepted</span>
-            </div>
-          </div>
-          <div class="v5-user-card">
-            <div class="v5-card-top">
-              <div class="v5-avatar">CK</div>
-              <div class="v5-card-info">
-                <div class="v5-card-name">Casey Kim</div>
-                <div class="v5-card-email">ckim@gatech.edu</div>
-              </div>
-            </div>
-            <div class="v5-card-meta">
-              <span>Hacker · Nov 5</span>
-              <span class="v5-badge v5-badge-wait">Waitlisted</span>
-            </div>
-          </div>
-        </div>
-        <div class="v5-footer">
-          <span>Showing 4 of 847</span>
-          <span style="cursor:pointer; color:#000;">Next →</span>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- VARIATION 06: FORM-FIRST -->
-  <div class="cell v6">
-    <div class="cell-label">
-      <div>
-        <span class="cell-num">06</span>
-      </div>
-      <span class="cell-desc">FORM-FIRST — filter-first, large search prominent</span>
-    </div>
-    <div class="cell-frame">
-      <div class="v6-step-label">User Management</div>
-      <div class="v6-headline">Find a user.</div>
-
-      <div class="v6-search-wrap">
-        <label class="v6-search-label">Search by name or email</label>
-        <input class="v6-search-input" type="text" placeholder="e.g. alex@mit.edu" value="alex">
-      </div>
-
-      <div class="v6-filters">
-        <button class="v6-filter-pill active">All</button>
-        <button class="v6-filter-pill">Hacker</button>
-        <button class="v6-filter-pill">Mentor</button>
-        <button class="v6-filter-pill">Judge</button>
-        <button class="v6-filter-pill">Accepted</button>
-      </div>
-
-      <div class="v6-result-count">5 results for "alex"</div>
-
-      <div class="v6-user-list">
-        <div class="v6-user-row selected">
-          <div class="v6-user-check checked">✓</div>
-          <span class="v6-user-name">Alex Chen</span>
-          <span class="v6-user-role">Hacker</span>
-          <span class="v6-user-badge v6-badge-dark">Accepted</span>
-        </div>
-        <div class="v6-user-row">
-          <div class="v6-user-check"></div>
-          <span class="v6-user-name">Jordan Lee</span>
-          <span class="v6-user-role">Mentor</span>
-          <span class="v6-user-badge v6-badge-pend">Pending</span>
-        </div>
-        <div class="v6-user-row">
-          <div class="v6-user-check"></div>
-          <span class="v6-user-name">Sam Rivera</span>
-          <span class="v6-user-role">Judge</span>
-          <span class="v6-user-badge v6-badge-dark">Accepted</span>
-        </div>
-        <div class="v6-user-row">
-          <div class="v6-user-check"></div>
-          <span class="v6-user-name">Casey Kim</span>
-          <span class="v6-user-role">Hacker</span>
-          <span class="v6-user-badge v6-badge-wait">Waitlisted</span>
-        </div>
-      </div>
-
-      <div class="v6-bulk-bar">
-        <span class="v6-bulk-label">1 selected</span>
-        <button class="v6-bulk-btn-outline">Edit</button>
-        <button class="v6-bulk-btn">↓ Export CSV</button>
-      </div>
-    </div>
-  </div>
-
-</div>
-
-</body>
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<title>RODEO — ADMIN USERS</title>
+		<link
+			href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Playfair+Display:wght@400;700;900&family=Inter:wght@400;500;600&display=swap"
+			rel="stylesheet"
+		/>
+		<style>
+			*,
+			*::before,
+			*::after {
+				box-sizing: border-box;
+				margin: 0;
+				padding: 0;
+			}
+
+			body {
+				font-family: 'DM Mono', monospace;
+				background: #fff;
+				color: #000;
+				min-height: 100vh;
+			}
+
+			.topbar {
+				font-family: 'DM Mono', monospace;
+				font-size: 12px;
+				font-weight: 500;
+				letter-spacing: 0.15em;
+				padding: 12px 20px;
+				border-bottom: 2px solid #000;
+				display: flex;
+				align-items: center;
+				justify-content: space-between;
+				background: #fff;
+			}
+
+			.topbar-title {
+				font-size: 13px;
+				font-weight: 700;
+				letter-spacing: 0.2em;
+			}
+			.topbar-sub {
+				font-size: 10px;
+				color: #aaa;
+				letter-spacing: 0.1em;
+			}
+
+			.grid {
+				display: grid;
+				grid-template-columns: repeat(3, 1fr);
+				gap: 0;
+				border-left: 1px solid #000;
+				border-top: 1px solid #000;
+			}
+
+			.cell {
+				border-right: 1px solid #000;
+				border-bottom: 1px solid #000;
+			}
+
+			.cell-label {
+				font-family: 'DM Mono', monospace;
+				font-size: 11px;
+				padding: 8px 12px;
+				border-bottom: 1px solid #000;
+				display: flex;
+				justify-content: space-between;
+				align-items: center;
+				background: #f4f4f4;
+			}
+
+			.cell-num {
+				font-size: 20px;
+				font-weight: 700;
+				line-height: 1;
+			}
+			.cell-desc {
+				font-size: 10px;
+				color: #555;
+				letter-spacing: 0.05em;
+			}
+
+			.cell-frame {
+				height: 400px;
+				overflow: hidden;
+				padding: 16px;
+				position: relative;
+				background: #fff;
+			}
+
+			/* ===================== VAR 1: EDITORIAL ===================== */
+			.v1 .cell-frame {
+				font-family: 'Playfair Display', serif;
+				padding: 20px 18px;
+			}
+
+			.v1-header {
+				border-bottom: 3px double #000;
+				margin-bottom: 12px;
+				padding-bottom: 8px;
+				display: flex;
+				justify-content: space-between;
+				align-items: flex-end;
+			}
+
+			.v1-title {
+				font-family: 'DM Mono', monospace;
+				font-size: 8px;
+				letter-spacing: 0.2em;
+				text-transform: uppercase;
+				color: #aaa;
+				margin-bottom: 2px;
+			}
+
+			.v1-headline {
+				font-family: 'Playfair Display', serif;
+				font-size: 20px;
+				font-weight: 900;
+				line-height: 1;
+			}
+
+			.v1-controls {
+				display: flex;
+				gap: 6px;
+				margin-bottom: 10px;
+				align-items: center;
+			}
+
+			.v1-search {
+				border: none;
+				border-bottom: 1.5px solid #000;
+				padding: 4px 0;
+				font-family: 'DM Mono', monospace;
+				font-size: 9px;
+				width: 120px;
+				outline: none;
+				background: transparent;
+			}
+
+			.v1-btn {
+				font-family: 'DM Mono', monospace;
+				font-size: 8px;
+				padding: 4px 8px;
+				border: 1px solid #000;
+				background: transparent;
+				cursor: pointer;
+				letter-spacing: 0.08em;
+				text-transform: uppercase;
+			}
+
+			.v1-btn-dark {
+				background: #000;
+				color: #fff;
+			}
+
+			.v1-table {
+				width: 100%;
+				border-collapse: collapse;
+				font-size: 9px;
+			}
+
+			.v1-table th {
+				font-family: 'DM Mono', monospace;
+				font-size: 8px;
+				font-weight: 500;
+				color: #aaa;
+				text-transform: uppercase;
+				letter-spacing: 0.1em;
+				padding: 4px 0;
+				border-bottom: 2px solid #000;
+				text-align: left;
+			}
+
+			.v1-table td {
+				padding: 7px 4px 7px 0;
+				border-bottom: 1px solid #e0e0e0;
+				vertical-align: middle;
+			}
+
+			.v1-name {
+				font-family: 'Playfair Display', serif;
+				font-size: 11px;
+				font-weight: 700;
+			}
+
+			.v1-email {
+				font-family: 'DM Mono', monospace;
+				font-size: 8px;
+				color: #aaa;
+				display: block;
+			}
+
+			.v1-badge {
+				font-family: 'DM Mono', monospace;
+				font-size: 8px;
+				padding: 2px 5px;
+				border: 1px solid #000;
+			}
+
+			.v1-badge-dark {
+				background: #000;
+				color: #fff;
+				border-color: #000;
+			}
+			.v1-badge-wait {
+				background: transparent;
+				border: 1px solid #000;
+			}
+			.v1-badge-rej {
+				background: #f4f4f4;
+				color: #aaa;
+				border-color: #e0e0e0;
+			}
+			.v1-badge-pend {
+				border: 1px dashed #aaa;
+				color: #aaa;
+			}
+
+			.v1-pagination {
+				display: flex;
+				gap: 4px;
+				margin-top: 10px;
+				font-family: 'DM Mono', monospace;
+				font-size: 8px;
+				align-items: center;
+			}
+
+			.v1-page {
+				width: 20px;
+				height: 20px;
+				border: 1px solid #e0e0e0;
+				display: flex;
+				align-items: center;
+				justify-content: center;
+				cursor: pointer;
+			}
+
+			.v1-page.active {
+				border-color: #000;
+				font-weight: 700;
+			}
+
+			/* ===================== VAR 2: BRUTALIST ===================== */
+			.v2 .cell-frame {
+				font-family: 'Arial Black', 'Impact', sans-serif;
+				background: #fff;
+				padding: 10px;
+			}
+
+			.v2-topbar {
+				background: #000;
+				color: #fff;
+				font-size: 9px;
+				font-weight: 900;
+				letter-spacing: 0.12em;
+				text-transform: uppercase;
+				padding: 4px 8px;
+				margin-bottom: 8px;
+				display: flex;
+				justify-content: space-between;
+			}
+
+			.v2-controls {
+				display: flex;
+				gap: 0;
+				margin-bottom: 8px;
+				border: 3px solid #000;
+			}
+
+			.v2-search-input {
+				flex: 1;
+				border: none;
+				padding: 5px 8px;
+				font-family: 'DM Mono', monospace;
+				font-size: 9px;
+				font-weight: 700;
+				text-transform: uppercase;
+				letter-spacing: 0.05em;
+				outline: none;
+			}
+
+			.v2-search-btn {
+				background: #000;
+				color: #fff;
+				border: none;
+				padding: 5px 10px;
+				font-family: 'DM Mono', monospace;
+				font-size: 8px;
+				font-weight: 700;
+				text-transform: uppercase;
+				letter-spacing: 0.1em;
+				cursor: pointer;
+			}
+
+			.v2-table {
+				width: 100%;
+				border-collapse: collapse;
+				font-size: 8px;
+				border: 3px solid #000;
+				margin-bottom: 8px;
+			}
+
+			.v2-table th {
+				background: #000;
+				color: #fff;
+				font-family: 'DM Mono', monospace;
+				font-size: 7px;
+				font-weight: 700;
+				text-transform: uppercase;
+				letter-spacing: 0.1em;
+				padding: 4px 6px;
+				border-right: 2px solid #fff;
+				text-align: left;
+			}
+
+			.v2-table td {
+				padding: 5px 6px;
+				border-bottom: 2px solid #000;
+				border-right: 2px solid #000;
+				font-family: 'DM Mono', monospace;
+				font-size: 8px;
+				text-transform: uppercase;
+				vertical-align: middle;
+			}
+
+			.v2-badge {
+				font-size: 7px;
+				padding: 2px 4px;
+				font-weight: 900;
+				text-transform: uppercase;
+				letter-spacing: 0.08em;
+				border: 2px solid #000;
+				display: inline-block;
+			}
+
+			.v2-badge-dark {
+				background: #000;
+				color: #fff;
+			}
+			.v2-badge-wait {
+				background: #fff;
+				border: 2px solid #000;
+			}
+			.v2-badge-rej {
+				background: #f4f4f4;
+				border: 2px solid #aaa;
+				color: #aaa;
+			}
+			.v2-badge-pend {
+				background: #fff;
+				border: 2px dashed #000;
+			}
+
+			.v2-cb {
+				width: 12px;
+				height: 12px;
+				border: 2px solid #000;
+				display: inline-block;
+				vertical-align: middle;
+			}
+
+			.v2-footer {
+				display: flex;
+				justify-content: space-between;
+				align-items: center;
+				font-family: 'DM Mono', monospace;
+				font-size: 8px;
+			}
+
+			.v2-dl-btn {
+				font-family: 'DM Mono', monospace;
+				font-size: 8px;
+				font-weight: 900;
+				text-transform: uppercase;
+				padding: 4px 10px;
+				background: #000;
+				color: #fff;
+				border: none;
+				cursor: pointer;
+				letter-spacing: 0.1em;
+			}
+
+			/* ===================== VAR 3: MINIMAL ===================== */
+			.v3 .cell-frame {
+				font-family:
+					system-ui,
+					-apple-system,
+					sans-serif;
+				padding: 22px 20px;
+			}
+
+			.v3-header {
+				display: flex;
+				justify-content: space-between;
+				align-items: flex-end;
+				margin-bottom: 16px;
+				border-bottom: 1px solid #000;
+				padding-bottom: 10px;
+			}
+
+			.v3-title {
+				font-size: 9px;
+				color: #aaa;
+				letter-spacing: 0.15em;
+				text-transform: uppercase;
+			}
+
+			.v3-count {
+				font-size: 22px;
+				font-weight: 300;
+				line-height: 1;
+			}
+
+			.v3-filters {
+				display: flex;
+				gap: 12px;
+				margin-bottom: 12px;
+				font-size: 9px;
+			}
+
+			.v3-filter-item {
+				color: #aaa;
+				cursor: pointer;
+				letter-spacing: 0.05em;
+			}
+			.v3-filter-item.active {
+				color: #000;
+				font-weight: 600;
+				border-bottom: 1px solid #000;
+			}
+
+			.v3-table {
+				width: 100%;
+				border-collapse: collapse;
+				font-size: 9px;
+			}
+
+			.v3-table th {
+				font-size: 8px;
+				color: #aaa;
+				font-weight: 400;
+				text-transform: uppercase;
+				letter-spacing: 0.1em;
+				padding: 3px 0;
+				border-bottom: 1px solid #e0e0e0;
+				text-align: left;
+			}
+
+			.v3-table td {
+				padding: 8px 0;
+				border-bottom: 1px solid #f4f4f4;
+				font-size: 9px;
+				vertical-align: middle;
+			}
+
+			.v3-name {
+				font-size: 10px;
+				font-weight: 500;
+			}
+			.v3-email {
+				font-size: 8px;
+				color: #aaa;
+				display: block;
+				margin-top: 1px;
+			}
+
+			.v3-badge {
+				font-size: 8px;
+				padding: 2px 6px;
+			}
+
+			.v3-badge-dark {
+				background: #000;
+				color: #fff;
+			}
+			.v3-badge-wait {
+				border: 1px solid #000;
+			}
+			.v3-badge-rej {
+				color: #aaa;
+			}
+			.v3-badge-pend {
+				border: 1px dashed #aaa;
+				color: #aaa;
+			}
+
+			.v3-actions {
+				font-size: 8px;
+				color: #aaa;
+			}
+			.v3-actions a {
+				color: #000;
+				text-decoration: none;
+				margin-right: 6px;
+			}
+
+			.v3-pagination {
+				margin-top: 10px;
+				font-size: 8px;
+				color: #aaa;
+				display: flex;
+				gap: 10px;
+			}
+
+			.v3-pagination span {
+				color: #000;
+				font-weight: 500;
+			}
+
+			/* ===================== VAR 4: SYSTEMATIC ===================== */
+			.v4 .cell-frame {
+				font-family: 'DM Mono', monospace;
+				padding: 0;
+				display: flex;
+				flex-direction: column;
+				font-size: 9px;
+			}
+
+			.v4-toolbar {
+				padding: 7px 10px;
+				border-bottom: 1px solid #000;
+				display: flex;
+				gap: 6px;
+				align-items: center;
+				background: #f4f4f4;
+				flex-shrink: 0;
+			}
+
+			.v4-search {
+				border: 1px solid #000;
+				padding: 3px 6px;
+				font-family: 'DM Mono', monospace;
+				font-size: 8px;
+				outline: none;
+				flex: 1;
+			}
+
+			.v4-select {
+				border: 1px solid #000;
+				padding: 3px 4px;
+				font-family: 'DM Mono', monospace;
+				font-size: 8px;
+				outline: none;
+				background: #fff;
+			}
+
+			.v4-btn {
+				font-family: 'DM Mono', monospace;
+				font-size: 8px;
+				padding: 3px 8px;
+				border: 1px solid #000;
+				background: #000;
+				color: #fff;
+				cursor: pointer;
+				text-transform: uppercase;
+				letter-spacing: 0.08em;
+			}
+
+			.v4-table {
+				width: 100%;
+				border-collapse: collapse;
+				font-size: 8px;
+				flex: 1;
+			}
+
+			.v4-table thead {
+				background: #000;
+				color: #fff;
+			}
+
+			.v4-table th {
+				padding: 4px 6px;
+				font-size: 7px;
+				font-weight: 500;
+				text-align: left;
+				letter-spacing: 0.1em;
+				text-transform: uppercase;
+				border-right: 1px solid #333;
+			}
+
+			.v4-table td {
+				padding: 5px 6px;
+				border-bottom: 1px solid #e0e0e0;
+				border-right: 1px solid #f4f4f4;
+				vertical-align: middle;
+			}
+
+			.v4-table tr:hover td {
+				background: #f4f4f4;
+			}
+
+			.v4-cb {
+				width: 10px;
+				height: 10px;
+				border: 1px solid #000;
+				display: inline-block;
+				vertical-align: middle;
+				margin-right: 2px;
+			}
+
+			.v4-badge {
+				font-size: 7px;
+				padding: 1px 4px;
+				letter-spacing: 0.05em;
+				display: inline-block;
+			}
+
+			.v4-badge-dark {
+				background: #000;
+				color: #fff;
+			}
+			.v4-badge-wait {
+				border: 1px solid #000;
+			}
+			.v4-badge-rej {
+				background: #f4f4f4;
+				color: #aaa;
+			}
+			.v4-badge-pend {
+				border: 1px dashed #aaa;
+				color: #aaa;
+			}
+
+			.v4-action-link {
+				font-size: 7px;
+				color: #000;
+				text-decoration: underline;
+				cursor: pointer;
+				margin-right: 4px;
+			}
+
+			.v4-footer {
+				padding: 5px 10px;
+				border-top: 1px solid #000;
+				display: flex;
+				justify-content: space-between;
+				font-size: 8px;
+				background: #f4f4f4;
+				flex-shrink: 0;
+			}
+
+			.v4-page-btn {
+				display: inline-flex;
+				align-items: center;
+				justify-content: center;
+				width: 18px;
+				height: 18px;
+				border: 1px solid #e0e0e0;
+				font-size: 8px;
+				cursor: pointer;
+				margin-left: 2px;
+			}
+
+			.v4-page-btn.active {
+				border-color: #000;
+				font-weight: 700;
+				background: #000;
+				color: #fff;
+			}
+
+			/* ===================== VAR 5: DASHBOARD ===================== */
+			.v5 .cell-frame {
+				font-family: 'Inter', sans-serif;
+				background: #f4f4f4;
+				padding: 0;
+				display: flex;
+				overflow: hidden;
+			}
+
+			.v5-sidebar {
+				width: 72px;
+				background: #000;
+				color: #fff;
+				padding: 12px 0;
+				flex-shrink: 0;
+				display: flex;
+				flex-direction: column;
+			}
+
+			.v5-sidebar-logo {
+				font-family: 'DM Mono', monospace;
+				font-size: 9px;
+				font-weight: 700;
+				letter-spacing: 0.1em;
+				padding: 0 8px 10px;
+				border-bottom: 1px solid #333;
+				margin-bottom: 8px;
+			}
+
+			.v5-nav-item {
+				font-size: 8px;
+				padding: 5px 8px;
+				color: #aaa;
+				cursor: pointer;
+				text-transform: uppercase;
+				letter-spacing: 0.06em;
+			}
+
+			.v5-nav-item.active {
+				background: #fff;
+				color: #000;
+				font-weight: 600;
+			}
+
+			.v5-main {
+				flex: 1;
+				padding: 12px 10px;
+				overflow: hidden;
+			}
+
+			.v5-top {
+				display: flex;
+				justify-content: space-between;
+				align-items: center;
+				margin-bottom: 10px;
+			}
+
+			.v5-page-title {
+				font-size: 11px;
+				font-weight: 600;
+			}
+
+			.v5-top-btn {
+				font-family: 'DM Mono', monospace;
+				font-size: 8px;
+				padding: 4px 8px;
+				border: 1px solid #000;
+				background: #fff;
+				cursor: pointer;
+				font-weight: 600;
+				text-transform: uppercase;
+				letter-spacing: 0.06em;
+			}
+
+			.v5-search-row {
+				display: flex;
+				gap: 4px;
+				margin-bottom: 8px;
+			}
+
+			.v5-search {
+				flex: 1;
+				border: 1px solid #e0e0e0;
+				padding: 5px 8px;
+				font-family: 'Inter', sans-serif;
+				font-size: 8px;
+				outline: none;
+				background: #fff;
+			}
+
+			.v5-cards-grid {
+				display: grid;
+				grid-template-columns: repeat(2, 1fr);
+				gap: 6px;
+			}
+
+			.v5-user-card {
+				background: #fff;
+				border: 1px solid #e0e0e0;
+				padding: 8px;
+				display: flex;
+				flex-direction: column;
+				gap: 4px;
+			}
+
+			.v5-card-top {
+				display: flex;
+				align-items: center;
+				gap: 6px;
+			}
+
+			.v5-avatar {
+				width: 24px;
+				height: 24px;
+				border-radius: 50%;
+				background: #e0e0e0;
+				border: 1px solid #aaa;
+				display: flex;
+				align-items: center;
+				justify-content: center;
+				font-size: 8px;
+				font-weight: 700;
+				flex-shrink: 0;
+			}
+
+			.v5-card-info {
+				flex: 1;
+			}
+			.v5-card-name {
+				font-size: 9px;
+				font-weight: 600;
+				line-height: 1;
+			}
+			.v5-card-email {
+				font-size: 7px;
+				color: #aaa;
+				margin-top: 1px;
+			}
+
+			.v5-card-meta {
+				display: flex;
+				justify-content: space-between;
+				align-items: center;
+				font-size: 7px;
+				color: #555;
+			}
+
+			.v5-badge {
+				font-size: 7px;
+				padding: 1px 5px;
+				font-weight: 500;
+			}
+
+			.v5-badge-dark {
+				background: #000;
+				color: #fff;
+			}
+			.v5-badge-wait {
+				border: 1px solid #000;
+			}
+			.v5-badge-rej {
+				color: #aaa;
+				border: 1px solid #e0e0e0;
+			}
+			.v5-badge-pend {
+				border: 1px dashed #aaa;
+				color: #aaa;
+			}
+
+			.v5-footer {
+				margin-top: 8px;
+				display: flex;
+				justify-content: space-between;
+				font-size: 8px;
+				color: #aaa;
+			}
+
+			/* ===================== VAR 6: FORM-FIRST ===================== */
+			.v6 .cell-frame {
+				font-family: 'Inter', sans-serif;
+				background: #fff;
+				padding: 20px 18px;
+			}
+
+			.v6-step-label {
+				font-family: 'DM Mono', monospace;
+				font-size: 9px;
+				color: #aaa;
+				letter-spacing: 0.12em;
+				text-transform: uppercase;
+				margin-bottom: 6px;
+			}
+
+			.v6-headline {
+				font-size: 15px;
+				font-weight: 700;
+				letter-spacing: -0.02em;
+				margin-bottom: 12px;
+				line-height: 1.2;
+			}
+
+			.v6-search-wrap {
+				position: relative;
+				margin-bottom: 10px;
+			}
+
+			.v6-search-label {
+				font-family: 'DM Mono', monospace;
+				font-size: 8px;
+				color: #aaa;
+				text-transform: uppercase;
+				letter-spacing: 0.1em;
+				display: block;
+				margin-bottom: 4px;
+			}
+
+			.v6-search-input {
+				width: 100%;
+				border: 2px solid #000;
+				padding: 9px 12px;
+				font-family: 'Inter', sans-serif;
+				font-size: 11px;
+				outline: none;
+				background: #fff;
+			}
+
+			.v6-search-input:focus {
+				border-color: #000;
+				background: #f4f4f4;
+			}
+
+			.v6-filters {
+				display: flex;
+				gap: 6px;
+				margin-bottom: 12px;
+			}
+
+			.v6-filter-pill {
+				font-family: 'DM Mono', monospace;
+				font-size: 8px;
+				padding: 4px 10px;
+				border: 1px solid #000;
+				cursor: pointer;
+				text-transform: uppercase;
+				letter-spacing: 0.08em;
+				background: #fff;
+			}
+
+			.v6-filter-pill.active {
+				background: #000;
+				color: #fff;
+			}
+
+			.v6-result-count {
+				font-family: 'DM Mono', monospace;
+				font-size: 9px;
+				color: #aaa;
+				margin-bottom: 8px;
+				letter-spacing: 0.05em;
+			}
+
+			.v6-user-list {
+				display: flex;
+				flex-direction: column;
+				gap: 4px;
+			}
+
+			.v6-user-row {
+				display: flex;
+				align-items: center;
+				gap: 8px;
+				padding: 8px 10px;
+				border: 1px solid #e0e0e0;
+				cursor: pointer;
+			}
+
+			.v6-user-row:hover {
+				border-color: #000;
+				background: #f4f4f4;
+			}
+			.v6-user-row.selected {
+				border-color: #000;
+				background: #f4f4f4;
+				border-width: 2px;
+			}
+
+			.v6-user-check {
+				width: 14px;
+				height: 14px;
+				border: 1.5px solid #000;
+				display: flex;
+				align-items: center;
+				justify-content: center;
+				font-size: 9px;
+				flex-shrink: 0;
+			}
+
+			.v6-user-check.checked {
+				background: #000;
+				color: #fff;
+			}
+
+			.v6-user-name {
+				font-size: 10px;
+				font-weight: 600;
+				flex: 1;
+			}
+			.v6-user-role {
+				font-size: 8px;
+				color: #555;
+				font-family: 'DM Mono', monospace;
+			}
+
+			.v6-user-badge {
+				font-size: 8px;
+				padding: 2px 6px;
+			}
+
+			.v6-badge-dark {
+				background: #000;
+				color: #fff;
+			}
+			.v6-badge-wait {
+				border: 1px solid #000;
+			}
+			.v6-badge-pend {
+				border: 1px dashed #aaa;
+				color: #aaa;
+			}
+
+			.v6-bulk-bar {
+				display: flex;
+				gap: 6px;
+				margin-top: 10px;
+				padding-top: 10px;
+				border-top: 1px solid #e0e0e0;
+				align-items: center;
+			}
+
+			.v6-bulk-label {
+				font-family: 'DM Mono', monospace;
+				font-size: 9px;
+				color: #aaa;
+				flex: 1;
+			}
+
+			.v6-bulk-btn {
+				font-family: 'DM Mono', monospace;
+				font-size: 8px;
+				padding: 5px 10px;
+				border: 1px solid #000;
+				background: #000;
+				color: #fff;
+				cursor: pointer;
+				text-transform: uppercase;
+				letter-spacing: 0.08em;
+			}
+
+			.v6-bulk-btn-outline {
+				font-family: 'DM Mono', monospace;
+				font-size: 8px;
+				padding: 5px 10px;
+				border: 1px solid #000;
+				background: #fff;
+				color: #000;
+				cursor: pointer;
+				text-transform: uppercase;
+				letter-spacing: 0.08em;
+			}
+		</style>
+	</head>
+	<body>
+		<div class="topbar">
+			<span class="topbar-title">RODEO — ADMIN USERS</span>
+			<span class="topbar-sub">6 VARIATIONS · USER MANAGEMENT TABLE</span>
+		</div>
+
+		<div class="grid">
+			<!-- VARIATION 01: EDITORIAL -->
+			<div class="cell v1">
+				<div class="cell-label">
+					<div>
+						<span class="cell-num">01</span>
+					</div>
+					<span class="cell-desc">EDITORIAL — name as hero, sparse columns</span>
+				</div>
+				<div class="cell-frame">
+					<div class="v1-header">
+						<div>
+							<div class="v1-title">User Management</div>
+							<div class="v1-headline">Users</div>
+						</div>
+						<div style="font-family: 'DM Mono', monospace; font-size: 9px; color: #aaa">
+							847 total
+						</div>
+					</div>
+
+					<div class="v1-controls">
+						<input
+							class="v1-search"
+							type="text"
+							placeholder="Search by name or email..."
+							value="alex"
+						/>
+						<button class="v1-btn">Filter</button>
+						<button class="v1-btn v1-btn-dark">↓ CSV</button>
+					</div>
+
+					<table class="v1-table">
+						<thead>
+							<tr>
+								<th>Name</th>
+								<th>Role</th>
+								<th>Status</th>
+								<th>Applied</th>
+								<th></th>
+							</tr>
+						</thead>
+						<tbody>
+							<tr>
+								<td>
+									<div class="v1-name">Alex Chen</div>
+									<span class="v1-email">alex@mit.edu</span>
+								</td>
+								<td style="font-family: 'DM Mono', monospace; font-size: 8px">Hacker</td>
+								<td><span class="v1-badge v1-badge-dark">Accepted</span></td>
+								<td style="font-family: 'DM Mono', monospace; font-size: 8px; color: #aaa">
+									Nov 3
+								</td>
+								<td style="font-family: 'DM Mono', monospace; font-size: 8px">
+									<a href="#" style="color: #000">Edit</a>
+								</td>
+							</tr>
+							<tr>
+								<td>
+									<div class="v1-name">Jordan Lee</div>
+									<span class="v1-email">jlee@stanford.edu</span>
+								</td>
+								<td style="font-family: 'DM Mono', monospace; font-size: 8px">Mentor</td>
+								<td><span class="v1-badge v1-badge-pend">Pending</span></td>
+								<td style="font-family: 'DM Mono', monospace; font-size: 8px; color: #aaa">
+									Nov 4
+								</td>
+								<td style="font-family: 'DM Mono', monospace; font-size: 8px">
+									<a href="#" style="color: #000">Edit</a>
+								</td>
+							</tr>
+							<tr>
+								<td>
+									<div class="v1-name">Sam Rivera</div>
+									<span class="v1-email">srivera@cmu.edu</span>
+								</td>
+								<td style="font-family: 'DM Mono', monospace; font-size: 8px">Judge</td>
+								<td><span class="v1-badge v1-badge-dark">Accepted</span></td>
+								<td style="font-family: 'DM Mono', monospace; font-size: 8px; color: #aaa">
+									Nov 2
+								</td>
+								<td style="font-family: 'DM Mono', monospace; font-size: 8px">
+									<a href="#" style="color: #000">Edit</a>
+								</td>
+							</tr>
+							<tr>
+								<td>
+									<div class="v1-name">Casey Kim</div>
+									<span class="v1-email">ckim@gatech.edu</span>
+								</td>
+								<td style="font-family: 'DM Mono', monospace; font-size: 8px">Hacker</td>
+								<td><span class="v1-badge v1-badge-wait">Waitlisted</span></td>
+								<td style="font-family: 'DM Mono', monospace; font-size: 8px; color: #aaa">
+									Nov 5
+								</td>
+								<td style="font-family: 'DM Mono', monospace; font-size: 8px">
+									<a href="#" style="color: #000">Edit</a>
+								</td>
+							</tr>
+							<tr>
+								<td>
+									<div class="v1-name">Morgan Park</div>
+									<span class="v1-email">mpark@usc.edu</span>
+								</td>
+								<td style="font-family: 'DM Mono', monospace; font-size: 8px">Volunteer</td>
+								<td><span class="v1-badge v1-badge-rej">Rejected</span></td>
+								<td style="font-family: 'DM Mono', monospace; font-size: 8px; color: #aaa">
+									Nov 1
+								</td>
+								<td style="font-family: 'DM Mono', monospace; font-size: 8px">
+									<a href="#" style="color: #000">Edit</a>
+								</td>
+							</tr>
+						</tbody>
+					</table>
+
+					<div class="v1-pagination">
+						<span style="color: #aaa; margin-right: 4px">Page</span>
+						<div class="v1-page active">1</div>
+						<div class="v1-page">2</div>
+						<div class="v1-page">3</div>
+						<span style="color: #aaa; margin-left: 4px">of 170</span>
+					</div>
+				</div>
+			</div>
+
+			<!-- VARIATION 02: BRUTALIST -->
+			<div class="cell v2">
+				<div class="cell-label">
+					<div>
+						<span class="cell-num">02</span>
+					</div>
+					<span class="cell-desc">BRUTALIST — dense table, ALL CAPS status blocks</span>
+				</div>
+				<div class="cell-frame">
+					<div class="v2-topbar">
+						<span>■ USER MANAGEMENT — 847 RECORDS</span>
+						<span>LIVE DB</span>
+					</div>
+
+					<div class="v2-controls">
+						<input class="v2-search-input" type="text" placeholder="SEARCH USERS..." />
+						<button class="v2-search-btn">GO</button>
+					</div>
+
+					<table class="v2-table">
+						<thead>
+							<tr>
+								<th style="width: 14px"></th>
+								<th>NAME</th>
+								<th>ROLE</th>
+								<th>STATUS</th>
+								<th>DATE</th>
+								<th>ACT</th>
+							</tr>
+						</thead>
+						<tbody>
+							<tr>
+								<td><span class="v2-cb"></span></td>
+								<td style="font-weight: 900; font-size: 8px">
+									ALEX CHEN<br /><span style="font-weight: 400; color: #aaa; font-size: 7px"
+										>alex@mit.edu</span
+									>
+								</td>
+								<td>HACKER</td>
+								<td><span class="v2-badge v2-badge-dark">ACCEPT</span></td>
+								<td>NOV 3</td>
+								<td style="font-size: 7px; text-decoration: underline; cursor: pointer">EDIT</td>
+							</tr>
+							<tr>
+								<td><span class="v2-cb"></span></td>
+								<td style="font-weight: 900; font-size: 8px">
+									JORDAN LEE<br /><span style="font-weight: 400; color: #aaa; font-size: 7px"
+										>jlee@stanford.edu</span
+									>
+								</td>
+								<td>MENTOR</td>
+								<td><span class="v2-badge v2-badge-pend">PEND</span></td>
+								<td>NOV 4</td>
+								<td style="font-size: 7px; text-decoration: underline; cursor: pointer">EDIT</td>
+							</tr>
+							<tr>
+								<td><span class="v2-cb"></span></td>
+								<td style="font-weight: 900; font-size: 8px">
+									SAM RIVERA<br /><span style="font-weight: 400; color: #aaa; font-size: 7px"
+										>srivera@cmu.edu</span
+									>
+								</td>
+								<td>JUDGE</td>
+								<td><span class="v2-badge v2-badge-dark">ACCEPT</span></td>
+								<td>NOV 2</td>
+								<td style="font-size: 7px; text-decoration: underline; cursor: pointer">EDIT</td>
+							</tr>
+							<tr>
+								<td><span class="v2-cb"></span></td>
+								<td style="font-weight: 900; font-size: 8px">
+									CASEY KIM<br /><span style="font-weight: 400; color: #aaa; font-size: 7px"
+										>ckim@gatech.edu</span
+									>
+								</td>
+								<td>HACKER</td>
+								<td><span class="v2-badge v2-badge-wait">WAIT</span></td>
+								<td>NOV 5</td>
+								<td style="font-size: 7px; text-decoration: underline; cursor: pointer">EDIT</td>
+							</tr>
+							<tr>
+								<td><span class="v2-cb"></span></td>
+								<td style="font-weight: 900; font-size: 8px">
+									MORGAN PARK<br /><span style="font-weight: 400; color: #aaa; font-size: 7px"
+										>mpark@usc.edu</span
+									>
+								</td>
+								<td>VOLUNTEER</td>
+								<td><span class="v2-badge v2-badge-rej">REJECT</span></td>
+								<td>NOV 1</td>
+								<td style="font-size: 7px; text-decoration: underline; cursor: pointer">EDIT</td>
+							</tr>
+						</tbody>
+					</table>
+
+					<div class="v2-footer">
+						<span style="font-size: 7px; text-transform: uppercase">2 SELECTED</span>
+						<div style="display: flex; gap: 4px">
+							<button
+								style="
+									font-family: 'DM Mono', monospace;
+									font-size: 7px;
+									padding: 3px 6px;
+									border: 2px solid #000;
+									background: #fff;
+									cursor: pointer;
+									text-transform: uppercase;
+									font-weight: 700;
+								"
+							>
+								BULK EDIT
+							</button>
+							<button class="v2-dl-btn">↓ CSV</button>
+						</div>
+					</div>
+				</div>
+			</div>
+
+			<!-- VARIATION 03: MINIMAL -->
+			<div class="cell v3">
+				<div class="cell-label">
+					<div>
+						<span class="cell-num">03</span>
+					</div>
+					<span class="cell-desc">MINIMAL — ultra-light, hairline separators</span>
+				</div>
+				<div class="cell-frame">
+					<div class="v3-header">
+						<div>
+							<div class="v3-title">Users</div>
+							<div class="v3-count">847</div>
+						</div>
+						<div
+							style="
+								font-size: 9px;
+								color: #aaa;
+								display: flex;
+								gap: 8px;
+								align-items: center;
+								font-family: 'DM Mono', monospace;
+							"
+						>
+							<span style="cursor: pointer; color: #000">↓ CSV</span>
+						</div>
+					</div>
+
+					<div class="v3-filters">
+						<span class="v3-filter-item active">All</span>
+						<span class="v3-filter-item">Hackers</span>
+						<span class="v3-filter-item">Mentors</span>
+						<span class="v3-filter-item">Judges</span>
+						<span class="v3-filter-item">Accepted</span>
+						<span class="v3-filter-item">Pending</span>
+					</div>
+
+					<table class="v3-table">
+						<thead>
+							<tr>
+								<th>Name</th>
+								<th>Role</th>
+								<th>Status</th>
+								<th>Applied</th>
+								<th></th>
+							</tr>
+						</thead>
+						<tbody>
+							<tr>
+								<td>
+									<span class="v3-name">Alex Chen</span>
+									<span class="v3-email">alex@mit.edu</span>
+								</td>
+								<td style="font-size: 8px; color: #555">Hacker</td>
+								<td><span class="v3-badge v3-badge-dark">Accepted</span></td>
+								<td style="font-size: 8px; color: #aaa">Nov 3</td>
+								<td class="v3-actions"><a href="#">Edit</a></td>
+							</tr>
+							<tr>
+								<td>
+									<span class="v3-name">Jordan Lee</span>
+									<span class="v3-email">jlee@stanford.edu</span>
+								</td>
+								<td style="font-size: 8px; color: #555">Mentor</td>
+								<td><span class="v3-badge v3-badge-pend">Pending</span></td>
+								<td style="font-size: 8px; color: #aaa">Nov 4</td>
+								<td class="v3-actions"><a href="#">Edit</a></td>
+							</tr>
+							<tr>
+								<td>
+									<span class="v3-name">Sam Rivera</span>
+									<span class="v3-email">srivera@cmu.edu</span>
+								</td>
+								<td style="font-size: 8px; color: #555">Judge</td>
+								<td><span class="v3-badge v3-badge-dark">Accepted</span></td>
+								<td style="font-size: 8px; color: #aaa">Nov 2</td>
+								<td class="v3-actions"><a href="#">Edit</a></td>
+							</tr>
+							<tr>
+								<td>
+									<span class="v3-name">Casey Kim</span>
+									<span class="v3-email">ckim@gatech.edu</span>
+								</td>
+								<td style="font-size: 8px; color: #555">Hacker</td>
+								<td><span class="v3-badge v3-badge-wait">Waitlisted</span></td>
+								<td style="font-size: 8px; color: #aaa">Nov 5</td>
+								<td class="v3-actions"><a href="#">Edit</a></td>
+							</tr>
+							<tr>
+								<td>
+									<span class="v3-name">Morgan Park</span>
+									<span class="v3-email">mpark@usc.edu</span>
+								</td>
+								<td style="font-size: 8px; color: #555">Volunteer</td>
+								<td><span class="v3-badge v3-badge-rej">Rejected</span></td>
+								<td style="font-size: 8px; color: #aaa">Nov 1</td>
+								<td class="v3-actions"><a href="#">Edit</a></td>
+							</tr>
+						</tbody>
+					</table>
+
+					<div class="v3-pagination">
+						<span style="cursor: pointer">← Prev</span>
+						<span>Page <span>1</span> of 170</span>
+						<span style="cursor: pointer">Next →</span>
+					</div>
+				</div>
+			</div>
+
+			<!-- VARIATION 04: SYSTEMATIC -->
+			<div class="cell v4">
+				<div class="cell-label">
+					<div>
+						<span class="cell-num">04</span>
+					</div>
+					<span class="cell-desc">SYSTEMATIC — full table, filter sidebar</span>
+				</div>
+				<div class="cell-frame">
+					<div class="v4-toolbar">
+						<input class="v4-search" type="text" placeholder="search name / email..." value="" />
+						<select class="v4-select">
+							<option>ALL ROLES</option>
+							<option>HACKER</option>
+							<option>MENTOR</option>
+							<option>JUDGE</option>
+							<option>VOLUNTEER</option>
+						</select>
+						<select class="v4-select">
+							<option>ALL STATUS</option>
+							<option>ACCEPTED</option>
+							<option>WAITLIST</option>
+							<option>REJECTED</option>
+							<option>PENDING</option>
+						</select>
+						<button class="v4-btn">↓ CSV</button>
+					</div>
+
+					<table class="v4-table">
+						<thead>
+							<tr>
+								<th style="width: 14px"><span class="v4-cb"></span></th>
+								<th>NAME</th>
+								<th>EMAIL</th>
+								<th>ROLE</th>
+								<th>STATUS</th>
+								<th>APPLIED</th>
+								<th>ACTIONS</th>
+							</tr>
+						</thead>
+						<tbody>
+							<tr>
+								<td><span class="v4-cb"></span></td>
+								<td style="font-weight: 600; font-size: 9px">Alex Chen</td>
+								<td style="color: #aaa; font-size: 8px">alex@mit.edu</td>
+								<td>Hacker</td>
+								<td><span class="v4-badge v4-badge-dark">Accepted</span></td>
+								<td style="color: #aaa">Nov 3</td>
+								<td>
+									<span class="v4-action-link">Edit</span>
+									<span class="v4-action-link">Del</span>
+								</td>
+							</tr>
+							<tr>
+								<td><span class="v4-cb"></span></td>
+								<td style="font-weight: 600; font-size: 9px">Jordan Lee</td>
+								<td style="color: #aaa; font-size: 8px">jlee@stanford.edu</td>
+								<td>Mentor</td>
+								<td><span class="v4-badge v4-badge-pend">Pending</span></td>
+								<td style="color: #aaa">Nov 4</td>
+								<td>
+									<span class="v4-action-link">Edit</span>
+									<span class="v4-action-link">Del</span>
+								</td>
+							</tr>
+							<tr>
+								<td><span class="v4-cb"></span></td>
+								<td style="font-weight: 600; font-size: 9px">Sam Rivera</td>
+								<td style="color: #aaa; font-size: 8px">srivera@cmu.edu</td>
+								<td>Judge</td>
+								<td><span class="v4-badge v4-badge-dark">Accepted</span></td>
+								<td style="color: #aaa">Nov 2</td>
+								<td>
+									<span class="v4-action-link">Edit</span>
+									<span class="v4-action-link">Del</span>
+								</td>
+							</tr>
+							<tr>
+								<td><span class="v4-cb"></span></td>
+								<td style="font-weight: 600; font-size: 9px">Casey Kim</td>
+								<td style="color: #aaa; font-size: 8px">ckim@gatech.edu</td>
+								<td>Hacker</td>
+								<td><span class="v4-badge v4-badge-wait">Waitlisted</span></td>
+								<td style="color: #aaa">Nov 5</td>
+								<td>
+									<span class="v4-action-link">Edit</span>
+									<span class="v4-action-link">Del</span>
+								</td>
+							</tr>
+							<tr>
+								<td><span class="v4-cb"></span></td>
+								<td style="font-weight: 600; font-size: 9px">Morgan Park</td>
+								<td style="color: #aaa; font-size: 8px">mpark@usc.edu</td>
+								<td>Volunteer</td>
+								<td><span class="v4-badge v4-badge-rej">Rejected</span></td>
+								<td style="color: #aaa">Nov 1</td>
+								<td>
+									<span class="v4-action-link">Edit</span>
+									<span class="v4-action-link">Del</span>
+								</td>
+							</tr>
+						</tbody>
+					</table>
+
+					<div class="v4-footer">
+						<span>5 of 847 results · 0 selected</span>
+						<div>
+							<span class="v4-page-btn active">1</span>
+							<span class="v4-page-btn">2</span>
+							<span class="v4-page-btn">3</span>
+							<span class="v4-page-btn">…</span>
+							<span class="v4-page-btn">170</span>
+						</div>
+					</div>
+				</div>
+			</div>
+
+			<!-- VARIATION 05: DASHBOARD -->
+			<div class="cell v5">
+				<div class="cell-label">
+					<div>
+						<span class="cell-num">05</span>
+					</div>
+					<span class="cell-desc">DASHBOARD — card grid, avatar placeholders</span>
+				</div>
+				<div class="cell-frame">
+					<div class="v5-sidebar">
+						<div class="v5-sidebar-logo">RODEO</div>
+						<div class="v5-nav-item">Overview</div>
+						<div class="v5-nav-item active">Users</div>
+						<div class="v5-nav-item">RSVPs</div>
+						<div class="v5-nav-item">Roles</div>
+						<div class="v5-nav-item">Export</div>
+					</div>
+					<div class="v5-main">
+						<div class="v5-top">
+							<div class="v5-page-title">Users</div>
+							<button class="v5-top-btn">↓ CSV</button>
+						</div>
+						<div class="v5-search-row">
+							<input class="v5-search" type="text" placeholder="Search name or email..." />
+							<select
+								style="
+									border: 1px solid #e0e0e0;
+									padding: 5px 4px;
+									font-family: 'DM Mono', monospace;
+									font-size: 8px;
+									background: #fff;
+									outline: none;
+								"
+							>
+								<option>All Roles</option>
+								<option>Hackers</option>
+								<option>Mentors</option>
+							</select>
+						</div>
+						<div class="v5-cards-grid">
+							<div class="v5-user-card">
+								<div class="v5-card-top">
+									<div class="v5-avatar">AC</div>
+									<div class="v5-card-info">
+										<div class="v5-card-name">Alex Chen</div>
+										<div class="v5-card-email">alex@mit.edu</div>
+									</div>
+								</div>
+								<div class="v5-card-meta">
+									<span>Hacker · Nov 3</span>
+									<span class="v5-badge v5-badge-dark">Accepted</span>
+								</div>
+							</div>
+							<div class="v5-user-card">
+								<div class="v5-card-top">
+									<div class="v5-avatar">JL</div>
+									<div class="v5-card-info">
+										<div class="v5-card-name">Jordan Lee</div>
+										<div class="v5-card-email">jlee@stanford.edu</div>
+									</div>
+								</div>
+								<div class="v5-card-meta">
+									<span>Mentor · Nov 4</span>
+									<span class="v5-badge v5-badge-pend">Pending</span>
+								</div>
+							</div>
+							<div class="v5-user-card">
+								<div class="v5-card-top">
+									<div class="v5-avatar">SR</div>
+									<div class="v5-card-info">
+										<div class="v5-card-name">Sam Rivera</div>
+										<div class="v5-card-email">srivera@cmu.edu</div>
+									</div>
+								</div>
+								<div class="v5-card-meta">
+									<span>Judge · Nov 2</span>
+									<span class="v5-badge v5-badge-dark">Accepted</span>
+								</div>
+							</div>
+							<div class="v5-user-card">
+								<div class="v5-card-top">
+									<div class="v5-avatar">CK</div>
+									<div class="v5-card-info">
+										<div class="v5-card-name">Casey Kim</div>
+										<div class="v5-card-email">ckim@gatech.edu</div>
+									</div>
+								</div>
+								<div class="v5-card-meta">
+									<span>Hacker · Nov 5</span>
+									<span class="v5-badge v5-badge-wait">Waitlisted</span>
+								</div>
+							</div>
+						</div>
+						<div class="v5-footer">
+							<span>Showing 4 of 847</span>
+							<span style="cursor: pointer; color: #000">Next →</span>
+						</div>
+					</div>
+				</div>
+			</div>
+
+			<!-- VARIATION 06: FORM-FIRST -->
+			<div class="cell v6">
+				<div class="cell-label">
+					<div>
+						<span class="cell-num">06</span>
+					</div>
+					<span class="cell-desc">FORM-FIRST — filter-first, large search prominent</span>
+				</div>
+				<div class="cell-frame">
+					<div class="v6-step-label">User Management</div>
+					<div class="v6-headline">Find a user.</div>
+
+					<div class="v6-search-wrap">
+						<label class="v6-search-label">Search by name or email</label>
+						<input
+							class="v6-search-input"
+							type="text"
+							placeholder="e.g. alex@mit.edu"
+							value="alex"
+						/>
+					</div>
+
+					<div class="v6-filters">
+						<button class="v6-filter-pill active">All</button>
+						<button class="v6-filter-pill">Hacker</button>
+						<button class="v6-filter-pill">Mentor</button>
+						<button class="v6-filter-pill">Judge</button>
+						<button class="v6-filter-pill">Accepted</button>
+					</div>
+
+					<div class="v6-result-count">5 results for "alex"</div>
+
+					<div class="v6-user-list">
+						<div class="v6-user-row selected">
+							<div class="v6-user-check checked">✓</div>
+							<span class="v6-user-name">Alex Chen</span>
+							<span class="v6-user-role">Hacker</span>
+							<span class="v6-user-badge v6-badge-dark">Accepted</span>
+						</div>
+						<div class="v6-user-row">
+							<div class="v6-user-check"></div>
+							<span class="v6-user-name">Jordan Lee</span>
+							<span class="v6-user-role">Mentor</span>
+							<span class="v6-user-badge v6-badge-pend">Pending</span>
+						</div>
+						<div class="v6-user-row">
+							<div class="v6-user-check"></div>
+							<span class="v6-user-name">Sam Rivera</span>
+							<span class="v6-user-role">Judge</span>
+							<span class="v6-user-badge v6-badge-dark">Accepted</span>
+						</div>
+						<div class="v6-user-row">
+							<div class="v6-user-check"></div>
+							<span class="v6-user-name">Casey Kim</span>
+							<span class="v6-user-role">Hacker</span>
+							<span class="v6-user-badge v6-badge-wait">Waitlisted</span>
+						</div>
+					</div>
+
+					<div class="v6-bulk-bar">
+						<span class="v6-bulk-label">1 selected</span>
+						<button class="v6-bulk-btn-outline">Edit</button>
+						<button class="v6-bulk-btn">↓ Export CSV</button>
+					</div>
+				</div>
+			</div>
+		</div>
+	</body>
 </html>

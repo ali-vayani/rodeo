@@ -39,9 +39,7 @@ describe('user.list', () => {
 		expect(result.total).toBe(100);
 		expect(result.page).toBe(2);
 		expect(result.pageSize).toBe(10);
-		expect(db.user.findMany).toHaveBeenCalledWith(
-			expect.objectContaining({ skip: 10, take: 10 })
-		);
+		expect(db.user.findMany).toHaveBeenCalledWith(expect.objectContaining({ skip: 10, take: 10 }));
 	});
 
 	it('filters by search term', async () => {
@@ -84,7 +82,10 @@ describe('user.getById', () => {
 		expect(db.user.findUniqueOrThrow).toHaveBeenCalledWith(
 			expect.objectContaining({
 				where: { uid: hackerUser.uid },
-				include: expect.objectContaining({ application: expect.anything(), scans: expect.anything() })
+				include: expect.objectContaining({
+					application: expect.anything(),
+					scans: expect.anything()
+				})
 			})
 		);
 	});
@@ -123,7 +124,10 @@ describe('user.updateStatus', () => {
 		const caller = createTestCaller(db, adminUser);
 		db.user.update.mockResolvedValue({ ...hackerUser, status: UserStatus.APPLIED } as never);
 
-		const result = await caller.user.updateStatus({ uid: hackerUser.uid, status: UserStatus.APPLIED });
+		const result = await caller.user.updateStatus({
+			uid: hackerUser.uid,
+			status: UserStatus.APPLIED
+		});
 		expect(result.status).toBe(UserStatus.APPLIED);
 	});
 
@@ -142,7 +146,9 @@ describe('user.exportCsv', () => {
 
 		const csv = await caller.user.exportCsv();
 		const lines = csv.split('\n');
-		expect(lines[0]).toBe('uid,name,email,roles,status,pendingDecision,activeDecision,teamId,createdAt');
+		expect(lines[0]).toBe(
+			'uid,name,email,roles,status,pendingDecision,activeDecision,teamId,createdAt'
+		);
 		expect(lines[1]).toContain(hackerUser.uid);
 		expect(lines[1]).toContain(hackerUser.email);
 	});

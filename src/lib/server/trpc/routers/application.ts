@@ -31,14 +31,17 @@ export const applicationRouter = router({
 		)
 		.mutation(async ({ ctx, input }) => {
 			// eslint-disable-next-line @typescript-eslint/no-explicit-any
-			const question = await (ctx.prisma.question.findUnique as any)({
+			const question = (await (ctx.prisma.question.findUnique as any)({
 				where: { id: input.questionId },
 				select: { linkedField: true }
-			}) as { linkedField?: string | null } | null;
+			})) as { linkedField?: string | null } | null;
 
 			// Write through to the user record for linked fields
 			const LINKED_USER_FIELDS = ['name', 'university', 'year'] as const;
-			if (question?.linkedField && (LINKED_USER_FIELDS as readonly string[]).includes(question.linkedField)) {
+			if (
+				question?.linkedField &&
+				(LINKED_USER_FIELDS as readonly string[]).includes(question.linkedField)
+			) {
 				await ctx.prisma.user.update({
 					where: { uid: ctx.user.uid },
 					data: { [question.linkedField]: input.value }
@@ -77,7 +80,7 @@ export const applicationRouter = router({
 		}
 
 		if (user.status === UserStatus.CONFIRMED) {
-			throw new TRPCError({ code: 'BAD_REQUEST', message: 'You have already RSVP\'d.' });
+			throw new TRPCError({ code: 'BAD_REQUEST', message: "You have already RSVP'd." });
 		}
 
 		const updated = await ctx.prisma.user.update({
@@ -205,7 +208,9 @@ export const applicationRouter = router({
 				user.email,
 				{ subject: settings.submitSubject, body: settings.submitTemplate },
 				buildTemplateVars(user, settings)
-			).catch(() => {/* fire-and-forget */});
+			).catch(() => {
+				/* fire-and-forget */
+			});
 		}
 
 		return updatedUser;

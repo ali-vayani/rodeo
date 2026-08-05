@@ -65,7 +65,10 @@ describe('team.createTeam', () => {
 
 	it('throws BAD_REQUEST if user is already on a team', async () => {
 		const caller = createTestCaller(db, hackerUser);
-		db.user.findUniqueOrThrow.mockResolvedValue({ ...hackerUser, teamId: 'existing-team' } as never);
+		db.user.findUniqueOrThrow.mockResolvedValue({
+			...hackerUser,
+			teamId: 'existing-team'
+		} as never);
 
 		await expect(caller.team.createTeam({ teamName: 'New Team' })).rejects.toMatchObject({
 			code: 'BAD_REQUEST',
@@ -91,9 +94,9 @@ describe('team.inviteMember', () => {
 		db.user.findUniqueOrThrow.mockResolvedValue({ ...hackerUser, team: mockTeam } as never);
 		db.user.findUnique.mockResolvedValue(null);
 
-		await expect(
-			caller.team.inviteMember({ email: 'ghost@example.com' })
-		).rejects.toMatchObject({ code: 'NOT_FOUND' });
+		await expect(caller.team.inviteMember({ email: 'ghost@example.com' })).rejects.toMatchObject({
+			code: 'NOT_FOUND'
+		});
 	});
 
 	it('throws BAD_REQUEST if invitee is not ACCEPTED', async () => {
@@ -102,9 +105,10 @@ describe('team.inviteMember', () => {
 		// hackerUser has activeDecision: null (not ACCEPTED)
 		db.user.findUnique.mockResolvedValue({ ...hackerUser, activeDecision: null } as never);
 
-		await expect(
-			caller.team.inviteMember({ email: hackerUser.email })
-		).rejects.toMatchObject({ code: 'BAD_REQUEST', message: expect.stringContaining('confirmed') });
+		await expect(caller.team.inviteMember({ email: hackerUser.email })).rejects.toMatchObject({
+			code: 'BAD_REQUEST',
+			message: expect.stringContaining('confirmed')
+		});
 	});
 
 	it('throws BAD_REQUEST if invitee is already on a team', async () => {
@@ -115,24 +119,24 @@ describe('team.inviteMember', () => {
 			teamId: 'other-team'
 		} as never);
 
-		await expect(
-			caller.team.inviteMember({ email: confirmedHacker.email })
-		).rejects.toMatchObject({ code: 'BAD_REQUEST', message: expect.stringContaining('already on a team') });
+		await expect(caller.team.inviteMember({ email: confirmedHacker.email })).rejects.toMatchObject({
+			code: 'BAD_REQUEST',
+			message: expect.stringContaining('already on a team')
+		});
 	});
 
 	it('throws BAD_REQUEST if team is full', async () => {
 		const caller = createTestCaller(db, hackerUser);
 		const fullTeam = {
 			...mockTeam,
-			members: [
-				{ uid: 'u1' }, { uid: 'u2' }, { uid: 'u3' }, { uid: 'u4' }
-			]
+			members: [{ uid: 'u1' }, { uid: 'u2' }, { uid: 'u3' }, { uid: 'u4' }]
 		};
 		db.user.findUniqueOrThrow.mockResolvedValue({ ...hackerUser, team: fullTeam } as never);
 
-		await expect(
-			caller.team.inviteMember({ email: confirmedHacker.email })
-		).rejects.toMatchObject({ code: 'BAD_REQUEST', message: expect.stringContaining('full') });
+		await expect(caller.team.inviteMember({ email: confirmedHacker.email })).rejects.toMatchObject({
+			code: 'BAD_REQUEST',
+			message: expect.stringContaining('full')
+		});
 	});
 
 	it('throws BAD_REQUEST if invite already pending', async () => {
@@ -141,9 +145,10 @@ describe('team.inviteMember', () => {
 		db.user.findUnique.mockResolvedValue({ ...confirmedHacker, teamId: null } as never);
 		db.invitation.findFirst.mockResolvedValue(mockInvitation as never); // existing pending
 
-		await expect(
-			caller.team.inviteMember({ email: confirmedHacker.email })
-		).rejects.toMatchObject({ code: 'BAD_REQUEST', message: expect.stringContaining('already sent') });
+		await expect(caller.team.inviteMember({ email: confirmedHacker.email })).rejects.toMatchObject({
+			code: 'BAD_REQUEST',
+			message: expect.stringContaining('already sent')
+		});
 	});
 });
 
@@ -168,9 +173,9 @@ describe('team.acceptInvite', () => {
 			userId: 'other-user-uid'
 		} as never);
 
-		await expect(
-			caller.team.acceptInvite({ invitationId: 'inv-1' })
-		).rejects.toMatchObject({ code: 'FORBIDDEN' });
+		await expect(caller.team.acceptInvite({ invitationId: 'inv-1' })).rejects.toMatchObject({
+			code: 'FORBIDDEN'
+		});
 	});
 
 	it('throws BAD_REQUEST if invitation is not pending', async () => {
@@ -181,9 +186,9 @@ describe('team.acceptInvite', () => {
 			status: InvitationStatus.ACCEPTED
 		} as never);
 
-		await expect(
-			caller.team.acceptInvite({ invitationId: 'inv-1' })
-		).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+		await expect(caller.team.acceptInvite({ invitationId: 'inv-1' })).rejects.toMatchObject({
+			code: 'BAD_REQUEST'
+		});
 	});
 
 	it('throws BAD_REQUEST if team is already full', async () => {
@@ -195,9 +200,10 @@ describe('team.acceptInvite', () => {
 			team: { ...mockTeam, members: [{ uid: 'u1' }, { uid: 'u2' }, { uid: 'u3' }, { uid: 'u4' }] }
 		} as never);
 
-		await expect(
-			caller.team.acceptInvite({ invitationId: 'inv-1' })
-		).rejects.toMatchObject({ code: 'BAD_REQUEST', message: expect.stringContaining('full') });
+		await expect(caller.team.acceptInvite({ invitationId: 'inv-1' })).rejects.toMatchObject({
+			code: 'BAD_REQUEST',
+			message: expect.stringContaining('full')
+		});
 	});
 });
 
@@ -224,9 +230,9 @@ describe('team.declineInvite', () => {
 			userId: 'other-user-uid'
 		} as never);
 
-		await expect(
-			caller.team.declineInvite({ invitationId: 'inv-1' })
-		).rejects.toMatchObject({ code: 'FORBIDDEN' });
+		await expect(caller.team.declineInvite({ invitationId: 'inv-1' })).rejects.toMatchObject({
+			code: 'FORBIDDEN'
+		});
 	});
 });
 

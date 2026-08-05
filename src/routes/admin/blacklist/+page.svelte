@@ -1,11 +1,14 @@
 <script lang="ts">
 	import type { PageData } from './$types';
 	import { untrack } from 'svelte';
-	import { fly } from 'svelte/transition';
 	import { createClient } from '$lib/trpc/client';
-	import Toast from '$lib/components/ui/Toast.svelte';
+	import { Badge, Button, IconButton, Input } from '$lib/components/ui';
+	import { DataTable, PageHeader } from '$lib/components/patterns';
+	import type { Column } from '$lib/components/ui/types';
 	import DeleteEntryDialog from '$lib/components/blacklist/DeleteEntryDialog.svelte';
 	import { parseBlacklistCsv } from '$lib/blacklist/csv';
+	import { toast } from '$lib/ui/toast.svelte';
+	import { formatDate, pluralize } from '$lib/format';
 
 	let { data }: { data: PageData } = $props();
 
@@ -44,9 +47,9 @@
 			addLastName = '';
 			addEmail = '';
 			addReason = '';
-			showToast('Entry added');
+			toast.success('Entry added');
 		} catch (e) {
-			showToast(errorMessage(e, 'Failed to add entry'), 'error');
+			toast.fromError(e, 'Failed to add entry');
 		} finally {
 			adding = false;
 		}
@@ -70,9 +73,9 @@
 			await trpc.blacklist.remove.mutate({ id: entry.id });
 			entries = entries.filter((e) => e.id !== entry.id);
 			pendingDelete = null;
-			showToast('Entry removed');
+			toast.success('Entry removed');
 		} catch (e) {
-			showToast(errorMessage(e, 'Failed to remove entry'), 'error');
+			toast.fromError(e, 'Failed to remove entry');
 		} finally {
 			deleting = false;
 		}
@@ -103,7 +106,7 @@
 
 		const rows = parseBlacklistCsv(await file.text());
 		if (!rows.length) {
-			showToast('No rows found in that file', 'error');
+			toast.error('No rows found in that file');
 			return;
 		}
 
@@ -118,10 +121,13 @@
 			if (result.duplicates) parts.push(`${result.duplicates} already listed`);
 			if (result.invalid.length) parts.push(`${result.invalid.length} invalid`);
 
-			showToast(parts.join(' · '), result.invalid.length ? 'error' : 'success');
+			const summary = parts.join(' · ');
+			if (result.invalid.length) toast.error(summary);
+			else toast.success(summary);
+
 			importErrors = result.invalid;
 		} catch (e) {
-			showToast(errorMessage(e, 'Import failed'), 'error');
+			toast.fromError(e, 'Import failed');
 		} finally {
 			importing = false;
 		}
@@ -130,94 +136,62 @@
 	/** Rejected rows from the last import, kept on screen so they can actually be fixed. */
 	let importErrors = $state<{ row: number; reason: string }[]>([]);
 
-	// --- Helpers ---
-	function errorMessage(error: unknown, fallback: string): string {
-		return error instanceof Error && error.message ? error.message : fallback;
-	}
-
-	function formatDate(value: Date | string): string {
-		return new Date(value).toLocaleDateString('en-US', {
-			month: 'short',
-			day: 'numeric',
-			year: 'numeric'
-		});
-	}
-
-	// --- Toast ---
-	let toast = $state<{ message: string; type: 'success' | 'error' } | null>(null);
-	let toastTimer: ReturnType<typeof setTimeout>;
-
-	function showToast(message: string, type: 'success' | 'error' = 'success') {
-		clearTimeout(toastTimer);
-		toast = { message, type };
-		toastTimer = setTimeout(() => (toast = null), 3600);
-	}
+	// --- Table ---
+	const COLUMNS: Column<Entry>[] = [
+		{ key: 'name', header: 'Name', nowrap: true },
+		{ key: 'email', header: 'Email' },
+		{ key: 'reason', header: 'Reason' },
+		{ key: 'createdAt', header: 'Added', nowrap: true },
+		{ key: 'actions', header: '', nowrap: true, align: 'right' }
+	];
 </script>
 
-<div class="mb-4 flex items-start justify-between gap-4">
-	<div>
-		<h1 class="text-[22px] font-bold text-primary">Blacklist</h1>
-		<span class="mt-0.5 block text-[13px] text-muted-foreground">
-			A matching <span class="font-medium text-primary">email</span> auto-rejects on submit; a
-			matching <span class="font-medium text-primary">name</span> only flags the applicant for review.
-		</span>
-	</div>
-	<span class="mt-1 shrink-0 font-mono text-[11px] text-muted-foreground">
-		{entries.length}
-		{entries.length === 1 ? 'entry' : 'entries'}
-	</span>
-</div>
+<PageHeader title="Blacklist">
+	{#snippet description()}
+		A matching <span class="font-medium text-foreground">email</span> auto-rejects on submit; a
+		matching <span class="font-medium text-foreground">name</span> only flags the applicant for review.
+	{/snippet}
+	{#snippet meta()}{pluralize(entries.length, 'entry', 'entries')}{/snippet}
+</PageHeader>
 
-<div class="overflow-hidden rounded-md border border-border bg-white">
-	<!-- Add row -->
-	<div class="border-b border-border px-4 py-3">
-		<div class="grid grid-cols-[1fr_1fr_1.2fr_1.4fr_auto] gap-2">
-			<input
-				type="text"
-				placeholder="first name *"
-				bind:value={addFirstName}
-				onkeydown={onAddKeydown}
-				class="rounded border border-border bg-muted px-2 py-[6px] font-mono text-[11px] text-primary outline-none placeholder:text-[#bbb] focus:border-primary"
-			/>
-			<input
-				type="text"
-				placeholder="last name *"
-				bind:value={addLastName}
-				onkeydown={onAddKeydown}
-				class="rounded border border-border bg-muted px-2 py-[6px] font-mono text-[11px] text-primary outline-none placeholder:text-[#bbb] focus:border-primary"
-			/>
-			<input
-				type="email"
-				placeholder="email (preferred)"
-				bind:value={addEmail}
-				onkeydown={onAddKeydown}
-				class="rounded border border-border bg-muted px-2 py-[6px] font-mono text-[11px] text-primary outline-none placeholder:text-[#bbb] focus:border-primary"
-			/>
-			<input
-				type="text"
-				placeholder="reason (optional)"
-				bind:value={addReason}
-				onkeydown={onAddKeydown}
-				class="rounded border border-border bg-muted px-2 py-[6px] font-mono text-[11px] text-primary outline-none placeholder:text-[#bbb] focus:border-primary"
-			/>
-			<button
-				onclick={addEntry}
-				disabled={!canAdd}
-				class="cursor-pointer rounded border border-border bg-white px-3 py-[6px] font-mono text-[11px] font-medium whitespace-nowrap text-primary transition-colors hover:bg-[#fafafa] disabled:cursor-default disabled:opacity-40"
-			>
-				{adding ? '…' : '+ Add'}
-			</button>
-		</div>
+<div class="flex flex-col gap-4">
+	<!-- Add form -->
+	<div class="grid grid-cols-[1fr_1fr_1.2fr_1.4fr_auto] gap-2">
+		<Input
+			bind:value={addFirstName}
+			placeholder="first name *"
+			mono
+			onkeydown={onAddKeydown}
+			aria-label="First name"
+		/>
+		<Input
+			bind:value={addLastName}
+			placeholder="last name *"
+			mono
+			onkeydown={onAddKeydown}
+			aria-label="Last name"
+		/>
+		<Input
+			bind:value={addEmail}
+			type="email"
+			placeholder="email (preferred)"
+			mono
+			onkeydown={onAddKeydown}
+			aria-label="Email"
+		/>
+		<Input
+			bind:value={addReason}
+			placeholder="reason (optional)"
+			mono
+			onkeydown={onAddKeydown}
+			aria-label="Reason"
+		/>
+		<Button onclick={addEntry} disabled={!canAdd} loading={adding}>+ Add</Button>
 	</div>
 
 	<!-- Toolbar -->
-	<div class="flex items-center gap-2 border-b border-border px-4 py-2">
-		<input
-			type="text"
-			placeholder="search by name or email…"
-			bind:value={search}
-			class="flex-1 rounded border border-border bg-muted px-2 py-[5px] font-mono text-[11px] text-primary outline-none placeholder:text-[#bbb] focus:border-primary"
-		/>
+	<div class="flex items-center gap-2">
+		<Input bind:value={search} placeholder="search by name or email…" mono aria-label="Search" />
 		<input
 			bind:this={fileInput}
 			type="file"
@@ -225,26 +199,23 @@
 			onchange={onFileSelected}
 			class="hidden"
 		/>
-		<button
+		<Button
 			onclick={() => fileInput?.click()}
-			disabled={importing}
+			loading={importing}
+			class="shrink-0"
 			title="CSV columns: firstName, lastName, email, reason"
-			class="cursor-pointer rounded border border-border bg-white px-3 py-[5px] font-mono text-[11px] whitespace-nowrap text-primary transition-colors hover:bg-[#fafafa] disabled:cursor-default disabled:opacity-40"
 		>
-			{importing ? '…' : '↑ Import CSV'}
-		</button>
+			↑ Import CSV
+		</Button>
 	</div>
 
 	<!-- Rows the last import refused, listed so they can be corrected rather than guessed at -->
 	{#if importErrors.length}
-		<div class="border-b border-[#fde68a] bg-[#fffbeb] px-4 py-2.5">
+		<div class="rounded-lg border border-warning-200 bg-warning-50 px-3.5 py-3">
 			<div class="flex items-start justify-between gap-3">
-				<div class="text-[12px] text-[#92400e]">
-					<span class="font-semibold">
-						{importErrors.length}
-						{importErrors.length === 1 ? 'row' : 'rows'} skipped:
-					</span>
-					<ul class="mt-1 space-y-0.5 font-mono text-[11px]">
+				<div class="text-sm text-warning-700">
+					<span class="font-semibold">{pluralize(importErrors.length, 'row')} skipped:</span>
+					<ul class="mt-1 list-none space-y-0.5 pl-0 font-mono text-xs">
 						{#each importErrors.slice(0, 8) as issue (issue.row)}
 							<li>row {issue.row} — {issue.reason}</li>
 						{/each}
@@ -253,95 +224,56 @@
 						{/if}
 					</ul>
 				</div>
-				<button
-					onclick={() => (importErrors = [])}
-					aria-label="Dismiss import errors"
-					class="cursor-pointer border-none bg-transparent p-0 font-mono text-[11px] text-[#92400e] opacity-60 transition-opacity hover:opacity-100"
-				>
+				<IconButton label="Dismiss import errors" size="sm" onclick={() => (importErrors = [])}>
 					✕
-				</button>
+				</IconButton>
 			</div>
 		</div>
 	{/if}
 
-	<!-- Table -->
-	<div class="max-h-[calc(100vh-340px)] overflow-x-auto overflow-y-auto">
-		{#if filtered.length === 0}
-			<div class="py-12 text-center font-mono text-[11px] text-muted-foreground">
-				{search.trim() ? 'No matching entries' : 'No entries yet'}
-			</div>
-		{:else}
-			<table class="w-full border-collapse">
-				<thead>
-					<tr class="sticky top-0 z-[1] border-b border-border bg-muted">
-						{#each ['Name', 'Email', 'Reason', 'Added', ''] as col (col)}
-							<th
-								class="bg-muted px-[14px] py-[9px] text-left font-mono text-[9px] font-medium tracking-[0.1em] whitespace-nowrap text-muted-foreground uppercase"
-							>
-								{col}
-							</th>
-						{/each}
-					</tr>
-				</thead>
-				<tbody>
-					{#each filtered as entry (entry.id)}
-						<tr class="border-b border-[#f0f0f0] transition-colors hover:bg-[#fafafa]">
-							<td class="px-[14px] py-[10px] text-[13px] text-primary">
-								{entry.firstName}
-								{entry.lastName}
-							</td>
-							<td class="px-[14px] py-[10px] font-mono text-[12px] text-primary">
-								{#if entry.email}
-									{entry.email}
-								{:else}
-									<span
-										title="No email on this entry, so it flags for review but never auto-rejects."
-										class="text-muted-foreground"
-									>
-										— name only
-									</span>
-								{/if}
-							</td>
-							<td class="px-[14px] py-[10px] text-[12px] text-muted-foreground">
-								{entry.reason ?? '—'}
-							</td>
-							<td
-								class="px-[14px] py-[10px] font-mono text-[11px] whitespace-nowrap text-muted-foreground"
-							>
-								{formatDate(entry.createdAt)}
-							</td>
-							<td class="px-[14px] py-[10px] text-right">
-								<button
-									onclick={() => (pendingDelete = entry)}
-									aria-label="Remove {entry.firstName} {entry.lastName}"
-									class="cursor-pointer border-none bg-transparent p-0 font-mono text-[11px] text-[#bbb] transition-colors hover:text-destructive"
-								>
-									✕
-								</button>
-							</td>
-						</tr>
-					{/each}
-				</tbody>
-			</table>
-		{/if}
-	</div>
+	<DataTable
+		columns={COLUMNS}
+		rows={filtered}
+		rowKey={(entry) => entry.id}
+		stickyHeader
+		scrollClass="workspace-max-h"
+		emptyMessage={search.trim() ? 'No matching entries' : 'No entries yet'}
+	>
+		{#snippet cell({ row, column })}
+			{#if column.key === 'name'}
+				<span class="font-medium">{row.firstName} {row.lastName}</span>
+			{:else if column.key === 'email'}
+				{#if row.email}
+					<span class="font-mono text-sm">{row.email}</span>
+				{:else}
+					<Badge tone="neutral">name only</Badge>
+				{/if}
+			{:else if column.key === 'reason'}
+				<span class="text-sm text-foreground-secondary">{row.reason ?? '—'}</span>
+			{:else if column.key === 'createdAt'}
+				<span class="font-mono text-xs text-foreground-tertiary tabular-nums">
+					{formatDate(row.createdAt)}
+				</span>
+			{:else if column.key === 'actions'}
+				<IconButton
+					label="Remove {row.firstName} {row.lastName}"
+					size="sm"
+					variant="danger"
+					onclick={() => (pendingDelete = row)}
+				>
+					✕
+				</IconButton>
+			{/if}
+		{/snippet}
+	</DataTable>
 </div>
 
 {#if pendingDelete}
 	<DeleteEntryDialog
+		open
 		entry={pendingDelete}
 		isDeleting={deleting}
 		onConfirm={confirmRemove}
 		onCancel={() => (pendingDelete = null)}
 	/>
-{/if}
-
-{#if toast}
-	<div
-		in:fly={{ x: 60, duration: 280 }}
-		out:fly={{ x: 60, duration: 200 }}
-		class="fixed right-7 bottom-7 z-[200]"
-	>
-		<Toast message={toast.message} type={toast.type} />
-	</div>
 {/if}

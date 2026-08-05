@@ -1,7 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { mockDeep, mockReset, type DeepMockProxy } from 'vitest-mock-extended';
 import type { PrismaClient } from '$lib/generated/prisma/client';
-import { createTestCaller, adminUser, hackerUser, confirmedHacker, mockSettings } from '../test-utils';
+import {
+	createTestCaller,
+	adminUser,
+	hackerUser,
+	confirmedHacker,
+	mockSettings
+} from '../test-utils';
 
 vi.mock('$lib/server/db', async () => {
 	const { mockDeep } = await import('vitest-mock-extended');
@@ -195,9 +201,9 @@ describe('scan.lookup', () => {
 	it('throws FORBIDDEN for non-admin', async () => {
 		const caller = createTestCaller(db, hackerUser);
 
-		await expect(
-			caller.scan.lookup({ userCode: 'x', action: 'Check-In' })
-		).rejects.toMatchObject({ code: 'FORBIDDEN' });
+		await expect(caller.scan.lookup({ userCode: 'x', action: 'Check-In' })).rejects.toMatchObject({
+			code: 'FORBIDDEN'
+		});
 	});
 });
 
@@ -299,7 +305,10 @@ describe('scan.lookupByEmail', () => {
 describe('scan.getCounts', () => {
 	it('zero-fills configured actions with no scans', async () => {
 		const caller = createTestCaller(db, adminUser);
-		db.settings.findFirst.mockResolvedValue({ ...mockSettings, scanActions: ['Check-In', 'Lunch'] });
+		db.settings.findFirst.mockResolvedValue({
+			...mockSettings,
+			scanActions: ['Check-In', 'Lunch']
+		});
 		db.scan.groupBy.mockResolvedValue([{ action: 'Check-In', _count: { action: 5 } }] as never);
 
 		const result = await caller.scan.getCounts();

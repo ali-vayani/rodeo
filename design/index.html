@@ -1,507 +1,668 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>RODEO — Index</title>
-  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
-  <style>
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<title>RODEO — Index</title>
+		<link
+			href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&display=swap"
+			rel="stylesheet"
+		/>
+		<style>
+			*,
+			*::before,
+			*::after {
+				box-sizing: border-box;
+				margin: 0;
+				padding: 0;
+			}
 
-    body {
-      font-family: 'DM Mono', monospace;
-      background: #fff;
-      color: #000;
-      min-height: 100vh;
-    }
+			body {
+				font-family: 'DM Mono', monospace;
+				background: #fff;
+				color: #000;
+				min-height: 100vh;
+			}
 
-    .topbar {
-      font-family: 'DM Mono', monospace;
-      font-size: 11px;
-      font-weight: 500;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-      padding: 10px 24px;
-      border-bottom: 2px solid #000;
-      background: #000;
-      color: #fff;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-    }
+			.topbar {
+				font-family: 'DM Mono', monospace;
+				font-size: 11px;
+				font-weight: 500;
+				letter-spacing: 0.08em;
+				text-transform: uppercase;
+				padding: 10px 24px;
+				border-bottom: 2px solid #000;
+				background: #000;
+				color: #fff;
+				display: flex;
+				align-items: center;
+				justify-content: space-between;
+			}
 
-    .topbar-right {
-      font-size: 10px;
-      color: #aaa;
-      letter-spacing: 0.05em;
-    }
+			.topbar-right {
+				font-size: 10px;
+				color: #aaa;
+				letter-spacing: 0.05em;
+			}
 
-    .main {
-      max-width: 960px;
-      margin: 0 auto;
-      padding: 48px 24px 80px;
-    }
+			.main {
+				max-width: 960px;
+				margin: 0 auto;
+				padding: 48px 24px 80px;
+			}
 
-    .manifest-header {
-      margin-bottom: 48px;
-      border-bottom: 1px solid #000;
-      padding-bottom: 24px;
-    }
+			.manifest-header {
+				margin-bottom: 48px;
+				border-bottom: 1px solid #000;
+				padding-bottom: 24px;
+			}
 
-    .manifest-title {
-      font-size: 11px;
-      font-weight: 500;
-      text-transform: uppercase;
-      letter-spacing: 0.1em;
-      color: #aaa;
-      margin-bottom: 8px;
-    }
+			.manifest-title {
+				font-size: 11px;
+				font-weight: 500;
+				text-transform: uppercase;
+				letter-spacing: 0.1em;
+				color: #aaa;
+				margin-bottom: 8px;
+			}
 
-    .manifest-name {
-      font-size: 28px;
-      font-weight: 500;
-      letter-spacing: -0.02em;
-      margin-bottom: 12px;
-    }
+			.manifest-name {
+				font-size: 28px;
+				font-weight: 500;
+				letter-spacing: -0.02em;
+				margin-bottom: 12px;
+			}
 
-    .manifest-meta {
-      font-size: 10px;
-      color: #aaa;
-      letter-spacing: 0.05em;
-    }
+			.manifest-meta {
+				font-size: 10px;
+				color: #aaa;
+				letter-spacing: 0.05em;
+			}
 
-    .manifest-meta span {
-      display: inline-block;
-      margin-right: 24px;
-    }
+			.manifest-meta span {
+				display: inline-block;
+				margin-right: 24px;
+			}
 
-    .section {
-      margin-bottom: 48px;
-    }
+			.section {
+				margin-bottom: 48px;
+			}
 
-    .section-header {
-      display: flex;
-      align-items: baseline;
-      gap: 16px;
-      margin-bottom: 0;
-    }
+			.section-header {
+				display: flex;
+				align-items: baseline;
+				gap: 16px;
+				margin-bottom: 0;
+			}
 
-    .section-label {
-      font-size: 10px;
-      font-weight: 500;
-      text-transform: uppercase;
-      letter-spacing: 0.12em;
-      color: #aaa;
-      padding: 8px 0;
-      border-top: 1px solid #000;
-      width: 100%;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
+			.section-label {
+				font-size: 10px;
+				font-weight: 500;
+				text-transform: uppercase;
+				letter-spacing: 0.12em;
+				color: #aaa;
+				padding: 8px 0;
+				border-top: 1px solid #000;
+				width: 100%;
+				display: flex;
+				justify-content: space-between;
+				align-items: center;
+			}
 
-    .section-count {
-      font-size: 10px;
-      color: #aaa;
-    }
+			.section-count {
+				font-size: 10px;
+				color: #aaa;
+			}
 
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 11px;
-    }
+			table {
+				width: 100%;
+				border-collapse: collapse;
+				font-size: 11px;
+			}
 
-    thead tr {
-      border-bottom: 1px solid #000;
-    }
+			thead tr {
+				border-bottom: 1px solid #000;
+			}
 
-    thead th {
-      font-size: 9px;
-      font-weight: 500;
-      text-transform: uppercase;
-      letter-spacing: 0.1em;
-      color: #aaa;
-      padding: 8px 12px 8px 0;
-      text-align: left;
-    }
+			thead th {
+				font-size: 9px;
+				font-weight: 500;
+				text-transform: uppercase;
+				letter-spacing: 0.1em;
+				color: #aaa;
+				padding: 8px 12px 8px 0;
+				text-align: left;
+			}
 
-    thead th:first-child {
-      width: 40px;
-    }
+			thead th:first-child {
+				width: 40px;
+			}
 
-    thead th.col-file {
-      width: 220px;
-    }
+			thead th.col-file {
+				width: 220px;
+			}
 
-    thead th.col-page {
-      width: 200px;
-    }
+			thead th.col-page {
+				width: 200px;
+			}
 
-    tbody tr {
-      border-bottom: 1px solid #e0e0e0;
-      transition: background 0.1s;
-    }
+			tbody tr {
+				border-bottom: 1px solid #e0e0e0;
+				transition: background 0.1s;
+			}
 
-    tbody tr:hover {
-      background: #f4f4f4;
-    }
+			tbody tr:hover {
+				background: #f4f4f4;
+			}
 
-    tbody td {
-      padding: 14px 12px 14px 0;
-      vertical-align: top;
-    }
+			tbody td {
+				padding: 14px 12px 14px 0;
+				vertical-align: top;
+			}
 
-    .row-num {
-      font-size: 10px;
-      color: #aaa;
-      font-weight: 500;
-    }
+			.row-num {
+				font-size: 10px;
+				color: #aaa;
+				font-weight: 500;
+			}
 
-    .file-link {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      color: #000;
-      text-decoration: none;
-      font-weight: 500;
-      font-size: 11px;
-    }
+			.file-link {
+				display: inline-flex;
+				align-items: center;
+				gap: 6px;
+				color: #000;
+				text-decoration: none;
+				font-weight: 500;
+				font-size: 11px;
+			}
 
-    .file-link:hover {
-      text-decoration: underline;
-    }
+			.file-link:hover {
+				text-decoration: underline;
+			}
 
-    .file-link .arrow {
-      font-size: 9px;
-      color: #aaa;
-    }
+			.file-link .arrow {
+				font-size: 9px;
+				color: #aaa;
+			}
 
-    .file-ext {
-      font-size: 9px;
-      color: #aaa;
-      font-weight: 400;
-    }
+			.file-ext {
+				font-size: 9px;
+				color: #aaa;
+				font-weight: 400;
+			}
 
-    .page-name {
-      font-size: 11px;
-      font-weight: 500;
-      letter-spacing: 0.03em;
-    }
+			.page-name {
+				font-size: 11px;
+				font-weight: 500;
+				letter-spacing: 0.03em;
+			}
 
-    .page-desc {
-      font-size: 10px;
-      color: #aaa;
-      margin-top: 3px;
-      line-height: 1.5;
-    }
+			.page-desc {
+				font-size: 10px;
+				color: #aaa;
+				margin-top: 3px;
+				line-height: 1.5;
+			}
 
-    .key-elements {
-      font-size: 10px;
-      color: #000;
-      line-height: 1.6;
-    }
+			.key-elements {
+				font-size: 10px;
+				color: #000;
+				line-height: 1.6;
+			}
 
-    .tag {
-      display: inline-block;
-      font-size: 9px;
-      padding: 1px 6px;
-      border: 1px solid #e0e0e0;
-      background: #f4f4f4;
-      color: #000;
-      margin: 1px 2px 1px 0;
-      letter-spacing: 0.03em;
-    }
+			.tag {
+				display: inline-block;
+				font-size: 9px;
+				padding: 1px 6px;
+				border: 1px solid #e0e0e0;
+				background: #f4f4f4;
+				color: #000;
+				margin: 1px 2px 1px 0;
+				letter-spacing: 0.03em;
+			}
 
-    .badge {
-      display: inline-block;
-      font-size: 9px;
-      padding: 2px 7px;
-      letter-spacing: 0.06em;
-      text-transform: uppercase;
-    }
+			.badge {
+				display: inline-block;
+				font-size: 9px;
+				padding: 2px 7px;
+				letter-spacing: 0.06em;
+				text-transform: uppercase;
+			}
 
-    .badge-hacker { background: #000; color: #fff; }
-    .badge-admin { border: 1px solid #000; color: #000; }
+			.badge-hacker {
+				background: #000;
+				color: #fff;
+			}
+			.badge-admin {
+				border: 1px solid #000;
+				color: #000;
+			}
 
-    .footer {
-      margin-top: 64px;
-      padding-top: 16px;
-      border-top: 1px solid #e0e0e0;
-      font-size: 10px;
-      color: #aaa;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
+			.footer {
+				margin-top: 64px;
+				padding-top: 16px;
+				border-top: 1px solid #e0e0e0;
+				font-size: 10px;
+				color: #aaa;
+				display: flex;
+				justify-content: space-between;
+				align-items: center;
+			}
 
-    .variations-key {
-      margin-top: 48px;
-      border: 1px solid #000;
-    }
+			.variations-key {
+				margin-top: 48px;
+				border: 1px solid #000;
+			}
 
-    .variations-key-header {
-      font-size: 9px;
-      font-weight: 500;
-      text-transform: uppercase;
-      letter-spacing: 0.1em;
-      padding: 8px 12px;
-      background: #f4f4f4;
-      border-bottom: 1px solid #000;
-    }
+			.variations-key-header {
+				font-size: 9px;
+				font-weight: 500;
+				text-transform: uppercase;
+				letter-spacing: 0.1em;
+				padding: 8px 12px;
+				background: #f4f4f4;
+				border-bottom: 1px solid #000;
+			}
 
-    .variations-grid {
-      display: grid;
-      grid-template-columns: repeat(6, 1fr);
-    }
+			.variations-grid {
+				display: grid;
+				grid-template-columns: repeat(6, 1fr);
+			}
 
-    .var-cell {
-      padding: 12px;
-      border-right: 1px solid #e0e0e0;
-    }
+			.var-cell {
+				padding: 12px;
+				border-right: 1px solid #e0e0e0;
+			}
 
-    .var-cell:last-child {
-      border-right: none;
-    }
+			.var-cell:last-child {
+				border-right: none;
+			}
 
-    .var-num {
-      font-size: 18px;
-      font-weight: 500;
-      color: #e0e0e0;
-      display: block;
-      line-height: 1;
-      margin-bottom: 4px;
-    }
+			.var-num {
+				font-size: 18px;
+				font-weight: 500;
+				color: #e0e0e0;
+				display: block;
+				line-height: 1;
+				margin-bottom: 4px;
+			}
 
-    .var-name {
-      font-size: 10px;
-      font-weight: 500;
-      display: block;
-      margin-bottom: 3px;
-    }
+			.var-name {
+				font-size: 10px;
+				font-weight: 500;
+				display: block;
+				margin-bottom: 3px;
+			}
 
-    .var-desc {
-      font-size: 9px;
-      color: #aaa;
-      line-height: 1.4;
-    }
-  </style>
-</head>
-<body>
+			.var-desc {
+				font-size: 9px;
+				color: #aaa;
+				line-height: 1.4;
+			}
+		</style>
+	</head>
+	<body>
+		<div class="topbar">
+			<span>RODEO — Design System Manifest</span>
+			<span class="topbar-right">v0.1 / 2 sections / 12 pages / 72 variations</span>
+		</div>
 
-  <div class="topbar">
-    <span>RODEO — Design System Manifest</span>
-    <span class="topbar-right">v0.1 / 2 sections / 12 pages / 72 variations</span>
-  </div>
+		<div class="main">
+			<div class="manifest-header">
+				<div class="manifest-title">Technical Manifest</div>
+				<div class="manifest-name">Rodeo Design Explorations</div>
+				<div class="manifest-meta">
+					<span>PAGES: 12</span>
+					<span>VARIATIONS: 6 per page</span>
+					<span>ARCHETYPES: Editorial, Brutalist, Minimal, Systematic, Dashboard, Form-first</span>
+				</div>
+			</div>
 
-  <div class="main">
+			<!-- HACKER-FACING SECTION -->
+			<div class="section">
+				<div class="section-label">
+					<span
+						><span class="badge badge-hacker">Hacker-Facing</span> &nbsp; Pages visible to hackathon
+						participants</span
+					>
+					<span class="section-count">2 pages</span>
+				</div>
+				<table>
+					<thead>
+						<tr>
+							<th>#</th>
+							<th class="col-file">File</th>
+							<th class="col-page">Page Name</th>
+							<th>Description & Key Elements</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr>
+							<td class="row-num">01</td>
+							<td>
+								<a class="file-link" href="hacker-application.html">
+									hacker-application<span class="file-ext">.html</span>
+									<span class="arrow">↗</span>
+								</a>
+							</td>
+							<td>
+								<div class="page-name">HACKER APPLICATION</div>
+								<div class="page-desc">Multi-step application form for event registration</div>
+							</td>
+							<td>
+								<div class="key-elements">
+									<span class="tag">role selector</span>
+									<span class="tag">name / email</span>
+									<span class="tag">school / org</span>
+									<span class="tag">grad year</span>
+									<span class="tag">short answers</span>
+									<span class="tag">resume upload</span>
+									<span class="tag">portfolio URL</span>
+									<span class="tag">dietary restrictions</span>
+									<span class="tag">t-shirt size</span>
+									<span class="tag">terms agreement</span>
+									<span class="tag">auto-save</span>
+									<span class="tag">RSVP flow</span>
+									<div class="page-desc" style="margin-top: 6px">
+										States: filling → saved → submitted → waitlisted → accepted → RSVP confirmed
+									</div>
+								</div>
+							</td>
+						</tr>
+						<tr>
+							<td class="row-num">02</td>
+							<td>
+								<a class="file-link" href="hacker-account.html">
+									hacker-account<span class="file-ext">.html</span>
+									<span class="arrow">↗</span>
+								</a>
+							</td>
+							<td>
+								<div class="page-name">HACKER ACCOUNT</div>
+								<div class="page-desc">Participant dashboard post-acceptance</div>
+							</td>
+							<td>
+								<div class="key-elements">
+									<span class="tag">profile info</span>
+									<span class="tag">role badge</span>
+									<span class="tag">team members</span>
+									<span class="tag">invite by email</span>
+									<span class="tag">QR code</span>
+									<span class="tag">check-in status</span>
+									<span class="tag">download PDF</span>
+									<div class="page-desc" style="margin-top: 6px">
+										States: profile view, team management, QR check-in, team invite flow
+									</div>
+								</div>
+							</td>
+						</tr>
+					</tbody>
+				</table>
+			</div>
 
-    <div class="manifest-header">
-      <div class="manifest-title">Technical Manifest</div>
-      <div class="manifest-name">Rodeo Design Explorations</div>
-      <div class="manifest-meta">
-        <span>PAGES: 12</span>
-        <span>VARIATIONS: 6 per page</span>
-        <span>ARCHETYPES: Editorial, Brutalist, Minimal, Systematic, Dashboard, Form-first</span>
-      </div>
-    </div>
+			<!-- ADMIN SECTION -->
+			<div class="section">
+				<div class="section-label">
+					<span
+						><span class="badge badge-admin">Admin</span> &nbsp; Internal organizer tools and
+						dashboards</span
+					>
+					<span class="section-count">10 pages</span>
+				</div>
+				<table>
+					<thead>
+						<tr>
+							<th>#</th>
+							<th class="col-file">File</th>
+							<th class="col-page">Page Name</th>
+							<th>Description & Key Elements</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr>
+							<td class="row-num">03</td>
+							<td>
+								<a class="file-link" href="admin-dashboard.html"
+									>admin-dashboard<span class="file-ext">.html</span>
+									<span class="arrow">↗</span></a
+								>
+							</td>
+							<td>
+								<div class="page-name">ADMIN DASHBOARD</div>
+								<div class="page-desc">Overview metrics and quick nav</div>
+							</td>
+							<td>
+								<div class="key-elements">
+									<span class="tag">accept/reject/waitlist counts</span
+									><span class="tag">bar graph</span><span class="tag">role breakdown</span
+									><span class="tag">recent activity</span><span class="tag">quick nav</span>
+								</div>
+							</td>
+						</tr>
+						<tr>
+							<td class="row-num">04</td>
+							<td>
+								<a class="file-link" href="admin-users.html"
+									>admin-users<span class="file-ext">.html</span> <span class="arrow">↗</span></a
+								>
+							</td>
+							<td>
+								<div class="page-name">ADMIN USERS</div>
+								<div class="page-desc">User data table with filters and bulk actions</div>
+							</td>
+							<td>
+								<div class="key-elements">
+									<span class="tag">data table</span><span class="tag">filter panel</span
+									><span class="tag">status badges</span><span class="tag">download CSV</span
+									><span class="tag">edit modal</span><span class="tag">bulk select</span>
+								</div>
+							</td>
+						</tr>
+						<tr>
+							<td class="row-num">05</td>
+							<td>
+								<a class="file-link" href="admin-admissions.html"
+									>admin-admissions<span class="file-ext">.html</span>
+									<span class="arrow">↗</span></a
+								>
+							</td>
+							<td>
+								<div class="page-name">ADMIN ADMISSIONS</div>
+								<div class="page-desc">Review queue with accept/reject/waitlist controls</div>
+							</td>
+							<td>
+								<div class="key-elements">
+									<span class="tag">applicant card</span
+									><span class="tag">accept/reject/waitlist</span
+									><span class="tag">role filter</span><span class="tag">split-pane detail</span
+									><span class="tag">bulk actions</span>
+								</div>
+							</td>
+						</tr>
+						<tr>
+							<td class="row-num">06</td>
+							<td>
+								<a class="file-link" href="admin-scan.html"
+									>admin-scan<span class="file-ext">.html</span> <span class="arrow">↗</span></a
+								>
+							</td>
+							<td>
+								<div class="page-name">ADMIN SCAN</div>
+								<div class="page-desc">QR code scanner for event check-in</div>
+							</td>
+							<td>
+								<div class="key-elements">
+									<span class="tag">scan viewfinder</span
+									><span class="tag">scan group selector</span
+									><span class="tag">confirmation feedback</span
+									><span class="tag">recent scans</span><span class="tag">manual entry</span>
+								</div>
+							</td>
+						</tr>
+						<tr>
+							<td class="row-num">07</td>
+							<td>
+								<a class="file-link" href="admin-settings-hackathon.html"
+									>admin-settings-hackathon<span class="file-ext">.html</span>
+									<span class="arrow">↗</span></a
+								>
+							</td>
+							<td>
+								<div class="page-name">ADMIN SETTINGS</div>
+								<div class="page-desc">Hackathon config: dates, groups, danger zone</div>
+							</td>
+							<td>
+								<div class="key-elements">
+									<span class="tag">date pickers</span><span class="tag">scan groups</span
+									><span class="tag">lunch groups</span><span class="tag">timezone</span
+									><span class="tag">release decisions</span>
+								</div>
+							</td>
+						</tr>
+						<tr>
+							<td class="row-num">08</td>
+							<td>
+								<a class="file-link" href="admin-email-templates.html"
+									>admin-email-templates<span class="file-ext">.html</span>
+									<span class="arrow">↗</span></a
+								>
+							</td>
+							<td>
+								<div class="page-name">ADMIN EMAIL TEMPLATES</div>
+								<div class="page-desc">Edit transactional email templates</div>
+							</td>
+							<td>
+								<div class="key-elements">
+									<span class="tag">template selector</span><span class="tag">subject line</span
+									><span class="tag">body editor</span><span class="tag">preview panel</span
+									><span class="tag">variables</span>
+								</div>
+							</td>
+						</tr>
+						<tr>
+							<td class="row-num">09</td>
+							<td>
+								<a class="file-link" href="admin-custom-email.html"
+									>admin-custom-email<span class="file-ext">.html</span>
+									<span class="arrow">↗</span></a
+								>
+							</td>
+							<td>
+								<div class="page-name">ADMIN CUSTOM EMAIL</div>
+								<div class="page-desc">Compose and send targeted bulk email</div>
+							</td>
+							<td>
+								<div class="key-elements">
+									<span class="tag">subject</span><span class="tag">body editor</span
+									><span class="tag">recipient filter</span><span class="tag">recipient count</span
+									><span class="tag">send confirmation</span>
+								</div>
+							</td>
+						</tr>
+						<tr>
+							<td class="row-num">10</td>
+							<td>
+								<a class="file-link" href="admin-registration.html"
+									>admin-registration<span class="file-ext">.html</span>
+									<span class="arrow">↗</span></a
+								>
+							</td>
+							<td>
+								<div class="page-name">ADMIN REGISTRATION</div>
+								<div class="page-desc">Custom question builder for application form</div>
+							</td>
+							<td>
+								<div class="key-elements">
+									<span class="tag">question list</span><span class="tag">add question</span
+									><span class="tag">type picker</span><span class="tag">audience filter</span
+									><span class="tag">drag reorder</span>
+								</div>
+							</td>
+						</tr>
+						<tr>
+							<td class="row-num">11</td>
+							<td>
+								<a class="file-link" href="admin-schedule.html"
+									>admin-schedule<span class="file-ext">.html</span> <span class="arrow">↗</span></a
+								>
+							</td>
+							<td>
+								<div class="page-name">ADMIN SCHEDULE</div>
+								<div class="page-desc">Event timeline editor with day selector</div>
+							</td>
+							<td>
+								<div class="key-elements">
+									<span class="tag">day selector</span><span class="tag">timeline</span
+									><span class="tag">event cards</span><span class="tag">add event</span
+									><span class="tag">edit/delete</span>
+								</div>
+							</td>
+						</tr>
+						<tr>
+							<td class="row-num">12</td>
+							<td>
+								<a class="file-link" href="admin-blacklist.html"
+									>admin-blacklist<span class="file-ext">.html</span>
+									<span class="arrow">↗</span></a
+								>
+							</td>
+							<td>
+								<div class="page-name">ADMIN BLACKLIST</div>
+								<div class="page-desc">Block emails/names from applying</div>
+							</td>
+							<td>
+								<div class="key-elements">
+									<span class="tag">email input</span><span class="tag">name input</span
+									><span class="tag">entries list</span><span class="tag">delete entry</span
+									><span class="tag">bulk CSV import</span>
+								</div>
+							</td>
+						</tr>
+					</tbody>
+				</table>
+			</div>
 
-    <!-- HACKER-FACING SECTION -->
-    <div class="section">
-      <div class="section-label">
-        <span><span class="badge badge-hacker">Hacker-Facing</span> &nbsp; Pages visible to hackathon participants</span>
-        <span class="section-count">2 pages</span>
-      </div>
-      <table>
-        <thead>
-          <tr>
-            <th>#</th>
-            <th class="col-file">File</th>
-            <th class="col-page">Page Name</th>
-            <th>Description & Key Elements</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td class="row-num">01</td>
-            <td>
-              <a class="file-link" href="hacker-application.html">
-                hacker-application<span class="file-ext">.html</span>
-                <span class="arrow">↗</span>
-              </a>
-            </td>
-            <td>
-              <div class="page-name">HACKER APPLICATION</div>
-              <div class="page-desc">Multi-step application form for event registration</div>
-            </td>
-            <td>
-              <div class="key-elements">
-                <span class="tag">role selector</span>
-                <span class="tag">name / email</span>
-                <span class="tag">school / org</span>
-                <span class="tag">grad year</span>
-                <span class="tag">short answers</span>
-                <span class="tag">resume upload</span>
-                <span class="tag">portfolio URL</span>
-                <span class="tag">dietary restrictions</span>
-                <span class="tag">t-shirt size</span>
-                <span class="tag">terms agreement</span>
-                <span class="tag">auto-save</span>
-                <span class="tag">RSVP flow</span>
-                <div class="page-desc" style="margin-top:6px;">States: filling → saved → submitted → waitlisted → accepted → RSVP confirmed</div>
-              </div>
-            </td>
-          </tr>
-          <tr>
-            <td class="row-num">02</td>
-            <td>
-              <a class="file-link" href="hacker-account.html">
-                hacker-account<span class="file-ext">.html</span>
-                <span class="arrow">↗</span>
-              </a>
-            </td>
-            <td>
-              <div class="page-name">HACKER ACCOUNT</div>
-              <div class="page-desc">Participant dashboard post-acceptance</div>
-            </td>
-            <td>
-              <div class="key-elements">
-                <span class="tag">profile info</span>
-                <span class="tag">role badge</span>
-                <span class="tag">team members</span>
-                <span class="tag">invite by email</span>
-                <span class="tag">QR code</span>
-                <span class="tag">check-in status</span>
-                <span class="tag">download PDF</span>
-                <div class="page-desc" style="margin-top:6px;">States: profile view, team management, QR check-in, team invite flow</div>
-              </div>
-            </td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
+			<!-- VARIATION KEY -->
+			<div class="variations-key">
+				<div class="variations-key-header">Variation Archetypes — Applied to every page</div>
+				<div class="variations-grid">
+					<div class="var-cell">
+						<span class="var-num">01</span>
+						<span class="var-name">Editorial</span>
+						<span class="var-desc">Playfair Display, large headers, magazine layout</span>
+					</div>
+					<div class="var-cell">
+						<span class="var-num">02</span>
+						<span class="var-name">Brutalist</span>
+						<span class="var-desc">Impact, heavy borders, uppercase grid</span>
+					</div>
+					<div class="var-cell">
+						<span class="var-num">03</span>
+						<span class="var-name">Minimal</span>
+						<span class="var-desc">System-ui, hairline rules, max whitespace</span>
+					</div>
+					<div class="var-cell">
+						<span class="var-num">04</span>
+						<span class="var-name">Systematic</span>
+						<span class="var-desc">DM Mono, dense tables, data-forward</span>
+					</div>
+					<div class="var-cell">
+						<span class="var-num">05</span>
+						<span class="var-name">Dashboard</span>
+						<span class="var-desc">Inter, sidebar nav, card hierarchy</span>
+					</div>
+					<div class="var-cell">
+						<span class="var-num">06</span>
+						<span class="var-name">Form-first</span>
+						<span class="var-desc">Progress steps, focused inputs, one at a time</span>
+					</div>
+				</div>
+			</div>
 
-    <!-- ADMIN SECTION -->
-    <div class="section">
-      <div class="section-label">
-        <span><span class="badge badge-admin">Admin</span> &nbsp; Internal organizer tools and dashboards</span>
-        <span class="section-count">10 pages</span>
-      </div>
-      <table>
-        <thead>
-          <tr>
-            <th>#</th>
-            <th class="col-file">File</th>
-            <th class="col-page">Page Name</th>
-            <th>Description & Key Elements</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td class="row-num">03</td>
-            <td><a class="file-link" href="admin-dashboard.html">admin-dashboard<span class="file-ext">.html</span> <span class="arrow">↗</span></a></td>
-            <td><div class="page-name">ADMIN DASHBOARD</div><div class="page-desc">Overview metrics and quick nav</div></td>
-            <td><div class="key-elements"><span class="tag">accept/reject/waitlist counts</span><span class="tag">bar graph</span><span class="tag">role breakdown</span><span class="tag">recent activity</span><span class="tag">quick nav</span></div></td>
-          </tr>
-          <tr>
-            <td class="row-num">04</td>
-            <td><a class="file-link" href="admin-users.html">admin-users<span class="file-ext">.html</span> <span class="arrow">↗</span></a></td>
-            <td><div class="page-name">ADMIN USERS</div><div class="page-desc">User data table with filters and bulk actions</div></td>
-            <td><div class="key-elements"><span class="tag">data table</span><span class="tag">filter panel</span><span class="tag">status badges</span><span class="tag">download CSV</span><span class="tag">edit modal</span><span class="tag">bulk select</span></div></td>
-          </tr>
-          <tr>
-            <td class="row-num">05</td>
-            <td><a class="file-link" href="admin-admissions.html">admin-admissions<span class="file-ext">.html</span> <span class="arrow">↗</span></a></td>
-            <td><div class="page-name">ADMIN ADMISSIONS</div><div class="page-desc">Review queue with accept/reject/waitlist controls</div></td>
-            <td><div class="key-elements"><span class="tag">applicant card</span><span class="tag">accept/reject/waitlist</span><span class="tag">role filter</span><span class="tag">split-pane detail</span><span class="tag">bulk actions</span></div></td>
-          </tr>
-          <tr>
-            <td class="row-num">06</td>
-            <td><a class="file-link" href="admin-scan.html">admin-scan<span class="file-ext">.html</span> <span class="arrow">↗</span></a></td>
-            <td><div class="page-name">ADMIN SCAN</div><div class="page-desc">QR code scanner for event check-in</div></td>
-            <td><div class="key-elements"><span class="tag">scan viewfinder</span><span class="tag">scan group selector</span><span class="tag">confirmation feedback</span><span class="tag">recent scans</span><span class="tag">manual entry</span></div></td>
-          </tr>
-          <tr>
-            <td class="row-num">07</td>
-            <td><a class="file-link" href="admin-settings-hackathon.html">admin-settings-hackathon<span class="file-ext">.html</span> <span class="arrow">↗</span></a></td>
-            <td><div class="page-name">ADMIN SETTINGS</div><div class="page-desc">Hackathon config: dates, groups, danger zone</div></td>
-            <td><div class="key-elements"><span class="tag">date pickers</span><span class="tag">scan groups</span><span class="tag">lunch groups</span><span class="tag">timezone</span><span class="tag">release decisions</span></div></td>
-          </tr>
-          <tr>
-            <td class="row-num">08</td>
-            <td><a class="file-link" href="admin-email-templates.html">admin-email-templates<span class="file-ext">.html</span> <span class="arrow">↗</span></a></td>
-            <td><div class="page-name">ADMIN EMAIL TEMPLATES</div><div class="page-desc">Edit transactional email templates</div></td>
-            <td><div class="key-elements"><span class="tag">template selector</span><span class="tag">subject line</span><span class="tag">body editor</span><span class="tag">preview panel</span><span class="tag">variables</span></div></td>
-          </tr>
-          <tr>
-            <td class="row-num">09</td>
-            <td><a class="file-link" href="admin-custom-email.html">admin-custom-email<span class="file-ext">.html</span> <span class="arrow">↗</span></a></td>
-            <td><div class="page-name">ADMIN CUSTOM EMAIL</div><div class="page-desc">Compose and send targeted bulk email</div></td>
-            <td><div class="key-elements"><span class="tag">subject</span><span class="tag">body editor</span><span class="tag">recipient filter</span><span class="tag">recipient count</span><span class="tag">send confirmation</span></div></td>
-          </tr>
-          <tr>
-            <td class="row-num">10</td>
-            <td><a class="file-link" href="admin-registration.html">admin-registration<span class="file-ext">.html</span> <span class="arrow">↗</span></a></td>
-            <td><div class="page-name">ADMIN REGISTRATION</div><div class="page-desc">Custom question builder for application form</div></td>
-            <td><div class="key-elements"><span class="tag">question list</span><span class="tag">add question</span><span class="tag">type picker</span><span class="tag">audience filter</span><span class="tag">drag reorder</span></div></td>
-          </tr>
-          <tr>
-            <td class="row-num">11</td>
-            <td><a class="file-link" href="admin-schedule.html">admin-schedule<span class="file-ext">.html</span> <span class="arrow">↗</span></a></td>
-            <td><div class="page-name">ADMIN SCHEDULE</div><div class="page-desc">Event timeline editor with day selector</div></td>
-            <td><div class="key-elements"><span class="tag">day selector</span><span class="tag">timeline</span><span class="tag">event cards</span><span class="tag">add event</span><span class="tag">edit/delete</span></div></td>
-          </tr>
-          <tr>
-            <td class="row-num">12</td>
-            <td><a class="file-link" href="admin-blacklist.html">admin-blacklist<span class="file-ext">.html</span> <span class="arrow">↗</span></a></td>
-            <td><div class="page-name">ADMIN BLACKLIST</div><div class="page-desc">Block emails/names from applying</div></td>
-            <td><div class="key-elements"><span class="tag">email input</span><span class="tag">name input</span><span class="tag">entries list</span><span class="tag">delete entry</span><span class="tag">bulk CSV import</span></div></td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-
-    <!-- VARIATION KEY -->
-    <div class="variations-key">
-      <div class="variations-key-header">Variation Archetypes — Applied to every page</div>
-      <div class="variations-grid">
-        <div class="var-cell">
-          <span class="var-num">01</span>
-          <span class="var-name">Editorial</span>
-          <span class="var-desc">Playfair Display, large headers, magazine layout</span>
-        </div>
-        <div class="var-cell">
-          <span class="var-num">02</span>
-          <span class="var-name">Brutalist</span>
-          <span class="var-desc">Impact, heavy borders, uppercase grid</span>
-        </div>
-        <div class="var-cell">
-          <span class="var-num">03</span>
-          <span class="var-name">Minimal</span>
-          <span class="var-desc">System-ui, hairline rules, max whitespace</span>
-        </div>
-        <div class="var-cell">
-          <span class="var-num">04</span>
-          <span class="var-name">Systematic</span>
-          <span class="var-desc">DM Mono, dense tables, data-forward</span>
-        </div>
-        <div class="var-cell">
-          <span class="var-num">05</span>
-          <span class="var-name">Dashboard</span>
-          <span class="var-desc">Inter, sidebar nav, card hierarchy</span>
-        </div>
-        <div class="var-cell">
-          <span class="var-num">06</span>
-          <span class="var-name">Form-first</span>
-          <span class="var-desc">Progress steps, focused inputs, one at a time</span>
-        </div>
-      </div>
-    </div>
-
-    <div class="footer">
-      <span>RODEO Design System — Technical Manifest</span>
-      <span>12 pages × 6 variations = 72 explorations</span>
-    </div>
-
-  </div>
-</body>
+			<div class="footer">
+				<span>RODEO Design System — Technical Manifest</span>
+				<span>12 pages × 6 variations = 72 explorations</span>
+			</div>
+		</div>
+	</body>
 </html>

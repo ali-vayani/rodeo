@@ -46,9 +46,7 @@ async function getProdSession(event: RequestEvent) {
 
 	if (!user) {
 		const name =
-			sbUser.user_metadata?.full_name ??
-			sbUser.user_metadata?.name ??
-			sbUser.email.split('@')[0];
+			sbUser.user_metadata?.full_name ?? sbUser.user_metadata?.name ?? sbUser.email.split('@')[0];
 
 		user = await prisma.user.create({
 			data: { email: sbUser.email, name }
