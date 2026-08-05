@@ -3,7 +3,7 @@
 	import { untrack } from 'svelte';
 	import { fly } from 'svelte/transition';
 	import { createClient } from '$lib/trpc/client';
-	import Toast from '$lib/components/ui/Toast.svelte';
+	import Toast from '$lib/components/legacy/Toast.svelte';
 	import DeleteEntryDialog from '$lib/components/blacklist/DeleteEntryDialog.svelte';
 	import { parseBlacklistCsv } from '$lib/blacklist/csv';
 

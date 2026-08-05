@@ -18,7 +18,7 @@
 	import EmailPreview from '$lib/components/email/EmailPreview.svelte';
 	import SendConfirmation, { CONFIRM_WORD } from '$lib/components/email/SendConfirmation.svelte';
 	import SendHistory from '$lib/components/email/SendHistory.svelte';
-	import Toast from '$lib/components/ui/Toast.svelte';
+	import Toast from '$lib/components/legacy/Toast.svelte';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();

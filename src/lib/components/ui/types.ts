@@ -11,6 +11,15 @@ export interface SelectOption {
 	disabled?: boolean;
 }
 
+/** One tab in a `Tabs` rail. */
+export interface TabItem {
+	value: string;
+	label: string;
+	/** Small trailing count or status, e.g. a pending total. */
+	badge?: string | number;
+	disabled?: boolean;
+}
+
 /** One column of a `DataTable`. */
 export interface Column<Row> {
 	/** Stable key, also used as the `{#each}` key for the header cell. */

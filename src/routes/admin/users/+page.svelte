@@ -4,7 +4,7 @@
 	import { fly } from 'svelte/transition';
 	import { createClient } from '$lib/trpc/client';
 	import UserFilters from '$lib/components/admin/UserFilters.svelte';
-	import Toast from '$lib/components/ui/Toast.svelte';
+	import Toast from '$lib/components/legacy/Toast.svelte';
 	import {
 		ALL_ROLES,
 		ALL_STATUSES,

@@ -7,7 +7,7 @@
 	import DatesTab from '$lib/components/settings/DatesTab.svelte';
 	import ScanGroupsTab from '$lib/components/settings/ScanGroupsTab.svelte';
 	import DangerZoneTab from '$lib/components/settings/DangerZoneTab.svelte';
-	import Toast from '$lib/components/ui/Toast.svelte';
+	import Toast from '$lib/components/legacy/Toast.svelte';
 
 	let { data }: { data: PageData } = $props();
 

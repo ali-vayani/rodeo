@@ -10,7 +10,7 @@
 	import EventForm from '$lib/components/schedule/EventForm.svelte';
 	import EventModal from '$lib/components/schedule/EventModal.svelte';
 	import DeleteEventDialog from '$lib/components/schedule/DeleteEventDialog.svelte';
-	import Toast from '$lib/components/ui/Toast.svelte';
+	import Toast from '$lib/components/legacy/Toast.svelte';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();

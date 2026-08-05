@@ -21,8 +21,9 @@
 </script>
 
 <!--
-	Replaces six different treatments: py-12/text-[13px], py-6/text-xs,
-	px-4 py-6/text-xs, an italic inline span, a bare <p>, and a scoped-CSS one.
+	Replaces six different treatments across the app: two centered blocks at
+	different paddings and type sizes, a third with horizontal padding as well,
+	an italic inline span, a bare paragraph, and a scoped-CSS one.
 -->
 <div
 	class={cn(

@@ -209,6 +209,12 @@ body {
 	overflow-y: auto;
 }
 
+/* Modal panel width: fill the viewport minus a gutter, up to its max-w token.
+   Needs calc() against a percentage, which no theme namespace can express. */
+@utility modal-panel-w {
+	width: calc(100% - 2rem);
+}
+
 /* Full-height work surface below the app chrome: the admissions split pane,
    the users table, the scan log. One number, one place. */
 @utility workspace-h {

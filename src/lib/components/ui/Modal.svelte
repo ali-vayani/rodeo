@@ -51,7 +51,7 @@
 
 		<Dialog.Content
 			class={cn(
-				'fixed top-1/2 left-1/2 z-50 flex w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2',
+				'fixed top-1/2 left-1/2 z-50 flex modal-panel-w -translate-x-1/2 -translate-y-1/2',
 				'flex-col overflow-hidden rounded-xl bg-card shadow-lg',
 				SIZES[size],
 				className
