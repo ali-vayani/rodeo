@@ -1,42 +1,82 @@
 import { z } from 'zod';
-import { Role, UserStatus, DecisionStatus } from '$lib/generated/prisma/client';
 import { router, adminProcedure } from '../init';
 import { sendEmail } from '$lib/server/email';
+import { buildRecipientWhere, recipientFilterSchema } from '$lib/server/recipients';
 import { TEMPLATE_KEYS } from '$lib/email/templates';
 import { buildTemplateVars, substituteVariables, SAMPLE_VARS } from '$lib/email/variables';
 
 export const emailRouter = router({
+	/**
+	 * How many users a filter selects, without sending anything.
+	 *
+	 * Shares `buildRecipientWhere` with `sendCustom` so the count an admin confirms
+	 * is by construction the set that gets mailed.
+	 */
+	previewRecipients: adminProcedure
+		.input(recipientFilterSchema.extend({ sampleSize: z.number().int().min(1).max(20).default(5) }))
+		.query(async ({ ctx, input }) => {
+			const { sampleSize, ...filters } = input;
+			const where = buildRecipientWhere(filters);
+
+			const [count, sample] = await Promise.all([
+				ctx.prisma.user.count({ where }),
+				ctx.prisma.user.findMany({
+					where,
+					take: sampleSize,
+					orderBy: { createdAt: 'desc' },
+					select: { uid: true, name: true, email: true }
+				})
+			]);
+
+			// When targeting an explicit list, tell the admin which addresses don't
+			// correspond to a user rather than silently dropping them.
+			let unknownEmails: string[] = [];
+			if (filters.emails?.length) {
+				const matched = await ctx.prisma.user.findMany({
+					where: { email: { in: filters.emails } },
+					select: { email: true }
+				});
+				const found = new Set(matched.map((u) => u.email.toLowerCase()));
+				unknownEmails = filters.emails.filter((e) => !found.has(e.toLowerCase()));
+			}
+
+			return { count, sample, unknownEmails };
+		}),
+
 	sendCustom: adminProcedure
 		.input(
 			z.object({
 				subject: z.string().min(1),
 				body: z.string().min(1),
-				filters: z.object({
-					roles: z.array(z.nativeEnum(Role)).optional(),
-					statuses: z.array(z.nativeEnum(UserStatus)).optional(),
-					decisions: z.array(z.nativeEnum(DecisionStatus)).optional()
-				})
+				filters: recipientFilterSchema
 			})
 		)
 		.mutation(async ({ ctx, input }) => {
 			const { subject, body, filters } = input;
 
 			const users = await ctx.prisma.user.findMany({
-				where: {
-					...(filters.roles?.length && { roles: { hasSome: filters.roles } }),
-					...(filters.statuses?.length && { status: { in: filters.statuses } }),
-					...(filters.decisions?.length && { activeDecision: { in: filters.decisions } })
-				}
+				where: buildRecipientWhere(filters)
 			});
 
 			if (users.length === 0) {
 				return { sent: 0 };
 			}
 
+			// Personalise per recipient, so {{name}} in a custom blast behaves the same
+			// way it does in the lifecycle templates.
+			const settings = await ctx.prisma.settings.findFirst();
 			await Promise.allSettled(
-				users.map((u) => sendEmail({ to: u.email, subject, body }))
+				users.map((u) => {
+					const vars = settings ? buildTemplateVars(u, settings) : {};
+					return sendEmail({
+						to: u.email,
+						subject: substituteVariables(subject, vars),
+						body: substituteVariables(body, vars)
+					});
+				})
 			);
 
+			// Store the raw template, not a rendered copy — one row covers N recipients.
 			await ctx.prisma.emailLog.create({
 				data: {
 					subject,
