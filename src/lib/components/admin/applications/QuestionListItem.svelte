@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { Question, QuestionType, Role } from '$lib/generated/prisma/client';
+	import type { Question, QuestionType } from '$lib/generated/prisma/client';
 
 	interface Props {
 		question: Question;
@@ -55,7 +55,7 @@
 				</span>
 				{#if question.targetRole && question.targetRole.length > 0}
 					<div class="roles">
-						{#each question.targetRole as role}
+						{#each question.targetRole as role (role)}
 							<span class="role-chip">{role}</span>
 						{/each}
 					</div>

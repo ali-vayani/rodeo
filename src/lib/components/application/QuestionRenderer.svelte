@@ -76,7 +76,7 @@
 		</label>
 	{:else if question.type === QuestionType.MULTIPLE_CHOICE}
 		<div class="flex flex-col gap-2">
-			{#each question.options as option}
+			{#each question.options as option (option)}
 				<label class="flex cursor-pointer items-center gap-2 text-sm text-primary">
 					<input
 						type="radio"
@@ -99,7 +99,7 @@
 			<option value="" disabled selected={!value}
 				>{question.placeholder ?? 'Select an option'}</option
 			>
-			{#each question.options as option}
+			{#each question.options as option (option)}
 				<option value={option} selected={value === option}>{option}</option>
 			{/each}
 		</select>

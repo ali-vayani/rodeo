@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { QuestionType, Role, Question } from '$lib/generated/prisma/client';
+	import type { Role, Question } from '$lib/generated/prisma/client';
 
 	interface Props {
 		questions: Question[];
@@ -7,16 +7,6 @@
 	}
 
 	let { questions, selectedRole }: Props = $props();
-
-	const ALL_ROLES: Role[] = [
-		'HACKER',
-		'JUDGE',
-		'MENTOR',
-		'VOLUNTEER',
-		'ORGANIZER',
-		'ADMIN',
-		'UNDECLARED'
-	];
 
 	const visibleQuestions = $derived(
 		questions.filter((q) => q.targetRole.length === 0 || q.targetRole.includes(selectedRole))
@@ -49,7 +39,7 @@
 			</div>
 		{:else}
 			<div class="form-preview">
-				{#each visibleQuestions as q, i}
+				{#each visibleQuestions as q, i (q.id)}
 					<div class="preview-field">
 						<span class="preview-label">
 							{q.title}
@@ -83,13 +73,13 @@
 						{:else if q.type === 'DROPDOWN'}
 							<select disabled>
 								<option value="">{q.placeholder || 'Select an option'}</option>
-								{#each q.options as opt}
+								{#each q.options as opt (opt)}
 									<option value={opt}>{opt}</option>
 								{/each}
 							</select>
 						{:else if q.type === 'MULTIPLE_CHOICE'}
 							<div class="radio-group">
-								{#each q.options as opt}
+								{#each q.options as opt (opt)}
 									<label class="radio-label">
 										<input type="radio" name="preview-{q.id || i}" value={opt} disabled />
 										<span>{opt}</span>
@@ -138,35 +128,6 @@
 		color: #aaa;
 		letter-spacing: 0.08em;
 		text-transform: uppercase;
-	}
-
-	.role-selector {
-		display: flex;
-		align-items: center;
-		gap: 6px;
-	}
-
-	.role-selector label {
-		font-size: 12px;
-		font-weight: 500;
-		color: #888;
-	}
-
-	.role-selector select {
-		font-size: 12px;
-		font-weight: 600;
-		color: #191919;
-		background: #f4f4f4;
-		border: 1px solid #e0e0e0;
-		border-radius: 5px;
-		padding: 4px 8px;
-		cursor: pointer;
-		outline: none;
-		transition: border-color 0.12s;
-	}
-
-	.role-selector select:focus {
-		border-color: #191919;
 	}
 
 	.pane-body {

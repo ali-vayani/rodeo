@@ -26,7 +26,7 @@
 	</div>
 
 	<div class="flex flex-col gap-[10px]">
-		{#each roles as role}
+		{#each roles as role (role.key)}
 			{@const count = byRole[role.key] ?? 0}
 			{@const pct = (count / maxCount) * 100}
 			<div class="flex items-center gap-[10px]">

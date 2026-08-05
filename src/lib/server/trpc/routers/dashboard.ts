@@ -21,10 +21,11 @@ export const dashboardRouter = router({
 				select: { roles: true }
 			}),
 
+			// No `include: { actor: true }`: the feed renders `actorName`, which is
+			// snapshotted on the row precisely so it doesn't need the join.
 			ctx.prisma.log.findMany({
 				take: 20,
-				orderBy: { timestamp: 'desc' },
-				include: { user: true }
+				orderBy: { timestamp: 'desc' }
 			})
 		]);
 

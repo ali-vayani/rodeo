@@ -1,12 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { mockDeep, mockReset, type DeepMockProxy } from 'vitest-mock-extended';
+import { mockReset, type DeepMockProxy } from 'vitest-mock-extended';
 import type { PrismaClient } from '$lib/generated/prisma/client';
 import {
 	createTestCaller,
 	adminUser,
 	hackerUser,
 	confirmedHacker,
-	mockSettings
+	mockSettings,
+	mockGroupBy
 } from '../test-utils';
 
 vi.mock('$lib/server/db', async () => {
@@ -99,7 +100,31 @@ describe('scan.scanUser', () => {
 		expect(db.log.create).toHaveBeenCalledWith(
 			expect.objectContaining({
 				data: expect.objectContaining({
-					action: expect.stringContaining(hackerUser.name)
+					action: 'scan.record',
+					summary: expect.stringContaining(hackerUser.name),
+					actorId: adminUser.uid,
+					targetId: hackerUser.uid,
+					metadata: expect.objectContaining({ scanAction: 'Check-In', duplicate: false })
+				})
+			})
+		);
+	});
+
+	it('marks a repeat scan as a duplicate in the audit entry', async () => {
+		const caller = createTestCaller(db, adminUser);
+		db.settings.findFirst.mockResolvedValue(mockSettings);
+		db.user.findFirst.mockResolvedValue(hackerUser as never);
+		db.scan.findFirst.mockResolvedValue(mockScan as never);
+		db.scan.create.mockResolvedValue(mockScan as never);
+		db.log.create.mockResolvedValue({} as never);
+
+		await caller.scan.scanUser({ userCode: hackerUser.uid, action: 'Check-In' });
+
+		expect(db.log.create).toHaveBeenCalledWith(
+			expect.objectContaining({
+				data: expect.objectContaining({
+					summary: expect.stringContaining('already scanned today'),
+					metadata: expect.objectContaining({ duplicate: true })
 				})
 			})
 		);
@@ -309,7 +334,9 @@ describe('scan.getCounts', () => {
 			...mockSettings,
 			scanActions: ['Check-In', 'Lunch']
 		});
-		db.scan.groupBy.mockResolvedValue([{ action: 'Check-In', _count: { action: 5 } }] as never);
+		mockGroupBy(db.scan.groupBy).mockResolvedValue([
+			{ action: 'Check-In', _count: { action: 5 } }
+		] as never);
 
 		const result = await caller.scan.getCounts();
 
@@ -319,7 +346,7 @@ describe('scan.getCounts', () => {
 	it('includes historical actions no longer in settings.scanActions', async () => {
 		const caller = createTestCaller(db, adminUser);
 		db.settings.findFirst.mockResolvedValue(mockSettings); // only 'Check-In'
-		db.scan.groupBy.mockResolvedValue([
+		mockGroupBy(db.scan.groupBy).mockResolvedValue([
 			{ action: 'Check-In', _count: { action: 3 } },
 			{ action: 'Retired Action', _count: { action: 2 } }
 		] as never);
@@ -332,7 +359,7 @@ describe('scan.getCounts', () => {
 	it('falls back to default action list when settings is null', async () => {
 		const caller = createTestCaller(db, adminUser);
 		db.settings.findFirst.mockResolvedValue(null);
-		db.scan.groupBy.mockResolvedValue([]);
+		mockGroupBy(db.scan.groupBy).mockResolvedValue([]);
 
 		const result = await caller.scan.getCounts();
 

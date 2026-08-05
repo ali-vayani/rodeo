@@ -1,6 +1,8 @@
 import type { RequestEvent } from '@sveltejs/kit';
 import { prisma } from '$lib/server/db';
 import { createSupabaseServerClient } from '$lib/server/supabase';
+import { usesSupabaseAuth } from '$lib/server/env';
+import { Role } from '$lib/generated/prisma/client';
 
 const COOKIE_NAME = 'session_uid';
 const COOKIE_MAX_AGE = 60 * 60 * 24 * 7; // 7 days
@@ -21,6 +23,8 @@ export function setSessionCookie(event: RequestEvent, uid: string) {
 		httpOnly: true,
 		sameSite: 'lax',
 		maxAge: COOKIE_MAX_AGE,
+		// This cookie only exists on the dev bypass path, which never runs over
+		// HTTPS; production sessions are Supabase's own cookies.
 		secure: false
 	});
 }
@@ -41,19 +45,22 @@ async function getProdSession(event: RequestEvent) {
 
 	if (!sbUser?.email) return null;
 
-	// Find or create the local User record from the Supabase identity
-	let user = await prisma.user.findUnique({ where: { email: sbUser.email } });
+	// Find or create the local User record from the Supabase identity. Google is
+	// the only sign-in path in production, so first login *is* registration —
+	// there is no separate sign-up step that could have created this row.
+	const email = sbUser.email.toLowerCase();
+	const name = sbUser.user_metadata?.full_name ?? sbUser.user_metadata?.name ?? email.split('@')[0];
 
-	if (!user) {
-		const name =
-			sbUser.user_metadata?.full_name ?? sbUser.user_metadata?.name ?? sbUser.email.split('@')[0];
-
-		user = await prisma.user.create({
-			data: { email: sbUser.email, name }
-		});
-	}
-
-	return user;
+	// Upsert rather than find-then-create: two tabs finishing the OAuth handshake
+	// at once would otherwise race on the unique email index and 500 one of them.
+	return prisma.user.upsert({
+		where: { email },
+		update: {},
+		// A brand-new account is a HACKER in CREATED — the state the application
+		// page's "filling out" view expects. Roles are widened from /admin/users;
+		// nothing about an OAuth profile can grant someone organizer access.
+		create: { email, name, roles: [Role.HACKER] }
+	});
 }
 
 // ---------------------------------------------------------------------------
@@ -61,8 +68,5 @@ async function getProdSession(event: RequestEvent) {
 // ---------------------------------------------------------------------------
 
 export async function getSession(event: RequestEvent) {
-	if (process.env.NODE_ENV === 'production') {
-		return getProdSession(event);
-	}
-	return getDevSession(event);
+	return usesSupabaseAuth() ? getProdSession(event) : getDevSession(event);
 }

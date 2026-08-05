@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { Question, QuestionType, Role } from '$lib/generated/prisma/client';
+	import type { Question } from '$lib/generated/prisma/client';
 
 	interface Changes {
 		added: Question[];
@@ -77,7 +77,7 @@
 							<h3>Added ({changes.added.length})</h3>
 						</div>
 						<ul>
-							{#each changes.added as q}
+							{#each changes.added as q (q.id)}
 								<li>
 									<span class="q-title">{truncate(q.title)}</span>
 									<span class="q-type">{q.type.replace('_', ' ')}</span>
@@ -94,7 +94,7 @@
 							<h3>Modified ({changes.modified.length})</h3>
 						</div>
 						<ul>
-							{#each changes.modified as q}
+							{#each changes.modified as q (q.id)}
 								<li>
 									<span class="q-title">{truncate(q.title)}</span>
 									<span class="q-badge">updated</span>
@@ -111,7 +111,7 @@
 							<h3>Deleted ({changes.deleted.length})</h3>
 						</div>
 						<ul>
-							{#each changes.deleted as q}
+							{#each changes.deleted as q (q.id)}
 								<li>
 									<span class="q-title">{truncate(q.title)}</span>
 									<span class="q-badge danger">removed</span>

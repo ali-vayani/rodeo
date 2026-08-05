@@ -21,7 +21,7 @@
 		I am applying as
 	</p>
 	<div class="flex flex-wrap gap-2">
-		{#each roles as role}
+		{#each roles as role (role)}
 			<button
 				type="button"
 				onclick={() => onselect(role.value)}

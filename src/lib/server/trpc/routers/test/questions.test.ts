@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { mockDeep, mockReset, type DeepMockProxy } from 'vitest-mock-extended';
+import { mockReset, type DeepMockProxy } from 'vitest-mock-extended';
 import type { PrismaClient } from '$lib/generated/prisma/client';
 import { Role, QuestionType } from '$lib/generated/prisma/client';
 import { createTestCaller, adminUser, hackerUser } from '../test-utils';
@@ -112,6 +112,7 @@ describe('questions.create', () => {
 describe('questions.update', () => {
 	it('updates existing question', async () => {
 		const caller = createTestCaller(db, adminUser);
+		db.question.findUniqueOrThrow.mockResolvedValue(hackerQuestion);
 		db.question.update.mockResolvedValue({ ...hackerQuestion, title: 'Updated' });
 		const result = await caller.questions.update({
 			id: 'q-hacker',

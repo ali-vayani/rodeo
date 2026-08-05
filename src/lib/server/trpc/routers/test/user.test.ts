@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { mockDeep, mockReset, type DeepMockProxy } from 'vitest-mock-extended';
+import { mockReset, type DeepMockProxy } from 'vitest-mock-extended';
 import type { PrismaClient } from '$lib/generated/prisma/client';
 import { Role, UserStatus } from '$lib/generated/prisma/client';
 import { createTestCaller, adminUser, hackerUser, appliedHacker } from '../test-utils';
@@ -101,6 +101,7 @@ describe('user.getById', () => {
 describe('user.updateRole', () => {
 	it('updates roles array', async () => {
 		const caller = createTestCaller(db, adminUser);
+		db.user.findUniqueOrThrow.mockResolvedValue(hackerUser as never);
 		db.user.update.mockResolvedValue({ ...hackerUser, roles: [Role.ADMIN] } as never);
 
 		const result = await caller.user.updateRole({ uid: hackerUser.uid, roles: [Role.ADMIN] });
@@ -108,6 +109,24 @@ describe('user.updateRole', () => {
 		expect(db.user.update).toHaveBeenCalledWith({
 			where: { uid: hackerUser.uid },
 			data: { roles: [Role.ADMIN] }
+		});
+	});
+
+	it('records the previous roles in the audit entry', async () => {
+		const caller = createTestCaller(db, adminUser);
+		db.user.findUniqueOrThrow.mockResolvedValue(hackerUser as never);
+		db.user.update.mockResolvedValue({ ...hackerUser, roles: [Role.ADMIN] } as never);
+
+		await caller.user.updateRole({ uid: hackerUser.uid, roles: [Role.ADMIN] });
+
+		expect(db.log.create).toHaveBeenCalledWith({
+			data: expect.objectContaining({
+				action: 'user.roles.update',
+				actorId: adminUser.uid,
+				actorName: adminUser.name,
+				targetId: hackerUser.uid,
+				metadata: { from: hackerUser.roles, to: [Role.ADMIN] }
+			})
 		});
 	});
 
@@ -122,6 +141,7 @@ describe('user.updateRole', () => {
 describe('user.updateStatus', () => {
 	it('updates status', async () => {
 		const caller = createTestCaller(db, adminUser);
+		db.user.findUniqueOrThrow.mockResolvedValue(hackerUser as never);
 		db.user.update.mockResolvedValue({ ...hackerUser, status: UserStatus.APPLIED } as never);
 
 		const result = await caller.user.updateStatus({

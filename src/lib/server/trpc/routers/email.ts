@@ -4,6 +4,7 @@ import { sendEmail } from '$lib/server/email';
 import { buildRecipientWhere, recipientFilterSchema } from '$lib/server/recipients';
 import { TEMPLATE_KEYS } from '$lib/email/templates';
 import { buildTemplateVars, substituteVariables, SAMPLE_VARS } from '$lib/email/variables';
+import { logAction } from '$lib/server/log';
 
 export const emailRouter = router({
 	/**
@@ -65,7 +66,7 @@ export const emailRouter = router({
 			// Personalise per recipient, so {{name}} in a custom blast behaves the same
 			// way it does in the lifecycle templates.
 			const settings = await ctx.prisma.settings.findFirst();
-			await Promise.allSettled(
+			const results = await Promise.allSettled(
 				users.map((u) => {
 					const vars = settings ? buildTemplateVars(u, settings) : {};
 					return sendEmail({
@@ -75,15 +76,28 @@ export const emailRouter = router({
 					});
 				})
 			);
+			const failed = results.filter((r) => r.status === 'rejected').length;
 
 			// Store the raw template, not a rendered copy — one row covers N recipients.
-			await ctx.prisma.emailLog.create({
+			const emailLog = await ctx.prisma.emailLog.create({
 				data: {
 					subject,
 					body,
 					userIds: users.map((u) => u.uid),
 					sentAt: new Date()
 				}
+			});
+
+			// EmailLog already holds the body and the recipient list; the audit entry
+			// records the act — who pressed send, on how many people — and points at
+			// that row rather than duplicating it.
+			await logAction(ctx, {
+				action: 'email.custom.send',
+				summary:
+					`Sent a custom email "${subject}" to ${users.length} ${users.length === 1 ? 'user' : 'users'}` +
+					(failed > 0 ? ` — ${failed} failed to send` : ''),
+				target: { id: emailLog.id, label: subject },
+				metadata: { recipients: users.length, failed, subject }
 			});
 
 			return { sent: users.length };
@@ -116,6 +130,12 @@ export const emailRouter = router({
 				to,
 				subject: substituteVariables(input.subject, vars),
 				body: substituteVariables(input.body, vars)
+			});
+
+			await logAction(ctx, {
+				action: 'email.test.send',
+				summary: `Sent a test "${input.template}" email to ${to}`,
+				metadata: { template: input.template, to }
 			});
 
 			return { to };

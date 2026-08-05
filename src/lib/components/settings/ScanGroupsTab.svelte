@@ -45,7 +45,7 @@
 	</p>
 
 	<div class="mb-4 space-y-1.5">
-		{#each groups as group}
+		{#each groups as group (group)}
 			<div class="flex items-center gap-2">
 				<div
 					class="flex-1 rounded border border-border bg-[#f9f9f9] px-3 py-[7px] text-[13px] text-primary"

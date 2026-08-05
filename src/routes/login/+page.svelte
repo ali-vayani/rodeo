@@ -4,14 +4,27 @@
 
 	let { form, data }: { form: ActionData; data: PageData } = $props();
 
+	let signingIn = $state(false);
+
 	async function signInWithGoogle() {
 		if (!data.supabaseUrl || !data.supabaseAnonKey) return;
 
+		signingIn = true;
 		const supabase = createBrowserClient(data.supabaseUrl, data.supabaseAnonKey);
-		await supabase.auth.signInWithOAuth({
+
+		// `next` rides along so /auth/callback can land the user on the page they
+		// originally asked for instead of always dropping them at a portal root.
+		const callback = new URL('/auth/callback', window.location.origin);
+		if (data.redirectTo) callback.searchParams.set('next', data.redirectTo);
+
+		const { error } = await supabase.auth.signInWithOAuth({
 			provider: 'google',
-			options: { redirectTo: `${window.location.origin}/auth/callback` }
+			options: { redirectTo: callback.toString() }
 		});
+
+		// Only reached if the redirect never happened — on success the browser has
+		// already left this page.
+		if (error) signingIn = false;
 	}
 </script>
 
@@ -25,7 +38,7 @@
 				RODEO
 			</h1>
 			<p class="mt-2 text-sm text-muted-foreground">
-				{data.isProd ? 'Sign in to continue' : 'Dev login — enter your yopmail address'}
+				{data.supabaseAuth ? 'Sign in to continue' : 'Dev login — enter your yopmail address'}
 			</p>
 		</div>
 
@@ -33,49 +46,38 @@
 			<p class="mb-4 text-sm text-destructive">Sign-in failed. Please try again.</p>
 		{/if}
 
-		<form method="POST" class="flex flex-col gap-3">
-			<input
-				type="email"
-				name="email"
-				placeholder={data.isProd ? 'you@example.com' : 'you@yopmail.com'}
-				required
-				autocomplete="email"
-				class="w-full rounded border border-border px-3 py-2 text-sm outline-none focus:border-primary"
-			/>
-
-			{#if data.isProd}
+		{#if !data.supabaseAuth}
+			<form method="POST" class="flex flex-col gap-3">
 				<input
-					type="password"
-					name="password"
-					placeholder="Password"
+					type="email"
+					name="email"
+					placeholder="you@yopmail.com"
 					required
-					autocomplete="current-password"
+					autocomplete="email"
 					class="w-full rounded border border-border px-3 py-2 text-sm outline-none focus:border-primary"
 				/>
-			{/if}
 
-			{#if form?.error}
-				<p class="text-sm text-destructive">{form.error}</p>
-			{/if}
+				{#if form?.error}
+					<p class="text-sm text-destructive">{form.error}</p>
+				{/if}
 
-			<button
-				type="submit"
-				class="w-full rounded bg-primary px-4 py-2 text-sm font-medium text-white transition-opacity hover:opacity-85"
-			>
-				Sign in →
-			</button>
-		</form>
-
-		{#if data.isProd}
-			<div class="my-4 flex items-center gap-3">
-				<div class="h-px flex-1 bg-border"></div>
-				<span class="text-xs text-muted-foreground">or</span>
-				<div class="h-px flex-1 bg-border"></div>
-			</div>
-
+				<button
+					type="submit"
+					class="w-full rounded bg-primary px-4 py-2 text-sm font-medium text-white transition-opacity hover:opacity-85"
+				>
+					Sign in →
+				</button>
+			</form>
+		{:else}
+			<!--
+				Google is the only sign-in path in a deployed environment, so there is
+				no password form and no separate sign-up: the first Google login
+				creates the account.
+			-->
 			<button
 				onclick={signInWithGoogle}
-				class="flex w-full items-center justify-center gap-3 rounded border border-border px-4 py-2 text-sm font-medium text-primary transition-colors hover:bg-muted"
+				disabled={signingIn}
+				class="flex w-full items-center justify-center gap-3 rounded border border-border px-4 py-2 text-sm font-medium text-primary transition-colors hover:bg-muted disabled:opacity-60"
 			>
 				<svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
 					<path
@@ -95,8 +97,12 @@
 						d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
 					/>
 				</svg>
-				Sign in with Google
+				{signingIn ? 'Redirecting…' : 'Sign in with Google'}
 			</button>
+
+			{#if form?.error}
+				<p class="mt-3 text-sm text-destructive">{form.error}</p>
+			{/if}
 		{/if}
 
 		<p class="mt-8 text-center font-mono text-xs text-muted-foreground">

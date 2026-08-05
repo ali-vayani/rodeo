@@ -39,7 +39,6 @@
 		user.status === UserStatus.CONFIRMED || user.status === UserStatus.CHECKED_IN
 	);
 
-	const checkedIn = $derived(user.status === UserStatus.CHECKED_IN);
 	const twoColumn = $derived(showRsvp || showEventContent);
 
 	const { rsvping, handleRsvp } = createRsvpHandler({ user });

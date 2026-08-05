@@ -13,6 +13,7 @@
  */
 
 import type { Tone } from './tone';
+import { errorMessage } from './errors';
 
 /** How long a toast stays up. One number, one place. */
 const DURATION_MS = 3200;
@@ -72,8 +73,7 @@ export const toast = {
 	 * helper was doing by hand.
 	 */
 	fromError(error: unknown, fallback: string) {
-		const message = error instanceof Error && error.message ? error.message : fallback;
-		return push(message, 'danger');
+		return push(errorMessage(error, fallback), 'danger');
 	},
 
 	dismiss,

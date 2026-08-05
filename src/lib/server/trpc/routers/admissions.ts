@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { TRPCError } from '@trpc/server';
 import { Role, DecisionStatus } from '$lib/generated/prisma/client';
 import { router, adminProcedure } from '../init';
-import { createLog } from '$lib/server/log';
+import { logAction } from '$lib/server/log';
 import { sendTemplatedEmail } from '$lib/server/email';
 import { buildTemplateVars } from '$lib/email/variables';
 import { CLAIM_TTL_MS } from '$lib/admissions/lock';
@@ -125,6 +125,11 @@ export const admissionsRouter = router({
 	 * Attempt to claim an applicant for review.
 	 * Succeeds if unclaimed, stale, or already claimed by this admin.
 	 * Returns { claimed: true } on success or { claimed: false, claimerName } if another admin holds it.
+	 *
+	 * Deliberately unaudited, as are `releaseClaim` and `heartbeat`: a reviewer
+	 * generates one of these every few seconds just by scrolling the list, and
+	 * that volume would bury the decisions in the feed. What matters — a decision
+	 * a lock actually stopped — is logged from `setDecision`'s conflict path.
 	 */
 	claim: adminProcedure.input(z.object({ uid: z.string() })).mutation(async ({ ctx, input }) => {
 		const now = new Date();
@@ -205,7 +210,7 @@ export const admissionsRouter = router({
 		)
 		.mutation(async ({ ctx, input }) => {
 			try {
-				return await ctx.prisma.user.update({
+				const applicant = await ctx.prisma.user.update({
 					where: claimableBy(input.uid, ctx.user.uid),
 					data: {
 						pendingDecision: input.decision,
@@ -213,6 +218,17 @@ export const admissionsRouter = router({
 						claimedAt: null
 					}
 				});
+
+				await logAction(ctx, {
+					action: 'admissions.decision.set',
+					// "Set a pending decision", not "accepted" — nothing reaches the
+					// applicant until release, and the trail shouldn't imply it did.
+					summary: `Set ${applicant.name}'s pending decision to ${input.decision}`,
+					target: { id: applicant.uid, label: applicant.name },
+					metadata: { decision: input.decision }
+				});
+
+				return applicant;
 			} catch (e) {
 				if (!isRecordNotFound(e)) throw e;
 
@@ -227,11 +243,12 @@ export const admissionsRouter = router({
 				}
 
 				const holder = target.claimer?.name ?? 'Another admin';
-				await createLog(
-					ctx.prisma,
-					`Decision blocked: attempted ${input.decision} on ${target.name} — claimed by ${holder}`,
-					ctx.user.uid
-				);
+				await logAction(ctx, {
+					action: 'admissions.decision.blocked',
+					summary: `Tried to set ${target.name} to ${input.decision} — blocked, claimed by ${holder}`,
+					target: { id: input.uid, label: target.name },
+					metadata: { decision: input.decision, heldBy: holder }
+				});
 				throw new TRPCError({
 					code: 'CONFLICT',
 					message: `${holder} is reviewing this applicant. Your decision was not saved.`
@@ -289,6 +306,9 @@ export const admissionsRouter = router({
 			);
 
 			// Send emails per decision type (fire-and-forget in dev)
+			let emailsAttempted = 0;
+			let emailsFailed = 0;
+
 			if (settings) {
 				const templateMap: Record<string, { subject: string; body: string }> = {
 					[DecisionStatus.ACCEPTED]: {
@@ -306,20 +326,48 @@ export const admissionsRouter = router({
 					[DecisionStatus.PENDING]: { subject: '', body: '' }
 				};
 
-				await Promise.allSettled(
-					users
-						.filter((u) => u.pendingDecision && templateMap[u.pendingDecision].body)
-						.map((u) =>
-							sendTemplatedEmail(
-								u.email,
-								templateMap[u.pendingDecision!],
-								buildTemplateVars(u, settings)
-							)
-						)
+				const recipients = users.filter(
+					(u) => u.pendingDecision && templateMap[u.pendingDecision].body
 				);
+				emailsAttempted = recipients.length;
+
+				const results = await Promise.allSettled(
+					recipients.map((u) =>
+						sendTemplatedEmail(
+							u.email,
+							templateMap[u.pendingDecision!],
+							buildTemplateVars(u, settings)
+						)
+					)
+				);
+				emailsFailed = results.filter((r) => r.status === 'rejected').length;
 			}
 
-			await createLog(ctx.prisma, `Released decisions for ${users.length} users`, ctx.user.uid);
+			// Release is the one irreversible batch action in the app, so its entry
+			// carries the full breakdown: who was affected, what each decision was,
+			// and how many notifications actually made it out.
+			const byDecision: Record<string, number> = {};
+			for (const u of users) {
+				const key = u.pendingDecision ?? 'none';
+				byDecision[key] = (byDecision[key] ?? 0) + 1;
+			}
+
+			await logAction(ctx, {
+				action: 'admissions.release',
+				summary:
+					`Released ${users.length} ${users.length === 1 ? 'decision' : 'decisions'} ` +
+					`(${Object.entries(byDecision)
+						.map(([decision, count]) => `${count} ${decision.toLowerCase()}`)
+						.join(', ')})` +
+					(emailsFailed > 0 ? ` — ${emailsFailed} emails failed to send` : ''),
+				metadata: {
+					released: users.length,
+					...byDecision,
+					scope: restrictToUids ? 'selected' : 'all pending',
+					emailsAttempted,
+					emailsFailed
+				}
+			});
 
 			return { released: users.length };
 		})

@@ -73,7 +73,7 @@
 				</tr>
 			</thead>
 			<tbody>
-				{#each applicants as applicant}
+				{#each applicants as applicant (applicant.uid)}
 					<tr class="border-b border-[#f0f0f0]">
 						<td class="px-4 py-3 text-[13px] font-medium text-primary">
 							{applicant.name}

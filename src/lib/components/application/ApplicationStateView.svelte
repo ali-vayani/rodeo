@@ -30,9 +30,19 @@
 	const rsvpDeadline = $derived(formatDate(settings?.RSVPDeadline));
 	const hackathonStart = $derived(formatDate(settings?.hackathonStartDate));
 
-	// TODO: fill in when URLs are ready
-	const scheduleUrl = '';
-	const discordUrl = '';
+	/**
+	 * The event links shown to a confirmed hacker.
+	 *
+	 * Both were `href=""` placeholders, which is not an inert link — it navigates
+	 * to the current URL, so a confirmed hacker clicking "schedule" got a page
+	 * reload. Null renders the words as plain text instead, and the anchors come
+	 * back the moment there is somewhere to point them.
+	 *
+	 * TODO: there is no hacker-facing schedule route yet (only /admin/schedule),
+	 * and no Settings column for a Discord invite. Both need to exist first.
+	 */
+	const scheduleUrl: string | null = null;
+	const discordUrl: string | null = null;
 </script>
 
 {#if appState === 'submitted'}
@@ -203,9 +213,17 @@
 		<div class="mt-4 rounded border border-border bg-muted p-4">
 			<p class="text-sm leading-relaxed text-primary">
 				Hope you have a good time! Take a look at our
-				<a href={scheduleUrl} class="text-primary underline">schedule</a>
+				{#if scheduleUrl}
+					<a href={scheduleUrl} class="text-primary underline">schedule</a>
+				{:else}
+					schedule
+				{/if}
 				and make sure to join the
-				<a href={discordUrl} class="text-primary underline">Discord</a>.
+				{#if discordUrl}
+					<a href={discordUrl} class="text-primary underline">Discord</a>.
+				{:else}
+					Discord.
+				{/if}
 			</p>
 		</div>
 	</div>

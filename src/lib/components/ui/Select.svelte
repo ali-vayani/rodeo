@@ -18,7 +18,9 @@
 		mono = false,
 		invalid = false,
 		class: className = '',
-		fieldClass = ''
+		fieldClass = '',
+		ariaLabel = undefined,
+		onValueChange = undefined
 	}: {
 		value?: string;
 		options: SelectOption[];
@@ -32,6 +34,14 @@
 		invalid?: boolean;
 		class?: string;
 		fieldClass?: string;
+		/** For a select with no visible label — a filter bar, a toolbar. */
+		ariaLabel?: string;
+		/**
+		 * Fires only on user selection, unlike an `$effect` on `value`, which also
+		 * runs when the parent resets the binding (a "clear filters" button) and
+		 * would turn that into a second round-trip.
+		 */
+		onValueChange?: (value: string) => void;
 	} = $props();
 
 	const selectedLabel = $derived(options.find((option) => option.value === value)?.label);
@@ -39,9 +49,10 @@
 </script>
 
 {#snippet control(id: string | undefined, isInvalid: boolean, describedBy: string | undefined)}
-	<Select.Root type="single" bind:value {disabled}>
+	<Select.Root type="single" bind:value {disabled} {onValueChange}>
 		<Select.Trigger
 			{id}
+			aria-label={ariaLabel}
 			aria-invalid={isInvalid || undefined}
 			aria-describedby={describedBy}
 			class={cn(

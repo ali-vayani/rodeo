@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
 	import type { Question, QuestionType, Role } from '$lib/generated/prisma/client';
 
 	interface Props {
@@ -110,6 +109,25 @@
 		options = options.map((o, idx) => (idx === i ? val : o));
 	}
 
+	/**
+	 * The option rows, each carrying its index into the *unfiltered* `options`.
+	 *
+	 * `updateOption` and `removeOption` both address that array, so the row has to
+	 * hand them the real index. Filtering first and using the loop counter edited
+	 * the wrong entry whenever a blank sat earlier in the list, and left the rows
+	 * with no stable key — option text is editable and may repeat, so the index is
+	 * the only identity available.
+	 *
+	 * A lone blank survives the filter so the editor always shows one empty row to
+	 * type into; `position` is what the placeholder counts, independent of it.
+	 */
+	const editableOptions = $derived(
+		options
+			.map((value, index) => ({ value, index }))
+			.filter((o) => o.value.trim() !== '' || options.length === 1)
+			.map((o, position) => ({ ...o, position: position + 1 }))
+	);
+
 	function validate(): boolean {
 		const errs: Record<string, string> = {};
 		if (!title.trim()) errs.title = 'Title is required';
@@ -200,7 +218,7 @@
 					<div class="field">
 						<label for="q-type">Type <span class="req">*</span></label>
 						<select id="q-type" bind:value={type}>
-							{#each QUESTION_TYPES as t}
+							{#each QUESTION_TYPES as t (t.value)}
 								<option value={t.value}>{t.label}</option>
 							{/each}
 						</select>
@@ -214,10 +232,16 @@
 				</div>
 
 				<!-- Target Roles -->
+				<!--
+					A group of toggle buttons, not one control, so this is a group label
+					rather than a <label> — which would have nothing to point at.
+				-->
 				<div class="field">
-					<label>Target Roles <span class="hint">(leave empty for all)</span></label>
-					<div class="role-grid">
-						{#each ALL_ROLES as role}
+					<span class="field-label" id="target-roles-label">
+						Target Roles <span class="hint">(leave empty for all)</span>
+					</span>
+					<div class="role-grid" role="group" aria-labelledby="target-roles-label">
+						{#each ALL_ROLES as role (role)}
 							<button
 								type="button"
 								class="role-toggle"
@@ -246,21 +270,23 @@
 				<!-- Conditional: Options -->
 				{#if showOptions}
 					<div class="field" class:field-error={errors.options}>
-						<label>Options <span class="req">*</span></label>
-						<div class="options-list">
-							{#each options.filter((o) => o.trim() !== '' || options.length === 1) as opt, i}
+						<span class="field-label" id="options-label">
+							Options <span class="req">*</span>
+						</span>
+						<div class="options-list" role="group" aria-labelledby="options-label">
+							{#each editableOptions as opt (opt.index)}
 								<div class="option-row">
 									<span class="opt-bullet">•</span>
 									<input
 										type="text"
-										value={opt}
-										oninput={(e) => updateOption(i, (e.target as HTMLInputElement).value)}
-										placeholder="Option {i + 1}"
+										value={opt.value}
+										oninput={(e) => updateOption(opt.index, (e.target as HTMLInputElement).value)}
+										placeholder="Option {opt.position}"
 									/>
 									<button
 										type="button"
 										class="remove-opt"
-										onclick={() => removeOption(i)}
+										onclick={() => removeOption(opt.index)}
 										aria-label="Remove option"
 									>
 										<svg
@@ -313,7 +339,7 @@
 					<div class="field">
 						<label for="q-linked">Linked Field</label>
 						<select id="q-linked" bind:value={linkedField}>
-							{#each LINKED_FIELDS as lf}
+							{#each LINKED_FIELDS as lf (lf.value)}
 								<option value={lf.value}>{lf.label}</option>
 							{/each}
 						</select>
@@ -418,7 +444,8 @@
 		gap: 6px;
 	}
 
-	.field label {
+	.field label,
+	.field .field-label {
 		font-size: 12px;
 		font-weight: 600;
 		color: #444;
@@ -593,8 +620,7 @@
 		color: #fff;
 	}
 
-	.field-error input,
-	.field-error select {
+	.field-error input {
 		border-color: #b00000;
 	}
 

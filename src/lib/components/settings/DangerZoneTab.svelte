@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { errorMessage } from '$lib/ui/errors';
 	import { createClient } from '$lib/trpc/client';
 
 	let {
@@ -42,8 +43,8 @@
 			const result = await trpc.admissions.release.mutate({});
 			closeReleaseModal();
 			onToast(`Released decisions for ${result.released} user${result.released === 1 ? '' : 's'}`);
-		} catch (e: any) {
-			onToast(e.message ?? 'Release failed', 'error');
+		} catch (e) {
+			onToast(errorMessage(e, 'Release failed'), 'error');
 		} finally {
 			releasing = false;
 		}
