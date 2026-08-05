@@ -11,15 +11,35 @@
 		content: string;
 		side?: 'top' | 'right' | 'bottom' | 'left';
 		delay?: number;
-		children: Snippet;
+		/**
+		 * Receives the trigger props to spread onto your own element:
+		 *
+		 *     <Tooltip content="Remove">
+		 *       {#snippet children(props)}
+		 *         <IconButton label="Remove" {...props}>✕</IconButton>
+		 *       {/snippet}
+		 *     </Tooltip>
+		 */
+		children: Snippet<[Record<string, unknown>]>;
 	} = $props();
 </script>
 
+<!--
+	The trigger renders through bits-ui's `child` snippet rather than as its own
+	element. Left to itself Tooltip.Trigger emits a <button>, so wrapping an
+	IconButton in one nested a button inside a button — invalid HTML that the
+	browser silently repairs, shifting content and tripping a hydration
+	mismatch. Handing the props to the caller's element avoids the nesting and
+	keeps the tooltip's aria-describedby on the real control.
+-->
 <Tooltip.Provider>
 	<Tooltip.Root delayDuration={delay}>
-		<Tooltip.Trigger class="cursor-default focus-visible:shadow-ring">
-			{@render children()}
+		<Tooltip.Trigger>
+			{#snippet child({ props })}
+				{@render children(props)}
+			{/snippet}
 		</Tooltip.Trigger>
+
 		<Tooltip.Portal>
 			<Tooltip.Content
 				{side}

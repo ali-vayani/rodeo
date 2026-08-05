@@ -53,7 +53,18 @@
 			'hover:bg-destructive-hover focus-visible:shadow-ring-danger'
 	};
 
-	const classes = $derived(cn(BASE, SIZES[size], VARIANTS[variant], className));
+	// A loading button is unclickable but is NOT unavailable — it is mid-action.
+	// Letting it inherit disabled:opacity-50 made every in-flight save look like
+	// a dead control, so loading overrides the dimming and shows a wait cursor.
+	const classes = $derived(
+		cn(
+			BASE,
+			SIZES[size],
+			VARIANTS[variant],
+			loading && 'cursor-wait disabled:opacity-100',
+			className
+		)
+	);
 	const isDisabled = $derived(disabled || loading);
 </script>
 
