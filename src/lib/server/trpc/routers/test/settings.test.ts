@@ -69,3 +69,70 @@ describe('settings.update', () => {
 		});
 	});
 });
+
+describe('settings.updateTemplates', () => {
+	const templates = { accept: { subject: 'New subject', body: 'New body' } };
+
+	it('writes only the template columns it was given', async () => {
+		// Regression guard: this is the whole reason updateTemplates exists. A full
+		// settings.update from this page would clobber a concurrent edit elsewhere.
+		const caller = createTestCaller(db, adminUser);
+		db.settings.findFirst.mockResolvedValue(mockSettings);
+		db.settings.update.mockResolvedValue(mockSettings);
+
+		await caller.settings.updateTemplates({ templates });
+
+		expect(db.settings.update).toHaveBeenCalledWith({
+			where: { id: mockSettings.id },
+			data: { acceptSubject: 'New subject', acceptTemplate: 'New body' }
+		});
+	});
+
+	it('leaves untouched templates alone', async () => {
+		const caller = createTestCaller(db, adminUser);
+		db.settings.findFirst.mockResolvedValue(mockSettings);
+		db.settings.update.mockResolvedValue(mockSettings);
+
+		await caller.settings.updateTemplates({ templates });
+
+		const { data } = db.settings.update.mock.calls[0][0];
+		expect(Object.keys(data)).toEqual(['acceptSubject', 'acceptTemplate']);
+	});
+
+	it('creates a row from DEFAULT_SETTINGS when none exists', async () => {
+		const caller = createTestCaller(db, adminUser);
+		db.settings.findFirst.mockResolvedValue(null);
+		db.settings.create.mockResolvedValue(mockSettings);
+
+		await caller.settings.updateTemplates({ templates });
+
+		expect(db.settings.create).toHaveBeenCalledWith({
+			data: expect.objectContaining({
+				acceptSubject: 'New subject',
+				acceptTemplate: 'New body',
+				timezone: 'America/Chicago'
+			})
+		});
+	});
+
+	it('rejects an empty subject', async () => {
+		const caller = createTestCaller(db, adminUser);
+		await expect(
+			caller.settings.updateTemplates({ templates: { accept: { subject: '', body: 'x' } } })
+		).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+	});
+
+	it('throws FORBIDDEN for non-admin', async () => {
+		const caller = createTestCaller(db, hackerUser);
+		await expect(caller.settings.updateTemplates({ templates })).rejects.toMatchObject({
+			code: 'FORBIDDEN'
+		});
+	});
+
+	it('throws UNAUTHORIZED when not logged in', async () => {
+		const caller = createTestCaller(db, null);
+		await expect(caller.settings.updateTemplates({ templates })).rejects.toMatchObject({
+			code: 'UNAUTHORIZED'
+		});
+	});
+});
