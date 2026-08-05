@@ -5,6 +5,14 @@
 	import { createClient } from '$lib/trpc/client';
 	import UserFilters from '$lib/components/admin/UserFilters.svelte';
 	import Toast from '$lib/components/ui/Toast.svelte';
+	import {
+		ALL_ROLES,
+		ALL_STATUSES,
+		DECISION_VALUES,
+		DECISION_OPTIONS,
+		allChecked,
+		buildRecipientParams
+	} from '$lib/admin/filters';
 
 	let { data }: { data: PageData } = $props();
 
@@ -35,35 +43,19 @@
 	}
 
 	// --- Filter state ---
-	const ALL_ROLES = ['HACKER', 'JUDGE', 'MENTOR', 'VOLUNTEER', 'ORGANIZER', 'ADMIN', 'UNDECLARED'];
-	const ALL_STATUSES = ['CREATED', 'APPLIED', 'CONFIRMED', 'DECLINED', 'CHECKED_IN'];
-	const ALL_DECISIONS = ['ACCEPTED', 'WAITLISTED', 'REJECTED', 'PENDING', 'NONE'];
-	const DECISION_VALUES = ['ACCEPTED', 'WAITLISTED', 'REJECTED', 'PENDING'];
-
-	let roleFilter = $state(Object.fromEntries(ALL_ROLES.map((r) => [r, true])));
-	let statusFilter = $state(Object.fromEntries(ALL_STATUSES.map((s) => [s, true])));
-	let decisionFilter = $state(Object.fromEntries(ALL_DECISIONS.map((d) => [d, true])));
+	// Vocabulary and the checkbox-state → tRPC-params translation are shared with the
+	// custom-email wizard, so a count here and a send there can't disagree.
+	let roleFilter = $state(allChecked(ALL_ROLES));
+	let statusFilter = $state(allChecked(ALL_STATUSES));
+	let decisionFilter = $state(allChecked(DECISION_OPTIONS));
 	let search = $state('');
 
-	// Build tRPC list params from current filter state.
-	// When everything is checked (default), we pass undefined so the server skips that filter.
 	function buildListParams(p: number) {
-		const selRoles = ALL_ROLES.filter((r) => roleFilter[r]);
-		const selStatuses = ALL_STATUSES.filter((s) => statusFilter[s]);
-		const selDecisions = DECISION_VALUES.filter((d) => decisionFilter[d]);
-		const noneChecked = decisionFilter['NONE'] ?? true;
-		const allDecDefault =
-			selDecisions.length === DECISION_VALUES.length && noneChecked;
-
 		return {
 			page: p,
 			pageSize: PAGE_SIZE,
-			search: search.trim() || undefined,
-			roles: selRoles.length < ALL_ROLES.length ? (selRoles as any) : undefined,
-			statuses: selStatuses.length < ALL_STATUSES.length ? (selStatuses as any) : undefined,
-			decisions: allDecDefault ? undefined : (selDecisions as any),
-			includeNoDecision: allDecDefault ? undefined : noneChecked
-		};
+			...buildRecipientParams(roleFilter, statusFilter, decisionFilter, search)
+		} as any;
 	}
 
 	// Checkbox toggles immediately re-fetch page 1 with new filters
@@ -89,7 +81,7 @@
 		loadPage(1);
 	}
 	function clearDecision() {
-		decisionFilter = Object.fromEntries(ALL_DECISIONS.map((d) => [d, false]));
+		decisionFilter = Object.fromEntries(DECISION_OPTIONS.map((d) => [d, false]));
 		loadPage(1);
 	}
 

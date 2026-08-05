@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { Role, UserStatus, DecisionStatus, InvitationStatus } from '$lib/generated/prisma/client';
 import { router, authedProcedure, adminProcedure } from '../init';
+import { buildRecipientWhere, recipientFilterSchema } from '$lib/server/recipients';
 
 export const userRouter = router({
 	me: authedProcedure.query(async ({ ctx }) => {
@@ -26,46 +27,17 @@ export const userRouter = router({
 
 	list: adminProcedure
 		.input(
-			z.object({
+			recipientFilterSchema.extend({
 				page: z.number().int().min(1).default(1),
-				pageSize: z.number().int().min(1).max(200).default(50),
-				search: z.string().optional(),
-				roles: z.array(z.nativeEnum(Role)).optional(),
-				statuses: z.array(z.nativeEnum(UserStatus)).optional(),
-				decisions: z.array(z.nativeEnum(DecisionStatus)).optional(),
-				includeNoDecision: z.boolean().optional()
+				pageSize: z.number().int().min(1).max(200).default(50)
 			})
 		)
 		.query(async ({ ctx, input }) => {
-			const { page, pageSize, search, roles, statuses, decisions, includeNoDecision } = input;
+			const { page, pageSize, ...filters } = input;
 
-			// Build AND conditions so each filter stacks independently
-			const conditions: any[] = [];
-
-			if (search) {
-				conditions.push({
-					OR: [
-						{ name: { contains: search, mode: 'insensitive' as const } },
-						{ email: { contains: search, mode: 'insensitive' as const } }
-					]
-				});
-			}
-
-			if (roles?.length) conditions.push({ roles: { hasSome: roles } });
-			if (statuses?.length) conditions.push({ status: { in: statuses } });
-
-			// Decision filter: support specific statuses AND/OR null (no decision)
-			if (decisions !== undefined || includeNoDecision !== undefined) {
-				const decisionOr: any[] = [];
-				if (decisions?.length) decisionOr.push({ activeDecision: { in: decisions } });
-				if (includeNoDecision) decisionOr.push({ activeDecision: null });
-				if (decisionOr.length === 1) conditions.push(decisionOr[0]);
-				else if (decisionOr.length > 1) conditions.push({ OR: decisionOr });
-				// empty decisionOr = all decision filters unchecked = show nothing
-				else conditions.push({ uid: 'IMPOSSIBLE_NO_MATCH' });
-			}
-
-			const where = conditions.length > 0 ? { AND: conditions } : {};
+			// Shared with email.sendCustom / previewRecipients so the count an admin
+			// sees and the set that actually gets mailed can never diverge.
+			const where = buildRecipientWhere(filters);
 
 			const [total, users] = await Promise.all([
 				ctx.prisma.user.count({ where }),
