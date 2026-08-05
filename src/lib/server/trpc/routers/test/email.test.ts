@@ -2,7 +2,13 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { mockDeep, mockReset, type DeepMockProxy } from 'vitest-mock-extended';
 import type { PrismaClient } from '$lib/generated/prisma/client';
 import { Role, UserStatus } from '$lib/generated/prisma/client';
-import { createTestCaller, adminUser, hackerUser, appliedHacker, mockSettings } from '../test-utils';
+import {
+	createTestCaller,
+	adminUser,
+	hackerUser,
+	appliedHacker,
+	mockSettings
+} from '../test-utils';
 
 vi.mock('$lib/server/db', async () => {
 	const { mockDeep } = await import('vitest-mock-extended');
@@ -249,9 +255,7 @@ describe('email.sendTest', () => {
 		const result = await caller.email.sendTest(testInput);
 
 		expect(result.to).toBe(adminUser.email);
-		expect(sendEmail).toHaveBeenCalledWith(
-			expect.objectContaining({ to: adminUser.email })
-		);
+		expect(sendEmail).toHaveBeenCalledWith(expect.objectContaining({ to: adminUser.email }));
 	});
 
 	it('substitutes variables into both the subject and the body', async () => {

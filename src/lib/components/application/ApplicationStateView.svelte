@@ -46,7 +46,7 @@
 			</div>
 			<span class="text-sm font-medium text-primary">Application submitted</span>
 		</div>
-		<h2 class="mb-2 text-xl font-light leading-snug text-primary tracking-[-0.02em]">
+		<h2 class="mb-2 text-xl leading-snug font-light tracking-[-0.02em] text-primary">
 			We've received<br />your application.
 		</h2>
 		<p class="mb-6 text-sm leading-relaxed text-muted-foreground">
@@ -63,20 +63,21 @@
 			</div>
 			<div class="flex justify-between text-sm">
 				<span class="text-muted-foreground">Status</span>
-				<span class="rounded px-2 py-0.5 font-mono text-xs font-medium bg-muted text-muted-foreground">
+				<span
+					class="rounded bg-muted px-2 py-0.5 font-mono text-xs font-medium text-muted-foreground"
+				>
 					UNDER REVIEW
 				</span>
 			</div>
 		</div>
 	</div>
-
 {:else if appState === 'waitlisted'}
 	<!-- Waitlisted -->
 	<div class="mx-auto max-w-md rounded border border-border bg-white p-8">
 		<div class="mb-4 flex items-center justify-between">
 			<h2 class="text-base font-semibold text-primary">Application Status</h2>
 			<span
-				class="rounded border border-primary px-2.5 py-0.5 font-mono text-xs font-medium uppercase tracking-wide text-primary bg-muted"
+				class="rounded border border-primary bg-muted px-2.5 py-0.5 font-mono text-xs font-medium tracking-wide text-primary uppercase"
 			>
 				Waitlisted
 			</span>
@@ -96,7 +97,7 @@
 			</div>
 		</div>
 		<div class="mt-4 rounded border border-border bg-muted p-4">
-			<p class="mb-1 text-xs font-medium uppercase tracking-widest text-muted-foreground">
+			<p class="mb-1 text-xs font-medium tracking-widest text-muted-foreground uppercase">
 				What's next
 			</p>
 			<p class="text-sm leading-relaxed text-primary">
@@ -105,14 +106,13 @@
 			</p>
 		</div>
 	</div>
-
 {:else if appState === 'rejected'}
 	<!-- Rejected -->
 	<div class="mx-auto max-w-md rounded border border-border bg-white p-8">
 		<div class="mb-4 flex items-center justify-between">
 			<h2 class="text-base font-semibold text-primary">Application Status</h2>
 			<span
-				class="rounded border border-border px-2.5 py-0.5 font-mono text-xs font-medium uppercase tracking-wide text-muted-foreground bg-muted"
+				class="rounded border border-border bg-muted px-2.5 py-0.5 font-mono text-xs font-medium tracking-wide text-muted-foreground uppercase"
 			>
 				Not accepted
 			</span>
@@ -128,7 +128,7 @@
 			</div>
 		</div>
 		<div class="mt-4 rounded border border-border bg-muted p-4">
-			<p class="mb-1 text-xs font-medium uppercase tracking-widest text-muted-foreground">
+			<p class="mb-1 text-xs font-medium tracking-widest text-muted-foreground uppercase">
 				A note from us
 			</p>
 			<p class="text-sm leading-relaxed text-primary">
@@ -137,18 +137,17 @@
 			</p>
 		</div>
 	</div>
-
 {:else if appState === 'accepted'}
 	<!-- Accepted — RSVP prompt -->
 	<div class="mx-auto max-w-md rounded border border-border bg-white p-8">
 		<div class="mb-2">
 			<span
-				class="rounded px-2.5 py-0.5 font-mono text-xs font-semibold uppercase tracking-wide bg-primary text-white"
+				class="rounded bg-primary px-2.5 py-0.5 font-mono text-xs font-semibold tracking-wide text-white uppercase"
 			>
 				Accepted
 			</span>
 		</div>
-		<h2 class="mb-2 mt-3 text-xl font-semibold leading-snug text-primary tracking-[-0.01em]">
+		<h2 class="mt-3 mb-2 text-xl leading-snug font-semibold tracking-[-0.01em] text-primary">
 			You're in, {user.name.split(' ')[0]}!
 		</h2>
 		<p class="mb-6 text-sm leading-relaxed text-muted-foreground">
@@ -159,7 +158,7 @@
 				type="button"
 				onclick={onrsvp}
 				disabled={rsvping}
-				class="rounded px-5 py-2 text-sm font-medium bg-primary text-white transition-opacity disabled:opacity-60"
+				class="rounded bg-primary px-5 py-2 text-sm font-medium text-white transition-opacity disabled:opacity-60"
 			>
 				{rsvping ? 'Confirming…' : 'RSVP Yes'}
 			</button>
@@ -186,7 +185,7 @@
 		<div class="mb-4 flex items-center justify-between">
 			<h2 class="text-base font-semibold text-primary">Application Status</h2>
 			<span
-				class="rounded border border-primary px-2.5 py-0.5 font-mono text-xs font-medium uppercase tracking-wide text-muted-foreground bg-muted"
+				class="rounded border border-primary bg-muted px-2.5 py-0.5 font-mono text-xs font-medium tracking-wide text-muted-foreground uppercase"
 			>
 				Checked in
 			</span>
@@ -204,25 +203,20 @@
 		<div class="mt-4 rounded border border-border bg-muted p-4">
 			<p class="text-sm leading-relaxed text-primary">
 				Hope you have a good time! Take a look at our
-				<a href={scheduleUrl} class="underline text-primary">schedule</a>
+				<a href={scheduleUrl} class="text-primary underline">schedule</a>
 				and make sure to join the
-				<a href={discordUrl} class="underline text-primary">Discord</a>.
+				<a href={discordUrl} class="text-primary underline">Discord</a>.
 			</p>
 		</div>
 	</div>
-
 {:else if appState === 'rsvpd'}
 	<!-- RSVP confirmed -->
-	<div
-		class="mx-auto max-w-md rounded border border-border bg-white p-8 text-center"
-	>
+	<div class="mx-auto max-w-md rounded border border-border bg-white p-8 text-center">
 		<div class="mb-4 text-3xl grayscale">★</div>
-		<p class="mb-1 font-mono text-xs uppercase tracking-widest text-muted-foreground">
+		<p class="mb-1 font-mono text-xs tracking-widest text-muted-foreground uppercase">
 			RSVP Confirmed
 		</p>
-		<h2
-			class="mb-3 mt-2 text-xl font-light leading-snug text-primary tracking-[-0.02em]"
-		>
+		<h2 class="mt-2 mb-3 text-xl leading-snug font-light tracking-[-0.02em] text-primary">
 			See you at the hackathon.
 		</h2>
 		<p class="mb-6 text-sm leading-relaxed text-muted-foreground">
@@ -230,22 +224,19 @@
 		</p>
 		{#if settings?.hackathonStartDate}
 			<div class="flex justify-center gap-2">
-				<span
-					class="rounded border border-primary px-3 py-1 font-mono text-xs text-primary"
-				>
+				<span class="rounded border border-primary px-3 py-1 font-mono text-xs text-primary">
 					{hackathonStart}
 				</span>
 			</div>
 		{/if}
 	</div>
-
 {:else if appState === 'declined'}
 	<!-- Declined -->
 	<div class="mx-auto max-w-md rounded border border-border bg-white p-8">
 		<div class="mb-4 flex items-center justify-between">
 			<h2 class="text-base font-semibold text-primary">Invitation Declined</h2>
 			<span
-				class="rounded border border-border px-2.5 py-0.5 font-mono text-xs font-medium uppercase tracking-wide text-muted-foreground bg-muted"
+				class="rounded border border-border bg-muted px-2.5 py-0.5 font-mono text-xs font-medium tracking-wide text-muted-foreground uppercase"
 			>
 				Declined
 			</span>
@@ -261,7 +252,7 @@
 			</div>
 		</div>
 		<div class="mt-4 rounded border border-border bg-muted p-4">
-			<p class="mb-1 text-xs font-medium uppercase tracking-widest text-muted-foreground">
+			<p class="mb-1 text-xs font-medium tracking-widest text-muted-foreground uppercase">
 				What's next
 			</p>
 			<p class="text-sm leading-relaxed text-primary">
@@ -289,7 +280,7 @@
 					type="button"
 					onclick={ondecline}
 					disabled={declining}
-					class="rounded px-4 py-2 text-sm font-medium bg-destructive text-white transition-opacity disabled:opacity-60"
+					class="rounded bg-destructive px-4 py-2 text-sm font-medium text-white transition-opacity disabled:opacity-60"
 				>
 					{declining ? 'Declining…' : 'Yes, decline'}
 				</button>

@@ -1,367 +1,899 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>RODEO — Admin Schedule</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Playfair+Display:wght@400;700;900&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
-<style>
-  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: 'DM Mono', monospace; background: #fff; color: #000; }
-  .topbar { border-bottom: 1px solid #000; padding: 12px 20px; display: flex; align-items: baseline; gap: 16px; }
-  .topbar-title { font-size: 13px; font-weight: 500; letter-spacing: 0.08em; }
-  .topbar-crumb { font-size: 11px; color: #aaa; }
-  .meta { padding: 16px 20px; border-bottom: 1px solid #000; }
-  .meta p { font-size: 11px; color: #aaa; line-height: 1.6; }
-  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0; border-left: 1px solid #000; border-top: 1px solid #000; }
-  .cell { border-right: 1px solid #000; border-bottom: 1px solid #000; }
-  .cell-label { font-family: 'DM Mono', monospace; font-size: 11px; padding: 8px 12px; border-bottom: 1px solid #000; display: flex; justify-content: space-between; align-items: center; background: #f4f4f4; }
-  .cell-num { font-size: 20px; font-weight: 700; line-height: 1; }
-  .cell-desc { font-size: 10px; color: #aaa; text-transform: uppercase; letter-spacing: 0.06em; }
-  .cell-frame { height: 400px; overflow: hidden; padding: 16px; position: relative; background: #fff; }
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<title>RODEO — Admin Schedule</title>
+		<link rel="preconnect" href="https://fonts.googleapis.com" />
+		<link
+			href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Playfair+Display:wght@400;700;900&family=Inter:wght@400;500;600&display=swap"
+			rel="stylesheet"
+		/>
+		<style>
+			*,
+			*::before,
+			*::after {
+				box-sizing: border-box;
+				margin: 0;
+				padding: 0;
+			}
+			body {
+				font-family: 'DM Mono', monospace;
+				background: #fff;
+				color: #000;
+			}
+			.topbar {
+				border-bottom: 1px solid #000;
+				padding: 12px 20px;
+				display: flex;
+				align-items: baseline;
+				gap: 16px;
+			}
+			.topbar-title {
+				font-size: 13px;
+				font-weight: 500;
+				letter-spacing: 0.08em;
+			}
+			.topbar-crumb {
+				font-size: 11px;
+				color: #aaa;
+			}
+			.meta {
+				padding: 16px 20px;
+				border-bottom: 1px solid #000;
+			}
+			.meta p {
+				font-size: 11px;
+				color: #aaa;
+				line-height: 1.6;
+			}
+			.grid {
+				display: grid;
+				grid-template-columns: repeat(3, 1fr);
+				gap: 0;
+				border-left: 1px solid #000;
+				border-top: 1px solid #000;
+			}
+			.cell {
+				border-right: 1px solid #000;
+				border-bottom: 1px solid #000;
+			}
+			.cell-label {
+				font-family: 'DM Mono', monospace;
+				font-size: 11px;
+				padding: 8px 12px;
+				border-bottom: 1px solid #000;
+				display: flex;
+				justify-content: space-between;
+				align-items: center;
+				background: #f4f4f4;
+			}
+			.cell-num {
+				font-size: 20px;
+				font-weight: 700;
+				line-height: 1;
+			}
+			.cell-desc {
+				font-size: 10px;
+				color: #aaa;
+				text-transform: uppercase;
+				letter-spacing: 0.06em;
+			}
+			.cell-frame {
+				height: 400px;
+				overflow: hidden;
+				padding: 16px;
+				position: relative;
+				background: #fff;
+			}
 
-  /* V1 Editorial */
-  .v1 { font-family: 'Playfair Display', serif; }
-  .v1-head { font-size: 22px; font-weight: 900; letter-spacing: -0.02em; border-bottom: 2px solid #000; padding-bottom: 8px; margin-bottom: 10px; }
-  .v1-tabs { display: flex; gap: 12px; margin-bottom: 10px; }
-  .v1-tab { font-family: 'DM Mono', monospace; font-size: 9px; letter-spacing: 0.08em; text-transform: uppercase; padding: 3px 8px; border: 1px solid #000; cursor: pointer; }
-  .v1-tab.active { background: #000; color: #fff; }
-  .v1-event { display: grid; grid-template-columns: 60px 1fr; gap: 8px; margin-bottom: 8px; align-items: start; }
-  .v1-time { font-family: 'DM Mono', monospace; font-size: 10px; color: #aaa; padding-top: 2px; }
-  .v1-ev-title { font-size: 13px; font-weight: 700; line-height: 1.2; }
-  .v1-ev-loc { font-family: 'DM Mono', monospace; font-size: 9px; color: #aaa; margin-top: 2px; }
-  .v1-rule { border: none; border-top: 1px solid #e0e0e0; margin: 6px 0 6px 68px; }
+			/* V1 Editorial */
+			.v1 {
+				font-family: 'Playfair Display', serif;
+			}
+			.v1-head {
+				font-size: 22px;
+				font-weight: 900;
+				letter-spacing: -0.02em;
+				border-bottom: 2px solid #000;
+				padding-bottom: 8px;
+				margin-bottom: 10px;
+			}
+			.v1-tabs {
+				display: flex;
+				gap: 12px;
+				margin-bottom: 10px;
+			}
+			.v1-tab {
+				font-family: 'DM Mono', monospace;
+				font-size: 9px;
+				letter-spacing: 0.08em;
+				text-transform: uppercase;
+				padding: 3px 8px;
+				border: 1px solid #000;
+				cursor: pointer;
+			}
+			.v1-tab.active {
+				background: #000;
+				color: #fff;
+			}
+			.v1-event {
+				display: grid;
+				grid-template-columns: 60px 1fr;
+				gap: 8px;
+				margin-bottom: 8px;
+				align-items: start;
+			}
+			.v1-time {
+				font-family: 'DM Mono', monospace;
+				font-size: 10px;
+				color: #aaa;
+				padding-top: 2px;
+			}
+			.v1-ev-title {
+				font-size: 13px;
+				font-weight: 700;
+				line-height: 1.2;
+			}
+			.v1-ev-loc {
+				font-family: 'DM Mono', monospace;
+				font-size: 9px;
+				color: #aaa;
+				margin-top: 2px;
+			}
+			.v1-rule {
+				border: none;
+				border-top: 1px solid #e0e0e0;
+				margin: 6px 0 6px 68px;
+			}
 
-  /* V2 Brutalist */
-  .v2 { font-family: Impact, 'Arial Black', sans-serif; }
-  .v2-head { font-size: 18px; font-weight: 900; text-transform: uppercase; border: 4px solid #000; padding: 4px 8px; display: inline-block; margin-bottom: 8px; }
-  .v2-tabs { display: flex; margin-bottom: 8px; }
-  .v2-tab { font-size: 10px; font-weight: 900; text-transform: uppercase; padding: 4px 10px; border: 3px solid #000; margin-right: -3px; cursor: pointer; background: #fff; }
-  .v2-tab.active { background: #000; color: #fff; }
-  .v2-event { border: 3px solid #000; margin-bottom: 6px; display: grid; grid-template-columns: 52px 1fr; }
-  .v2-time-block { background: #000; color: #fff; font-size: 9px; font-weight: 900; display: flex; align-items: center; justify-content: center; text-align: center; padding: 4px; line-height: 1.2; }
-  .v2-ev-body { padding: 4px 6px; }
-  .v2-ev-title { font-size: 11px; font-weight: 900; text-transform: uppercase; }
-  .v2-ev-loc { font-family: 'DM Mono', monospace; font-size: 8px; color: #aaa; margin-top: 2px; text-transform: uppercase; }
-  .v2-addbtn { border: 3px solid #000; font-size: 11px; font-weight: 900; text-transform: uppercase; padding: 4px 10px; background: #fff; cursor: pointer; margin-top: 6px; display: block; width: 100%; }
+			/* V2 Brutalist */
+			.v2 {
+				font-family: Impact, 'Arial Black', sans-serif;
+			}
+			.v2-head {
+				font-size: 18px;
+				font-weight: 900;
+				text-transform: uppercase;
+				border: 4px solid #000;
+				padding: 4px 8px;
+				display: inline-block;
+				margin-bottom: 8px;
+			}
+			.v2-tabs {
+				display: flex;
+				margin-bottom: 8px;
+			}
+			.v2-tab {
+				font-size: 10px;
+				font-weight: 900;
+				text-transform: uppercase;
+				padding: 4px 10px;
+				border: 3px solid #000;
+				margin-right: -3px;
+				cursor: pointer;
+				background: #fff;
+			}
+			.v2-tab.active {
+				background: #000;
+				color: #fff;
+			}
+			.v2-event {
+				border: 3px solid #000;
+				margin-bottom: 6px;
+				display: grid;
+				grid-template-columns: 52px 1fr;
+			}
+			.v2-time-block {
+				background: #000;
+				color: #fff;
+				font-size: 9px;
+				font-weight: 900;
+				display: flex;
+				align-items: center;
+				justify-content: center;
+				text-align: center;
+				padding: 4px;
+				line-height: 1.2;
+			}
+			.v2-ev-body {
+				padding: 4px 6px;
+			}
+			.v2-ev-title {
+				font-size: 11px;
+				font-weight: 900;
+				text-transform: uppercase;
+			}
+			.v2-ev-loc {
+				font-family: 'DM Mono', monospace;
+				font-size: 8px;
+				color: #aaa;
+				margin-top: 2px;
+				text-transform: uppercase;
+			}
+			.v2-addbtn {
+				border: 3px solid #000;
+				font-size: 11px;
+				font-weight: 900;
+				text-transform: uppercase;
+				padding: 4px 10px;
+				background: #fff;
+				cursor: pointer;
+				margin-top: 6px;
+				display: block;
+				width: 100%;
+			}
 
-  /* V3 Minimal */
-  .v3 { font-family: system-ui, sans-serif; }
-  .v3-head { font-size: 11px; font-weight: 400; color: #aaa; letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 12px; }
-  .v3-tabs { display: flex; gap: 16px; margin-bottom: 14px; border-bottom: 1px solid #e0e0e0; padding-bottom: 8px; }
-  .v3-tab { font-size: 10px; color: #aaa; cursor: pointer; padding-bottom: 8px; margin-bottom: -9px; }
-  .v3-tab.active { color: #000; border-bottom: 1px solid #000; }
-  .v3-event { display: grid; grid-template-columns: 52px 1fr; gap: 8px; padding: 7px 0; border-bottom: 1px solid #f0f0f0; align-items: start; }
-  .v3-time { font-size: 9px; color: #aaa; padding-top: 1px; }
-  .v3-title { font-size: 11px; font-weight: 500; }
-  .v3-loc { font-size: 9px; color: #aaa; margin-top: 2px; }
-  .v3-add { font-size: 10px; color: #aaa; margin-top: 10px; cursor: pointer; }
-  .v3-add:hover { color: #000; }
+			/* V3 Minimal */
+			.v3 {
+				font-family: system-ui, sans-serif;
+			}
+			.v3-head {
+				font-size: 11px;
+				font-weight: 400;
+				color: #aaa;
+				letter-spacing: 0.1em;
+				text-transform: uppercase;
+				margin-bottom: 12px;
+			}
+			.v3-tabs {
+				display: flex;
+				gap: 16px;
+				margin-bottom: 14px;
+				border-bottom: 1px solid #e0e0e0;
+				padding-bottom: 8px;
+			}
+			.v3-tab {
+				font-size: 10px;
+				color: #aaa;
+				cursor: pointer;
+				padding-bottom: 8px;
+				margin-bottom: -9px;
+			}
+			.v3-tab.active {
+				color: #000;
+				border-bottom: 1px solid #000;
+			}
+			.v3-event {
+				display: grid;
+				grid-template-columns: 52px 1fr;
+				gap: 8px;
+				padding: 7px 0;
+				border-bottom: 1px solid #f0f0f0;
+				align-items: start;
+			}
+			.v3-time {
+				font-size: 9px;
+				color: #aaa;
+				padding-top: 1px;
+			}
+			.v3-title {
+				font-size: 11px;
+				font-weight: 500;
+			}
+			.v3-loc {
+				font-size: 9px;
+				color: #aaa;
+				margin-top: 2px;
+			}
+			.v3-add {
+				font-size: 10px;
+				color: #aaa;
+				margin-top: 10px;
+				cursor: pointer;
+			}
+			.v3-add:hover {
+				color: #000;
+			}
 
-  /* V4 Systematic */
-  .v4 { font-family: 'DM Mono', monospace; }
-  .v4-head { font-size: 9px; text-transform: uppercase; letter-spacing: 0.1em; color: #aaa; margin-bottom: 6px; }
-  .v4-tabs { display: flex; gap: 0; margin-bottom: 8px; }
-  .v4-tab { font-size: 9px; padding: 3px 8px; border: 1px solid #000; margin-right: -1px; cursor: pointer; }
-  .v4-tab.active { background: #000; color: #fff; }
-  .v4-table { width: 100%; border-collapse: collapse; font-size: 9px; }
-  .v4-table th { background: #f4f4f4; border: 1px solid #e0e0e0; padding: 3px 6px; text-align: left; font-weight: 500; font-size: 8px; text-transform: uppercase; color: #aaa; }
-  .v4-table td { border: 1px solid #e0e0e0; padding: 3px 6px; vertical-align: top; }
-  .v4-table tr:nth-child(even) td { background: #fafafa; }
-  .v4-add { margin-top: 6px; font-size: 9px; border: 1px solid #000; padding: 3px 8px; background: #fff; cursor: pointer; display: inline-block; }
+			/* V4 Systematic */
+			.v4 {
+				font-family: 'DM Mono', monospace;
+			}
+			.v4-head {
+				font-size: 9px;
+				text-transform: uppercase;
+				letter-spacing: 0.1em;
+				color: #aaa;
+				margin-bottom: 6px;
+			}
+			.v4-tabs {
+				display: flex;
+				gap: 0;
+				margin-bottom: 8px;
+			}
+			.v4-tab {
+				font-size: 9px;
+				padding: 3px 8px;
+				border: 1px solid #000;
+				margin-right: -1px;
+				cursor: pointer;
+			}
+			.v4-tab.active {
+				background: #000;
+				color: #fff;
+			}
+			.v4-table {
+				width: 100%;
+				border-collapse: collapse;
+				font-size: 9px;
+			}
+			.v4-table th {
+				background: #f4f4f4;
+				border: 1px solid #e0e0e0;
+				padding: 3px 6px;
+				text-align: left;
+				font-weight: 500;
+				font-size: 8px;
+				text-transform: uppercase;
+				color: #aaa;
+			}
+			.v4-table td {
+				border: 1px solid #e0e0e0;
+				padding: 3px 6px;
+				vertical-align: top;
+			}
+			.v4-table tr:nth-child(even) td {
+				background: #fafafa;
+			}
+			.v4-add {
+				margin-top: 6px;
+				font-size: 9px;
+				border: 1px solid #000;
+				padding: 3px 8px;
+				background: #fff;
+				cursor: pointer;
+				display: inline-block;
+			}
 
-  /* V5 Dashboard */
-  .v5 { font-family: 'Inter', sans-serif; display: flex; height: 100%; gap: 0; margin: -16px; }
-  .v5-sidebar { width: 90px; border-right: 1px solid #e0e0e0; padding: 12px 8px; flex-shrink: 0; }
-  .v5-sidebar-title { font-size: 8px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: #aaa; margin-bottom: 8px; }
-  .v5-nav-item { font-size: 9px; padding: 4px 6px; border-radius: 2px; margin-bottom: 2px; cursor: pointer; color: #aaa; }
-  .v5-nav-item.active { background: #000; color: #fff; }
-  .v5-main { flex: 1; padding: 12px; overflow: hidden; }
-  .v5-main-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
-  .v5-main-title { font-size: 12px; font-weight: 600; }
-  .v5-addbtn { font-size: 9px; border: 1px solid #000; padding: 3px 8px; background: #fff; cursor: pointer; font-weight: 500; }
-  .v5-day-sel { display: flex; gap: 0; margin-bottom: 10px; }
-  .v5-day { font-size: 9px; padding: 3px 10px; border: 1px solid #e0e0e0; cursor: pointer; color: #aaa; margin-right: -1px; }
-  .v5-day.active { border-color: #000; color: #000; font-weight: 600; }
-  .v5-event-card { border: 1px solid #e0e0e0; border-radius: 2px; padding: 6px 8px; margin-bottom: 5px; display: grid; grid-template-columns: 50px 1fr auto; gap: 6px; align-items: center; }
-  .v5-ev-time { font-size: 8px; color: #aaa; font-family: 'DM Mono', monospace; }
-  .v5-ev-title { font-size: 10px; font-weight: 500; }
-  .v5-ev-loc { font-size: 8px; color: #aaa; }
-  .v5-ev-actions { font-size: 8px; color: #aaa; }
+			/* V5 Dashboard */
+			.v5 {
+				font-family: 'Inter', sans-serif;
+				display: flex;
+				height: 100%;
+				gap: 0;
+				margin: -16px;
+			}
+			.v5-sidebar {
+				width: 90px;
+				border-right: 1px solid #e0e0e0;
+				padding: 12px 8px;
+				flex-shrink: 0;
+			}
+			.v5-sidebar-title {
+				font-size: 8px;
+				font-weight: 600;
+				text-transform: uppercase;
+				letter-spacing: 0.08em;
+				color: #aaa;
+				margin-bottom: 8px;
+			}
+			.v5-nav-item {
+				font-size: 9px;
+				padding: 4px 6px;
+				border-radius: 2px;
+				margin-bottom: 2px;
+				cursor: pointer;
+				color: #aaa;
+			}
+			.v5-nav-item.active {
+				background: #000;
+				color: #fff;
+			}
+			.v5-main {
+				flex: 1;
+				padding: 12px;
+				overflow: hidden;
+			}
+			.v5-main-head {
+				display: flex;
+				justify-content: space-between;
+				align-items: center;
+				margin-bottom: 10px;
+			}
+			.v5-main-title {
+				font-size: 12px;
+				font-weight: 600;
+			}
+			.v5-addbtn {
+				font-size: 9px;
+				border: 1px solid #000;
+				padding: 3px 8px;
+				background: #fff;
+				cursor: pointer;
+				font-weight: 500;
+			}
+			.v5-day-sel {
+				display: flex;
+				gap: 0;
+				margin-bottom: 10px;
+			}
+			.v5-day {
+				font-size: 9px;
+				padding: 3px 10px;
+				border: 1px solid #e0e0e0;
+				cursor: pointer;
+				color: #aaa;
+				margin-right: -1px;
+			}
+			.v5-day.active {
+				border-color: #000;
+				color: #000;
+				font-weight: 600;
+			}
+			.v5-event-card {
+				border: 1px solid #e0e0e0;
+				border-radius: 2px;
+				padding: 6px 8px;
+				margin-bottom: 5px;
+				display: grid;
+				grid-template-columns: 50px 1fr auto;
+				gap: 6px;
+				align-items: center;
+			}
+			.v5-ev-time {
+				font-size: 8px;
+				color: #aaa;
+				font-family: 'DM Mono', monospace;
+			}
+			.v5-ev-title {
+				font-size: 10px;
+				font-weight: 500;
+			}
+			.v5-ev-loc {
+				font-size: 8px;
+				color: #aaa;
+			}
+			.v5-ev-actions {
+				font-size: 8px;
+				color: #aaa;
+			}
 
-  /* V6 Form-first */
-  .v6 { font-family: 'Inter', sans-serif; }
-  .v6-head { font-size: 11px; font-weight: 600; margin-bottom: 4px; }
-  .v6-sub { font-size: 9px; color: #aaa; margin-bottom: 12px; }
-  .v6-form { background: #f4f4f4; border: 1px solid #e0e0e0; padding: 10px; margin-bottom: 10px; }
-  .v6-form-title { font-size: 10px; font-weight: 600; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.04em; }
-  .v6-row { margin-bottom: 6px; }
-  .v6-label { font-size: 8px; text-transform: uppercase; letter-spacing: 0.06em; color: #aaa; display: block; margin-bottom: 2px; }
-  .v6-input { width: 100%; border: 1px solid #e0e0e0; background: #fff; padding: 4px 6px; font-size: 10px; font-family: inherit; }
-  .v6-row2 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; margin-bottom: 6px; }
-  .v6-addbtn { background: #000; color: #fff; border: none; width: 100%; padding: 6px; font-size: 10px; font-family: inherit; cursor: pointer; font-weight: 600; margin-top: 4px; }
-  .v6-list-title { font-size: 9px; text-transform: uppercase; letter-spacing: 0.06em; color: #aaa; margin-bottom: 6px; }
-  .v6-event-row { display: grid; grid-template-columns: 44px 1fr 60px auto; gap: 6px; font-size: 9px; padding: 4px 0; border-bottom: 1px solid #f0f0f0; align-items: center; }
-  .v6-ev-del { font-size: 8px; color: #aaa; cursor: pointer; }
-</style>
-</head>
-<body>
+			/* V6 Form-first */
+			.v6 {
+				font-family: 'Inter', sans-serif;
+			}
+			.v6-head {
+				font-size: 11px;
+				font-weight: 600;
+				margin-bottom: 4px;
+			}
+			.v6-sub {
+				font-size: 9px;
+				color: #aaa;
+				margin-bottom: 12px;
+			}
+			.v6-form {
+				background: #f4f4f4;
+				border: 1px solid #e0e0e0;
+				padding: 10px;
+				margin-bottom: 10px;
+			}
+			.v6-form-title {
+				font-size: 10px;
+				font-weight: 600;
+				margin-bottom: 8px;
+				text-transform: uppercase;
+				letter-spacing: 0.04em;
+			}
+			.v6-row {
+				margin-bottom: 6px;
+			}
+			.v6-label {
+				font-size: 8px;
+				text-transform: uppercase;
+				letter-spacing: 0.06em;
+				color: #aaa;
+				display: block;
+				margin-bottom: 2px;
+			}
+			.v6-input {
+				width: 100%;
+				border: 1px solid #e0e0e0;
+				background: #fff;
+				padding: 4px 6px;
+				font-size: 10px;
+				font-family: inherit;
+			}
+			.v6-row2 {
+				display: grid;
+				grid-template-columns: 1fr 1fr 1fr;
+				gap: 6px;
+				margin-bottom: 6px;
+			}
+			.v6-addbtn {
+				background: #000;
+				color: #fff;
+				border: none;
+				width: 100%;
+				padding: 6px;
+				font-size: 10px;
+				font-family: inherit;
+				cursor: pointer;
+				font-weight: 600;
+				margin-top: 4px;
+			}
+			.v6-list-title {
+				font-size: 9px;
+				text-transform: uppercase;
+				letter-spacing: 0.06em;
+				color: #aaa;
+				margin-bottom: 6px;
+			}
+			.v6-event-row {
+				display: grid;
+				grid-template-columns: 44px 1fr 60px auto;
+				gap: 6px;
+				font-size: 9px;
+				padding: 4px 0;
+				border-bottom: 1px solid #f0f0f0;
+				align-items: center;
+			}
+			.v6-ev-del {
+				font-size: 8px;
+				color: #aaa;
+				cursor: pointer;
+			}
+		</style>
+	</head>
+	<body>
+		<div class="topbar">
+			<span class="topbar-title">RODEO — ADMIN SCHEDULE</span>
+			<span class="topbar-crumb">admin / schedule</span>
+		</div>
+		<div class="meta">
+			<p>
+				6 layout variations for the hackathon schedule manager. Elements: day selector, timeline,
+				event cards (title/time/location), add/edit event.
+			</p>
+		</div>
 
-<div class="topbar">
-  <span class="topbar-title">RODEO — ADMIN SCHEDULE</span>
-  <span class="topbar-crumb">admin / schedule</span>
-</div>
-<div class="meta">
-  <p>6 layout variations for the hackathon schedule manager. Elements: day selector, timeline, event cards (title/time/location), add/edit event.</p>
-</div>
+		<div class="grid">
+			<!-- V1: Editorial -->
+			<div class="cell">
+				<div class="cell-label">
+					<span class="cell-num">01</span>
+					<span class="cell-desc">Editorial — Typographic timeline</span>
+				</div>
+				<div class="cell-frame">
+					<div class="v1">
+						<div class="v1-head">Schedule</div>
+						<div class="v1-tabs">
+							<span class="v1-tab active">Day 1 — Nov 15</span>
+							<span class="v1-tab">Day 2 — Nov 16</span>
+						</div>
+						<div class="v1-event">
+							<div class="v1-time">9:00 am</div>
+							<div>
+								<div class="v1-ev-title">Opening Ceremony</div>
+								<div class="v1-ev-loc">Main Hall</div>
+							</div>
+						</div>
+						<hr class="v1-rule" />
+						<div class="v1-event">
+							<div class="v1-time">10:00 am</div>
+							<div>
+								<div class="v1-ev-title">Hacking Begins</div>
+								<div class="v1-ev-loc">Entire Venue</div>
+							</div>
+						</div>
+						<hr class="v1-rule" />
+						<div class="v1-event">
+							<div class="v1-time">12:30 pm</div>
+							<div>
+								<div class="v1-ev-title">Lunch</div>
+								<div class="v1-ev-loc">Cafeteria</div>
+							</div>
+						</div>
+						<hr class="v1-rule" />
+						<div class="v1-event">
+							<div class="v1-time">3:00 pm</div>
+							<div>
+								<div class="v1-ev-title">Workshop: Intro to ML</div>
+								<div class="v1-ev-loc">Room 101</div>
+							</div>
+						</div>
+						<hr class="v1-rule" />
+						<div class="v1-event">
+							<div class="v1-time">6:00 pm</div>
+							<div>
+								<div class="v1-ev-title">Dinner</div>
+								<div class="v1-ev-loc">Cafeteria</div>
+							</div>
+						</div>
+					</div>
+				</div>
+			</div>
 
-<div class="grid">
+			<!-- V2: Brutalist -->
+			<div class="cell">
+				<div class="cell-label">
+					<span class="cell-num">02</span>
+					<span class="cell-desc">Brutalist — Block schedule grid</span>
+				</div>
+				<div class="cell-frame">
+					<div class="v2">
+						<div class="v2-head">SCHEDULE</div>
+						<div class="v2-tabs">
+							<span class="v2-tab active">DAY 1</span>
+							<span class="v2-tab">DAY 2</span>
+						</div>
+						<div class="v2-event">
+							<div class="v2-time-block">9:00<br />AM</div>
+							<div class="v2-ev-body">
+								<div class="v2-ev-title">OPENING CEREMONY</div>
+								<div class="v2-ev-loc">MAIN HALL</div>
+							</div>
+						</div>
+						<div class="v2-event">
+							<div class="v2-time-block">10:00<br />AM</div>
+							<div class="v2-ev-body">
+								<div class="v2-ev-title">HACKING BEGINS</div>
+								<div class="v2-ev-loc">ENTIRE VENUE</div>
+							</div>
+						</div>
+						<div class="v2-event">
+							<div class="v2-time-block">12:30<br />PM</div>
+							<div class="v2-ev-body">
+								<div class="v2-ev-title">LUNCH</div>
+								<div class="v2-ev-loc">CAFETERIA</div>
+							</div>
+						</div>
+						<div class="v2-event">
+							<div class="v2-time-block">3:00<br />PM</div>
+							<div class="v2-ev-body">
+								<div class="v2-ev-title">ML WORKSHOP</div>
+								<div class="v2-ev-loc">ROOM 101</div>
+							</div>
+						</div>
+						<button class="v2-addbtn">+ ADD EVENT</button>
+					</div>
+				</div>
+			</div>
 
-  <!-- V1: Editorial -->
-  <div class="cell">
-    <div class="cell-label">
-      <span class="cell-num">01</span>
-      <span class="cell-desc">Editorial — Typographic timeline</span>
-    </div>
-    <div class="cell-frame">
-      <div class="v1">
-        <div class="v1-head">Schedule</div>
-        <div class="v1-tabs">
-          <span class="v1-tab active">Day 1 — Nov 15</span>
-          <span class="v1-tab">Day 2 — Nov 16</span>
-        </div>
-        <div class="v1-event">
-          <div class="v1-time">9:00 am</div>
-          <div><div class="v1-ev-title">Opening Ceremony</div><div class="v1-ev-loc">Main Hall</div></div>
-        </div>
-        <hr class="v1-rule">
-        <div class="v1-event">
-          <div class="v1-time">10:00 am</div>
-          <div><div class="v1-ev-title">Hacking Begins</div><div class="v1-ev-loc">Entire Venue</div></div>
-        </div>
-        <hr class="v1-rule">
-        <div class="v1-event">
-          <div class="v1-time">12:30 pm</div>
-          <div><div class="v1-ev-title">Lunch</div><div class="v1-ev-loc">Cafeteria</div></div>
-        </div>
-        <hr class="v1-rule">
-        <div class="v1-event">
-          <div class="v1-time">3:00 pm</div>
-          <div><div class="v1-ev-title">Workshop: Intro to ML</div><div class="v1-ev-loc">Room 101</div></div>
-        </div>
-        <hr class="v1-rule">
-        <div class="v1-event">
-          <div class="v1-time">6:00 pm</div>
-          <div><div class="v1-ev-title">Dinner</div><div class="v1-ev-loc">Cafeteria</div></div>
-        </div>
-      </div>
-    </div>
-  </div>
+			<!-- V3: Minimal -->
+			<div class="cell">
+				<div class="cell-label">
+					<span class="cell-num">03</span>
+					<span class="cell-desc">Minimal — Hairline timeline</span>
+				</div>
+				<div class="cell-frame">
+					<div class="v3">
+						<div class="v3-head">Schedule</div>
+						<div class="v3-tabs">
+							<span class="v3-tab active">Nov 15</span>
+							<span class="v3-tab">Nov 16</span>
+						</div>
+						<div class="v3-event">
+							<div class="v3-time">9:00 am</div>
+							<div>
+								<div class="v3-title">Opening Ceremony</div>
+								<div class="v3-loc">Main Hall</div>
+							</div>
+						</div>
+						<div class="v3-event">
+							<div class="v3-time">10:00</div>
+							<div>
+								<div class="v3-title">Hacking Begins</div>
+								<div class="v3-loc">Entire Venue</div>
+							</div>
+						</div>
+						<div class="v3-event">
+							<div class="v3-time">12:30</div>
+							<div>
+								<div class="v3-title">Lunch</div>
+								<div class="v3-loc">Cafeteria</div>
+							</div>
+						</div>
+						<div class="v3-event">
+							<div class="v3-time">3:00 pm</div>
+							<div>
+								<div class="v3-title">Workshop: Intro to ML</div>
+								<div class="v3-loc">Room 101</div>
+							</div>
+						</div>
+						<div class="v3-event">
+							<div class="v3-time">6:00 pm</div>
+							<div>
+								<div class="v3-title">Dinner</div>
+								<div class="v3-loc">Cafeteria</div>
+							</div>
+						</div>
+						<div class="v3-add">+ add event</div>
+					</div>
+				</div>
+			</div>
 
-  <!-- V2: Brutalist -->
-  <div class="cell">
-    <div class="cell-label">
-      <span class="cell-num">02</span>
-      <span class="cell-desc">Brutalist — Block schedule grid</span>
-    </div>
-    <div class="cell-frame">
-      <div class="v2">
-        <div class="v2-head">SCHEDULE</div>
-        <div class="v2-tabs">
-          <span class="v2-tab active">DAY 1</span>
-          <span class="v2-tab">DAY 2</span>
-        </div>
-        <div class="v2-event">
-          <div class="v2-time-block">9:00<br>AM</div>
-          <div class="v2-ev-body"><div class="v2-ev-title">OPENING CEREMONY</div><div class="v2-ev-loc">MAIN HALL</div></div>
-        </div>
-        <div class="v2-event">
-          <div class="v2-time-block">10:00<br>AM</div>
-          <div class="v2-ev-body"><div class="v2-ev-title">HACKING BEGINS</div><div class="v2-ev-loc">ENTIRE VENUE</div></div>
-        </div>
-        <div class="v2-event">
-          <div class="v2-time-block">12:30<br>PM</div>
-          <div class="v2-ev-body"><div class="v2-ev-title">LUNCH</div><div class="v2-ev-loc">CAFETERIA</div></div>
-        </div>
-        <div class="v2-event">
-          <div class="v2-time-block">3:00<br>PM</div>
-          <div class="v2-ev-body"><div class="v2-ev-title">ML WORKSHOP</div><div class="v2-ev-loc">ROOM 101</div></div>
-        </div>
-        <button class="v2-addbtn">+ ADD EVENT</button>
-      </div>
-    </div>
-  </div>
+			<!-- V4: Systematic -->
+			<div class="cell">
+				<div class="cell-label">
+					<span class="cell-num">04</span>
+					<span class="cell-desc">Systematic — Table view all metadata</span>
+				</div>
+				<div class="cell-frame">
+					<div class="v4">
+						<div class="v4-head">SCHEDULE — EVENT TABLE</div>
+						<div class="v4-tabs">
+							<span class="v4-tab active">DAY 1</span>
+							<span class="v4-tab">DAY 2</span>
+							<span class="v4-tab">ALL</span>
+						</div>
+						<table class="v4-table">
+							<thead>
+								<tr>
+									<th>TIME</th>
+									<th>TITLE</th>
+									<th>LOCATION</th>
+									<th>TYPE</th>
+									<th>ACT</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td>09:00–10:00</td>
+									<td>Opening Ceremony</td>
+									<td>Main Hall</td>
+									<td>ceremony</td>
+									<td>✎ ✕</td>
+								</tr>
+								<tr>
+									<td>10:00–...</td>
+									<td>Hacking Begins</td>
+									<td>Entire Venue</td>
+									<td>main</td>
+									<td>✎ ✕</td>
+								</tr>
+								<tr>
+									<td>12:30–13:30</td>
+									<td>Lunch</td>
+									<td>Cafeteria</td>
+									<td>food</td>
+									<td>✎ ✕</td>
+								</tr>
+								<tr>
+									<td>15:00–16:00</td>
+									<td>Workshop: ML</td>
+									<td>Room 101</td>
+									<td>workshop</td>
+									<td>✎ ✕</td>
+								</tr>
+								<tr>
+									<td>18:00–19:00</td>
+									<td>Dinner</td>
+									<td>Cafeteria</td>
+									<td>food</td>
+									<td>✎ ✕</td>
+								</tr>
+							</tbody>
+						</table>
+						<button class="v4-add">+ ADD ROW</button>
+					</div>
+				</div>
+			</div>
 
-  <!-- V3: Minimal -->
-  <div class="cell">
-    <div class="cell-label">
-      <span class="cell-num">03</span>
-      <span class="cell-desc">Minimal — Hairline timeline</span>
-    </div>
-    <div class="cell-frame">
-      <div class="v3">
-        <div class="v3-head">Schedule</div>
-        <div class="v3-tabs">
-          <span class="v3-tab active">Nov 15</span>
-          <span class="v3-tab">Nov 16</span>
-        </div>
-        <div class="v3-event">
-          <div class="v3-time">9:00 am</div>
-          <div><div class="v3-title">Opening Ceremony</div><div class="v3-loc">Main Hall</div></div>
-        </div>
-        <div class="v3-event">
-          <div class="v3-time">10:00</div>
-          <div><div class="v3-title">Hacking Begins</div><div class="v3-loc">Entire Venue</div></div>
-        </div>
-        <div class="v3-event">
-          <div class="v3-time">12:30</div>
-          <div><div class="v3-title">Lunch</div><div class="v3-loc">Cafeteria</div></div>
-        </div>
-        <div class="v3-event">
-          <div class="v3-time">3:00 pm</div>
-          <div><div class="v3-title">Workshop: Intro to ML</div><div class="v3-loc">Room 101</div></div>
-        </div>
-        <div class="v3-event">
-          <div class="v3-time">6:00 pm</div>
-          <div><div class="v3-title">Dinner</div><div class="v3-loc">Cafeteria</div></div>
-        </div>
-        <div class="v3-add">+ add event</div>
-      </div>
-    </div>
-  </div>
+			<!-- V5: Dashboard -->
+			<div class="cell">
+				<div class="cell-label">
+					<span class="cell-num">05</span>
+					<span class="cell-desc">Dashboard — Sidebar + timeline cards</span>
+				</div>
+				<div class="cell-frame">
+					<div class="v5">
+						<div class="v5-sidebar">
+							<div class="v5-sidebar-title">Days</div>
+							<div class="v5-nav-item active">
+								Nov 15<br /><span style="font-size: 7px; color: #aaa">Day 1</span>
+							</div>
+							<div class="v5-nav-item">
+								Nov 16<br /><span style="font-size: 7px; color: #aaa">Day 2</span>
+							</div>
+							<div style="border-top: 1px solid #e0e0e0; margin: 8px 0"></div>
+							<div class="v5-sidebar-title">Views</div>
+							<div class="v5-nav-item">Timeline</div>
+							<div class="v5-nav-item">Table</div>
+						</div>
+						<div class="v5-main">
+							<div class="v5-main-head">
+								<div class="v5-main-title">Day 1 — Nov 15</div>
+								<button class="v5-addbtn">+ Add Event</button>
+							</div>
+							<div class="v5-event-card">
+								<div class="v5-ev-time">9:00 am</div>
+								<div>
+									<div class="v5-ev-title">Opening Ceremony</div>
+									<div class="v5-ev-loc">Main Hall</div>
+								</div>
+								<div class="v5-ev-actions">✎ ✕</div>
+							</div>
+							<div class="v5-event-card">
+								<div class="v5-ev-time">10:00</div>
+								<div>
+									<div class="v5-ev-title">Hacking Begins</div>
+									<div class="v5-ev-loc">Entire Venue</div>
+								</div>
+								<div class="v5-ev-actions">✎ ✕</div>
+							</div>
+							<div class="v5-event-card">
+								<div class="v5-ev-time">12:30</div>
+								<div>
+									<div class="v5-ev-title">Lunch</div>
+									<div class="v5-ev-loc">Cafeteria</div>
+								</div>
+								<div class="v5-ev-actions">✎ ✕</div>
+							</div>
+							<div class="v5-event-card">
+								<div class="v5-ev-time">3:00 pm</div>
+								<div>
+									<div class="v5-ev-title">Workshop: Intro to ML</div>
+									<div class="v5-ev-loc">Room 101</div>
+								</div>
+								<div class="v5-ev-actions">✎ ✕</div>
+							</div>
+							<div class="v5-event-card">
+								<div class="v5-ev-time">6:00 pm</div>
+								<div>
+									<div class="v5-ev-title">Dinner</div>
+									<div class="v5-ev-loc">Cafeteria</div>
+								</div>
+								<div class="v5-ev-actions">✎ ✕</div>
+							</div>
+						</div>
+					</div>
+				</div>
+			</div>
 
-  <!-- V4: Systematic -->
-  <div class="cell">
-    <div class="cell-label">
-      <span class="cell-num">04</span>
-      <span class="cell-desc">Systematic — Table view all metadata</span>
-    </div>
-    <div class="cell-frame">
-      <div class="v4">
-        <div class="v4-head">SCHEDULE — EVENT TABLE</div>
-        <div class="v4-tabs">
-          <span class="v4-tab active">DAY 1</span>
-          <span class="v4-tab">DAY 2</span>
-          <span class="v4-tab">ALL</span>
-        </div>
-        <table class="v4-table">
-          <thead>
-            <tr>
-              <th>TIME</th>
-              <th>TITLE</th>
-              <th>LOCATION</th>
-              <th>TYPE</th>
-              <th>ACT</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr><td>09:00–10:00</td><td>Opening Ceremony</td><td>Main Hall</td><td>ceremony</td><td>✎ ✕</td></tr>
-            <tr><td>10:00–...</td><td>Hacking Begins</td><td>Entire Venue</td><td>main</td><td>✎ ✕</td></tr>
-            <tr><td>12:30–13:30</td><td>Lunch</td><td>Cafeteria</td><td>food</td><td>✎ ✕</td></tr>
-            <tr><td>15:00–16:00</td><td>Workshop: ML</td><td>Room 101</td><td>workshop</td><td>✎ ✕</td></tr>
-            <tr><td>18:00–19:00</td><td>Dinner</td><td>Cafeteria</td><td>food</td><td>✎ ✕</td></tr>
-          </tbody>
-        </table>
-        <button class="v4-add">+ ADD ROW</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- V5: Dashboard -->
-  <div class="cell">
-    <div class="cell-label">
-      <span class="cell-num">05</span>
-      <span class="cell-desc">Dashboard — Sidebar + timeline cards</span>
-    </div>
-    <div class="cell-frame">
-      <div class="v5">
-        <div class="v5-sidebar">
-          <div class="v5-sidebar-title">Days</div>
-          <div class="v5-nav-item active">Nov 15<br><span style="font-size:7px;color:#aaa">Day 1</span></div>
-          <div class="v5-nav-item">Nov 16<br><span style="font-size:7px;color:#aaa">Day 2</span></div>
-          <div style="border-top:1px solid #e0e0e0;margin:8px 0;"></div>
-          <div class="v5-sidebar-title">Views</div>
-          <div class="v5-nav-item">Timeline</div>
-          <div class="v5-nav-item">Table</div>
-        </div>
-        <div class="v5-main">
-          <div class="v5-main-head">
-            <div class="v5-main-title">Day 1 — Nov 15</div>
-            <button class="v5-addbtn">+ Add Event</button>
-          </div>
-          <div class="v5-event-card">
-            <div class="v5-ev-time">9:00 am</div>
-            <div><div class="v5-ev-title">Opening Ceremony</div><div class="v5-ev-loc">Main Hall</div></div>
-            <div class="v5-ev-actions">✎ ✕</div>
-          </div>
-          <div class="v5-event-card">
-            <div class="v5-ev-time">10:00</div>
-            <div><div class="v5-ev-title">Hacking Begins</div><div class="v5-ev-loc">Entire Venue</div></div>
-            <div class="v5-ev-actions">✎ ✕</div>
-          </div>
-          <div class="v5-event-card">
-            <div class="v5-ev-time">12:30</div>
-            <div><div class="v5-ev-title">Lunch</div><div class="v5-ev-loc">Cafeteria</div></div>
-            <div class="v5-ev-actions">✎ ✕</div>
-          </div>
-          <div class="v5-event-card">
-            <div class="v5-ev-time">3:00 pm</div>
-            <div><div class="v5-ev-title">Workshop: Intro to ML</div><div class="v5-ev-loc">Room 101</div></div>
-            <div class="v5-ev-actions">✎ ✕</div>
-          </div>
-          <div class="v5-event-card">
-            <div class="v5-ev-time">6:00 pm</div>
-            <div><div class="v5-ev-title">Dinner</div><div class="v5-ev-loc">Cafeteria</div></div>
-            <div class="v5-ev-actions">✎ ✕</div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- V6: Form-first -->
-  <div class="cell">
-    <div class="cell-label">
-      <span class="cell-num">06</span>
-      <span class="cell-desc">Form-first — Add event focused</span>
-    </div>
-    <div class="cell-frame">
-      <div class="v6">
-        <div class="v6-head">Add Event</div>
-        <div class="v6-sub">Day 1 — Nov 15, 2025</div>
-        <div class="v6-form">
-          <div class="v6-form-title">New Event</div>
-          <div class="v6-row">
-            <label class="v6-label">Event Title</label>
-            <input class="v6-input" type="text" placeholder="e.g. Workshop: Intro to ML">
-          </div>
-          <div class="v6-row2">
-            <div>
-              <label class="v6-label">Start Time</label>
-              <input class="v6-input" type="text" value="3:00 PM">
-            </div>
-            <div>
-              <label class="v6-label">End Time</label>
-              <input class="v6-input" type="text" value="4:00 PM">
-            </div>
-            <div>
-              <label class="v6-label">Location</label>
-              <input class="v6-input" type="text" placeholder="Room 101">
-            </div>
-          </div>
-          <button class="v6-addbtn">ADD TO SCHEDULE</button>
-        </div>
-        <div class="v6-list-title">Today's Events (5)</div>
-        <div class="v6-event-row"><span>9:00</span><span>Opening Ceremony</span><span>Main Hall</span><span class="v6-ev-del">✕</span></div>
-        <div class="v6-event-row"><span>10:00</span><span>Hacking Begins</span><span>Venue</span><span class="v6-ev-del">✕</span></div>
-        <div class="v6-event-row"><span>12:30</span><span>Lunch</span><span>Cafeteria</span><span class="v6-ev-del">✕</span></div>
-        <div class="v6-event-row"><span>3:00</span><span>ML Workshop</span><span>Room 101</span><span class="v6-ev-del">✕</span></div>
-      </div>
-    </div>
-  </div>
-
-</div>
-
-</body>
+			<!-- V6: Form-first -->
+			<div class="cell">
+				<div class="cell-label">
+					<span class="cell-num">06</span>
+					<span class="cell-desc">Form-first — Add event focused</span>
+				</div>
+				<div class="cell-frame">
+					<div class="v6">
+						<div class="v6-head">Add Event</div>
+						<div class="v6-sub">Day 1 — Nov 15, 2025</div>
+						<div class="v6-form">
+							<div class="v6-form-title">New Event</div>
+							<div class="v6-row">
+								<label class="v6-label">Event Title</label>
+								<input class="v6-input" type="text" placeholder="e.g. Workshop: Intro to ML" />
+							</div>
+							<div class="v6-row2">
+								<div>
+									<label class="v6-label">Start Time</label>
+									<input class="v6-input" type="text" value="3:00 PM" />
+								</div>
+								<div>
+									<label class="v6-label">End Time</label>
+									<input class="v6-input" type="text" value="4:00 PM" />
+								</div>
+								<div>
+									<label class="v6-label">Location</label>
+									<input class="v6-input" type="text" placeholder="Room 101" />
+								</div>
+							</div>
+							<button class="v6-addbtn">ADD TO SCHEDULE</button>
+						</div>
+						<div class="v6-list-title">Today's Events (5)</div>
+						<div class="v6-event-row">
+							<span>9:00</span><span>Opening Ceremony</span><span>Main Hall</span
+							><span class="v6-ev-del">✕</span>
+						</div>
+						<div class="v6-event-row">
+							<span>10:00</span><span>Hacking Begins</span><span>Venue</span
+							><span class="v6-ev-del">✕</span>
+						</div>
+						<div class="v6-event-row">
+							<span>12:30</span><span>Lunch</span><span>Cafeteria</span
+							><span class="v6-ev-del">✕</span>
+						</div>
+						<div class="v6-event-row">
+							<span>3:00</span><span>ML Workshop</span><span>Room 101</span
+							><span class="v6-ev-del">✕</span>
+						</div>
+					</div>
+				</div>
+			</div>
+		</div>
+	</body>
 </html>

@@ -1,6 +1,12 @@
 import 'dotenv/config';
 import { PrismaPg } from '@prisma/adapter-pg';
-import { PrismaClient, Role, UserStatus, DecisionStatus, QuestionType } from '../src/lib/generated/prisma/client';
+import {
+	PrismaClient,
+	Role,
+	UserStatus,
+	DecisionStatus,
+	QuestionType
+} from '../src/lib/generated/prisma/client';
 
 const connectionString = process.env.DATABASE_URL;
 if (!connectionString) {
@@ -301,7 +307,13 @@ const questions = [
 		type: QuestionType.MULTIPLE_CHOICE,
 		required: true,
 		targetRole: [Role.VOLUNTEER],
-		options: ['Friday evening setup', 'Saturday morning', 'Saturday afternoon', 'Sunday morning', 'Sunday breakdown'],
+		options: [
+			'Friday evening setup',
+			'Saturday morning',
+			'Saturday afternoon',
+			'Sunday morning',
+			'Sunday breakdown'
+		],
 		order: 50
 	},
 	{
@@ -309,7 +321,7 @@ const questions = [
 		type: QuestionType.LONG_TEXT,
 		required: false,
 		targetRole: [Role.VOLUNTEER],
-		placeholder: 'Tell us about events you\'ve helped run before',
+		placeholder: "Tell us about events you've helped run before",
 		order: 51
 	}
 ];
@@ -321,8 +333,8 @@ const questions = [
 const queueResponses: Record<string, Record<string, string>> = {
 	'hacker.queue1@yopmail.com': {
 		'Full Name': 'Jamie Chen',
-		'University': 'University of Texas at Austin',
-		'Year': 'Sophomore',
+		University: 'University of Texas at Austin',
+		Year: 'Sophomore',
 		'Phone Number': '(512) 555-0111',
 		'T-Shirt Size': 'S',
 		'Dietary Restrictions': 'Vegetarian',
@@ -337,8 +349,8 @@ const queueResponses: Record<string, Record<string, string>> = {
 	},
 	'hacker.queue2@yopmail.com': {
 		'Full Name': 'Marcus Rivera',
-		'University': 'Texas A&M University',
-		'Year': 'Junior',
+		University: 'Texas A&M University',
+		Year: 'Junior',
 		'Phone Number': '(979) 555-0188',
 		'T-Shirt Size': 'L',
 		'Dietary Restrictions': 'None',
@@ -353,8 +365,8 @@ const queueResponses: Record<string, Record<string, string>> = {
 	},
 	'hacker.queue3@yopmail.com': {
 		'Full Name': 'Priya Nair',
-		'University': 'UT Dallas',
-		'Year': 'Senior',
+		University: 'UT Dallas',
+		Year: 'Senior',
 		'Phone Number': '(214) 555-0147',
 		'T-Shirt Size': 'XS',
 		'Dietary Restrictions': 'Gluten-free',
@@ -419,7 +431,10 @@ async function main() {
 
 main()
 	.catch((e: unknown) => {
-		const code = typeof e === 'object' && e !== null && 'code' in e ? String((e as { code: unknown }).code) : '';
+		const code =
+			typeof e === 'object' && e !== null && 'code' in e
+				? String((e as { code: unknown }).code)
+				: '';
 		if (code === 'P2021') {
 			console.error(
 				'No tables in this database yet. Create them first, then seed again:\n' +

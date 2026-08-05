@@ -10,10 +10,10 @@ The original plan had one `Blacklist` row carrying a `type` of `EMAIL` or `NAME`
 single `value`, with either kind auto-rejecting on submit. That conflates two signals with
 very different reliability.
 
-| Signal    | Matching                   | Effect                                       |
-| --------- | -------------------------- | -------------------------------------------- |
-| **Email** | Exact, on a normalized address | Auto-sets `pendingDecision = REJECTED` at `application.submit` |
-| **Name**  | First **and** last, typo-tolerant | Flags for a reviewer. Decides nothing.  |
+| Signal    | Matching                          | Effect                                                         |
+| --------- | --------------------------------- | -------------------------------------------------------------- |
+| **Email** | Exact, on a normalized address    | Auto-sets `pendingDecision = REJECTED` at `application.submit` |
+| **Name**  | First **and** last, typo-tolerant | Flags for a reviewer. Decides nothing.                         |
 
 An email address identifies one person. A name does not — and two people sharing a name is
 ordinary, not exceptional. Auto-rejecting on a name means an applicant who happens to share
@@ -24,7 +24,7 @@ anyone, the matching is free to tolerate misspellings; because email matching au
 it stays strictly exact.
 
 **A consequence worth knowing:** name flags are computed per request in `admissions.list`,
-not stored at submit time. An entry added *after* someone applied still flags them. The
+not stored at submit time. An entry added _after_ someone applied still flags them. The
 email auto-reject, by contrast, only fires at submit — blacklisting an address afterward
 does not retroactively reject that application.
 
@@ -100,7 +100,7 @@ failure mode for a hand-maintained spreadsheet.
 `$lib/blacklist/csv.ts` is a real RFC 4180 parser, not `split(',')`. Files come out of Excel
 and Google Sheets, which means quoted fields, commas inside the reason column, CRLF, and a
 UTF-8 BOM — a naive split turns each of those into silently wrong data rather than a visible
-error. A header row is *detected*, not assumed; blindly dropping line one eats a real entry
+error. A header row is _detected_, not assumed; blindly dropping line one eats a real entry
 whenever someone exports without headers.
 
 Two behaviors that look inconsistent but aren't:
@@ -111,7 +111,7 @@ Two behaviors that look inconsistent but aren't:
   unique index, which only covers rows that have an address. Without the explicit check,
   name-only rows would accumulate a fresh copy on every import.
 
-The UI reports the counts the *server* returned. Reporting the number of rows sent — as the
+The UI reports the counts the _server_ returned. Reporting the number of rows sent — as the
 earlier prototype did — calls every skipped duplicate and rejected row a success.
 
 ## Deliberately not built

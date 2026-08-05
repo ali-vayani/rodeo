@@ -62,7 +62,10 @@ export const teamRouter = router({
 			}
 
 			if (inviter.team.members.length >= MAX_TEAM_SIZE) {
-				throw new TRPCError({ code: 'BAD_REQUEST', message: 'Team is already full (max 4 members).' });
+				throw new TRPCError({
+					code: 'BAD_REQUEST',
+					message: 'Team is already full (max 4 members).'
+				});
 			}
 
 			const invitee = await ctx.prisma.user.findUnique({ where: { email: input.email } });
@@ -71,7 +74,10 @@ export const teamRouter = router({
 				throw new TRPCError({ code: 'NOT_FOUND', message: 'User not found.' });
 			}
 
-			if (invitee.activeDecision !== DecisionStatus.ACCEPTED || invitee.status !== UserStatus.CONFIRMED) {
+			if (
+				invitee.activeDecision !== DecisionStatus.ACCEPTED ||
+				invitee.status !== UserStatus.CONFIRMED
+			) {
 				throw new TRPCError({
 					code: 'BAD_REQUEST',
 					message: "User's attendance is not confirmed."
@@ -159,7 +165,10 @@ export const teamRouter = router({
 				where: { uid: ctx.user.uid }
 			});
 
-			if (user.activeDecision !== DecisionStatus.ACCEPTED || (user.status !== UserStatus.CONFIRMED && user.status !== UserStatus.CHECKED_IN)) {
+			if (
+				user.activeDecision !== DecisionStatus.ACCEPTED ||
+				(user.status !== UserStatus.CONFIRMED && user.status !== UserStatus.CHECKED_IN)
+			) {
 				throw new TRPCError({
 					code: 'BAD_REQUEST',
 					message: 'You must be confirmed or checked in to join a team.'
@@ -171,10 +180,10 @@ export const teamRouter = router({
 			}
 
 			// eslint-disable-next-line @typescript-eslint/no-explicit-any
-			const team = await (ctx.prisma.team.findUnique as any)({
+			const team = (await (ctx.prisma.team.findUnique as any)({
 				where: { inviteCode: input.inviteCode },
 				include: { members: true }
-			}) as { id: string; teamName: string; members: { uid: string }[] } | null;
+			})) as { id: string; teamName: string; members: { uid: string }[] } | null;
 
 			if (!team) {
 				throw new TRPCError({ code: 'NOT_FOUND', message: 'Invite link not found or expired.' });
@@ -198,7 +207,11 @@ export const teamRouter = router({
 				include: { members: true }
 			});
 			if (!team) return null;
-			return { teamName: team.teamName, memberCount: team.members.length, inviteCode: team.inviteCode };
+			return {
+				teamName: team.teamName,
+				memberCount: team.members.length,
+				inviteCode: team.inviteCode
+			};
 		}),
 
 	leaveTeam: authedProcedure.mutation(async ({ ctx }) => {

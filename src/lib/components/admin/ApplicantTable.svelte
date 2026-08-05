@@ -33,27 +33,43 @@
 	}
 </script>
 
-<div class="bg-white border border-border rounded-md overflow-hidden">
-	<div class="px-5 py-4 border-b border-border">
-		<span class="text-[11px] font-bold tracking-[0.12em] uppercase text-muted-foreground">
+<div class="overflow-hidden rounded-md border border-border bg-white">
+	<div class="border-b border-border px-5 py-4">
+		<span class="text-[11px] font-bold tracking-[0.12em] text-muted-foreground uppercase">
 			Recent Applicants
 		</span>
 	</div>
 
 	{#if applicants.length === 0}
-		<div class="p-8 text-center text-[13px] text-muted-foreground">
-			No applicants yet
-		</div>
+		<div class="p-8 text-center text-[13px] text-muted-foreground">No applicants yet</div>
 	{:else}
 		<table class="w-full border-collapse">
 			<thead>
-				<tr class="bg-[#f9f9f9] border-b border-border">
-					<th class="px-4 py-[10px] text-left text-[11px] font-semibold tracking-[0.06em] uppercase text-muted-foreground">Name</th>
-					<th class="px-4 py-[10px] text-left text-[11px] font-semibold tracking-[0.06em] uppercase text-muted-foreground">Email</th>
-					<th class="px-4 py-[10px] text-left text-[11px] font-semibold tracking-[0.06em] uppercase text-muted-foreground">Role</th>
-					<th class="px-4 py-[10px] text-left text-[11px] font-semibold tracking-[0.06em] uppercase text-muted-foreground">Status</th>
-					<th class="px-4 py-[10px] text-left text-[11px] font-semibold tracking-[0.06em] uppercase text-muted-foreground">Decision</th>
-					<th class="px-4 py-[10px] text-left text-[11px] font-semibold tracking-[0.06em] uppercase text-muted-foreground">Applied</th>
+				<tr class="border-b border-border bg-[#f9f9f9]">
+					<th
+						class="px-4 py-[10px] text-left text-[11px] font-semibold tracking-[0.06em] text-muted-foreground uppercase"
+						>Name</th
+					>
+					<th
+						class="px-4 py-[10px] text-left text-[11px] font-semibold tracking-[0.06em] text-muted-foreground uppercase"
+						>Email</th
+					>
+					<th
+						class="px-4 py-[10px] text-left text-[11px] font-semibold tracking-[0.06em] text-muted-foreground uppercase"
+						>Role</th
+					>
+					<th
+						class="px-4 py-[10px] text-left text-[11px] font-semibold tracking-[0.06em] text-muted-foreground uppercase"
+						>Status</th
+					>
+					<th
+						class="px-4 py-[10px] text-left text-[11px] font-semibold tracking-[0.06em] text-muted-foreground uppercase"
+						>Decision</th
+					>
+					<th
+						class="px-4 py-[10px] text-left text-[11px] font-semibold tracking-[0.06em] text-muted-foreground uppercase"
+						>Applied</th
+					>
 				</tr>
 			</thead>
 			<tbody>
@@ -69,13 +85,17 @@
 							{primaryRole(applicant.roles)}
 						</td>
 						<td class="px-4 py-3">
-							<span class="text-[11px] font-semibold tracking-[0.06em] uppercase text-[#555]">
+							<span class="text-[11px] font-semibold tracking-[0.06em] text-[#555] uppercase">
 								{applicant.status.charAt(0) + applicant.status.slice(1).toLowerCase()}
 							</span>
 						</td>
 						<td class="px-4 py-3">
 							{#if applicant.activeDecision}
-								<span class="inline-block px-2 py-0.5 rounded text-[11px] font-semibold {DECISION_CLASS[applicant.activeDecision] ?? 'bg-[#e5e7eb] text-[#374151]'}">
+								<span
+									class="inline-block rounded px-2 py-0.5 text-[11px] font-semibold {DECISION_CLASS[
+										applicant.activeDecision
+									] ?? 'bg-[#e5e7eb] text-[#374151]'}"
+								>
 									{applicant.activeDecision.charAt(0) +
 										applicant.activeDecision.slice(1).toLowerCase()}
 								</span>
@@ -83,7 +103,7 @@
 								<span class="text-xs text-muted-foreground">—</span>
 							{/if}
 						</td>
-						<td class="px-4 py-3 text-xs text-muted-foreground font-mono">
+						<td class="px-4 py-3 font-mono text-xs text-muted-foreground">
 							{formatDate(applicant.createdAt)}
 						</td>
 					</tr>
