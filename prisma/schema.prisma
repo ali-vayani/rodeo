@@ -59,11 +59,6 @@ enum InvitationStatus {
   DECLINED
 }
 
-enum BlacklistType {
-  EMAIL
-  NAME
-}
-
 // Models
 // -----------------------------------------------------------------------------
 
@@ -140,11 +135,28 @@ model Settings {
   timezone            String // IANA identifier, e.g. "America/Chicago"
 }
 
+/// An entry carries two independent signals, and they are deliberately not equal in weight:
+///
+///   - `email` is an identity. An exact match auto-rejects at `application.submit`.
+///   - `firstName`/`lastName` are a heuristic. A match only flags the applicant for a
+///     reviewer; it never decides anything on its own.
+///
+/// That asymmetry is what lets name matching be typo-tolerant (see `$lib/blacklist/match`)
+/// without a misspelling ever costing someone their application.
 model Blacklist {
-  id        String       @id @default(cuid())
-  type      BlacklistType
-  value     String
-  createdAt DateTime     @default(now())
+  id        String   @id @default(cuid())
+  firstName String
+  lastName  String
+  /// Optional so an organizer can blacklist a name they have no email for.
+  /// Stored normalized (trimmed + lowercased) so the unique index is case-insensitive.
+  /// Postgres permits many NULLs under a unique index, so name-only rows don't collide.
+  email     String?  @unique
+  reason    String?
+  createdAt DateTime @default(now())
+
+  /// Name matching loads every row and compares in application code, so the common
+  /// case — listing the blacklist newest-first — is the only query worth indexing.
+  @@index([createdAt])
 }
 
 model Question {

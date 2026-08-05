@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { mockDeep, mockReset, type DeepMockProxy } from 'vitest-mock-extended';
 import type { PrismaClient } from '$lib/generated/prisma/client';
-import { UserStatus, DecisionStatus, BlacklistType, QuestionType, Role } from '$lib/generated/prisma/client';
+import { UserStatus, DecisionStatus, QuestionType, Role } from '$lib/generated/prisma/client';
 import { createTestCaller, hackerUser, appliedHacker, acceptedHacker, mockSettings } from '../test-utils';
 
 vi.mock('$lib/server/db', async () => {
@@ -171,7 +171,7 @@ describe('application.submit', () => {
 		db.user.findUniqueOrThrow.mockResolvedValue(hackerUser as never);
 		db.question.findMany.mockResolvedValue([] as never);
 		db.applicationResponse.findMany.mockResolvedValue([] as never);
-		db.blacklist.findMany.mockResolvedValue([] as never);
+		db.blacklist.findUnique.mockResolvedValue(null as never);
 		db.user.update.mockResolvedValue({ ...hackerUser, status: UserStatus.APPLIED } as never);
 		db.settings.findFirst.mockResolvedValue(null);
 
@@ -198,14 +198,12 @@ describe('application.submit', () => {
 		});
 	});
 
-	it('auto-sets pendingDecision=REJECTED for blacklisted email', async () => {
+	it('auto-sets pendingDecision=REJECTED for a blacklisted email', async () => {
 		const caller = createTestCaller(db, hackerUser);
 		db.user.findUniqueOrThrow.mockResolvedValue(hackerUser as never);
 		db.question.findMany.mockResolvedValue([] as never);
 		db.applicationResponse.findMany.mockResolvedValue([] as never);
-		db.blacklist.findMany.mockResolvedValue([
-			{ id: 'bl-1', type: BlacklistType.EMAIL, value: hackerUser.email, createdAt: new Date() }
-		] as never);
+		db.blacklist.findUnique.mockResolvedValue({ id: 'bl-1' } as never);
 		db.user.update.mockResolvedValue({
 			...hackerUser,
 			status: UserStatus.APPLIED,
@@ -222,24 +220,40 @@ describe('application.submit', () => {
 		);
 	});
 
-	it('auto-sets pendingDecision=REJECTED for blacklisted name', async () => {
+	it('looks the email up in its normalized form', async () => {
 		const caller = createTestCaller(db, hackerUser);
-		db.user.findUniqueOrThrow.mockResolvedValue(hackerUser as never);
+		db.user.findUniqueOrThrow.mockResolvedValue({
+			...hackerUser,
+			email: '  Hacker@Example.COM '
+		} as never);
 		db.question.findMany.mockResolvedValue([] as never);
 		db.applicationResponse.findMany.mockResolvedValue([] as never);
-		db.blacklist.findMany.mockResolvedValue([
-			{ id: 'bl-2', type: BlacklistType.NAME, value: 'hacker', createdAt: new Date() }
-		] as never);
+		db.blacklist.findUnique.mockResolvedValue(null as never);
 		db.user.update.mockResolvedValue({ ...hackerUser, status: UserStatus.APPLIED } as never);
 		db.settings.findFirst.mockResolvedValue(null);
 
 		await caller.application.submit();
 
-		expect(db.user.update).toHaveBeenCalledWith(
-			expect.objectContaining({
-				data: expect.objectContaining({ pendingDecision: DecisionStatus.REJECTED })
-			})
+		expect(db.blacklist.findUnique).toHaveBeenCalledWith(
+			expect.objectContaining({ where: { email: 'hacker@example.com' } })
 		);
+	});
+
+	it('does not auto-reject on a name match, which only flags at review time', async () => {
+		// A blacklisted name is matched tolerantly enough to catch misspellings, so it must
+		// never reach a decision on its own -- `admissions.list` surfaces it to a human.
+		const caller = createTestCaller(db, hackerUser);
+		db.user.findUniqueOrThrow.mockResolvedValue(hackerUser as never);
+		db.question.findMany.mockResolvedValue([] as never);
+		db.applicationResponse.findMany.mockResolvedValue([] as never);
+		db.blacklist.findUnique.mockResolvedValue(null as never);
+		db.user.update.mockResolvedValue({ ...hackerUser, status: UserStatus.APPLIED } as never);
+		db.settings.findFirst.mockResolvedValue(null);
+
+		await caller.application.submit();
+
+		const updateArg = db.user.update.mock.calls[0]?.[0];
+		expect(updateArg?.data).not.toHaveProperty('pendingDecision');
 	});
 
 	it('calls sendTemplatedEmail on success when submitTemplate is set', async () => {
@@ -247,7 +261,7 @@ describe('application.submit', () => {
 		db.user.findUniqueOrThrow.mockResolvedValue(hackerUser as never);
 		db.question.findMany.mockResolvedValue([] as never);
 		db.applicationResponse.findMany.mockResolvedValue([] as never);
-		db.blacklist.findMany.mockResolvedValue([] as never);
+		db.blacklist.findUnique.mockResolvedValue(null as never);
 		db.user.update.mockResolvedValue({ ...hackerUser, status: UserStatus.APPLIED } as never);
 		db.settings.findFirst.mockResolvedValue(mockSettings);
 

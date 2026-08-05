@@ -6,6 +6,7 @@ import { createLog } from '$lib/server/log';
 import { sendTemplatedEmail } from '$lib/server/email';
 import { buildTemplateVars } from '$lib/email/variables';
 import { CLAIM_TTL_MS } from '$lib/admissions/lock';
+import { prepareBlacklist, matchApplicant } from '$lib/blacklist/match';
 
 /**
  * Rows this admin is allowed to claim or act on: unclaimed, already theirs (at any
@@ -40,6 +41,9 @@ export const admissionsRouter = router({
 	/**
 	 * list all users with optional filters
 	 *
+	 * Each row carries a `blacklistMatch`, computed here rather than stored, so that entries
+	 * added after someone applied still show up against them.
+	 *
 	 * @param roles - filter by roles
 	 * @param decision - filter by decision (pending & active)
 	 * @param search - search by name or email
@@ -56,7 +60,7 @@ export const admissionsRouter = router({
 		.query(async ({ ctx, input }) => {
 			const { roles, decision, noDecision, search } = input;
 
-			return ctx.prisma.user.findMany({
+			const users = await ctx.prisma.user.findMany({
 				where: {
 					...(roles?.length && { roles: { hasSome: roles } }),
 					...(noDecision && { pendingDecision: null, activeDecision: null }),
@@ -75,6 +79,18 @@ export const admissionsRouter = router({
 				},
 				orderBy: { createdAt: 'desc' }
 			});
+
+			// Fuzzy name matching can't be expressed as a WHERE clause, so the blacklist is
+			// pulled in full and folded once, then compared against this page of applicants in
+			// memory. The table is small by nature -- a few hundred entries at most -- and this
+			// keeps the matching rules in one tested module instead of split across SQL.
+			const blacklist = prepareBlacklist(
+				await ctx.prisma.blacklist.findMany({
+					select: { firstName: true, lastName: true, email: true }
+				})
+			);
+
+			return users.map((user) => ({ ...user, blacklistMatch: matchApplicant(user, blacklist) }));
 		}),
 
 	/**

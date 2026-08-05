@@ -1,6 +1,8 @@
 <script lang="ts">
 	import DecisionBar from './DecisionBar.svelte';
+	import BlacklistBadge from './BlacklistBadge.svelte';
 	import type { ReviewPhase } from '$lib/admissions/reviewSession.svelte';
+	import type { BlacklistMatch } from '$lib/blacklist/match';
 
 	let {
 		applicant,
@@ -23,6 +25,7 @@
 			status: string;
 			pendingDecision: string | null;
 			activeDecision: string | null;
+			blacklistMatch: BlacklistMatch | null;
 			createdAt: Date | string;
 			application: Array<{ value: string; question: { title: string; order: number } }>;
 		};
@@ -113,6 +116,7 @@
 				<div class="mt-[3px] text-[13px] text-muted-foreground">{applicant.email}</div>
 			</div>
 			<div class="flex shrink-0 flex-wrap justify-end gap-1.5">
+				<BlacklistBadge match={applicant.blacklistMatch} size="md" />
 				{#if applicant.roles.length}
 					<span
 						class="inline-block rounded bg-[#f0f0f0] px-2 py-[3px] text-[11px] font-semibold tracking-[0.04em] text-[#555] uppercase"

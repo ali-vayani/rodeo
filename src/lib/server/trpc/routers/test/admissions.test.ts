@@ -36,6 +36,9 @@ beforeEach(() => {
   vi.mocked(sendTemplatedEmail).mockClear();
   vi.useFakeTimers();
   vi.setSystemTime(NOW);
+  // `list` folds the blacklist to flag applicants; default to empty so tests that are
+  // about filtering don't each have to say they aren't about the blacklist.
+  db.blacklist.findMany.mockResolvedValue([] as never);
 });
 
 afterEach(() => {
@@ -74,6 +77,50 @@ describe("admissions.list", () => {
     db.user.findMany.mockResolvedValue([hackerUser, pendingUser] as never);
     const result = await caller.admissions.list({});
     expect(result).toHaveLength(2);
+  });
+
+  it("reports no blacklist match when the table is empty", async () => {
+    const caller = createTestCaller(db, adminUser);
+    db.user.findMany.mockResolvedValue([hackerUser] as never);
+    const result = await caller.admissions.list({});
+    expect(result[0].blacklistMatch).toBeNull();
+  });
+
+  it("flags an applicant whose email is blacklisted", async () => {
+    const caller = createTestCaller(db, adminUser);
+    db.user.findMany.mockResolvedValue([hackerUser] as never);
+    db.blacklist.findMany.mockResolvedValue([
+      { firstName: "", lastName: "", email: hackerUser.email.toLowerCase() },
+    ] as never);
+
+    const result = await caller.admissions.list({});
+    expect(result[0].blacklistMatch).toBe("EMAIL");
+  });
+
+  it("flags an applicant whose name is blacklisted, without deciding anything", async () => {
+    const caller = createTestCaller(db, adminUser);
+    const [first, last] = hackerUser.name.split(" ");
+    db.user.findMany.mockResolvedValue([hackerUser] as never);
+    db.blacklist.findMany.mockResolvedValue([
+      { firstName: first, lastName: last, email: null },
+    ] as never);
+
+    const result = await caller.admissions.list({});
+    expect(result[0].blacklistMatch).toBe("NAME_EXACT");
+    expect(result[0].pendingDecision).toBe(hackerUser.pendingDecision);
+  });
+
+  it("catches an entry added after the applicant already applied", async () => {
+    // The flag is computed per request rather than stored at submit time, which is the
+    // whole reason a late addition still shows up here.
+    const caller = createTestCaller(db, adminUser);
+    db.user.findMany.mockResolvedValue([pendingUser] as never);
+    db.blacklist.findMany.mockResolvedValue([
+      { firstName: "", lastName: "", email: pendingUser.email },
+    ] as never);
+
+    const result = await caller.admissions.list({});
+    expect(result[0].blacklistMatch).toBe("EMAIL");
   });
 
   it("filters by roles", async () => {
