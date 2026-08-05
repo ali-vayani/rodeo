@@ -66,7 +66,7 @@ describe('email.sendCustom', () => {
 
 		expect(db.user.findMany).toHaveBeenCalledWith(
 			expect.objectContaining({
-				where: expect.objectContaining({ roles: { hasSome: [Role.HACKER] } })
+				where: { AND: [{ roles: { hasSome: [Role.HACKER] } }] }
 			})
 		);
 	});
@@ -83,7 +83,7 @@ describe('email.sendCustom', () => {
 
 		expect(db.user.findMany).toHaveBeenCalledWith(
 			expect.objectContaining({
-				where: expect.objectContaining({ status: { in: [UserStatus.APPLIED] } })
+				where: { AND: [{ status: { in: [UserStatus.APPLIED] } }] }
 			})
 		);
 	});
@@ -104,6 +104,134 @@ describe('email.sendCustom', () => {
 		await expect(caller.email.sendCustom(emailInput)).rejects.toMatchObject({
 			code: 'FORBIDDEN'
 		});
+	});
+
+	it('substitutes variables per recipient in both subject and body', async () => {
+		const caller = createTestCaller(db, adminUser);
+		db.user.findMany.mockResolvedValue([hackerUser, appliedHacker] as never);
+		db.settings.findFirst.mockResolvedValue(mockSettings);
+		db.emailLog.create.mockResolvedValue(emailLog as never);
+
+		await caller.email.sendCustom({
+			subject: 'Hi {{name}}',
+			body: 'We start {{hackathon_start}}, {{name}}.',
+			filters: {}
+		});
+
+		const start = mockSettings.hackathonStartDate.toLocaleDateString();
+		expect(sendEmail).toHaveBeenCalledWith({
+			to: hackerUser.email,
+			subject: `Hi ${hackerUser.name}`,
+			body: `We start ${start}, ${hackerUser.name}.`
+		});
+		expect(sendEmail).toHaveBeenCalledWith({
+			to: appliedHacker.email,
+			subject: `Hi ${appliedHacker.name}`,
+			body: `We start ${start}, ${appliedHacker.name}.`
+		});
+	});
+
+	it('logs the raw template, not a rendered copy', async () => {
+		// One EmailLog row covers N recipients, so storing a rendered body would
+		// arbitrarily pick one recipient's values and misrepresent the rest.
+		const caller = createTestCaller(db, adminUser);
+		db.user.findMany.mockResolvedValue([hackerUser] as never);
+		db.settings.findFirst.mockResolvedValue(mockSettings);
+		db.emailLog.create.mockResolvedValue(emailLog as never);
+
+		await caller.email.sendCustom({ subject: 'Hi {{name}}', body: 'Body {{name}}', filters: {} });
+
+		expect(db.emailLog.create).toHaveBeenCalledWith(
+			expect.objectContaining({
+				data: expect.objectContaining({ subject: 'Hi {{name}}', body: 'Body {{name}}' })
+			})
+		);
+	});
+
+	it('sends nothing when the decision filter is engaged but empty', async () => {
+		// The mass-mail regression: this used to drop the clause and match everyone.
+		const caller = createTestCaller(db, adminUser);
+		db.user.findMany.mockResolvedValue([] as never);
+
+		const result = await caller.email.sendCustom({
+			...emailInput,
+			filters: { decisions: [], includeNoDecision: false }
+		});
+
+		expect(db.user.findMany).toHaveBeenCalledWith(
+			expect.objectContaining({ where: { AND: [{ uid: 'IMPOSSIBLE_NO_MATCH' }] } })
+		);
+		expect(result).toEqual({ sent: 0 });
+	});
+});
+
+describe('email.previewRecipients', () => {
+	it('returns the count and a sample without sending', async () => {
+		const caller = createTestCaller(db, adminUser);
+		db.user.count.mockResolvedValue(42 as never);
+		db.user.findMany.mockResolvedValue([hackerUser] as never);
+
+		const result = await caller.email.previewRecipients({ roles: [Role.HACKER] });
+
+		expect(result.count).toBe(42);
+		expect(result.sample).toEqual([hackerUser]);
+		expect(sendEmail).not.toHaveBeenCalled();
+	});
+
+	it('uses the same predicate sendCustom would use', async () => {
+		const caller = createTestCaller(db, adminUser);
+		db.user.count.mockResolvedValue(0 as never);
+		db.user.findMany.mockResolvedValue([] as never);
+
+		await caller.email.previewRecipients({ decisions: [], includeNoDecision: false });
+
+		expect(db.user.count).toHaveBeenCalledWith({
+			where: { AND: [{ uid: 'IMPOSSIBLE_NO_MATCH' }] }
+		});
+	});
+
+	it('throws FORBIDDEN for non-admin', async () => {
+		const caller = createTestCaller(db, hackerUser);
+		await expect(caller.email.previewRecipients({})).rejects.toMatchObject({
+			code: 'FORBIDDEN'
+		});
+	});
+
+	it('reports addresses that match no user', async () => {
+		const caller = createTestCaller(db, adminUser);
+		db.user.count.mockResolvedValue(1 as never);
+		db.user.findMany
+			.mockResolvedValueOnce([hackerUser] as never) // the sample
+			.mockResolvedValueOnce([{ email: hackerUser.email }] as never); // the existence check
+
+		const result = await caller.email.previewRecipients({
+			emails: [hackerUser.email, 'ghost@yopmail.com']
+		});
+
+		expect(result.unknownEmails).toEqual(['ghost@yopmail.com']);
+	});
+
+	it('reports no unknowns when every address resolves', async () => {
+		const caller = createTestCaller(db, adminUser);
+		db.user.count.mockResolvedValue(1 as never);
+		db.user.findMany
+			.mockResolvedValueOnce([hackerUser] as never)
+			.mockResolvedValueOnce([{ email: hackerUser.email }] as never);
+
+		const result = await caller.email.previewRecipients({ emails: [hackerUser.email] });
+
+		expect(result.unknownEmails).toEqual([]);
+	});
+
+	it('skips the existence check when no address list was given', async () => {
+		const caller = createTestCaller(db, adminUser);
+		db.user.count.mockResolvedValue(3 as never);
+		db.user.findMany.mockResolvedValue([hackerUser] as never);
+
+		const result = await caller.email.previewRecipients({ roles: [Role.HACKER] });
+
+		expect(result.unknownEmails).toEqual([]);
+		expect(db.user.findMany).toHaveBeenCalledTimes(1);
 	});
 });
 

@@ -2,7 +2,19 @@
 	import { untrack } from 'svelte';
 	import { tokenizeTemplate, SAMPLE_VARS, type TemplateSegment } from '$lib/email/variables';
 
-	let { subject, body }: { subject: string; body: string } = $props();
+	let {
+		subject,
+		body,
+		/** Values to substitute. Defaults to the placeholder samples. */
+		vars = SAMPLE_VARS,
+		/** Height of the scrollable preview box. */
+		height = 'h-[180px]'
+	}: {
+		subject: string;
+		body: string;
+		vars?: Record<string, string>;
+		height?: string;
+	} = $props();
 
 	// Debounced so the preview doesn't re-tokenize on every keystroke. Seeded from
 	// the initial props deliberately; the $effect below carries every later change.
@@ -20,8 +32,8 @@
 		return () => clearTimeout(timer);
 	});
 
-	let subjectSegments = $derived(tokenizeTemplate(debouncedSubject, SAMPLE_VARS));
-	let bodySegments = $derived(tokenizeTemplate(debouncedBody, SAMPLE_VARS));
+	let subjectSegments = $derived(tokenizeTemplate(debouncedSubject, vars));
+	let bodySegments = $derived(tokenizeTemplate(debouncedBody, vars));
 
 	let unknownKeys = $derived([
 		...new Set(
@@ -58,7 +70,7 @@
 		{/if}
 	</div>
 
-	<div class="h-[180px] shrink-0 overflow-y-auto rounded border border-border bg-muted p-4">
+	<div class="{height} shrink-0 overflow-y-auto rounded border border-border bg-muted p-4">
 		<div class="mb-2 border-b border-border pb-2 text-[13px] font-semibold text-primary">
 			{#if debouncedSubject === ''}
 				<span class="text-muted-foreground italic">No subject</span>
