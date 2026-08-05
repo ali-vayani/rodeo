@@ -5,7 +5,9 @@ import { createContext } from '$lib/server/trpc/context';
 
 const createCaller = createCallerFactory(appRouter);
 
-const PAGE_SIZE = 5;
+// Matches user.list's own default. The router caps pageSize at 200, so this can
+// go higher, but past ~50 rows the filter panel scrolls out of view.
+const PAGE_SIZE = 50;
 
 export const load: PageServerLoad = async (event) => {
 	const caller = createCaller(createContext(event));

@@ -23,7 +23,7 @@
 	</div>
 
 	<!-- Stat cards -->
-	<div class="grid grid-cols-5 gap-3 mb-5">
+	<div class="mb-5 grid grid-cols-5 gap-3">
 		<StatCard label="Total" value={data.stats.total} />
 		<StatCard label="Accepted" value={accepted} />
 		<StatCard label="Waitlisted" value={waitlisted} />
@@ -31,12 +31,21 @@
 		<StatCard label="Pending" value={pending} />
 	</div>
 
-	<!-- Bar chart + activity feed -->
-	<div class="grid grid-cols-[2fr_1fr] gap-3 mb-5 items-stretch">
+	<!-- Bar chart + activity feed. Both named-user panels are absent for organizers,
+	     so the chart takes the full width rather than leaving a gap. -->
+	<div
+		class="mb-5 grid items-stretch gap-3 {data.stats.recentActivity
+			? 'grid-cols-[2fr_1fr]'
+			: 'grid-cols-1'}"
+	>
 		<StatusBarChart byRole={data.stats.byRole} {accepted} confirmed={confirmedCount} />
-		<ActivityFeed entries={data.stats.recentActivity} />
+		{#if data.stats.recentActivity}
+			<ActivityFeed entries={data.stats.recentActivity} />
+		{/if}
 	</div>
 
 	<!-- Recent applicants table -->
-	<ApplicantTable applicants={data.recentApplicants} />
+	{#if data.recentApplicants}
+		<ApplicantTable applicants={data.recentApplicants} />
+	{/if}
 </div>

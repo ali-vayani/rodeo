@@ -3,6 +3,7 @@ import { mockDeep, mockReset, type DeepMockProxy } from "vitest-mock-extended";
 import type { PrismaClient } from "$lib/generated/prisma/client";
 import { Role, DecisionStatus } from "$lib/generated/prisma/client";
 import { CLAIM_TTL_MS } from "$lib/admissions/lock";
+import { APPLICANT_ROLES } from "$lib/admissions/roles";
 import {
   createTestCaller,
   adminUser,
@@ -132,6 +133,41 @@ describe("admissions.list", () => {
         where: expect.objectContaining({ roles: { hasSome: [Role.HACKER] } }),
       }),
     );
+  });
+
+  it("bounds the queue to applicant roles when no filter is given", async () => {
+    // The "All" tab sends no roles, which must still mean "all applicants" rather
+    // than "all users" — staff have no application to review.
+    const caller = createTestCaller(db, adminUser);
+    db.user.findMany.mockResolvedValue([hackerUser] as never);
+    await caller.admissions.list({});
+    expect(db.user.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ roles: { hasSome: APPLICANT_ROLES } }),
+      }),
+    );
+    expect(APPLICANT_ROLES).not.toContain(Role.ORGANIZER);
+    expect(APPLICANT_ROLES).not.toContain(Role.ADMIN);
+  });
+
+  it("drops staff roles from an explicit filter", async () => {
+    const caller = createTestCaller(db, adminUser);
+    db.user.findMany.mockResolvedValue([hackerUser] as never);
+    await caller.admissions.list({ roles: [Role.HACKER, Role.ORGANIZER] });
+    expect(db.user.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ roles: { hasSome: [Role.HACKER] } }),
+      }),
+    );
+  });
+
+  it("returns nothing for a staff-only filter, without querying", async () => {
+    const caller = createTestCaller(db, adminUser);
+    const result = await caller.admissions.list({
+      roles: [Role.ORGANIZER, Role.ADMIN],
+    });
+    expect(result).toEqual([]);
+    expect(db.user.findMany).not.toHaveBeenCalled();
   });
 
   it("filters by decision", async () => {

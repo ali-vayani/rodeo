@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { ScheduleType } from '$lib/generated/prisma/client';
-import { router, publicProcedure, adminProcedure } from '../init';
+import { router, publicProcedure, portalProcedure } from '../init';
 
 const scheduleInput = z.object({
 	name: z.string().min(1),
@@ -16,20 +16,18 @@ export const scheduleRouter = router({
 		return ctx.prisma.schedule.findMany({ orderBy: { start: 'asc' } });
 	}),
 
-	create: adminProcedure.input(scheduleInput).mutation(async ({ ctx, input }) => {
+	create: portalProcedure.input(scheduleInput).mutation(async ({ ctx, input }) => {
 		return ctx.prisma.schedule.create({ data: input });
 	}),
 
-	update: adminProcedure
+	update: portalProcedure
 		.input(z.object({ id: z.string() }).merge(scheduleInput))
 		.mutation(async ({ ctx, input }) => {
 			const { id, ...data } = input;
 			return ctx.prisma.schedule.update({ where: { id }, data });
 		}),
 
-	delete: adminProcedure
-		.input(z.object({ id: z.string() }))
-		.mutation(async ({ ctx, input }) => {
-			return ctx.prisma.schedule.delete({ where: { id: input.id } });
-		})
+	delete: portalProcedure.input(z.object({ id: z.string() })).mutation(async ({ ctx, input }) => {
+		return ctx.prisma.schedule.delete({ where: { id: input.id } });
+	})
 });
