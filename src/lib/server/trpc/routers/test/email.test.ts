@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { mockDeep, mockReset, type DeepMockProxy } from 'vitest-mock-extended';
 import type { PrismaClient } from '$lib/generated/prisma/client';
 import { Role, UserStatus } from '$lib/generated/prisma/client';
-import { createTestCaller, adminUser, hackerUser, appliedHacker } from '../test-utils';
+import { createTestCaller, adminUser, hackerUser, appliedHacker, mockSettings } from '../test-utils';
 
 vi.mock('$lib/server/db', async () => {
 	const { mockDeep } = await import('vitest-mock-extended');
@@ -104,6 +104,74 @@ describe('email.sendCustom', () => {
 		await expect(caller.email.sendCustom(emailInput)).rejects.toMatchObject({
 			code: 'FORBIDDEN'
 		});
+	});
+});
+
+describe('email.sendTest', () => {
+	const testInput = {
+		template: 'accept' as const,
+		subject: 'Hi {{name}} — you are in',
+		body: 'Hi {{name}}, we start {{hackathon_start}}.'
+	};
+
+	it('defaults the recipient to the calling admin', async () => {
+		const caller = createTestCaller(db, adminUser);
+		db.settings.findFirst.mockResolvedValue(mockSettings);
+
+		const result = await caller.email.sendTest(testInput);
+
+		expect(result.to).toBe(adminUser.email);
+		expect(sendEmail).toHaveBeenCalledWith(
+			expect.objectContaining({ to: adminUser.email })
+		);
+	});
+
+	it('substitutes variables into both the subject and the body', async () => {
+		const caller = createTestCaller(db, adminUser);
+		db.settings.findFirst.mockResolvedValue(mockSettings);
+
+		await caller.email.sendTest(testInput);
+
+		expect(sendEmail).toHaveBeenCalledWith({
+			to: adminUser.email,
+			subject: `Hi ${adminUser.name} — you are in`,
+			body: `Hi ${adminUser.name}, we start ${mockSettings.hackathonStartDate.toLocaleDateString()}.`
+		});
+	});
+
+	it('honours an explicit recipient', async () => {
+		const caller = createTestCaller(db, adminUser);
+		db.settings.findFirst.mockResolvedValue(mockSettings);
+
+		const result = await caller.email.sendTest({ ...testInput, to: 'someone@yopmail.com' });
+
+		expect(result.to).toBe('someone@yopmail.com');
+	});
+
+	it('falls back to sample variables when no settings row exists', async () => {
+		const caller = createTestCaller(db, adminUser);
+		db.settings.findFirst.mockResolvedValue(null);
+
+		await caller.email.sendTest(testInput);
+
+		expect(sendEmail).toHaveBeenCalledWith(
+			expect.objectContaining({ subject: 'Hi Sarah Chen — you are in' })
+		);
+	});
+
+	it('does not write an EmailLog row', async () => {
+		// EmailLog is the audit trail of real sends; test sends must stay out of it.
+		const caller = createTestCaller(db, adminUser);
+		db.settings.findFirst.mockResolvedValue(mockSettings);
+
+		await caller.email.sendTest(testInput);
+
+		expect(db.emailLog.create).not.toHaveBeenCalled();
+	});
+
+	it('throws FORBIDDEN for non-admin', async () => {
+		const caller = createTestCaller(db, hackerUser);
+		await expect(caller.email.sendTest(testInput)).rejects.toMatchObject({ code: 'FORBIDDEN' });
 	});
 });
 

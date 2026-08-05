@@ -2,6 +2,8 @@ import { z } from 'zod';
 import { Role, UserStatus, DecisionStatus } from '$lib/generated/prisma/client';
 import { router, adminProcedure } from '../init';
 import { sendEmail } from '$lib/server/email';
+import { TEMPLATE_KEYS } from '$lib/email/templates';
+import { buildTemplateVars, substituteVariables, SAMPLE_VARS } from '$lib/email/variables';
 
 export const emailRouter = router({
 	sendCustom: adminProcedure
@@ -45,6 +47,38 @@ export const emailRouter = router({
 			});
 
 			return { sent: users.length };
+		}),
+
+	/**
+	 * Sends one lifecycle template to the admin so they can read it in a real inbox.
+	 *
+	 * Subject and body come from the input rather than the database — proofreading
+	 * an unsaved draft is the whole point. Deliberately writes no EmailLog row:
+	 * that table is the audit trail of real sends.
+	 */
+	sendTest: adminProcedure
+		.input(
+			z.object({
+				template: z.enum(TEMPLATE_KEYS),
+				subject: z.string().min(1).max(200),
+				body: z.string().min(1).max(20000),
+				to: z.string().email().optional()
+			})
+		)
+		.mutation(async ({ ctx, input }) => {
+			const to = input.to ?? ctx.user.email;
+			const settings = await ctx.prisma.settings.findFirst();
+			// No Settings row yet on a fresh install — fall back to the preview samples
+			// so a test send still demonstrates substitution.
+			const vars = settings ? buildTemplateVars(ctx.user, settings) : SAMPLE_VARS;
+
+			await sendEmail({
+				to,
+				subject: substituteVariables(input.subject, vars),
+				body: substituteVariables(input.body, vars)
+			});
+
+			return { to };
 		}),
 
 	getLogs: adminProcedure

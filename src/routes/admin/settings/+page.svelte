@@ -69,11 +69,17 @@
 				hackathonStartDate: merged.hackathonStartDate,
 				scanActions: merged.scanActions,
 				submitTemplate: merged.submitTemplate,
+				submitSubject: merged.submitSubject,
 				acceptTemplate: merged.acceptTemplate,
+				acceptSubject: merged.acceptSubject,
 				confirmTemplate: merged.confirmTemplate,
+				confirmSubject: merged.confirmSubject,
 				declineTemplate: merged.declineTemplate,
+				declineSubject: merged.declineSubject,
 				rejectTemplate: merged.rejectTemplate,
+				rejectSubject: merged.rejectSubject,
 				waitlistTemplate: merged.waitlistTemplate,
+				waitlistSubject: merged.waitlistSubject,
 				timezone: merged.timezone
 			});
 			settings = { ...settings, ...updates } as SettingsRow;

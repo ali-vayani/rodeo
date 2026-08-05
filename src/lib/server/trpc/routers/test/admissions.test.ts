@@ -504,7 +504,7 @@ describe("admissions.release", () => {
 
     expect(sendTemplatedEmail).toHaveBeenCalledWith(
       pendingUser.email,
-      mockSettings.acceptTemplate,
+      { subject: mockSettings.acceptSubject, body: mockSettings.acceptTemplate },
       expect.objectContaining({ name: pendingUser.name }),
     );
   });
