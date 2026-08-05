@@ -6,6 +6,7 @@
 		tabs,
 		active = $bindable(''),
 		orientation = 'horizontal',
+		onChange = undefined,
 		class: className = ''
 	}: {
 		tabs: TabItem[];
@@ -13,11 +14,16 @@
 		/** Vertical is the left rail used by settings, email templates, and the
 		    custom-email step list. */
 		orientation?: 'horizontal' | 'vertical';
+		/** Fires after a selection. For callers whose tab change has a side effect
+		    — the custom-email wizard re-counts recipients on reaching step 3. */
+		onChange?: (value: string) => void;
 		class?: string;
 	} = $props();
 
 	function select(tab: TabItem) {
-		if (!tab.disabled) active = tab.value;
+		if (tab.disabled) return;
+		active = tab.value;
+		onChange?.(tab.value);
 	}
 
 	/** Arrow keys move between tabs, per the WAI-ARIA tabs pattern. */
@@ -35,7 +41,7 @@
 				: enabled[(index - 1 + enabled.length) % enabled.length];
 		if (!next) return;
 
-		active = next.value;
+		select(next);
 		// Roving tabindex means the newly selected tab is the only focusable one,
 		// so focus has to follow the selection or it strands on a tabindex="-1".
 		const tablist = (event.currentTarget as HTMLElement).closest('[role="tablist"]');

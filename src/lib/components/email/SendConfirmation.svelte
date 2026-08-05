@@ -5,6 +5,7 @@
 
 <script lang="ts">
 	import EmailPreview from './EmailPreview.svelte';
+	import { Input } from '$lib/components/ui';
 
 	let {
 		subject,
@@ -25,15 +26,15 @@
 
 <div class="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto">
 	<div>
-		<h2 class="text-[15px] font-semibold text-primary">Confirm &amp; Send</h2>
-		<p class="mt-0.5 text-xs text-muted-foreground">
+		<h2 class="text-lg font-semibold text-foreground">Confirm &amp; Send</h2>
+		<p class="mt-0.5 text-xs text-foreground-secondary">
 			This cannot be undone. Recipients are re-counted at this step, so the number below is current.
 		</p>
 	</div>
 
 	<!-- Danger callout, matching the Release Decisions treatment -->
-	<div class="rounded border border-[#fca5a5] bg-[#fff3f3] px-[14px] py-3">
-		<div class="text-[13px] font-semibold text-primary">
+	<div class="rounded-md border border-danger-200 bg-danger-50 px-3.5 py-3">
+		<div class="text-base font-semibold text-foreground">
 			{#if loading}
 				Counting recipients…
 			{:else if count === null}
@@ -42,25 +43,21 @@
 				{count} user{count === 1 ? '' : 's'} will receive this email.
 			{/if}
 		</div>
-		<div class="mt-1 text-xs text-muted-foreground">
-			Subject: <span class="font-mono text-primary">{subject}</span>
+		<div class="mt-1 text-xs text-foreground-secondary">
+			Subject: <span class="font-mono text-foreground">{subject}</span>
 		</div>
 	</div>
 
-	<EmailPreview {subject} {body} height="h-[220px]" />
+	<EmailPreview {subject} {body} height="lg" />
 
-	<div class="flex flex-col gap-2">
-		<label for="send-confirm" class="text-xs text-muted-foreground">
-			Type
-			<span class="rounded bg-[#f0f0f0] px-[5px] py-px font-mono text-primary">{CONFIRM_WORD}</span>
-			to confirm
-		</label>
-		<input
-			id="send-confirm"
-			bind:value={confirmText}
-			disabled={sending}
-			autocomplete="off"
-			class="w-[220px] rounded border border-border bg-white px-3 py-[7px] font-mono text-[13px] text-primary outline-none focus:border-primary"
-		/>
-	</div>
+	<Input
+		bind:value={confirmText}
+		label="Type {CONFIRM_WORD} to confirm"
+		mono
+		autocomplete="off"
+		disabled={sending}
+		placeholder={CONFIRM_WORD}
+		class="max-w-56"
+		fieldClass="max-w-56"
+	/>
 </div>

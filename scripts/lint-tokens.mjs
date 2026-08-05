@@ -24,7 +24,9 @@ const SCOPES = [
 	'src/routes/admin/blacklist',
 	'src/lib/components/blacklist',
 	'src/routes/admin/schedule',
-	'src/lib/components/schedule'
+	'src/lib/components/schedule',
+	'src/lib/components/email',
+	'src/routes/admin/custom-email'
 	// Pages are appended here as they migrate. Everything not listed still
 	// predates the design system — see docs/component-library-plan.md for the
 	// remaining queue.

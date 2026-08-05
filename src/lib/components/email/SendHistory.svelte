@@ -10,34 +10,36 @@
 	let { logs }: { logs: LogRow[] } = $props();
 </script>
 
-<div class="rounded-md border border-border bg-white">
-	<div class="flex items-center justify-between border-b border-border bg-muted px-4 py-[9px]">
-		<span class="text-[10px] font-bold tracking-widest text-muted-foreground uppercase">
+<div class="rounded-md border border-border bg-card">
+	<div class="flex items-center justify-between border-b border-border bg-muted px-4 py-2.5">
+		<span
+			class="font-mono text-2xs font-medium tracking-eyebrow text-foreground-tertiary uppercase"
+		>
 			Recent Sends
 		</span>
-		<span class="text-[11px] text-muted-foreground">
+		<span class="text-xs text-foreground-secondary">
 			Records what was sent, not who sent it or by what filter.
 		</span>
 	</div>
 
 	{#if logs.length === 0}
-		<div class="px-4 py-6 text-center text-xs text-muted-foreground">Nothing sent yet.</div>
+		<div class="px-4 py-6 text-center text-xs text-foreground-secondary">Nothing sent yet.</div>
 	{:else}
-		<table class="w-full text-[13px]">
+		<table class="w-full text-base">
 			<thead>
 				<tr class="border-b border-border text-left">
 					<th
-						class="px-4 py-2 text-[10px] font-bold tracking-widest text-muted-foreground uppercase"
+						class="px-4 py-2 font-mono text-2xs font-medium tracking-eyebrow text-foreground-tertiary uppercase"
 					>
 						Subject
 					</th>
 					<th
-						class="w-[110px] px-4 py-2 text-[10px] font-bold tracking-widest text-muted-foreground uppercase"
+						class="w-28 px-4 py-2 font-mono text-2xs font-medium tracking-eyebrow text-foreground-tertiary uppercase"
 					>
 						Recipients
 					</th>
 					<th
-						class="w-[190px] px-4 py-2 text-[10px] font-bold tracking-widest text-muted-foreground uppercase"
+						class="w-48 px-4 py-2 font-mono text-2xs font-medium tracking-eyebrow text-foreground-tertiary uppercase"
 					>
 						Sent
 					</th>
@@ -46,11 +48,11 @@
 			<tbody>
 				{#each logs as log (log.id)}
 					<tr class="border-b border-border last:border-b-0">
-						<td class="max-w-0 truncate px-4 py-2 text-primary" title={log.subject}>
+						<td class="max-w-0 truncate px-4 py-2 text-foreground" title={log.subject}>
 							{log.subject}
 						</td>
-						<td class="px-4 py-2 font-mono text-[12px] text-primary">{log.userIds.length}</td>
-						<td class="px-4 py-2 font-mono text-[12px] text-muted-foreground">
+						<td class="px-4 py-2 font-mono text-sm text-foreground">{log.userIds.length}</td>
+						<td class="px-4 py-2 font-mono text-sm text-foreground-secondary">
 							{new Date(log.sentAt).toLocaleString()}
 						</td>
 					</tr>

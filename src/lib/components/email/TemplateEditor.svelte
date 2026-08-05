@@ -44,7 +44,7 @@
 	<div class="flex flex-col gap-1.5">
 		<label
 			for="template-subject"
-			class="text-[10px] font-bold tracking-widest text-muted-foreground uppercase"
+			class="font-mono text-2xs font-medium tracking-eyebrow text-foreground-tertiary uppercase"
 		>
 			Subject
 		</label>
@@ -55,12 +55,14 @@
 			onfocus={() => (lastFocused = 'subject')}
 			maxlength="200"
 			placeholder="Subject line for the {label} email"
-			class="w-full rounded border border-border bg-white px-3 py-[7px] text-[13px] text-primary outline-none focus:border-primary"
+			class="h-8 w-full rounded-md border border-border bg-card px-3 text-base text-foreground outline-none focus:border-primary"
 		/>
 	</div>
 
 	<div class="flex flex-wrap items-center gap-1.5">
-		<span class="text-[10px] font-bold tracking-widest text-muted-foreground uppercase">
+		<span
+			class="font-mono text-2xs font-medium tracking-eyebrow text-foreground-tertiary uppercase"
+		>
 			Insert
 		</span>
 		{#each TEMPLATE_VARIABLES as v (v.key)}
@@ -68,7 +70,7 @@
 				type="button"
 				onclick={() => insertVariable(v.key)}
 				title="{v.label} — e.g. {v.sample}"
-				class="cursor-pointer rounded border border-border bg-muted px-1.5 py-0.5 font-mono text-[11px] text-primary hover:bg-[#ebebeb]"
+				class="cursor-pointer rounded-md border border-border bg-muted px-1.5 py-0.5 font-mono text-xs text-foreground hover:bg-neutral-100"
 			>
 				{'{{' + v.key + '}}'}
 			</button>
@@ -78,7 +80,7 @@
 	<div class="flex min-h-0 flex-1 flex-col gap-1.5">
 		<label
 			for="template-body"
-			class="text-[10px] font-bold tracking-widest text-muted-foreground uppercase"
+			class="font-mono text-2xs font-medium tracking-eyebrow text-foreground-tertiary uppercase"
 		>
 			Body
 		</label>
@@ -88,7 +90,7 @@
 			bind:value={body}
 			onfocus={() => (lastFocused = 'body')}
 			placeholder="Body of the {label} email"
-			class="min-h-0 w-full flex-1 resize-none rounded border border-border bg-white px-3 py-2 font-mono text-[13px] leading-relaxed text-primary outline-none focus:border-primary"
+			class="min-h-0 w-full flex-1 resize-none rounded-md border border-border bg-card px-3 py-2 font-mono text-base leading-relaxed text-foreground outline-none focus:border-primary"
 		></textarea>
 	</div>
 </div>

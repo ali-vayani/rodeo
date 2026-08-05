@@ -1,6 +1,5 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
-	import { fly } from 'svelte/transition';
 	import { beforeNavigate } from '$app/navigation';
 	import { createClient } from '$lib/trpc/client';
 	import {
@@ -18,20 +17,28 @@
 	import EmailPreview from '$lib/components/email/EmailPreview.svelte';
 	import SendConfirmation, { CONFIRM_WORD } from '$lib/components/email/SendConfirmation.svelte';
 	import SendHistory from '$lib/components/email/SendHistory.svelte';
-	import Toast from '$lib/components/legacy/Toast.svelte';
+	import { Button } from '$lib/components/ui';
+	import { PageHeader, Tabs } from '$lib/components/patterns';
+	import type { TabItem } from '$lib/components/ui/types';
+	import { toast } from '$lib/ui/toast.svelte';
+	import { pluralize } from '$lib/format';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
 
 	const trpc = createClient();
 
-	const STEPS = [
-		{ n: 1, label: 'Recipients' },
-		{ n: 2, label: 'Compose' },
-		{ n: 3, label: 'Confirm' }
-	] as const;
-
 	let step = $state<1 | 2 | 3>(1);
+
+	// Steps ahead of the current one stay disabled: the wizard is strictly
+	// forward-only until each stage is satisfied.
+	let stepTabs = $derived<TabItem[]>(
+		[
+			{ value: '1', label: '1 · Recipients' },
+			{ value: '2', label: '2 · Compose' },
+			{ value: '3', label: '3 · Confirm' }
+		].map((t) => ({ ...t, disabled: Number(t.value) > step }))
+	);
 
 	// Targeting is either/or: attribute filters, or an explicit address list. Keeping
 	// them mutually exclusive avoids "does this union or intersect?" ambiguity.
@@ -56,8 +63,6 @@
 
 	let sending = $state(false);
 	let logs = $state(untrack(() => data.history.logs));
-	let toast = $state<{ message: string; type: 'success' | 'error' } | null>(null);
-	let toastTimer: ReturnType<typeof setTimeout>;
 	let debounceTimer: ReturnType<typeof setTimeout>;
 
 	let parsedEmails = $derived(parseEmailList(emailText));
@@ -79,12 +84,6 @@
 		if (!confirm('You have an unsent draft. Leave anyway?')) nav.cancel();
 	});
 
-	function showToast(message: string, type: 'success' | 'error' = 'success') {
-		clearTimeout(toastTimer);
-		toast = { message, type };
-		toastTimer = setTimeout(() => (toast = null), 3200);
-	}
-
 	/** Re-count against the same predicate the send will use. */
 	async function refreshCount() {
 		const token = ++countToken;
@@ -100,7 +99,7 @@
 		} catch (e: unknown) {
 			if (token !== countToken) return;
 			count = null;
-			showToast(e instanceof Error ? e.message : 'Failed to count recipients', 'error');
+			toast.fromError(e, 'Failed to count recipients');
 		} finally {
 			if (token === countToken) countLoading = false;
 		}
@@ -130,7 +129,7 @@
 				body,
 				filters: filters as never
 			});
-			showToast(`Sent to ${result.sent} user${result.sent === 1 ? '' : 's'}`);
+			toast.success(`Sent to ${pluralize(result.sent, 'user')}`);
 			const refreshed = await trpc.email.getLogs.query({ page: 1, pageSize: 10 });
 			logs = refreshed.logs;
 			subject = '';
@@ -138,49 +137,30 @@
 			confirmText = '';
 			step = 1;
 		} catch (e: unknown) {
-			showToast(e instanceof Error ? e.message : 'Failed to send', 'error');
+			toast.fromError(e, 'Failed to send');
 		} finally {
 			sending = false;
 		}
 	}
 </script>
 
-<!-- Page header -->
-<div class="mb-4 flex items-center justify-between">
-	<h1 class="text-[22px] font-bold text-primary">Custom Email</h1>
-	<span class="font-mono text-[11px] text-muted-foreground">
-		Dev builds log to the server console.
-	</span>
-</div>
+<PageHeader title="Custom email">
+	{#snippet meta()}Dev builds log to the server console.{/snippet}
+</PageHeader>
 
-<div class="flex h-[calc(100vh-136px)] flex-col gap-5 overflow-y-auto">
-	<div class="flex shrink-0 overflow-hidden rounded-md border border-border bg-white">
-		<!-- Step rail -->
-		<div class="flex w-[160px] shrink-0 flex-col border-r border-border bg-muted">
-			<div
-				class="border-b border-border px-3 py-[11px] text-[10px] font-bold tracking-widest text-muted-foreground uppercase"
-			>
-				Steps
-			</div>
-			{#each STEPS as s (s.n)}
-				<button
-					onclick={() => goTo(s.n)}
-					disabled={s.n > step}
-					class="flex items-center gap-2 border-b border-border px-4 py-[11px] text-left text-[13px] transition-colors disabled:cursor-not-allowed disabled:opacity-40 {step ===
-					s.n
-						? 'bg-white font-semibold text-primary'
-						: s.n < step
-							? 'cursor-pointer bg-transparent text-[#555] hover:bg-[#ebebeb]'
-							: 'bg-transparent text-muted-foreground'}"
-				>
-					<span class="font-mono text-[11px]">{s.n}</span>
-					<span>{s.label}</span>
-				</button>
-			{/each}
-		</div>
+<div class="flex workspace-h flex-col gap-5 overflow-y-auto">
+	<div class="flex shrink-0 overflow-hidden rounded-lg border border-border bg-card shadow-sm">
+		<!-- Step rail. The shared vertical Tabs, so the wizard rail and the settings
+		     tabs are the same control instead of two lookalikes. -->
+		<Tabs
+			tabs={stepTabs}
+			active={String(step)}
+			orientation="vertical"
+			onChange={(value) => goTo(Number(value) as 1 | 2 | 3)}
+		/>
 
 		<!-- Step body -->
-		<div class="flex min-w-0 flex-1 flex-col gap-4 p-8" style="min-height: 520px">
+		<div class="flex min-h-130 min-w-0 flex-1 flex-col gap-4 p-8">
 			{#if step === 1}
 				<RecipientFilter
 					bind:mode
@@ -197,13 +177,13 @@
 				/>
 			{:else if step === 2}
 				<div>
-					<h2 class="text-[15px] font-semibold text-primary">Compose</h2>
-					<p class="mt-0.5 text-xs text-muted-foreground">
+					<h2 class="m-0 text-lg font-semibold text-foreground">Compose</h2>
+					<p class="mt-0.5 mb-0 text-xs text-foreground-secondary">
 						Variables are substituted per recipient when the email is sent.
 					</p>
 				</div>
 				<TemplateEditor label="Custom" bind:subject bind:body />
-				<EmailPreview {subject} {body} height="h-[150px]" />
+				<EmailPreview {subject} {body} height="sm" />
 			{:else}
 				<SendConfirmation
 					{subject}
@@ -218,39 +198,37 @@
 			<!-- Step actions -->
 			<div class="mt-auto flex shrink-0 items-center gap-2 border-t border-border pt-4">
 				{#if step > 1}
-					<button
-						onclick={() => goTo((step - 1) as 1 | 2)}
-						disabled={sending}
-						class="cursor-pointer rounded-md border border-border bg-white px-[14px] py-[9px] text-[13px] font-medium whitespace-nowrap text-primary disabled:opacity-50"
-					>
-						Back
-					</button>
+					<Button onclick={() => goTo((step - 1) as 1 | 2)} disabled={sending}>Back</Button>
 				{/if}
 
 				{#if step === 1}
-					<button
+					<Button
+						variant="primary"
+						class="ml-auto"
 						onclick={() => goTo(2)}
 						disabled={countLoading || !count}
-						class="ml-auto cursor-pointer rounded-md border-none bg-primary px-[18px] py-[9px] text-[13px] font-semibold whitespace-nowrap text-white disabled:opacity-50"
 					>
 						Next: Compose →
-					</button>
+					</Button>
 				{:else if step === 2}
-					<button
+					<Button
+						variant="primary"
+						class="ml-auto"
 						onclick={() => goTo(3)}
 						disabled={!composeReady}
-						class="ml-auto cursor-pointer rounded-md border-none bg-primary px-[18px] py-[9px] text-[13px] font-semibold whitespace-nowrap text-white disabled:opacity-50"
 					>
 						Next: Confirm →
-					</button>
+					</Button>
 				{:else}
-					<button
+					<Button
+						variant="danger"
+						class="ml-auto"
 						onclick={send}
-						disabled={sending || countLoading || !count || confirmText !== CONFIRM_WORD}
-						class="ml-auto cursor-pointer rounded-md border-none bg-destructive px-[18px] py-[9px] text-[13px] font-semibold whitespace-nowrap text-white disabled:opacity-50"
+						loading={sending}
+						disabled={countLoading || !count || confirmText !== CONFIRM_WORD}
 					>
-						{sending ? 'Sending…' : `Send to ${count ?? 0} ${count === 1 ? 'person' : 'people'}`}
-					</button>
+						Send to {pluralize(count ?? 0, 'person', 'people')}
+					</Button>
 				{/if}
 			</div>
 		</div>
@@ -266,14 +244,3 @@
 	total={count ?? 0}
 	onClose={() => (listOpen = false)}
 />
-
-<!-- Toast -->
-{#if toast}
-	<div
-		in:fly={{ x: 60, duration: 280 }}
-		out:fly={{ x: 60, duration: 200 }}
-		class="fixed right-7 bottom-7 z-[200]"
-	>
-		<Toast message={toast.message} type={toast.type} />
-	</div>
-{/if}
