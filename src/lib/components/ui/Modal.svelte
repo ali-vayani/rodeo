@@ -13,6 +13,7 @@
 		dismissible = true,
 		class: className = '',
 		bodyClass = '',
+		onClose = undefined,
 		footer,
 		children
 	}: {
@@ -24,9 +25,19 @@
 		dismissible?: boolean;
 		class?: string;
 		bodyClass?: string;
+		/**
+		 * Fires on any dismissal — Escape, backdrop, or the close button. Needed
+		 * when the caller keeps its own "which row am I editing" state, which
+		 * would otherwise stay set after the dialog went away.
+		 */
+		onClose?: () => void;
 		footer?: Snippet;
 		children: Snippet;
 	} = $props();
+
+	function onOpenChange(next: boolean) {
+		if (!next) onClose?.();
+	}
 
 	// Replaces six hand-written pixel widths across nine overlays.
 	const SIZES: Record<Size, string> = {
@@ -43,7 +54,7 @@
 	backdrop and key handling each time, trapped focus in none of them, and
 	needed seven `svelte-ignore a11y_*` comments to stay quiet.
 -->
-<Dialog.Root bind:open>
+<Dialog.Root bind:open {onOpenChange}>
 	<Dialog.Portal>
 		<Dialog.Overlay
 			class="data-[state=open]:animate-in data-[state=closed]:animate-out fixed inset-0 z-50 bg-overlay"

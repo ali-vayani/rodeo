@@ -1,6 +1,5 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
-	import { fly } from 'svelte/transition';
 	import { createClient } from '$lib/trpc/client';
 	import type { ScheduleModel as Schedule } from '$lib/generated/prisma/models';
 	import { dayKey, nextDayKey, formatDayLabel } from '$lib/schedule/days';
@@ -10,7 +9,10 @@
 	import EventForm from '$lib/components/schedule/EventForm.svelte';
 	import EventModal from '$lib/components/schedule/EventModal.svelte';
 	import DeleteEventDialog from '$lib/components/schedule/DeleteEventDialog.svelte';
-	import Toast from '$lib/components/legacy/Toast.svelte';
+	import { Badge, Button, Card, EmptyState } from '$lib/components/ui';
+	import { PageHeader } from '$lib/components/patterns';
+	import { toast } from '$lib/ui/toast.svelte';
+	import { pluralize } from '$lib/format';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
@@ -45,15 +47,6 @@
 
 	let deleteTarget = $state<Schedule | null>(null);
 	let isDeleting = $state(false);
-
-	let toast = $state<{ message: string; type: 'success' | 'error' } | null>(null);
-	let toastTimer: ReturnType<typeof setTimeout>;
-
-	function showToast(message: string, type: 'success' | 'error' = 'success') {
-		clearTimeout(toastTimer);
-		toast = { message, type };
-		toastTimer = setTimeout(() => (toast = null), 3200);
-	}
 
 	let buckets = $derived.by(() => {
 		const grouped: Record<string, Schedule[]> = { [day1]: [], [day2]: [], [OTHER_DAY]: [] };
@@ -97,10 +90,10 @@
 			const created = await trpc.schedule.create.mutate(input);
 			events = sortByStart([...events, created]);
 			revealDay(created);
-			showToast('Event added');
+			toast.success('Event added');
 			addOpen = false;
 		} catch (e) {
-			showToast(e instanceof Error ? e.message : 'Failed to add event', 'error');
+			toast.fromError(e, 'Failed to add event');
 		} finally {
 			creating = false;
 		}
@@ -113,10 +106,10 @@
 			const updated = await trpc.schedule.update.mutate({ id: editing.id, ...input });
 			events = sortByStart(events.map((e) => (e.id === updated.id ? updated : e)));
 			revealDay(updated);
-			showToast('Event updated');
+			toast.success('Event updated');
 			editing = null;
 		} catch (e) {
-			showToast(e instanceof Error ? e.message : 'Failed to save changes', 'error');
+			toast.fromError(e, 'Failed to save changes');
 		} finally {
 			updating = false;
 		}
@@ -131,9 +124,9 @@
 			events = events.filter((e) => e.id !== id);
 			if (editing?.id === id) editing = null;
 			deleteTarget = null;
-			showToast('Event deleted');
+			toast.success('Event deleted');
 		} catch (e) {
-			showToast(e instanceof Error ? e.message : 'Failed to delete event', 'error');
+			toast.fromError(e, 'Failed to delete event');
 		} finally {
 			isDeleting = false;
 		}
@@ -144,25 +137,14 @@
 	<title>Schedule · Rodeo Admin</title>
 </svelte:head>
 
-<div class="max-w-[860px]">
-	<!-- Page header -->
-	<div class="mb-4 flex items-center justify-between">
-		<div>
-			<h1 class="text-[22px] font-bold text-primary">Schedule</h1>
-			<span class="mt-0.5 block text-[13px] text-muted-foreground">
-				{events.length}
-				{events.length === 1 ? 'event' : 'events'} across the hackathon
-			</span>
-		</div>
-		{#if !addOpen}
-			<button
-				onclick={() => (addOpen = true)}
-				class="shrink-0 cursor-pointer rounded-md border border-primary bg-primary px-[18px] py-2 text-[13px] font-semibold text-white"
-			>
-				+ Add Event
-			</button>
-		{/if}
-	</div>
+<div class="max-w-4xl">
+	<PageHeader title="Schedule" subtitle="{pluralize(events.length, 'event')} across the hackathon">
+		{#snippet actions()}
+			{#if !addOpen}
+				<Button variant="primary" onclick={() => (addOpen = true)}>+ Add event</Button>
+			{/if}
+		{/snippet}
+	</PageHeader>
 
 	<DayToggle {days} selected={selectedDay} {counts} onSelect={(key) => (selectedDay = key)} />
 
@@ -180,24 +162,18 @@
 	{/if}
 
 	<!-- Event list -->
-	<div class="overflow-hidden rounded-md border border-border bg-white">
-		<div class="flex items-center justify-between border-b border-border bg-muted px-4 py-[9px]">
-			<span class="text-[10px] font-bold tracking-widest text-muted-foreground uppercase">
-				{selectedDay === OTHER_DAY ? 'Outside the hackathon dates' : 'Timeline'}
-			</span>
+	<Card
+		title={selectedDay === OTHER_DAY ? 'Outside the hackathon dates' : 'Timeline'}
+		padding="none"
+	>
+		{#snippet actions()}
 			{#if visibleEvents.length > 0}
-				<span
-					class="rounded border border-border bg-white px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground"
-				>
-					{visibleEvents.length}
-				</span>
+				<Badge tone="neutral">{visibleEvents.length}</Badge>
 			{/if}
-		</div>
+		{/snippet}
 
 		{#if visibleEvents.length === 0}
-			<div class="px-4 py-8 text-center text-[13px] text-muted-foreground">
-				No events scheduled for this day.
-			</div>
+			<EmptyState message="No events scheduled for this day." />
 		{:else}
 			{#each visibleEvents as event (event.id)}
 				<EventCard
@@ -208,13 +184,14 @@
 				/>
 			{/each}
 		{/if}
-	</div>
+	</Card>
 </div>
 
 {#if editing}
 	<!-- Keyed on the event id so opening a different row remounts with its values. -->
 	{#key editing.id}
 		<EventModal
+			open
 			event={editing}
 			{timezone}
 			{defaultDayKey}
@@ -227,20 +204,11 @@
 
 {#if deleteTarget}
 	<DeleteEventDialog
+		open
 		event={deleteTarget}
 		{timezone}
 		{isDeleting}
 		onConfirm={confirmDelete}
 		onCancel={() => (deleteTarget = null)}
 	/>
-{/if}
-
-{#if toast}
-	<div
-		in:fly={{ x: 60, duration: 280 }}
-		out:fly={{ x: 60, duration: 200 }}
-		class="fixed right-7 bottom-7 z-[200]"
-	>
-		<Toast message={toast.message} type={toast.type} />
-	</div>
 {/if}

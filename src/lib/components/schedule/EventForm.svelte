@@ -4,6 +4,9 @@
 	import type { ScheduleModel as Schedule } from '$lib/generated/prisma/models';
 	import type { EventInput } from '$lib/schedule/types';
 	import { toZonedInput, fromZonedInput } from '$lib/schedule/days';
+	import { Button, Card, Input, Select, Textarea } from '$lib/components/ui';
+	import { humanizeEnum } from '$lib/format';
+	import { cn } from '$lib/utils';
 
 	let {
 		event = null,
@@ -27,14 +30,17 @@
 		onCancel: () => void;
 	} = $props();
 
-	const TYPES = Object.values(ScheduleType);
+	const TYPE_OPTIONS = Object.values(ScheduleType).map((value) => ({
+		value,
+		label: humanizeEnum(value)
+	}));
 
 	// Snapshotted once per mount. The page keys this component on the event id so
 	// switching between add and edit remounts it with fresh values.
 	let name = $state(untrack(() => event?.name ?? ''));
 	let location = $state(untrack(() => event?.location ?? ''));
 	let description = $state(untrack(() => event?.description ?? ''));
-	let type = $state<ScheduleType>(untrack(() => event?.type ?? ScheduleType.EVENT));
+	let type = $state<string>(untrack(() => event?.type ?? ScheduleType.EVENT));
 	let start = $state(
 		untrack(() => (event ? toZonedInput(event.start, timezone) : `${defaultDayKey}T12:00`))
 	);
@@ -53,8 +59,18 @@
 
 	let hasErrors = $derived(Object.values(errors).some(Boolean));
 
+	// Errors only surface once a field has been touched or a submit was attempted,
+	// so a fresh form isn't red before anyone has typed anything.
+	let touched = $state<Record<string, boolean>>({});
+	let submitted = $state(false);
+
+	function shown(field: keyof typeof errors): string | null {
+		return touched[field] || submitted ? errors[field] : null;
+	}
+
 	function handleSubmit(e: SubmitEvent) {
 		e.preventDefault();
+		submitted = true;
 		if (hasErrors || saving) return;
 		onSubmit({
 			name: name.trim(),
@@ -64,113 +80,91 @@
 			start: fromZonedInput(start, timezone),
 			end: fromZonedInput(end, timezone),
 			location: location.trim(),
-			type
+			type: type as ScheduleType
 		});
 	}
-
-	const inputClass =
-		'w-full rounded border bg-white px-3 py-[7px] text-[13px] text-primary outline-none';
-	const labelClass = 'mb-1.5 text-[10px] font-bold tracking-widest text-muted-foreground uppercase';
 </script>
 
-<form
-	onsubmit={handleSubmit}
-	class={bare ? '' : 'mb-4 overflow-hidden rounded-md border border-border bg-white'}
->
-	<div class="border-b border-border bg-muted px-4 py-[9px]">
-		<span class="text-[10px] font-bold tracking-widest text-muted-foreground uppercase">
-			{event ? 'Edit Event' : 'New Event'}
-		</span>
-	</div>
+{#snippet fields()}
+	<div class="flex flex-col gap-4 p-4">
+		<!--
+			autofocus reaches the real <input> through Input's ...rest. The compiler's
+			a11y_autofocus check only inspects literal attributes on elements, so it
+			no longer fires here — the tradeoff is deliberate either way: this form is
+			the only thing on screen when it opens.
+		-->
+		<Input
+			label="Title"
+			required
+			bind:value={name}
+			placeholder="e.g. Workshop: Intro to ML"
+			autofocus
+			error={shown('name')}
+			onblur={() => (touched.name = true)}
+		/>
 
-	<div class="space-y-4 p-4">
-		<div>
-			<div class={labelClass}>Title</div>
-			<!-- svelte-ignore a11y_autofocus -->
-			<input
-				type="text"
-				bind:value={name}
-				placeholder="e.g. Workshop: Intro to ML"
-				autofocus
-				class="{inputClass} {errors.name ? 'border-destructive' : 'border-border'}"
+		<div class="grid gap-4 sm:grid-cols-2">
+			<p class="m-0 -mb-2 text-xs text-foreground-secondary sm:col-span-2">
+				Times are in <span class="font-mono text-foreground">{timezone}</span>, the hackathon
+				timezone — not your computer's.
+			</p>
+			<Input
+				label="Start"
+				type="datetime-local"
+				mono
+				bind:value={start}
+				error={shown('start')}
+				onblur={() => (touched.start = true)}
 			/>
-			{#if errors.name}<div class="mt-1 text-xs text-destructive">{errors.name}</div>{/if}
+			<Input
+				label="End"
+				type="datetime-local"
+				mono
+				bind:value={end}
+				error={shown('end')}
+				onblur={() => (touched.end = true)}
+			/>
 		</div>
 
 		<div class="grid gap-4 sm:grid-cols-2">
-			<div class="-mb-2 text-xs text-muted-foreground sm:col-span-2">
-				Times are in <span class="font-mono text-primary">{timezone}</span>, the hackathon timezone
-				— not your computer's.
-			</div>
-			<div>
-				<div class={labelClass}>Start</div>
-				<input
-					type="datetime-local"
-					bind:value={start}
-					class="{inputClass} font-mono {errors.start ? 'border-destructive' : 'border-border'}"
-				/>
-				{#if errors.start}<div class="mt-1 text-xs text-destructive">{errors.start}</div>{/if}
-			</div>
-			<div>
-				<div class={labelClass}>End</div>
-				<input
-					type="datetime-local"
-					bind:value={end}
-					class="{inputClass} font-mono {errors.end ? 'border-destructive' : 'border-border'}"
-				/>
-				{#if errors.end}<div class="mt-1 text-xs text-destructive">{errors.end}</div>{/if}
-			</div>
+			<Input
+				label="Location"
+				required
+				bind:value={location}
+				placeholder="Room 101"
+				error={shown('location')}
+				onblur={() => (touched.location = true)}
+			/>
+			<Select label="Type" options={TYPE_OPTIONS} bind:value={type} />
 		</div>
 
-		<div class="grid gap-4 sm:grid-cols-2">
-			<div>
-				<div class={labelClass}>Location</div>
-				<input
-					type="text"
-					bind:value={location}
-					placeholder="Room 101"
-					class="{inputClass} {errors.location ? 'border-destructive' : 'border-border'}"
-				/>
-				{#if errors.location}<div class="mt-1 text-xs text-destructive">{errors.location}</div>{/if}
-			</div>
-			<div>
-				<div class={labelClass}>Type</div>
-				<select bind:value={type} class="{inputClass} cursor-pointer border-border">
-					{#each TYPES as t (t)}
-						<option value={t}>{t.toLowerCase()}</option>
-					{/each}
-				</select>
-			</div>
-		</div>
-
-		<div>
-			<div class={labelClass}>
-				Description
-				<span class="font-normal tracking-normal normal-case"> — optional</span>
-			</div>
-			<textarea
-				bind:value={description}
-				rows="2"
-				placeholder="Shown alongside the event"
-				class="{inputClass} resize-y border-border"
-			></textarea>
-		</div>
+		<Textarea
+			label="Description"
+			hint="Optional — shown alongside the event"
+			bind:value={description}
+			rows={2}
+			placeholder="Shown alongside the event"
+		/>
 	</div>
+{/snippet}
 
-	<div class="flex justify-end gap-[10px] border-t border-border px-4 py-3">
-		<button
-			type="button"
-			onclick={onCancel}
-			class="cursor-pointer rounded-md border border-border bg-white px-4 py-2 text-[13px] font-medium text-primary"
-		>
-			Cancel
-		</button>
-		<button
-			type="submit"
-			disabled={hasErrors || saving}
-			class="cursor-pointer rounded-md border border-primary bg-primary px-[18px] py-2 text-[13px] font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40"
-		>
-			{saving ? 'Saving…' : event ? 'Save Changes' : 'Add to Schedule'}
-		</button>
-	</div>
+{#snippet actions()}
+	<Button type="button" onclick={onCancel} disabled={saving}>Cancel</Button>
+	<Button type="submit" variant="primary" disabled={hasErrors} loading={saving}>
+		{event ? 'Save changes' : 'Add to schedule'}
+	</Button>
+{/snippet}
+
+<form onsubmit={handleSubmit} class={cn(!bare && 'mb-4')}>
+	{#if bare}
+		{@render fields()}
+		<div class="flex justify-end gap-2 border-t border-border px-4 py-3">
+			{@render actions()}
+		</div>
+	{:else}
+		<Card title={event ? 'Edit event' : 'New event'} padding="none">
+			{@render fields()}
+			{#snippet footer()}{@render actions()}{/snippet}
+		</Card>
+	{/if}
 </form>
