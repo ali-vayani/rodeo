@@ -120,12 +120,23 @@ model Settings {
   admissionsSend      DateTime?
   hackathonStartDate  DateTime
   scanActions         String[]
+
+  // Lifecycle email templates, edited at /admin/email-templates. Every subject
+  // carries a @default so adding one to a populated table backfills in a single
+  // statement, and so updateTemplates can create a row without naming all 19 fields.
   submitTemplate      String
+  submitSubject       String   @default("We received your application")
   acceptTemplate      String
+  acceptSubject       String   @default("You've been accepted!")
   confirmTemplate     String
+  confirmSubject      String   @default("Your RSVP is confirmed")
   declineTemplate     String
+  declineSubject      String   @default("Your RSVP has been declined")
   rejectTemplate      String
+  rejectSubject       String   @default("An update on your application")
   waitlistTemplate    String
+  waitlistSubject     String   @default("You're on the waitlist")
+
   timezone            String // IANA identifier, e.g. "America/Chicago"
 }
 

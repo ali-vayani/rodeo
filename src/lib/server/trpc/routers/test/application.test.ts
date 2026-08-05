@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { mockDeep, mockReset, type DeepMockProxy } from 'vitest-mock-extended';
 import type { PrismaClient } from '$lib/generated/prisma/client';
 import { UserStatus, DecisionStatus, BlacklistType, QuestionType, Role } from '$lib/generated/prisma/client';
-import { createTestCaller, hackerUser, appliedHacker, mockSettings } from '../test-utils';
+import { createTestCaller, hackerUser, appliedHacker, acceptedHacker, mockSettings } from '../test-utils';
 
 vi.mock('$lib/server/db', async () => {
 	const { mockDeep } = await import('vitest-mock-extended');
@@ -96,6 +96,75 @@ describe('application.save', () => {
 	});
 });
 
+describe('application.rsvp', () => {
+	it('sends the confirm template on success', async () => {
+		const caller = createTestCaller(db, acceptedHacker);
+		db.user.findUniqueOrThrow.mockResolvedValue(acceptedHacker as never);
+		db.user.update.mockResolvedValue({
+			...acceptedHacker,
+			status: UserStatus.CONFIRMED
+		} as never);
+		db.settings.findFirst.mockResolvedValue(mockSettings);
+
+		await caller.application.rsvp();
+
+		expect(sendTemplatedEmail).toHaveBeenCalledWith(
+			acceptedHacker.email,
+			{ subject: mockSettings.confirmSubject, body: mockSettings.confirmTemplate },
+			expect.objectContaining({ name: acceptedHacker.name })
+		);
+	});
+
+	it('still confirms when the email send fails', async () => {
+		const caller = createTestCaller(db, acceptedHacker);
+		db.user.findUniqueOrThrow.mockResolvedValue(acceptedHacker as never);
+		db.user.update.mockResolvedValue({
+			...acceptedHacker,
+			status: UserStatus.CONFIRMED
+		} as never);
+		db.settings.findFirst.mockResolvedValue(mockSettings);
+		vi.mocked(sendTemplatedEmail).mockRejectedValueOnce(new Error('smtp down'));
+
+		const result = await caller.application.rsvp();
+
+		expect(result.status).toBe(UserStatus.CONFIRMED);
+	});
+});
+
+describe('application.rsvpDecline', () => {
+	it('sends the decline template on success', async () => {
+		const caller = createTestCaller(db, acceptedHacker);
+		db.user.findUniqueOrThrow.mockResolvedValue(acceptedHacker as never);
+		db.user.update.mockResolvedValue({
+			...acceptedHacker,
+			status: UserStatus.DECLINED
+		} as never);
+		db.settings.findFirst.mockResolvedValue(mockSettings);
+
+		await caller.application.rsvpDecline();
+
+		expect(sendTemplatedEmail).toHaveBeenCalledWith(
+			acceptedHacker.email,
+			{ subject: mockSettings.declineSubject, body: mockSettings.declineTemplate },
+			expect.objectContaining({ name: acceptedHacker.name })
+		);
+	});
+
+	it('sends nothing when no settings row exists', async () => {
+		const caller = createTestCaller(db, acceptedHacker);
+		db.user.findUniqueOrThrow.mockResolvedValue(acceptedHacker as never);
+		db.user.update.mockResolvedValue({
+			...acceptedHacker,
+			status: UserStatus.DECLINED
+		} as never);
+		db.settings.findFirst.mockResolvedValue(null);
+
+		await caller.application.rsvpDecline();
+
+		expect(sendTemplatedEmail).not.toHaveBeenCalled();
+	});
+});
+
 describe('application.submit', () => {
 	it('sets status to APPLIED on success', async () => {
 		const caller = createTestCaller(db, hackerUser);
@@ -186,7 +255,7 @@ describe('application.submit', () => {
 
 		expect(sendTemplatedEmail).toHaveBeenCalledWith(
 			hackerUser.email,
-			mockSettings.submitTemplate,
+			{ subject: mockSettings.submitSubject, body: mockSettings.submitTemplate },
 			expect.objectContaining({ name: hackerUser.name })
 		);
 	});

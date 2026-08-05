@@ -1,11 +1,9 @@
+import { substituteVariables } from '$lib/email/variables';
+
 export interface EmailPayload {
 	to: string;
 	subject: string;
 	body: string;
-}
-
-function substituteVariables(template: string, vars: Record<string, string>): string {
-	return template.replace(/\{\{(\w+)\}\}/g, (_, key) => vars[key] ?? `{{${key}}}`);
 }
 
 export async function sendEmail(payload: EmailPayload): Promise<void> {
@@ -19,12 +17,15 @@ export async function sendEmail(payload: EmailPayload): Promise<void> {
 	throw new Error('Production email sending not yet implemented');
 }
 
+/** Substitutes `vars` into both halves of a stored template and sends it. */
 export async function sendTemplatedEmail(
 	to: string,
-	template: string,
+	template: { subject: string; body: string },
 	vars: Record<string, string>
 ): Promise<void> {
-	const subject = vars['subject'] ?? 'Notification from Rodeo';
-	const body = substituteVariables(template, vars);
-	await sendEmail({ to, subject, body });
+	await sendEmail({
+		to,
+		subject: substituteVariables(template.subject, vars),
+		body: substituteVariables(template.body, vars)
+	});
 }

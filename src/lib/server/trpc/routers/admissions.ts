@@ -4,6 +4,7 @@ import { Role, DecisionStatus } from '$lib/generated/prisma/client';
 import { router, adminProcedure } from '../init';
 import { createLog } from '$lib/server/log';
 import { sendTemplatedEmail } from '$lib/server/email';
+import { buildTemplateVars } from '$lib/email/variables';
 import { CLAIM_TTL_MS } from '$lib/admissions/lock';
 
 /**
@@ -273,22 +274,31 @@ export const admissionsRouter = router({
 
 			// Send emails per decision type (fire-and-forget in dev)
 			if (settings) {
-				const templateMap: Record<string, string> = {
-					[DecisionStatus.ACCEPTED]: settings.acceptTemplate,
-					[DecisionStatus.REJECTED]: settings.rejectTemplate,
-					[DecisionStatus.WAITLISTED]: settings.waitlistTemplate,
-					[DecisionStatus.PENDING]: ''
+				const templateMap: Record<string, { subject: string; body: string }> = {
+					[DecisionStatus.ACCEPTED]: {
+						subject: settings.acceptSubject,
+						body: settings.acceptTemplate
+					},
+					[DecisionStatus.REJECTED]: {
+						subject: settings.rejectSubject,
+						body: settings.rejectTemplate
+					},
+					[DecisionStatus.WAITLISTED]: {
+						subject: settings.waitlistSubject,
+						body: settings.waitlistTemplate
+					},
+					[DecisionStatus.PENDING]: { subject: '', body: '' }
 				};
 
 				await Promise.allSettled(
 					users
-						.filter((u) => u.pendingDecision && templateMap[u.pendingDecision])
+						.filter((u) => u.pendingDecision && templateMap[u.pendingDecision].body)
 						.map((u) =>
-							sendTemplatedEmail(u.email, templateMap[u.pendingDecision!], {
-								name: u.name,
-								hackathon_start: settings.hackathonStartDate.toLocaleDateString(),
-								rsvp_deadline: settings.RSVPDeadline.toLocaleDateString()
-							})
+							sendTemplatedEmail(
+								u.email,
+								templateMap[u.pendingDecision!],
+								buildTemplateVars(u, settings)
+							)
 						)
 				);
 			}
