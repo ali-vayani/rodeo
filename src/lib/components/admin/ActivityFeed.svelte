@@ -1,12 +1,15 @@
 <script lang="ts">
+	import { NOTABLE_ACTIONS } from '$lib/log/notable';
+
 	let {
 		entries
 	}: {
 		entries: Array<{
 			id: string;
 			action: string;
+			summary: string;
 			timestamp: Date | string;
-			user: { name: string; email: string } | null;
+			actorName: string | null;
 		}>;
 	} = $props();
 
@@ -24,10 +27,8 @@
 		return `${diffDay}d ago`;
 	}
 
-	const NOTABLE = ['release', 'scan', 'submit', 'confirm', 'accept', 'reject', 'waitlist'];
-
 	function isNotable(action: string): boolean {
-		return NOTABLE.some((kw) => action.toLowerCase().includes(kw));
+		return NOTABLE_ACTIONS.has(action);
 	}
 </script>
 
@@ -42,7 +43,7 @@
 		<div class="py-6 text-center text-[13px] text-muted-foreground">No activity yet</div>
 	{:else}
 		<div class="flex-1 overflow-y-auto">
-			{#each entries as entry}
+			{#each entries as entry (entry.id)}
 				<div class="flex items-start gap-[10px] border-b border-[#f0f0f0] py-[10px]">
 					<div
 						class="mt-1 size-1.5 shrink-0 rounded-full"
@@ -50,10 +51,10 @@
 					></div>
 					<div class="min-w-0 flex-1">
 						<div class="text-[13px] leading-[1.4] text-[#333]">
-							{#if entry.user}
-								<span class="font-medium">{entry.user.name}</span>
+							{#if entry.actorName}
+								<span class="font-medium">{entry.actorName}</span>
 							{/if}
-							{entry.action}
+							{entry.summary}
 						</div>
 					</div>
 					<div class="shrink-0 font-mono text-[11px] text-muted-foreground">

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { errorMessage } from '$lib/ui/errors';
 	import { onMount, onDestroy, untrack } from 'svelte';
 	import { fly } from 'svelte/transition';
 	import { Html5Qrcode } from 'html5-qrcode';
@@ -132,9 +133,9 @@
 			scanState = 'idle';
 			dialogUser = result;
 			dialogOpen = true;
-		} catch (e: any) {
+		} catch (e) {
 			scanState = 'error';
-			errorMsg = e.message ?? 'No matching attendee found.';
+			errorMsg = errorMessage(e, 'No matching attendee found.');
 			lastScan = null;
 			resumeScanning();
 		} finally {
@@ -156,9 +157,9 @@
 			scanState = 'idle';
 			dialogUser = result;
 			dialogOpen = true;
-		} catch (e: any) {
+		} catch (e) {
 			scanState = 'error';
-			errorMsg = e.message ?? 'No matching attendee found.';
+			errorMsg = errorMessage(e, 'No matching attendee found.');
 			lastScan = null;
 			resumeScanning();
 		} finally {
@@ -205,9 +206,9 @@
 			dialogOpen = false;
 			dialogUser = null;
 			// Camera stays paused until "Scan Next" is tapped.
-		} catch (e: any) {
+		} catch (e) {
 			scanState = 'error';
-			errorMsg = e.message ?? 'Failed to record scan';
+			errorMsg = errorMessage(e, 'Failed to record scan');
 			lastScan = null;
 			dialogOpen = false;
 			dialogUser = null;

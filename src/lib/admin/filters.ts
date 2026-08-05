@@ -8,26 +8,29 @@ import { Role, UserStatus, DecisionStatus } from '$lib/generated/prisma/enums';
  * the server, so they must agree on what "all checked" and "none checked" mean —
  * otherwise a count from one and a send from the other disagree.
  */
-export const ALL_ROLES = Object.values(Role) as string[];
-export const ALL_STATUSES = Object.values(UserStatus) as string[];
-export const DECISION_VALUES = Object.values(DecisionStatus) as string[];
+// Kept as the enum types, not widened to string[]. Widening them was the single
+// cause of the `as any` at every tRPC call site downstream: the params these
+// build feed procedures whose input schemas are the enums.
+export const ALL_ROLES: Role[] = Object.values(Role);
+export const ALL_STATUSES: UserStatus[] = Object.values(UserStatus);
+export const DECISION_VALUES: DecisionStatus[] = Object.values(DecisionStatus);
 
 /** Synthetic option for users with no `activeDecision` yet. Not a DecisionStatus. */
 export const NO_DECISION = 'NONE';
-export const DECISION_OPTIONS = [...DECISION_VALUES, NO_DECISION];
+export const DECISION_OPTIONS: string[] = [...DECISION_VALUES, NO_DECISION];
 
 export type FilterState = Record<string, boolean>;
 
 /** Every option checked — the default, meaning "no filter applied". */
-export function allChecked(options: string[]): FilterState {
+export function allChecked(options: readonly string[]): FilterState {
 	return Object.fromEntries(options.map((o) => [o, true]));
 }
 
 export type RecipientParams = {
 	search?: string;
-	roles?: string[];
-	statuses?: string[];
-	decisions?: string[];
+	roles?: Role[];
+	statuses?: UserStatus[];
+	decisions?: DecisionStatus[];
 	includeNoDecision?: boolean;
 	emails?: string[];
 };

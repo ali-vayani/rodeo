@@ -1,12 +1,13 @@
 <script lang="ts">
 	import { page } from '$app/state';
+	import { resolve } from '$app/paths';
 
 	let { children } = $props();
 
 	const links = [
 		{ href: '/hacker/application', label: 'Application' },
 		{ href: '/hacker/account', label: 'Account' }
-	];
+	] as const;
 </script>
 
 <div class="flex min-h-screen">
@@ -16,10 +17,10 @@
 			<span class="font-mono text-lg font-medium text-primary">rodeo</span>
 		</div>
 		<ul class="mt-1 flex flex-1 flex-col gap-0.5 px-3">
-			{#each links as link}
+			{#each links as link (link.href)}
 				<li>
 					<a
-						href={link.href}
+						href={resolve(link.href)}
 						class="block rounded px-3 py-2 text-sm transition-colors {page.url.pathname ===
 						link.href
 							? 'bg-primary text-white'

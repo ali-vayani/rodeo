@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { resolve } from '$app/paths';
 	import type { PageData } from './$types';
 	import { Role, UserStatus } from '$lib/generated/prisma/enums';
 	import { computeApplicationState, type ApplicationState } from '$lib/application/state';
@@ -15,7 +16,9 @@
 	const trpc = createClient();
 
 	// --- State machine ---
-	let currentState = $state<ApplicationState>(computeApplicationState(data.user));
+	// untrack, like `user` below: the initial state is a snapshot, and the
+	// mutations on this page advance it explicitly.
+	let currentState = $state<ApplicationState>(untrack(() => computeApplicationState(data.user)));
 
 	// Mutable copy of user so we can update after mutations
 	// untrack: we intentionally snapshot the initial value; page data doesn't change
@@ -168,7 +171,7 @@
 		<div class="mb-6 rounded border border-border bg-white p-5">
 			<p class="text-sm font-medium text-primary">
 				You joined <strong>{joinTeam.teamName}</strong>.
-				<a href="/hacker/account" class="ml-1 text-muted-foreground underline"
+				<a href={resolve('/hacker/account')} class="ml-1 text-muted-foreground underline"
 					>Go to your account →</a
 				>
 			</p>

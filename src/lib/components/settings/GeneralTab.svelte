@@ -44,7 +44,7 @@
 			bind:value={localTimezone}
 			class="w-full cursor-pointer rounded border border-border bg-white px-3 py-[7px] text-[13px] text-primary outline-none"
 		>
-			{#each TIMEZONES as tz}
+			{#each TIMEZONES as tz (tz)}
 				<option value={tz.value}>{tz.label} — {tz.value}</option>
 			{/each}
 			{#if !TIMEZONES.find((t) => t.value === localTimezone)}

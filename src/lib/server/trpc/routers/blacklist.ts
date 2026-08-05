@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { router, adminProcedure } from '../init';
 import { normalizeEmail, normalizeName } from '$lib/blacklist/match';
+import { logAction } from '$lib/server/log';
 
 /** Ceiling on a single CSV import, so a malformed file can't turn into an unbounded insert. */
 const MAX_IMPORT_ROWS = 5000;
@@ -52,13 +53,27 @@ export const blacklistRouter = router({
 		// Re-adding an address updates the name and reason rather than failing on the unique
 		// index -- an admin typing in an address that already exists means to correct the
 		// entry. Name-only rows have no unique key to upsert against, so they just insert.
-		if (!email) return ctx.prisma.blacklist.create({ data });
+		const entry = email
+			? await ctx.prisma.blacklist.upsert({
+					where: { email },
+					create: data,
+					update: { firstName: input.firstName, lastName: input.lastName, reason: input.reason }
+				})
+			: await ctx.prisma.blacklist.create({ data });
 
-		return ctx.prisma.blacklist.upsert({
-			where: { email },
-			create: data,
-			update: { firstName: input.firstName, lastName: input.lastName, reason: input.reason }
+		const name = `${entry.firstName} ${entry.lastName}`;
+		await logAction(ctx, {
+			action: 'blacklist.add',
+			// The email/name distinction decides whether this auto-rejects or merely
+			// flags, so it belongs in the sentence rather than buried in metadata.
+			summary: email
+				? `Blacklisted ${name} (${email})`
+				: `Blacklisted the name ${name} (no email — flags for review only)`,
+			target: { id: entry.id, label: name },
+			metadata: { email: email ?? null, reason: entry.reason ?? null }
 		});
+
+		return entry;
 	}),
 
 	/**
@@ -125,10 +140,35 @@ export const blacklistRouter = router({
 
 			// Every valid row either landed or was already present, so the difference is the
 			// duplicate count -- reported separately so the UI never calls a skip a success.
-			return { added: count, duplicates: valid.length - count, invalid };
+			const result = { added: count, duplicates: valid.length - count, invalid };
+
+			await logAction(ctx, {
+				action: 'blacklist.import',
+				summary:
+					`Imported ${count} blacklist ${count === 1 ? 'entry' : 'entries'} ` +
+					`(${result.duplicates} duplicate, ${invalid.length} rejected)`,
+				metadata: {
+					rows: input.rows.length,
+					added: count,
+					duplicates: result.duplicates,
+					invalid: invalid.length
+				}
+			});
+
+			return result;
 		}),
 
 	remove: adminProcedure.input(z.object({ id: z.string() })).mutation(async ({ ctx, input }) => {
-		return ctx.prisma.blacklist.delete({ where: { id: input.id } });
+		const entry = await ctx.prisma.blacklist.delete({ where: { id: input.id } });
+
+		const name = `${entry.firstName} ${entry.lastName}`;
+		await logAction(ctx, {
+			action: 'blacklist.remove',
+			summary: `Removed ${name} from the blacklist`,
+			target: { id: entry.id, label: name },
+			metadata: { email: entry.email, reason: entry.reason }
+		});
+
+		return entry;
 	})
 });

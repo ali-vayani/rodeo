@@ -254,7 +254,7 @@
 					bind:value={selectedRole}
 					class="cursor-pointer rounded-[5px] border border-[#e0e0e0] bg-[#f4f4f4] px-2 py-1 text-xs font-semibold text-[#191919] outline-none focus:border-[#191919]"
 				>
-					{#each ALL_ROLES as role}
+					{#each ALL_ROLES as role (role)}
 						<option value={role}>{role}</option>
 					{/each}
 				</select>
@@ -331,7 +331,7 @@
 							bind:value={addType}
 							class="flex-1 rounded-md border border-[#e0e0e0] bg-white px-2.5 py-2 text-[13px] text-[#191919] transition-[border-color] duration-[120ms] outline-none focus:border-[#191919]"
 						>
-							{#each QUESTION_TYPES as t}
+							{#each QUESTION_TYPES as t (t.value)}
 								<option value={t.value}>{t.label}</option>
 							{/each}
 						</select>

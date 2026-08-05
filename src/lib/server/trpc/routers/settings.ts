@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { router, authedProcedure, adminProcedure } from '../init';
 import { TEMPLATE_KEYS } from '$lib/email/templates';
+import { logAction, listOrNone } from '$lib/server/log';
 
 const settingsInput = z.object({
 	applicationOpen: z.coerce.date(),
@@ -46,6 +47,31 @@ export const DEFAULT_SETTINGS = {
 	timezone: 'America/Chicago'
 };
 
+/**
+ * Which keys of `next` differ from `previous`.
+ *
+ * Dates arrive as `Date` and arrays as `string[]`, so `!==` alone would report
+ * every field as changed on every save. Both are compared by value.
+ */
+function changedFields(previous: Record<string, unknown>, next: Record<string, unknown>): string[] {
+	return Object.keys(next).filter((key) => {
+		const before = previous[key];
+		const after = next[key];
+
+		// `admissionsSend` is nullable in the column and optional in the input, so
+		// an untouched empty value arrives as `undefined` against a stored `null`.
+		if (before == null || after == null) return (before ?? null) !== (after ?? null);
+
+		if (before instanceof Date || after instanceof Date) {
+			return new Date(before as Date).getTime() !== new Date(after as Date).getTime();
+		}
+		if (Array.isArray(before) || Array.isArray(after)) {
+			return JSON.stringify(before) !== JSON.stringify(after);
+		}
+		return before !== after;
+	});
+}
+
 export const settingsRouter = router({
 	get: authedProcedure.query(async ({ ctx }) => {
 		const settings = await ctx.prisma.settings.findFirst();
@@ -54,10 +80,25 @@ export const settingsRouter = router({
 
 	update: adminProcedure.input(settingsInput).mutation(async ({ ctx, input }) => {
 		const existing = await ctx.prisma.settings.findFirst();
-		if (existing) {
-			return ctx.prisma.settings.update({ where: { id: existing.id }, data: input });
-		}
-		return ctx.prisma.settings.create({ data: input });
+
+		// The page is a full-object PUT, so every save sends all nineteen columns.
+		// Logging "updated settings" would be true of every entry and useful in
+		// none — name the fields that actually moved.
+		const changed = existing ? changedFields(existing, input) : Object.keys(input);
+
+		const settings = existing
+			? await ctx.prisma.settings.update({ where: { id: existing.id }, data: input })
+			: await ctx.prisma.settings.create({ data: input });
+
+		await logAction(ctx, {
+			action: 'settings.update',
+			summary: existing
+				? `Updated settings (${listOrNone(changed)})`
+				: 'Created the initial settings row',
+			metadata: { changed }
+		});
+
+		return settings;
 	}),
 
 	/**
@@ -88,11 +129,21 @@ export const settingsRouter = router({
 			}
 
 			const existing = await ctx.prisma.settings.findFirst();
-			if (existing) {
-				return ctx.prisma.settings.update({ where: { id: existing.id }, data });
-			}
-			// Fresh install: seed.ts doesn't create a Settings row, so `get` served
-			// DEFAULT_SETTINGS and there is nothing to update yet. Materialise it.
-			return ctx.prisma.settings.create({ data: { ...DEFAULT_SETTINGS, ...data } });
+			const settings = existing
+				? await ctx.prisma.settings.update({ where: { id: existing.id }, data })
+				: // Fresh install: seed.ts doesn't create a Settings row, so `get` served
+					// DEFAULT_SETTINGS and there is nothing to update yet. Materialise it.
+					await ctx.prisma.settings.create({ data: { ...DEFAULT_SETTINGS, ...data } });
+
+			const edited = Object.keys(input.templates);
+			await logAction(ctx, {
+				action: 'settings.templates.update',
+				summary: `Updated the ${listOrNone(edited)} email ${edited.length === 1 ? 'template' : 'templates'}`,
+				// Bodies are not stored here — they can run to 20k characters each, and
+				// the trail records that they changed, not what they said.
+				metadata: { templates: edited }
+			});
+
+			return settings;
 		})
 });

@@ -42,7 +42,7 @@
 		<table class="w-full border-collapse">
 			<thead>
 				<tr class="border-b border-border bg-[#f9f9f9]">
-					{#each ['Name', 'Email', 'Role', 'Status', 'Pending', 'Decision', 'Created', ''] as col}
+					{#each ['Name', 'Email', 'Role', 'Status', 'Pending', 'Decision', 'Created', ''] as col (col)}
 						<th
 							class="px-[14px] py-[10px] text-left text-[11px] font-semibold tracking-[0.06em] whitespace-nowrap text-muted-foreground uppercase"
 						>

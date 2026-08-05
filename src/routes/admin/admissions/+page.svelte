@@ -1,4 +1,6 @@
 <script lang="ts">
+	import type { Role, DecisionStatus } from '$lib/generated/prisma/enums';
+	import { errorMessage, isTRPCErrorCode } from '$lib/ui/errors';
 	import { untrack } from 'svelte';
 	import { fly } from 'svelte/transition';
 	import { createClient } from '$lib/trpc/client';
@@ -18,7 +20,7 @@
 
 	let applicants = $state<Applicant[]>(untrack(() => [...data.applicants]));
 	let selectedUid = $state<string | null>(null);
-	let roleTab = $state('ALL');
+	let roleTab = $state<Role | 'ALL'>('ALL');
 	let search = $state('');
 	let loading = $state(false);
 	let decisionLoading = $state(false);
@@ -143,17 +145,17 @@
 		try {
 			applicants = await trpc.admissions.list.query({
 				noDecision: true,
-				roles: roleTab !== 'ALL' ? ([roleTab] as any) : undefined,
+				roles: roleTab !== 'ALL' ? [roleTab] : undefined,
 				search: search.trim() || undefined
 			});
-		} catch (e: any) {
-			showToast(e.message ?? 'Failed to load applicants', 'error');
+		} catch (e) {
+			showToast(errorMessage(e, 'Failed to load applicants'), 'error');
 		} finally {
 			loading = false;
 		}
 	}
 
-	function onRoleTabChange(tab: string) {
+	function onRoleTabChange(tab: Role | 'ALL') {
 		roleTab = tab;
 		loadApplicants();
 	}
@@ -165,7 +167,7 @@
 		searchTimer = setTimeout(loadApplicants, 400);
 	}
 
-	async function handleDecision(decision: string) {
+	async function handleDecision(decision: DecisionStatus) {
 		if (!selectedUid || !session.canDecide) return;
 		const uid = selectedUid;
 		const idx = applicants.findIndex((a) => a.uid === uid);
@@ -174,7 +176,7 @@
 		session.noteActivity();
 		decisionLoading = true;
 		try {
-			await trpc.admissions.setDecision.mutate({ uid, decision: decision as any });
+			await trpc.admissions.setDecision.mutate({ uid, decision });
 
 			// setDecision already cleared the claim server-side — skip the teardown release
 			session.markDecided(uid);
@@ -186,12 +188,12 @@
 			applicants = applicants.filter((a) => a.uid !== uid);
 			// Same index in the new array = the next person, skipping anyone locked
 			rollToNextUnlocked(idx, uid);
-		} catch (e: any) {
-			if (e?.data?.code === 'CONFLICT') {
+		} catch (e) {
+			if (isTRPCErrorCode(e, 'CONFLICT')) {
 				// Someone else got there first — the server refused the write.
 				session.reclaim();
 			}
-			showToast(e.message ?? 'Failed to update decision', 'error');
+			showToast(errorMessage(e, 'Failed to update decision'), 'error');
 		} finally {
 			decisionLoading = false;
 		}
@@ -211,8 +213,8 @@
 			showToast(
 				`Released decisions for ${result.released} user${result.released === 1 ? '' : 's'}`
 			);
-		} catch (e: any) {
-			showToast(e.message ?? 'Release failed', 'error');
+		} catch (e) {
+			showToast(errorMessage(e, 'Release failed'), 'error');
 		} finally {
 			releasing = false;
 		}

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { mockDeep, mockReset, type DeepMockProxy } from 'vitest-mock-extended';
+import { mockReset, type DeepMockProxy } from 'vitest-mock-extended';
 import type { PrismaClient } from '$lib/generated/prisma/client';
 import { Role, DecisionStatus } from '$lib/generated/prisma/client';
 import { CLAIM_TTL_MS } from '$lib/admissions/lock';
@@ -439,8 +439,14 @@ describe('admissions.setDecision', () => {
 		expect(db.log.create).toHaveBeenCalledWith(
 			expect.objectContaining({
 				data: expect.objectContaining({
-					action: expect.stringContaining('Decision blocked'),
-					userId: adminUser.uid
+					action: 'admissions.decision.blocked',
+					summary: expect.stringContaining(adminUser2.name),
+					actorId: adminUser.uid,
+					targetId: claimedHacker.uid,
+					metadata: expect.objectContaining({
+						decision: DecisionStatus.ACCEPTED,
+						heldBy: adminUser2.name
+					})
 				})
 			})
 		);
@@ -534,7 +540,10 @@ describe('admissions.release', () => {
 		expect(db.log.create).toHaveBeenCalledWith(
 			expect.objectContaining({
 				data: expect.objectContaining({
-					action: expect.stringContaining('Released decisions')
+					action: 'admissions.release',
+					summary: expect.stringContaining('Released 1 decision'),
+					actorId: adminUser.uid,
+					metadata: expect.objectContaining({ released: 1, scope: 'all pending' })
 				})
 			})
 		);

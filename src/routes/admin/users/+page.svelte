@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { errorMessage } from '$lib/ui/errors';
 	import type { PageData } from './$types';
 	import { untrack } from 'svelte';
 	import { fly } from 'svelte/transition';
@@ -13,6 +14,7 @@
 		allChecked,
 		buildRecipientParams
 	} from '$lib/admin/filters';
+	import { Role, UserStatus, DecisionStatus } from '$lib/generated/prisma/enums';
 
 	let { data }: { data: PageData } = $props();
 
@@ -35,8 +37,8 @@
 			users = result.users;
 			total = result.total;
 			page = p;
-		} catch (e: any) {
-			showToast(e.message ?? 'Failed to load page', 'error');
+		} catch (e) {
+			showToast(errorMessage(e, 'Failed to load page'), 'error');
 		} finally {
 			loadingPage = false;
 		}
@@ -55,7 +57,7 @@
 			page: p,
 			pageSize: PAGE_SIZE,
 			...buildRecipientParams(roleFilter, statusFilter, decisionFilter, search)
-		} as any;
+		};
 	}
 
 	// Checkbox toggles immediately re-fetch page 1 with new filters
@@ -123,10 +125,12 @@
 
 	// --- Modal state ---
 	let selectedUser = $state<User | null>(null);
-	let editRoles = $state<string[]>([]);
-	let editStatus = $state('');
-	let editPending = $state<string>('');
-	let editActive = $state<string>('');
+	// Typed as the enums rather than plain strings; '' is the modal's own "unset"
+	// for the two nullable decision fields and is mapped back to null on save.
+	let editRoles = $state<Role[]>([]);
+	let editStatus = $state<UserStatus>(UserStatus.CREATED);
+	let editPending = $state<DecisionStatus | ''>('');
+	let editActive = $state<DecisionStatus | ''>('');
 	let saving = $state(false);
 
 	function openModal(user: User) {
@@ -141,7 +145,7 @@
 		selectedUser = null;
 	}
 
-	function toggleEditRole(role: string) {
+	function toggleEditRole(role: Role) {
 		if (editRoles.includes(role)) {
 			editRoles = editRoles.filter((r) => r !== role);
 		} else {
@@ -154,20 +158,20 @@
 		saving = true;
 		try {
 			const [roleResult, statusResult, decisionResult] = await Promise.all([
-				trpc.user.updateRole.mutate({ uid: selectedUser.uid, roles: editRoles as any }),
-				trpc.user.updateStatus.mutate({ uid: selectedUser.uid, status: editStatus as any }),
+				trpc.user.updateRole.mutate({ uid: selectedUser.uid, roles: editRoles }),
+				trpc.user.updateStatus.mutate({ uid: selectedUser.uid, status: editStatus }),
 				trpc.user.updateDecisions.mutate({
 					uid: selectedUser.uid,
-					pendingDecision: (editPending || null) as any,
-					activeDecision: (editActive || null) as any
+					pendingDecision: editPending || null,
+					activeDecision: editActive || null
 				})
 			]);
 			const merged = { ...roleResult, ...statusResult, ...decisionResult } as User;
 			users = users.map((u) => (u.uid === merged.uid ? { ...u, ...merged } : u));
 			closeModal();
 			showToast('User saved');
-		} catch (e: any) {
-			showToast(e.message ?? 'Failed to save', 'error');
+		} catch (e) {
+			showToast(errorMessage(e, 'Failed to save'), 'error');
 		} finally {
 			saving = false;
 		}
@@ -249,7 +253,7 @@
 				<table class="w-full border-collapse">
 					<thead>
 						<tr class="sticky top-0 z-[1] border-b border-border bg-[#f9f9f9]">
-							{#each ['Name', 'Email', 'Role', 'Status', 'Pending', 'Decision', 'Created', ''] as col}
+							{#each ['Name', 'Email', 'Role', 'Status', 'Pending', 'Decision', 'Created', ''] as col (col)}
 								<th
 									class="bg-[#f9f9f9] px-[14px] py-[10px] text-left text-[11px] font-semibold tracking-[0.06em] whitespace-nowrap text-muted-foreground uppercase"
 								>
@@ -431,7 +435,7 @@
 						Roles
 					</div>
 					<div class="flex flex-wrap gap-[10px_16px]">
-						{#each ALL_ROLES as role}
+						{#each ALL_ROLES as role (role)}
 							<label class="flex cursor-pointer items-center gap-1.5 text-[13px] text-[#333]">
 								<input
 									type="checkbox"
@@ -457,7 +461,7 @@
 							bind:value={editStatus}
 							class="w-full cursor-pointer rounded border border-border bg-white px-2 py-1.5 text-[13px] text-primary outline-none"
 						>
-							{#each ALL_STATUSES as s}
+							{#each ALL_STATUSES as s (s)}
 								<option value={s}
 									>{s.charAt(0) + s.slice(1).toLowerCase().replace(/_/g, ' ')}</option
 								>
@@ -475,7 +479,7 @@
 							class="w-full cursor-pointer rounded border border-border bg-white px-2 py-1.5 text-[13px] text-primary outline-none"
 						>
 							<option value="">None</option>
-							{#each DECISION_VALUES as d}
+							{#each DECISION_VALUES as d (d)}
 								<option value={d}>{d.charAt(0) + d.slice(1).toLowerCase()}</option>
 							{/each}
 						</select>
@@ -491,7 +495,7 @@
 							class="w-full cursor-pointer rounded border border-border bg-white px-2 py-1.5 text-[13px] text-primary outline-none"
 						>
 							<option value="">None</option>
-							{#each DECISION_VALUES as d}
+							{#each DECISION_VALUES as d (d)}
 								<option value={d}>{d.charAt(0) + d.slice(1).toLowerCase()}</option>
 							{/each}
 						</select>

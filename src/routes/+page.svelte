@@ -1,3 +1,7 @@
+<script lang="ts">
+	import { resolve } from '$app/paths';
+</script>
+
 <div class="flex min-h-screen items-center justify-center bg-white">
 	<div class="text-center">
 		<p class="font-mono text-xs tracking-widest text-muted-foreground uppercase">
@@ -7,7 +11,7 @@
 		<p class="mt-2 text-sm text-muted-foreground">Sign in to access your portal</p>
 
 		<a
-			href="/login"
+			href={resolve('/login')}
 			class="mt-8 inline-block rounded bg-primary px-6 py-2 text-sm font-medium text-white transition-opacity hover:opacity-85"
 		>
 			Sign in →

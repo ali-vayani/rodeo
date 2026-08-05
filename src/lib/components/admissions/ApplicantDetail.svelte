@@ -3,6 +3,7 @@
 	import BlacklistBadge from './BlacklistBadge.svelte';
 	import type { ReviewPhase } from '$lib/admissions/reviewSession.svelte';
 	import type { BlacklistMatch } from '$lib/blacklist/match';
+	import type { DecisionStatus } from '$lib/generated/prisma/enums';
 
 	let {
 		applicant,
@@ -29,7 +30,7 @@
 			createdAt: Date | string;
 			application: Array<{ value: string; question: { title: string; order: number } }>;
 		};
-		onDecision: (decision: string) => void;
+		onDecision: (decision: DecisionStatus) => void;
 		decisionLoading: boolean;
 		hasPrev: boolean;
 		hasNext: boolean;

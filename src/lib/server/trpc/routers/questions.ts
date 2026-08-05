@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { Role, QuestionType } from '$lib/generated/prisma/client';
 import { router, publicProcedure, adminProcedure } from '../init';
+import { logAction } from '$lib/server/log';
 
 const questionInput = z.object({
 	title: z.string().min(1),
@@ -35,18 +36,54 @@ export const questionsRouter = router({
 	}),
 
 	create: adminProcedure.input(questionInput).mutation(async ({ ctx, input }) => {
-		return ctx.prisma.question.create({ data: input });
+		const question = await ctx.prisma.question.create({ data: input });
+
+		await logAction(ctx, {
+			action: 'question.create',
+			summary: `Added the question "${question.title}"`,
+			target: { id: question.id, label: question.title },
+			metadata: { type: question.type, required: question.required }
+		});
+
+		return question;
 	}),
 
 	update: adminProcedure
 		.input(z.object({ id: z.string() }).merge(questionInput))
 		.mutation(async ({ ctx, input }) => {
 			const { id, ...data } = input;
-			return ctx.prisma.question.update({ where: { id }, data });
+			const before = await ctx.prisma.question.findUniqueOrThrow({
+				where: { id },
+				select: { title: true }
+			});
+
+			const question = await ctx.prisma.question.update({ where: { id }, data });
+
+			await logAction(ctx, {
+				action: 'question.update',
+				summary: `Edited the question "${question.title}"`,
+				target: { id: question.id, label: question.title },
+				// Renames are the edit that makes old responses hard to interpret, so
+				// the previous title is worth keeping even when nothing else changed.
+				metadata: { titleFrom: before.title, type: question.type }
+			});
+
+			return question;
 		}),
 
 	delete: adminProcedure.input(z.object({ id: z.string() })).mutation(async ({ ctx, input }) => {
-		return ctx.prisma.question.delete({ where: { id: input.id } });
+		const question = await ctx.prisma.question.delete({ where: { id: input.id } });
+
+		await logAction(ctx, {
+			action: 'question.delete',
+			// Deleting a question cascades its responses. Say so in the trail —
+			// this is the entry someone reads when applicant answers go missing.
+			summary: `Deleted the question "${question.title}" and its responses`,
+			target: { id: question.id, label: question.title },
+			metadata: { type: question.type }
+		});
+
+		return question;
 	}),
 
 	reorder: adminProcedure
@@ -60,6 +97,13 @@ export const questionsRouter = router({
 					})
 				)
 			);
+
+			await logAction(ctx, {
+				action: 'question.reorder',
+				summary: `Reordered ${input.length} application questions`,
+				metadata: { count: input.length }
+			});
+
 			return { success: true };
 		}),
 
@@ -73,6 +117,19 @@ export const questionsRouter = router({
 			})
 		)
 		.mutation(async ({ ctx, input }) => {
+			// Resolve the deleted titles before the transaction removes them — an
+			// audit row reading "deleted 2 questions" is far less useful than one
+			// naming them, and after the commit there is nothing left to name.
+			const deletedTitles =
+				input.deleted.length > 0
+					? (
+							await ctx.prisma.question.findMany({
+								where: { id: { in: input.deleted.map((q) => q.id) } },
+								select: { title: true }
+							})
+						).map((q) => q.title)
+					: [];
+
 			await ctx.prisma.$transaction(async (tx) => {
 				for (const q of input.deleted) {
 					await tx.question.delete({ where: { id: q.id } });
@@ -91,6 +148,28 @@ export const questionsRouter = router({
 					});
 				}
 			});
+
+			// One entry per save, not one per question: the editor commits the whole
+			// form at once, and a trail of twelve rows for a single click buries
+			// everything else in the feed.
+			const parts = [
+				input.added.length && `${input.added.length} added`,
+				input.modified.length && `${input.modified.length} edited`,
+				input.deleted.length && `${input.deleted.length} deleted`,
+				input.reordered.length && `${input.reordered.length} reordered`
+			].filter(Boolean) as string[];
+
+			await logAction(ctx, {
+				action: 'question.batch',
+				summary: `Saved the application form (${parts.length > 0 ? parts.join(', ') : 'no changes'})`,
+				metadata: {
+					added: input.added.map((q) => q.title),
+					modified: input.modified.map((q) => q.title),
+					deleted: deletedTitles,
+					reordered: input.reordered.length
+				}
+			});
+
 			return { success: true };
 		})
 });

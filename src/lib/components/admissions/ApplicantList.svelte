@@ -1,6 +1,7 @@
 <script lang="ts">
 	import BlacklistBadge from './BlacklistBadge.svelte';
 	import type { BlacklistMatch } from '$lib/blacklist/match';
+	import type { Role } from '$lib/generated/prisma/enums';
 
 	let {
 		applicants,
@@ -27,8 +28,8 @@
 		}>;
 		selectedUid: string | null;
 		onSelect: (uid: string) => void;
-		roleTab: string;
-		onRoleTabChange: (tab: string) => void;
+		roleTab: Role | 'ALL';
+		onRoleTabChange: (tab: Role | 'ALL') => void;
 		search: string;
 		onSearchInput: (value: string) => void;
 		loading: boolean;
@@ -45,7 +46,7 @@
 		{ key: 'JUDGE', label: 'Judges' },
 		{ key: 'MENTOR', label: 'Mentors' },
 		{ key: 'VOLUNTEER', label: 'Volunteers' }
-	];
+	] as const;
 
 	const DECISION_CLASS: Record<string, string> = {
 		ACCEPTED: 'bg-[#d1fae5] text-[#065f46]',
@@ -88,7 +89,7 @@
 		<!-- Role tabs + collapse button -->
 		<div class="flex shrink-0 items-stretch overflow-x-hidden border-b border-border">
 			<div class="flex flex-1 overflow-x-auto">
-				{#each ROLE_TABS as tab}
+				{#each ROLE_TABS as tab (tab.key)}
 					<button
 						onclick={() => onRoleTabChange(tab.key)}
 						class="shrink-0 cursor-pointer border-b-2 border-none bg-transparent px-[10px] py-[10px] text-[11px] whitespace-nowrap transition-colors {roleTab ===

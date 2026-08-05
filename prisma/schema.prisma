@@ -193,12 +193,44 @@ model Scan {
   user      User     @relation(fields: [userId], references: [uid], onDelete: Cascade)
 }
 
+/// The append-only audit trail: who did what, to whom, and with what detail.
+///
+/// Actor identity is stored twice on purpose. `actorId` is the live relation, so
+/// the logs page can filter by admin and join to the current record. `actorName`
+/// and `actorEmail` are snapshots taken at write time, because the FK nulls out
+/// when an organizer is removed and an audit row reading "— released 240
+/// decisions" is worth nothing. The snapshot is the record; the relation is the
+/// convenience.
 model Log {
   id        String   @id @default(cuid())
+  /// Stable dot-slug — `admissions.decision.set`. Never rendered raw: it is what
+  /// the logs page filters on and what `LOG_ACTIONS` maps to a human label.
   action    String
+  /// The sentence a human reads: "Accepted Sarah Chen". Rendered *after* the
+  /// actor's name, so it opens with the verb and never repeats the actor.
+  summary   String
   timestamp DateTime @default(now())
-  userId    String?
-  user      User?    @relation(fields: [userId], references: [uid], onDelete: SetNull)
+
+  actorId    String?
+  actor      User?   @relation(fields: [actorId], references: [uid], onDelete: SetNull)
+  actorName  String?
+  actorEmail String?
+
+  /// What was acted on. Deliberately not a relation — targets are users,
+  /// questions, schedule events and blacklist entries alike, and an audit row has
+  /// to outlive the row it describes.
+  targetId    String?
+  targetLabel String?
+
+  /// Action-specific detail, e.g. `{"from":"PENDING","to":"ACCEPTED"}`.
+  /// Write-once and display-only; nothing branches on its contents.
+  metadata Json?
+
+  /// Every read is "newest first, optionally narrowed by actor or action", so the
+  /// composite indexes carry the filtered variants without a separate sort step.
+  @@index([timestamp])
+  @@index([actorId, timestamp])
+  @@index([action, timestamp])
 }
 
 model EmailLog {

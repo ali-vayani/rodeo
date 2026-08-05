@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { TRPCError } from '@trpc/server';
 import { router, adminProcedure } from '../init';
-import { createLog } from '$lib/server/log';
+import { logAction } from '$lib/server/log';
 import { Role, UserStatus, type PrismaClient } from '$lib/generated/prisma/client';
 
 // Shared by `lookup` below; `scanUser` keeps its own inline logic unchanged.
@@ -169,7 +169,14 @@ export const scanRouter = router({
 				include: { user: true }
 			});
 
-			await createLog(ctx.prisma, `Scanned ${user.name} for "${input.action}"`, ctx.user.uid);
+			await logAction(ctx, {
+				action: 'scan.record',
+				summary: duplicate
+					? `Scanned ${user.name} for "${input.action}" (already scanned today)`
+					: `Scanned ${user.name} for "${input.action}"`,
+				target: { id: user.uid, label: user.name },
+				metadata: { scanAction: input.action, duplicate: !!duplicate, scanId: scan.id }
+			});
 
 			return { scan, user, isDuplicate: !!duplicate };
 		}),

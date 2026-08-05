@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { mockDeep, mockReset, type DeepMockProxy } from 'vitest-mock-extended';
+import { mockReset, type DeepMockProxy } from 'vitest-mock-extended';
 import type { PrismaClient } from '$lib/generated/prisma/client';
 import { Role, UserStatus, DecisionStatus } from '$lib/generated/prisma/client';
-import { createTestCaller, adminUser, hackerUser } from '../test-utils';
+import { createTestCaller, adminUser, hackerUser, mockGroupBy } from '../test-utils';
 
 vi.mock('$lib/server/db', async () => {
 	const { mockDeep } = await import('vitest-mock-extended');
@@ -20,7 +20,7 @@ describe('dashboard.stats', () => {
 
 		db.user.count.mockResolvedValue(10);
 		// groupBy is called twice: first for byStatus, then for byDecision
-		db.user.groupBy
+		mockGroupBy(db.user.groupBy)
 			.mockResolvedValueOnce([
 				{ status: UserStatus.CREATED, _count: { status: 7 } },
 				{ status: UserStatus.APPLIED, _count: { status: 3 } }

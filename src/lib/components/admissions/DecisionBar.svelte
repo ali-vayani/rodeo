@@ -1,5 +1,6 @@
 <script lang="ts">
 	import type { ReviewPhase } from '$lib/admissions/reviewSession.svelte';
+	import type { DecisionStatus } from '$lib/generated/prisma/enums';
 
 	let {
 		pendingDecision,
@@ -15,7 +16,7 @@
 		onReclaim
 	}: {
 		pendingDecision: string | null;
-		onDecision: (decision: string) => void;
+		onDecision: (decision: DecisionStatus) => void;
 		loading: boolean;
 		hasPrev: boolean;
 		hasNext: boolean;

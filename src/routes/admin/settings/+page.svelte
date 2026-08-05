@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { errorMessage } from '$lib/ui/errors';
 	import { untrack } from 'svelte';
 	import { fly } from 'svelte/transition';
 	import { createClient } from '$lib/trpc/client';
@@ -84,8 +85,8 @@
 			});
 			settings = { ...settings, ...updates } as SettingsRow;
 			showToast('Settings saved');
-		} catch (e: any) {
-			showToast(e.message ?? 'Failed to save settings', 'error');
+		} catch (e) {
+			showToast(errorMessage(e, 'Failed to save settings'), 'error');
 		} finally {
 			saving = false;
 		}
@@ -106,7 +107,7 @@
 		>
 			Settings
 		</div>
-		{#each sections as section}
+		{#each sections as section (section.id)}
 			<button
 				onclick={() => scrollToSection(section.id)}
 				class="cursor-pointer border-b border-border px-4 py-[11px] text-left text-[13px] transition-colors {activeSection ===
