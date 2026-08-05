@@ -1,0 +1,92 @@
+/**
+ * App-wide toast store.
+ *
+ * Eight pages each carried their own `showToast` + timer + `{#if toast}` block.
+ * Six were byte-identical at 3200ms; application-editor had drifted to 3500ms
+ * and blacklist to 3600ms, so the same feature behaved three different ways.
+ *
+ * `ToastHost` renders this once from the root layout. Callers just do:
+ *
+ *     import { toast } from '$lib/ui/toast.svelte';
+ *     toast.success('Event added');
+ *     toast.error(message);
+ */
+
+import type { Tone } from './tone';
+
+/** How long a toast stays up. One number, one place. */
+const DURATION_MS = 3200;
+
+/** Beyond this, older toasts are dropped rather than stacked off-screen. */
+const MAX_VISIBLE = 3;
+
+export interface ToastItem {
+	id: number;
+	message: string;
+	tone: Extract<Tone, 'success' | 'danger'>;
+}
+
+let nextId = 0;
+const timers = new Map<number, ReturnType<typeof setTimeout>>();
+
+const items = $state<ToastItem[]>([]);
+
+function push(message: string, tone: ToastItem['tone']): number {
+	const id = nextId++;
+	items.push({ id, message, tone });
+
+	// Drop from the front so the newest — the one that matches what the user
+	// just did — is always the one that survives.
+	while (items.length > MAX_VISIBLE) {
+		const evicted = items.shift();
+		if (evicted) clearTimer(evicted.id);
+	}
+
+	timers.set(
+		id,
+		setTimeout(() => dismiss(id), DURATION_MS)
+	);
+	return id;
+}
+
+function clearTimer(id: number) {
+	const timer = timers.get(id);
+	if (timer) {
+		clearTimeout(timer);
+		timers.delete(id);
+	}
+}
+
+function dismiss(id: number) {
+	clearTimer(id);
+	const index = items.findIndex((item) => item.id === id);
+	if (index !== -1) items.splice(index, 1);
+}
+
+export const toast = {
+	/** Live list, read by `ToastHost`. */
+	get items(): ToastItem[] {
+		return items;
+	},
+
+	success: (message: string) => push(message, 'success'),
+	error: (message: string) => push(message, 'danger'),
+
+	/**
+	 * Report a caught error. Falls back to `fallback` when the thrown value
+	 * has no usable message, which is what every page's local `errorMessage`
+	 * helper was doing by hand.
+	 */
+	fromError(error: unknown, fallback: string) {
+		const message = error instanceof Error && error.message ? error.message : fallback;
+		return push(message, 'danger');
+	},
+
+	dismiss,
+
+	/** Route changes shouldn't carry stale feedback onto the next screen. */
+	clear() {
+		for (const item of items) clearTimer(item.id);
+		items.length = 0;
+	}
+};
