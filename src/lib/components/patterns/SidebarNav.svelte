@@ -24,6 +24,11 @@
 		{#each links as link (link.href)}
 			{@const active = page.url.pathname === link.href}
 			<li>
+				<!--
+					Links come from the layout that mounts this, which is where the
+					routes are actually known. Same tradeoff as Button's href.
+				-->
+				<!-- eslint-disable svelte/no-navigation-without-resolve -->
 				<a
 					href={link.href}
 					aria-current={active ? 'page' : undefined}
@@ -37,6 +42,7 @@
 				>
 					{link.label}
 				</a>
+				<!-- eslint-enable svelte/no-navigation-without-resolve -->
 			</li>
 		{/each}
 	</ul>

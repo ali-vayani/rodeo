@@ -215,6 +215,12 @@ body {
 	width: calc(100% - 2rem);
 }
 
+/* Toasts sit above modals (z-50) so feedback fired from inside a dialog is
+   still visible. Tailwind's z scale stops at 50 and there is no z namespace. */
+@utility z-toast {
+	z-index: 200;
+}
+
 /* Full-height work surface below the app chrome: the admissions split pane,
    the users table, the scan log. One number, one place. */
 @utility workspace-h {

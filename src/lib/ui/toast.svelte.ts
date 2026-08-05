@@ -24,43 +24,37 @@ export interface ToastItem {
 	id: number;
 	message: string;
 	tone: Extract<Tone, 'success' | 'danger'>;
+	/** Its own expiry handle. Kept on the item so there is no side table to
+	    keep in sync when one is evicted early. */
+	timer?: ReturnType<typeof setTimeout>;
 }
 
 let nextId = 0;
-const timers = new Map<number, ReturnType<typeof setTimeout>>();
 
 const items = $state<ToastItem[]>([]);
 
 function push(message: string, tone: ToastItem['tone']): number {
 	const id = nextId++;
-	items.push({ id, message, tone });
+	const item: ToastItem = { id, message, tone };
+	item.timer = setTimeout(() => dismiss(id), DURATION_MS);
+	items.push(item);
 
 	// Drop from the front so the newest — the one that matches what the user
 	// just did — is always the one that survives.
 	while (items.length > MAX_VISIBLE) {
 		const evicted = items.shift();
-		if (evicted) clearTimer(evicted.id);
+		if (evicted?.timer) clearTimeout(evicted.timer);
 	}
 
-	timers.set(
-		id,
-		setTimeout(() => dismiss(id), DURATION_MS)
-	);
 	return id;
 }
 
-function clearTimer(id: number) {
-	const timer = timers.get(id);
-	if (timer) {
-		clearTimeout(timer);
-		timers.delete(id);
-	}
-}
-
 function dismiss(id: number) {
-	clearTimer(id);
 	const index = items.findIndex((item) => item.id === id);
-	if (index !== -1) items.splice(index, 1);
+	if (index === -1) return;
+
+	const [removed] = items.splice(index, 1);
+	if (removed?.timer) clearTimeout(removed.timer);
 }
 
 export const toast = {
@@ -86,7 +80,7 @@ export const toast = {
 
 	/** Route changes shouldn't carry stale feedback onto the next screen. */
 	clear() {
-		for (const item of items) clearTimer(item.id);
+		for (const item of items) if (item.timer) clearTimeout(item.timer);
 		items.length = 0;
 	}
 };

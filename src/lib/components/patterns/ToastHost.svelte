@@ -25,7 +25,7 @@
 	screen readers register the region before anything lands in it.
 -->
 <div
-	class="pointer-events-none fixed right-7 bottom-7 z-[200] flex flex-col items-end gap-2"
+	class="pointer-events-none fixed right-7 bottom-7 z-toast flex flex-col items-end gap-2"
 	aria-live="polite"
 	aria-atomic="false"
 >

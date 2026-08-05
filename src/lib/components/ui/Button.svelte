@@ -64,6 +64,12 @@
 			{@render children()}
 		</span>
 	{:else}
+		<!--
+			`href` arrives as an already-resolved string from the caller, which is
+			the only place that knows the route. Resolving it here would mean this
+			primitive had to know every route in the app.
+		-->
+		<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -->
 		<a {href} class={classes} {...rest}>{@render children()}</a>
 	{/if}
 {:else}
