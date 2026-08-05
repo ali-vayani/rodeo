@@ -39,6 +39,10 @@ export function isProduction(): boolean {
  * Preview counts. A preview deploy runs against the production database, so a
  * cookie-only bypass there would be an unauthenticated door into real applicant
  * data — the bypass exists for localhost and nowhere else.
+ *
+ * This answers what the environment *looks* like, not whether the bypass is
+ * permitted: `validateEnv()` additionally demands ALLOW_DEV_AUTH=1 before the
+ * app will boot with it on.
  */
 export function usesSupabaseAuth(): boolean {
 	return deployEnv() !== 'development';
@@ -76,6 +80,21 @@ export function emailFrom(): string {
  */
 export function validateEnv(): void {
 	required('DATABASE_URL');
+
+	// The dev bypass has to be asked for, never inherited. `deployEnv()` answers
+	// 'development' for anything that isn't a recognised VERCEL_ENV, so a
+	// self-hosted `node build` that forgets NODE_ENV=production would otherwise
+	// come up serving passwordless logins — and the seed creates
+	// admin1@yopmail.com with Role.ADMIN. Requiring an explicit opt-in makes a
+	// forgotten variable a boot failure instead of an unlocked front door.
+	if (!usesSupabaseAuth() && env.ALLOW_DEV_AUTH !== '1') {
+		throw new Error(
+			'Refusing to start: this process resolved to the development environment, ' +
+				'where /login signs in any @yopmail.com account with no password. ' +
+				'Set ALLOW_DEV_AUTH=1 if this really is local development; otherwise set ' +
+				'NODE_ENV=production (or VERCEL_ENV) so the deploy authenticates through Supabase.'
+		);
+	}
 
 	if (!isProduction()) return;
 

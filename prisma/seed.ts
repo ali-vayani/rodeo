@@ -12,6 +12,59 @@ const adapter = new PrismaPg({ connectionString });
 const prisma = new PrismaClient({ adapter });
 
 // ---------------------------------------------------------------------------
+// Production guard
+//
+// This script writes passwordless @yopmail.com admin accounts, and with
+// SEED_PRUNE=1 it deletes every @yopmail.com account it did not generate. The
+// only thing deciding which database that lands in is whichever DATABASE_URL
+// happens to be in .env — one stale line and `npm run db:seed` is a privilege
+// escalation into production rather than a dev convenience.
+//
+// Deliberately duplicated from src/lib/server/env.ts: this runs under tsx with
+// no SvelteKit aliases, so it cannot import $lib. Keep the two in step.
+// ---------------------------------------------------------------------------
+
+const LOCAL_HOSTS = ['localhost', '127.0.0.1', '::1', '[::1]'];
+
+/** The host DATABASE_URL points at, or null when it can't be read as one. */
+function databaseHost(url: string | undefined): string | null {
+	if (!url) return null;
+	try {
+		return new URL(url).hostname || null;
+	} catch {
+		return null;
+	}
+}
+
+function assertSafeToSeed(url: string | undefined): void {
+	if (process.env.SEED_ALLOW_PRODUCTION === '1') return;
+
+	const refuse = (reason: string): never => {
+		throw new Error(
+			`Refusing to seed: ${reason}\n\n` +
+				'This script creates passwordless @yopmail.com admin accounts, and\n' +
+				'`npm run db:seed:fresh` deletes every @yopmail.com account it did not\n' +
+				'generate. Neither is survivable against a real database.\n\n' +
+				'  • Point DATABASE_URL at your local Postgres (see .env.example), or\n' +
+				'  • run with SEED_ALLOW_PRODUCTION=1 if you genuinely mean to seed this one.'
+		);
+	};
+
+	if (process.env.VERCEL_ENV === 'production' || process.env.NODE_ENV === 'production') {
+		refuse('this is a production environment (VERCEL_ENV / NODE_ENV).');
+	}
+
+	// Unreadable counts as remote: a URL this script can't parse is not one it can
+	// vouch for.
+	const host = databaseHost(url);
+	if (!host || !LOCAL_HOSTS.includes(host)) {
+		refuse(
+			`DATABASE_URL points at ${host ?? 'a host this script could not parse'}, not a local database.`
+		);
+	}
+}
+
+// ---------------------------------------------------------------------------
 // Questions
 // Linked questions write through to the User model on save.
 // Order 0–9 reserved for linked/identity questions; general questions start at 10.
@@ -197,10 +250,19 @@ const questions = [
 // ---------------------------------------------------------------------------
 
 async function main() {
+	assertSafeToSeed(connectionString);
+
 	console.log('Seeding questions...');
 	for (const q of questions) {
+		// Matched on order, not title. Titles are editable in
+		// /admin/application-editor, and matching on one meant that renaming a
+		// seeded question and re-seeding produced a second copy of it rather than
+		// updating the original. `order` is this file's own numbering scheme (see
+		// the block comment above the list) and is the closest thing to a stable
+		// key the schema offers; targetRole disambiguates the two questions that
+		// share a title across roles.
 		const existing = await prisma.question.findFirst({
-			where: { title: q.title, targetRole: { equals: q.targetRole } }
+			where: { order: q.order, targetRole: { equals: q.targetRole } }
 		});
 		if (existing) {
 			await prisma.question.update({ where: { id: existing.id }, data: q });

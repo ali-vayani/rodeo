@@ -1,9 +1,75 @@
 import { z } from 'zod';
 import { TRPCError } from '@trpc/server';
+import type { PrismaClient } from '$lib/generated/prisma/client';
 import { DecisionStatus, InvitationStatus, UserStatus } from '$lib/generated/prisma/client';
 import { router, authedProcedure } from '../init';
 
 const MAX_TEAM_SIZE = 4;
+
+/**
+ * Did this write lose a serialization race?
+ *
+ * Postgres aborts one side of a detected conflict and Prisma surfaces it as
+ * P2034 ("write conflict or deadlock"). Matched structurally rather than with an
+ * `instanceof` against the generated error class so the check keeps working
+ * across client regenerations.
+ */
+function isWriteConflict(error: unknown): boolean {
+	return (
+		typeof error === 'object' &&
+		error !== null &&
+		'code' in error &&
+		(error as { code?: unknown }).code === 'P2034'
+	);
+}
+
+/**
+ * Adds a member to a team, refusing if the team filled up in the meantime.
+ *
+ * The count and the write have to happen inside one serializable transaction.
+ * Reading the size and then writing as two separate statements is write skew:
+ * three invitees accepting the same instant each see three members, each write
+ * succeeds, and the team lands at six with nobody told anything went wrong.
+ * `Serializable` makes Postgres detect that overlap and abort the losers, so the
+ * ones who didn't get the seat find out.
+ *
+ * Callers still do their own pre-check first, because the common case is a team
+ * that was already full before the request arrived — that deserves the specific
+ * message, and this exists for the fraction of a second the pre-check can't cover.
+ */
+async function addMemberToTeam(
+	prisma: PrismaClient,
+	{ uid, teamId, invitationId }: { uid: string; teamId: string; invitationId?: string }
+) {
+	try {
+		return await prisma.$transaction(
+			async (tx) => {
+				const members = await tx.user.count({ where: { teamId } });
+				if (members >= MAX_TEAM_SIZE) {
+					throw new TRPCError({ code: 'BAD_REQUEST', message: 'Team is already full.' });
+				}
+
+				if (invitationId) {
+					await tx.invitation.update({
+						where: { id: invitationId },
+						data: { status: InvitationStatus.ACCEPTED }
+					});
+				}
+
+				return tx.user.update({ where: { uid }, data: { teamId } });
+			},
+			{ isolationLevel: 'Serializable' }
+		);
+	} catch (error) {
+		// Losing the race and losing the count check are the same outcome from the
+		// hacker's side — someone else took the last seat — so a rolled-back
+		// transaction gets that answer rather than surfacing as a 500.
+		if (isWriteConflict(error)) {
+			throw new TRPCError({ code: 'BAD_REQUEST', message: 'Team is already full.' });
+		}
+		throw error;
+	}
+}
 
 export const teamRouter = router({
 	getMyTeam: authedProcedure.query(async ({ ctx }) => {
@@ -50,7 +116,12 @@ export const teamRouter = router({
 		}),
 
 	inviteMember: authedProcedure
-		.input(z.object({ email: z.string().email() }))
+		// Normalized in the schema, so every use below — the lookup, the duplicate
+		// check, and the stored row — sees the same form. Accounts are written
+		// lowercased everywhere (auth.ts's Supabase upsert, scan's email lookup), so
+		// an invite typed as "Teammate@Example.com" otherwise matches nothing and the
+		// inviter is told an account that plainly exists does not.
+		.input(z.object({ email: z.string().trim().toLowerCase().email() }))
 		.mutation(async ({ ctx, input }) => {
 			const inviter = await ctx.prisma.user.findUniqueOrThrow({
 				where: { uid: ctx.user.uid },
@@ -127,16 +198,11 @@ export const teamRouter = router({
 				throw new TRPCError({ code: 'BAD_REQUEST', message: 'Team is already full.' });
 			}
 
-			await ctx.prisma.$transaction([
-				ctx.prisma.invitation.update({
-					where: { id: input.invitationId },
-					data: { status: InvitationStatus.ACCEPTED }
-				}),
-				ctx.prisma.user.update({
-					where: { uid: ctx.user.uid },
-					data: { teamId: invitation.teamId }
-				})
-			]);
+			await addMemberToTeam(ctx.prisma, {
+				uid: ctx.user.uid,
+				teamId: invitation.teamId,
+				invitationId: input.invitationId
+			});
 
 			return { success: true };
 		}),
@@ -193,10 +259,7 @@ export const teamRouter = router({
 				throw new TRPCError({ code: 'BAD_REQUEST', message: 'Team is already full.' });
 			}
 
-			return ctx.prisma.user.update({
-				where: { uid: ctx.user.uid },
-				data: { teamId: team.id }
-			});
+			return addMemberToTeam(ctx.prisma, { uid: ctx.user.uid, teamId: team.id });
 		}),
 
 	getByInviteCode: authedProcedure

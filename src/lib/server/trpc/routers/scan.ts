@@ -4,7 +4,39 @@ import { router, portalProcedure } from '../init';
 import { logAction } from '$lib/server/log';
 import { Role, UserStatus, type PrismaClient } from '$lib/generated/prisma/client';
 
-// Shared by `lookup` below; `scanUser` keeps its own inline logic unchanged.
+/**
+ * The projection every endpoint here hands back in place of a `User` row.
+ *
+ * Organizers may work the scan page (`ORGANIZER_SECTIONS` in src/lib/auth/permissions.ts)
+ * but are explicitly not to see per-person data, and a full row carries phone-book
+ * detail plus `pendingDecision`/`activeDecision` — i.e. who was rejected. These are
+ * exactly the fields the scan UI consumes: `ScanConfirmDialog`'s `DialogUser` prop,
+ * plus `uid`, which the page sends back to `scanUser` on confirm.
+ */
+const scanUserSelect = {
+	uid: true,
+	name: true,
+	email: true,
+	university: true,
+	year: true,
+	roles: true,
+	status: true
+} as const;
+
+/**
+ * Scans and history are the event's own record, not the attendee's — no user row
+ * hangs off them beyond the name the recent-scans list prints.
+ */
+const scanSelect = { id: true, action: true, timestamp: true } as const;
+
+/**
+ * A scanned QR code carries the whole uid, but a human typing from the printed
+ * badge has only the `RC-` + last four (see `QRCard.svelte`), and that tail is
+ * matched as a uid *suffix*. Anything shorter stops identifying one person: `RC-`
+ * on its own strips to `''`, which is `uid LIKE '%'` — every user in the table.
+ */
+const MIN_CODE_SUFFIX_LENGTH = 4;
+
 async function assertValidAction(prisma: PrismaClient, action: string): Promise<void> {
 	const settings = await prisma.settings.findFirst();
 	if (settings && !settings.scanActions.includes(action)) {
@@ -16,19 +48,44 @@ async function assertValidAction(prisma: PrismaClient, action: string): Promise<
 }
 
 async function resolveUserByCode(prisma: PrismaClient, userCode: string) {
-	const user = await prisma.user.findFirst({
-		where: {
-			OR: [{ uid: userCode }, { uid: { endsWith: userCode.replace(/^RC-/i, '') } }]
-		}
+	const code = userCode.trim();
+	const suffix = code.replace(/^RC-/i, '');
+	if (suffix.length < MIN_CODE_SUFFIX_LENGTH) {
+		throw new TRPCError({
+			code: 'BAD_REQUEST',
+			message: `Scan code is too short — expected at least ${MIN_CODE_SUFFIX_LENGTH} characters after "RC-".`
+		});
+	}
+
+	// `take: 2` is all it costs to tell "one match" from "more than one": a suffix is
+	// not a unique key, so silently taking the first row checks in the wrong person and
+	// audit-logs it under their name. Two rows means the volunteer has to disambiguate.
+	// Case-insensitive on the suffix because the badge prints it uppercased
+	// (`QRCard.svelte`) while a cuid is lowercase — a hand-typed `RC-AB12` would
+	// otherwise never match the `ab12` actually stored.
+	const users = await prisma.user.findMany({
+		where: { OR: [{ uid: code }, { uid: { endsWith: suffix, mode: 'insensitive' } }] },
+		select: scanUserSelect,
+		take: 2
 	});
-	if (!user) {
+
+	if (users.length === 0) {
 		throw new TRPCError({ code: 'NOT_FOUND', message: 'User not found.' });
 	}
-	return user;
+	if (users.length > 1) {
+		throw new TRPCError({
+			code: 'CONFLICT',
+			message: 'That code matches more than one attendee — look them up by email instead.'
+		});
+	}
+	return users[0];
 }
 
 async function resolveUserByEmail(prisma: PrismaClient, email: string) {
-	const user = await prisma.user.findUnique({ where: { email: email.trim().toLowerCase() } });
+	const user = await prisma.user.findUnique({
+		where: { email: email.trim().toLowerCase() },
+		select: scanUserSelect
+	});
 	if (!user) {
 		throw new TRPCError({ code: 'NOT_FOUND', message: 'User not found.' });
 	}
@@ -132,53 +189,28 @@ export const scanRouter = router({
 			})
 		)
 		.mutation(async ({ ctx, input }) => {
-			// Validate action exists in settings
-			const settings = await ctx.prisma.settings.findFirst();
-			if (settings && !settings.scanActions.includes(input.action)) {
-				throw new TRPCError({
-					code: 'BAD_REQUEST',
-					message: `Invalid scan action "${input.action}". Valid actions: ${settings.scanActions.join(', ')}`
-				});
-			}
-
-			// Find user by uid or by code prefix
-			const user = await ctx.prisma.user.findFirst({
-				where: {
-					OR: [{ uid: input.userCode }, { uid: { endsWith: input.userCode.replace(/^RC-/i, '') } }]
-				}
-			});
-
-			if (!user) {
-				throw new TRPCError({ code: 'NOT_FOUND', message: 'User not found.' });
-			}
-
-			// Check for duplicate scan today
-			const startOfDay = new Date();
-			startOfDay.setHours(0, 0, 0, 0);
-
-			const duplicate = await ctx.prisma.scan.findFirst({
-				where: {
-					userId: user.uid,
-					action: input.action,
-					timestamp: { gte: startOfDay }
-				}
-			});
+			// The write path runs the same helpers as `lookup` on purpose: it used to carry
+			// its own copy of the action check and the code lookup, which meant a fix to one
+			// left the other resolving codes the old way.
+			await assertValidAction(ctx.prisma, input.action);
+			const user = await resolveUserByCode(ctx.prisma, input.userCode);
+			const isDuplicate = await isDuplicateToday(ctx.prisma, user.uid, input.action);
 
 			const scan = await ctx.prisma.scan.create({
 				data: { userId: user.uid, action: input.action },
-				include: { user: true }
+				select: scanSelect
 			});
 
 			await logAction(ctx, {
 				action: 'scan.record',
-				summary: duplicate
+				summary: isDuplicate
 					? `Scanned ${user.name} for "${input.action}" (already scanned today)`
 					: `Scanned ${user.name} for "${input.action}"`,
 				target: { id: user.uid, label: user.name },
-				metadata: { scanAction: input.action, duplicate: !!duplicate, scanId: scan.id }
+				metadata: { scanAction: input.action, duplicate: isDuplicate, scanId: scan.id }
 			});
 
-			return { scan, user, isDuplicate: !!duplicate };
+			return { scan, user, isDuplicate };
 		}),
 
 	getRecent: portalProcedure
@@ -187,16 +219,19 @@ export const scanRouter = router({
 			return ctx.prisma.scan.findMany({
 				take: input.limit,
 				orderBy: { timestamp: 'desc' },
-				include: { user: true }
+				select: { ...scanSelect, user: { select: { name: true } } }
 			});
 		}),
 
 	getHistory: portalProcedure
 		.input(z.object({ userId: z.string() }))
 		.query(async ({ ctx, input }) => {
+			// Takes an arbitrary uid, so it deliberately returns nothing about the person
+			// it belongs to — only that user's scan trail.
 			return ctx.prisma.scan.findMany({
 				where: { userId: input.userId },
-				orderBy: { timestamp: 'desc' }
+				orderBy: { timestamp: 'desc' },
+				select: scanSelect
 			});
 		})
 });

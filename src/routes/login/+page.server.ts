@@ -25,6 +25,29 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 };
 
 /**
+ * Where to land after signing in, restricted to this origin.
+ *
+ * `redirectTo` arrives on the query string, so an absolute URL would make the
+ * login form an open redirect: a link that genuinely starts on Rodeo and ends on
+ * someone else's page, one step after the user typed their address. Same rule as
+ * the OAuth callback (`src/routes/auth/callback/+server.ts`), which had the check
+ * and this path did not. Decoding a malformed escape throws, and a bad link
+ * shouldn't 500 the login page, so that falls back to the default too.
+ */
+function safeRedirect(raw: string | null): string {
+	if (!raw) return '/';
+
+	let path: string;
+	try {
+		path = decodeURIComponent(raw);
+	} catch {
+		return '/';
+	}
+
+	return path.startsWith('/') && !path.startsWith('//') ? path : '/';
+}
+
+/**
  * The dev bypass, and only the dev bypass.
  *
  * Deployed environments sign in through Google, so there is no password form to
@@ -53,7 +76,6 @@ export const actions: Actions = {
 
 		setSessionCookie(event, user.uid);
 
-		const redirectTo = event.url.searchParams.get('redirectTo');
-		redirect(302, redirectTo ? decodeURIComponent(redirectTo) : '/');
+		redirect(302, safeRedirect(event.url.searchParams.get('redirectTo')));
 	}
 };

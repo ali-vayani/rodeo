@@ -38,8 +38,11 @@ Rodeo is Freetail Hackers' hackathon management platform. It has two portals:
    cp .env.example .env
    ```
 
-   `DATABASE_URL` is the only variable local development needs — see
-   [Environments](#environments) for why.
+   Local development needs `DATABASE_URL` and `ALLOW_DEV_AUTH=1` — see
+   [Environments](#environments) for why. Without the second one the server refuses
+   to start: the development environment signs in any `@yopmail.com` account with no
+   password, so enabling it has to be a deliberate act rather than the default a
+   misconfigured deploy falls into.
 
 3. Start Postgres:
 

@@ -28,11 +28,26 @@ const mockScan = {
 	user: hackerUser
 };
 
+/**
+ * The only user fields the scan endpoints may return. Asserted as an exact shape
+ * rather than a "doesn't include email" spot check, so a field added to `User`
+ * later can't quietly ride along to an organizer.
+ */
+const expectedUserSelect = {
+	uid: true,
+	name: true,
+	email: true,
+	university: true,
+	year: true,
+	roles: true,
+	status: true
+};
+
 describe('scan.scanUser', () => {
 	it('creates scan and returns user on success', async () => {
 		const caller = createTestCaller(db, adminUser);
 		db.settings.findFirst.mockResolvedValue(mockSettings);
-		db.user.findFirst.mockResolvedValue(hackerUser as never);
+		db.user.findMany.mockResolvedValue([hackerUser] as never);
 		db.scan.findFirst.mockResolvedValue(null);
 		db.scan.create.mockResolvedValue(mockScan as never);
 		db.log.create.mockResolvedValue({} as never);
@@ -46,7 +61,7 @@ describe('scan.scanUser', () => {
 	it('sets isDuplicate=true when already scanned today', async () => {
 		const caller = createTestCaller(db, adminUser);
 		db.settings.findFirst.mockResolvedValue(mockSettings);
-		db.user.findFirst.mockResolvedValue(hackerUser as never);
+		db.user.findMany.mockResolvedValue([hackerUser] as never);
 		db.scan.findFirst.mockResolvedValue(mockScan as never); // duplicate found
 		db.scan.create.mockResolvedValue(mockScan as never);
 		db.log.create.mockResolvedValue({} as never);
@@ -59,7 +74,7 @@ describe('scan.scanUser', () => {
 	it('throws NOT_FOUND for unknown user code', async () => {
 		const caller = createTestCaller(db, adminUser);
 		db.settings.findFirst.mockResolvedValue(mockSettings);
-		db.user.findFirst.mockResolvedValue(null);
+		db.user.findMany.mockResolvedValue([] as never);
 
 		await expect(
 			caller.scan.scanUser({ userCode: 'RC-UNKNOWN', action: 'Check-In' })
@@ -78,7 +93,7 @@ describe('scan.scanUser', () => {
 	it('allows any action when settings is null', async () => {
 		const caller = createTestCaller(db, adminUser);
 		db.settings.findFirst.mockResolvedValue(null); // no settings = skip validation
-		db.user.findFirst.mockResolvedValue(hackerUser as never);
+		db.user.findMany.mockResolvedValue([hackerUser] as never);
 		db.scan.findFirst.mockResolvedValue(null);
 		db.scan.create.mockResolvedValue(mockScan as never);
 		db.log.create.mockResolvedValue({} as never);
@@ -90,7 +105,7 @@ describe('scan.scanUser', () => {
 	it('creates a log entry', async () => {
 		const caller = createTestCaller(db, adminUser);
 		db.settings.findFirst.mockResolvedValue(mockSettings);
-		db.user.findFirst.mockResolvedValue(hackerUser as never);
+		db.user.findMany.mockResolvedValue([hackerUser] as never);
 		db.scan.findFirst.mockResolvedValue(null);
 		db.scan.create.mockResolvedValue(mockScan as never);
 		db.log.create.mockResolvedValue({} as never);
@@ -113,7 +128,7 @@ describe('scan.scanUser', () => {
 	it('marks a repeat scan as a duplicate in the audit entry', async () => {
 		const caller = createTestCaller(db, adminUser);
 		db.settings.findFirst.mockResolvedValue(mockSettings);
-		db.user.findFirst.mockResolvedValue(hackerUser as never);
+		db.user.findMany.mockResolvedValue([hackerUser] as never);
 		db.scan.findFirst.mockResolvedValue(mockScan as never);
 		db.scan.create.mockResolvedValue(mockScan as never);
 		db.log.create.mockResolvedValue({} as never);
@@ -130,6 +145,42 @@ describe('scan.scanUser', () => {
 		);
 	});
 
+	it('rejects a bare RC- prefix instead of checking in an arbitrary user', async () => {
+		const caller = createTestCaller(db, adminUser);
+		db.settings.findFirst.mockResolvedValue(mockSettings);
+
+		await expect(
+			caller.scan.scanUser({ userCode: 'RC-', action: 'Check-In' })
+		).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+
+		// Never reaches the database: a suffix of '' is `uid LIKE '%'`, so the query
+		// itself is the bug, not just what we do with its result.
+		expect(db.user.findMany).not.toHaveBeenCalled();
+		expect(db.scan.create).not.toHaveBeenCalled();
+	});
+
+	it('rejects a code shorter than the printed RC- suffix', async () => {
+		const caller = createTestCaller(db, adminUser);
+		db.settings.findFirst.mockResolvedValue(mockSettings);
+
+		await expect(caller.scan.scanUser({ userCode: '1', action: 'Check-In' })).rejects.toMatchObject(
+			{ code: 'BAD_REQUEST' }
+		);
+		expect(db.scan.create).not.toHaveBeenCalled();
+	});
+
+	it('refuses to record a scan when the code matches more than one user', async () => {
+		const caller = createTestCaller(db, adminUser);
+		db.settings.findFirst.mockResolvedValue(mockSettings);
+		db.user.findMany.mockResolvedValue([hackerUser, confirmedHacker] as never);
+
+		await expect(
+			caller.scan.scanUser({ userCode: 'RC-AB12', action: 'Check-In' })
+		).rejects.toMatchObject({ code: 'CONFLICT' });
+		expect(db.scan.create).not.toHaveBeenCalled();
+		expect(db.log.create).not.toHaveBeenCalled();
+	});
+
 	it('throws FORBIDDEN for non-admin', async () => {
 		const caller = createTestCaller(db, hackerUser);
 		await expect(
@@ -142,7 +193,7 @@ describe('scan.lookup', () => {
 	it('returns user, isDuplicate=false, warning=null for a normal confirmed hacker', async () => {
 		const caller = createTestCaller(db, adminUser);
 		db.settings.findFirst.mockResolvedValue(mockSettings);
-		db.user.findFirst.mockResolvedValue(confirmedHacker as never);
+		db.user.findMany.mockResolvedValue([confirmedHacker] as never);
 		db.scan.findFirst.mockResolvedValue(null);
 		db.scan.count.mockResolvedValue(2);
 
@@ -157,7 +208,7 @@ describe('scan.lookup', () => {
 	it('throws NOT_FOUND for unknown user code', async () => {
 		const caller = createTestCaller(db, adminUser);
 		db.settings.findFirst.mockResolvedValue(mockSettings);
-		db.user.findFirst.mockResolvedValue(null);
+		db.user.findMany.mockResolvedValue([] as never);
 
 		await expect(
 			caller.scan.lookup({ userCode: 'RC-UNKNOWN', action: 'Check-In' })
@@ -176,7 +227,7 @@ describe('scan.lookup', () => {
 	it('sets isDuplicate=true without creating a scan row', async () => {
 		const caller = createTestCaller(db, adminUser);
 		db.settings.findFirst.mockResolvedValue(mockSettings);
-		db.user.findFirst.mockResolvedValue(confirmedHacker as never);
+		db.user.findMany.mockResolvedValue([confirmedHacker] as never);
 		db.scan.findFirst.mockResolvedValue(mockScan as never);
 		db.scan.count.mockResolvedValue(1);
 
@@ -189,7 +240,7 @@ describe('scan.lookup', () => {
 	it('sets warning=UNCONFIRMED_HACKER for a hacker who has not confirmed', async () => {
 		const caller = createTestCaller(db, adminUser);
 		db.settings.findFirst.mockResolvedValue(mockSettings);
-		db.user.findFirst.mockResolvedValue(hackerUser as never); // status CREATED
+		db.user.findMany.mockResolvedValue([hackerUser] as never); // status CREATED
 		db.scan.findFirst.mockResolvedValue(null);
 		db.scan.count.mockResolvedValue(0);
 
@@ -201,7 +252,7 @@ describe('scan.lookup', () => {
 	it('does not warn for a CHECKED_IN hacker', async () => {
 		const caller = createTestCaller(db, adminUser);
 		db.settings.findFirst.mockResolvedValue(mockSettings);
-		db.user.findFirst.mockResolvedValue({ ...hackerUser, status: 'CHECKED_IN' } as never);
+		db.user.findMany.mockResolvedValue([{ ...hackerUser, status: 'CHECKED_IN' }] as never);
 		db.scan.findFirst.mockResolvedValue(null);
 		db.scan.count.mockResolvedValue(1);
 
@@ -213,7 +264,7 @@ describe('scan.lookup', () => {
 	it('does not warn for non-hacker roles regardless of status', async () => {
 		const caller = createTestCaller(db, adminUser);
 		db.settings.findFirst.mockResolvedValue(mockSettings);
-		db.user.findFirst.mockResolvedValue(adminUser as never); // ADMIN role, status CREATED
+		db.user.findMany.mockResolvedValue([adminUser] as never); // ADMIN role, status CREATED
 
 		db.scan.findFirst.mockResolvedValue(null);
 		db.scan.count.mockResolvedValue(0);
@@ -221,6 +272,53 @@ describe('scan.lookup', () => {
 		const result = await caller.scan.lookup({ userCode: adminUser.uid, action: 'Check-In' });
 
 		expect(result.warning).toBeNull();
+	});
+
+	it('rejects a bare RC- prefix rather than matching every user', async () => {
+		const caller = createTestCaller(db, adminUser);
+		db.settings.findFirst.mockResolvedValue(mockSettings);
+
+		await expect(caller.scan.lookup({ userCode: 'RC-', action: 'Check-In' })).rejects.toMatchObject(
+			{ code: 'BAD_REQUEST' }
+		);
+		expect(db.user.findMany).not.toHaveBeenCalled();
+	});
+
+	it('rejects a code shorter than the printed RC- suffix', async () => {
+		const caller = createTestCaller(db, adminUser);
+		db.settings.findFirst.mockResolvedValue(mockSettings);
+
+		await expect(
+			caller.scan.lookup({ userCode: 'RC-AB', action: 'Check-In' })
+		).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+		expect(db.user.findMany).not.toHaveBeenCalled();
+	});
+
+	it('throws CONFLICT rather than picking one when a code is ambiguous', async () => {
+		const caller = createTestCaller(db, adminUser);
+		db.settings.findFirst.mockResolvedValue(mockSettings);
+		db.user.findMany.mockResolvedValue([hackerUser, confirmedHacker] as never);
+
+		await expect(
+			caller.scan.lookup({ userCode: 'RC-AB12', action: 'Check-In' })
+		).rejects.toMatchObject({ code: 'CONFLICT' });
+
+		// Two rows is enough to know the code is ambiguous, so the query is capped there.
+		expect(db.user.findMany).toHaveBeenCalledWith(expect.objectContaining({ take: 2 }));
+	});
+
+	it('reads only the user fields the scan UI renders', async () => {
+		const caller = createTestCaller(db, adminUser);
+		db.settings.findFirst.mockResolvedValue(mockSettings);
+		db.user.findMany.mockResolvedValue([confirmedHacker] as never);
+		db.scan.findFirst.mockResolvedValue(null);
+		db.scan.count.mockResolvedValue(0);
+
+		await caller.scan.lookup({ userCode: confirmedHacker.uid, action: 'Check-In' });
+
+		expect(db.user.findMany).toHaveBeenCalledWith(
+			expect.objectContaining({ select: expectedUserSelect })
+		);
 	});
 
 	it('throws FORBIDDEN for non-admin', async () => {
@@ -263,9 +361,23 @@ describe('scan.lookupByEmail', () => {
 			action: 'Check-In'
 		});
 
-		expect(db.user.findUnique).toHaveBeenCalledWith({
-			where: { email: confirmedHacker.email }
-		});
+		expect(db.user.findUnique).toHaveBeenCalledWith(
+			expect.objectContaining({ where: { email: confirmedHacker.email } })
+		);
+	});
+
+	it('reads only the user fields the scan UI renders', async () => {
+		const caller = createTestCaller(db, adminUser);
+		db.settings.findFirst.mockResolvedValue(mockSettings);
+		db.user.findUnique.mockResolvedValue(confirmedHacker as never);
+		db.scan.findFirst.mockResolvedValue(null);
+		db.scan.count.mockResolvedValue(0);
+
+		await caller.scan.lookupByEmail({ email: confirmedHacker.email, action: 'Check-In' });
+
+		expect(db.user.findUnique).toHaveBeenCalledWith(
+			expect.objectContaining({ select: expectedUserSelect })
+		);
 	});
 
 	it('throws NOT_FOUND for unknown email', async () => {
@@ -368,27 +480,38 @@ describe('scan.getCounts', () => {
 });
 
 describe('scan.getRecent', () => {
-	it('returns last N scans with user info', async () => {
+	it('returns last N scans with only the name the feed prints', async () => {
 		const caller = createTestCaller(db, adminUser);
 		db.scan.findMany.mockResolvedValue([mockScan] as never);
 
 		const result = await caller.scan.getRecent({ limit: 5 });
 		expect(result).toHaveLength(1);
 		expect(db.scan.findMany).toHaveBeenCalledWith(
-			expect.objectContaining({ take: 5, include: { user: true } })
+			expect.objectContaining({
+				take: 5,
+				select: {
+					id: true,
+					action: true,
+					timestamp: true,
+					user: { select: { name: true } }
+				}
+			})
 		);
 	});
 });
 
 describe('scan.getHistory', () => {
-	it('returns scans for a specific userId', async () => {
+	it('returns scans for a specific userId and nothing about that user', async () => {
 		const caller = createTestCaller(db, adminUser);
 		db.scan.findMany.mockResolvedValue([mockScan] as never);
 
 		const result = await caller.scan.getHistory({ userId: hackerUser.uid });
 		expect(result).toHaveLength(1);
 		expect(db.scan.findMany).toHaveBeenCalledWith(
-			expect.objectContaining({ where: { userId: hackerUser.uid } })
+			expect.objectContaining({
+				where: { userId: hackerUser.uid },
+				select: { id: true, action: true, timestamp: true }
+			})
 		);
 	});
 });

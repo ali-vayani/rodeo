@@ -95,7 +95,7 @@ describe('organizer is denied everything holding user data', () => {
 describe('organizer keeps the sections with no per-person data', () => {
 	it('can look up a scan', async () => {
 		db.settings.findFirst.mockResolvedValue(mockSettings as never);
-		db.user.findFirst.mockResolvedValue(hackerUser as never);
+		db.user.findMany.mockResolvedValue([hackerUser] as never);
 		db.scan.findFirst.mockResolvedValue(null as never);
 		db.scan.count.mockResolvedValue(0 as never);
 

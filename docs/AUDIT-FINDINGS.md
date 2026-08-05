@@ -11,6 +11,7 @@ clean, production build succeeds.
 ## Critical
 
 ### C1. The dev auth bypass can activate in a deployed environment
+
 `src/lib/server/env.ts:23-45`, `src/lib/server/auth.ts:14-34`, `src/routes/login/+page.server.ts:34-58`
 
 `deployEnv()` falls back to `'development'` whenever `VERCEL_ENV` is unset **and**
@@ -30,6 +31,7 @@ throw when `!usesSupabaseAuth()` unless an explicit `ALLOW_DEV_AUTH=1` is set, a
 any unrecognized/missing environment as production rather than development.
 
 ### C2. `npm run db:seed` has no production guard
+
 `prisma/seed.ts:1-30`, `prisma/seedUsers.ts:493-506`
 
 The seed script runs against whatever `DATABASE_URL` points at, with no environment
@@ -49,6 +51,7 @@ unless an explicit `SEED_ALLOW_PRODUCTION=1` override is present.
 ## High
 
 ### H1. A scan code of `RC-` matches every user and checks in a random person
+
 `src/lib/server/trpc/routers/scan.ts:18-28` and the duplicated inline copy at `127-153`
 
 Both lookup paths do `uid: { endsWith: userCode.replace(/^RC-/i, '') }`. The input schema
@@ -68,6 +71,7 @@ than `findFirst`. Delete the duplicated inline block in `scanUser` and call the 
 `resolveUserByCode`.
 
 ### H2. Application deadlines are decorative — nothing enforces them server-side
+
 `src/lib/server/trpc/routers/application.ts:25,70,146`; settings columns at
 `src/lib/server/trpc/routers/settings.ts:6-26`
 
@@ -85,6 +89,7 @@ the window (`save`/`submit` against open/deadline, `rsvp`/`rsvpDecline` against
 `RSVPDeadline`), with a test per boundary.
 
 ### H3. Answers stay editable after submission
+
 `src/lib/server/trpc/routers/application.ts:25-65`
 
 `application.save` upserts a response with no check on the user's status. `submit`
@@ -103,6 +108,7 @@ H2).
 ## Medium
 
 ### M1. Open redirect in the dev login action
+
 `src/routes/login/+page.server.ts:56-57`
 
 `redirect(302, redirectTo ? decodeURIComponent(redirectTo) : '/')` performs no
@@ -117,6 +123,7 @@ reach a deploy.
 **Fix:** apply the callback's rule — accept only values starting with `/` and not `//`.
 
 ### M2. CSV export is vulnerable to formula injection
+
 `src/lib/server/trpc/routers/user.ts:181-196`
 
 Only `name` is quoted, and no field is neutralized against leading `=`, `+`, `-`, or `@`.
@@ -129,6 +136,7 @@ so any comma in stored data shifts every subsequent column.
 **Fix:** quote every field and prefix a `'` to any value beginning with `= + - @`.
 
 ### M3. Team size limit is checked non-atomically
+
 `src/lib/server/trpc/routers/team.ts:110-142` and `161-200`
 
 `acceptInvite` and `joinByCode` both read the member count, then write in a separate
@@ -142,6 +150,7 @@ the documented maximum, with no error surfaced to anyone.
 or a transaction with an isolation level that re-checks) and fail the losers.
 
 ### M4. Team invitations don't normalize the email address
+
 `src/lib/server/trpc/routers/team.ts:52-107`
 
 `inviteMember` looks up `where: { email: input.email }` and stores `email: input.email`
@@ -155,6 +164,7 @@ even though the account exists.
 **Fix:** lowercase and trim on entry, matching `resolveUserByEmail`.
 
 ### M5. Organizers receive full user records from the scan endpoints
+
 `src/lib/server/trpc/routers/scan.ts:54-110,184-201`
 
 `lookup`, `lookupByEmail`, `getRecent` (`include: { user: true }`), and `getHistory` all
@@ -175,6 +185,7 @@ arbitrary `userId`.
 ## Low
 
 ### L1. Every authenticated user can read all email templates
+
 `src/lib/server/trpc/routers/settings.ts:76-79`
 
 `settings.get` is `authedProcedure` and returns the whole row, including the six
@@ -183,6 +194,7 @@ lifecycle templates and subjects. The hacker portal only needs the dates and tim
 **Fix:** return a narrowed projection for non-admin callers.
 
 ### L2. The `/design` style guide ships publicly
+
 `src/routes/design/+page.svelte`
 
 No guard and no environment check — the internal design system reference is reachable in
@@ -192,6 +204,7 @@ part of the public surface.
 **Fix:** guard it behind portal access, or exclude it from production builds.
 
 ### L3. Seed question matching is fragile
+
 `prisma/seed.ts` (`main`, question loop)
 
 Questions are matched by `title` + exact `targetRole` array. Editing a question's title in

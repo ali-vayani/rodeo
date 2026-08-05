@@ -94,6 +94,34 @@ describe('validateEnv', () => {
 
 	it('requires nothing else in development', () => {
 		env.DATABASE_URL = 'postgres://localhost/rodeo';
+		env.ALLOW_DEV_AUTH = '1';
+		expect(() => validateEnv()).not.toThrow();
+	});
+
+	it('refuses to boot into the dev bypass without ALLOW_DEV_AUTH', () => {
+		env.DATABASE_URL = 'postgres://localhost/rodeo';
+
+		// A deploy that forgets NODE_ENV=production lands here, and the dev bypass
+		// would hand out the seeded admin account to anyone who reaches /login.
+		expect(() => validateEnv()).toThrow('ALLOW_DEV_AUTH');
+	});
+
+	it('refuses an unrecognised VERCEL_ENV without ALLOW_DEV_AUTH', () => {
+		env.DATABASE_URL = 'postgres://localhost/rodeo';
+		env.VERCEL_ENV = 'staging';
+
+		// Unrecognised resolves to 'development', which is exactly the case the
+		// opt-in exists to catch — a real deploy that reads as localhost.
+		expect(() => validateEnv()).toThrow('ALLOW_DEV_AUTH');
+	});
+
+	it.each(['production', 'preview'])('never asks for ALLOW_DEV_AUTH on %s', (where) => {
+		completeProductionEnv();
+		env.VERCEL_ENV = where;
+
+		// The flag governs the bypass only. Supabase auth is already in force here,
+		// so its absence must not block a deploy from booting.
+		expect(env.ALLOW_DEV_AUTH).toBeUndefined();
 		expect(() => validateEnv()).not.toThrow();
 	});
 

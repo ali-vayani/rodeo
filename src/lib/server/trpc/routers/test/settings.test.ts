@@ -1,7 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { mockReset, type DeepMockProxy } from 'vitest-mock-extended';
 import type { PrismaClient } from '$lib/generated/prisma/client';
-import { createTestCaller, adminUser, hackerUser, mockSettings } from '../test-utils';
+import {
+	createTestCaller,
+	adminUser,
+	hackerUser,
+	organizerUser,
+	mockSettings
+} from '../test-utils';
 
 vi.mock('$lib/server/db', async () => {
 	const { mockDeep } = await import('vitest-mock-extended');
@@ -14,8 +20,8 @@ const db = prisma as DeepMockProxy<PrismaClient>;
 beforeEach(() => mockReset(db));
 
 describe('settings.get', () => {
-	it('returns settings when row exists', async () => {
-		const caller = createTestCaller(db, hackerUser);
+	it('returns the full row to an admin', async () => {
+		const caller = createTestCaller(db, adminUser);
 		db.settings.findFirst.mockResolvedValue(mockSettings);
 		const result = await caller.settings.get();
 		expect(result).toEqual(mockSettings);
@@ -29,6 +35,64 @@ describe('settings.get', () => {
 			scanActions: ['Check-In'],
 			timezone: 'America/Chicago'
 		});
+	});
+
+	it('withholds the email templates from a hacker', async () => {
+		const caller = createTestCaller(db, hackerUser);
+		db.settings.findFirst.mockResolvedValue(mockSettings);
+
+		const result = await caller.settings.get();
+
+		// Emptied rather than dropped — callers are typed against the full row.
+		expect(result).toMatchObject({
+			acceptTemplate: '',
+			acceptSubject: '',
+			rejectTemplate: '',
+			waitlistTemplate: '',
+			submitTemplate: '',
+			confirmTemplate: '',
+			declineTemplate: ''
+		});
+		expect(JSON.stringify(result)).not.toContain('accepted!');
+	});
+
+	it('still gives a hacker the dates and timezone the portal renders', async () => {
+		const caller = createTestCaller(db, hackerUser);
+		db.settings.findFirst.mockResolvedValue(mockSettings);
+
+		const result = await caller.settings.get();
+
+		expect(result).toMatchObject({
+			id: mockSettings.id,
+			RSVPDeadline: mockSettings.RSVPDeadline,
+			applicationDeadline: mockSettings.applicationDeadline,
+			hackathonStartDate: mockSettings.hackathonStartDate,
+			timezone: mockSettings.timezone
+		});
+	});
+
+	it('withholds the email templates from an organizer but keeps scanActions', async () => {
+		// The scan page is organizer-reachable and loads settings for its scan
+		// groups; the mail copy is admin-only. See $lib/auth/permissions.
+		const caller = createTestCaller(db, organizerUser);
+		db.settings.findFirst.mockResolvedValue(mockSettings);
+
+		const result = await caller.settings.get();
+
+		expect(result.scanActions).toEqual(mockSettings.scanActions);
+		expect(result.acceptTemplate).toBe('');
+	});
+
+	it('redacts the defaults too when no row exists', async () => {
+		// The fresh-install path returns DEFAULT_SETTINGS, whose templates are real
+		// copy — it can't be the one branch that skips the projection.
+		const caller = createTestCaller(db, hackerUser);
+		db.settings.findFirst.mockResolvedValue(null);
+
+		const result = await caller.settings.get();
+
+		expect(result.acceptTemplate).toBe('');
+		expect(result.timezone).toBe('America/Chicago');
 	});
 
 	it('throws UNAUTHORIZED when not logged in', async () => {
