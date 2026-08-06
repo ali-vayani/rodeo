@@ -5,7 +5,7 @@ import { Role, DecisionStatus } from '$lib/generated/prisma/client';
 import { router, adminProcedure } from '../init';
 import { logAction } from '$lib/server/log';
 import { sendTemplatedEmail } from '$lib/server/email';
-import { buildTemplateVars } from '$lib/email/variables';
+import { buildEmailPersonalization } from '$lib/server/wallet/email-block';
 import { CLAIM_TTL_MS } from '$lib/admissions/lock';
 import { narrowToApplicants } from '$lib/admissions/roles';
 import { prepareBlacklist, matchApplicant } from '$lib/blacklist/match';
@@ -362,13 +362,10 @@ export const admissionsRouter = router({
 				emailsAttempted = recipients.length;
 
 				const results = await Promise.allSettled(
-					recipients.map((u) =>
-						sendTemplatedEmail(
-							u.email,
-							templateMap[u.pendingDecision!],
-							buildTemplateVars(u, settings)
-						)
-					)
+					recipients.map(async (u) => {
+						const { vars, attachments } = await buildEmailPersonalization(u, settings);
+						return sendTemplatedEmail(u.email, templateMap[u.pendingDecision!], vars, attachments);
+					})
 				);
 				emailsFailed = results.filter((r) => r.status === 'rejected').length;
 			}

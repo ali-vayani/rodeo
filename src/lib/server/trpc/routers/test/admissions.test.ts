@@ -624,7 +624,10 @@ describe('admissions.release', () => {
 		expect(sendTemplatedEmail).toHaveBeenCalledWith(
 			pendingUser.email,
 			{ subject: mockSettings.acceptSubject, body: mockSettings.acceptTemplate },
-			expect.objectContaining({ name: pendingUser.name })
+			expect.objectContaining({ name: pendingUser.name }),
+			// An acceptance goes out before the recipient has RSVP'd, so there is no
+			// check-in block yet and nothing to attach.
+			[]
 		);
 	});
 

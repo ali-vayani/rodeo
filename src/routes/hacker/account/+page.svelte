@@ -5,6 +5,7 @@
 	import { getApplicationStateLabel } from '$lib/application/state';
 	import { Role } from '$lib/generated/prisma/enums';
 	import QRCard from '$lib/components/account/QRCard.svelte';
+	import WalletPassCard from '$lib/components/account/WalletPassCard.svelte';
 	import TeamPanel from '$lib/components/account/TeamPanel.svelte';
 	import ApplicationStateView from '$lib/components/application/ApplicationStateView.svelte';
 	import { createRsvpHandler } from '$lib/application/rsvp.svelte';
@@ -113,6 +114,9 @@
 
 			{#if showEventContent}
 				<QRCard uid={user.uid} />
+				<!-- Below the QR, not inside it: QRCard is the fallback for anyone
+				     without a smartphone wallet and stays single-purpose. -->
+				<WalletPassCard availability={data.wallet} rsvpDeadline={settings?.RSVPDeadline} />
 			{/if}
 		</div>
 

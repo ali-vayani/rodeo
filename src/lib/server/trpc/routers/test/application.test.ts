@@ -336,7 +336,10 @@ describe('application.rsvp', () => {
 		expect(sendTemplatedEmail).toHaveBeenCalledWith(
 			acceptedHacker.email,
 			{ subject: mockSettings.confirmSubject, body: mockSettings.confirmTemplate },
-			expect.objectContaining({ name: acceptedHacker.name })
+			expect.objectContaining({ name: acceptedHacker.name }),
+			// The RSVP-confirmation send now carries the check-in block's QR image, and
+			// this hacker just became CONFIRMED, so there is one to carry.
+			expect.arrayContaining([expect.objectContaining({ contentType: 'image/png' })])
 		);
 	});
 
@@ -727,7 +730,10 @@ describe('application.submit', () => {
 		expect(sendTemplatedEmail).toHaveBeenCalledWith(
 			hackerUser.email,
 			{ subject: mockSettings.submitSubject, body: mockSettings.submitTemplate },
-			expect.objectContaining({ name: hackerUser.name })
+			expect.objectContaining({ name: hackerUser.name }),
+			// No attachment: submitting an application does not make you a confirmed
+			// attendee, so there is no check-in block and nothing to attach.
+			[]
 		);
 	});
 });

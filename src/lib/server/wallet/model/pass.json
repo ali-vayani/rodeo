@@ -1,0 +1,19 @@
+{
+	"formatVersion": 1,
+	"passTypeIdentifier": "pass.com.freetailhackers.rodeo",
+	"teamIdentifier": "L9U4TT58WC",
+	"organizationName": "Freetail Hackers",
+	"description": "Rodeo hacker badge",
+	"serialNumber": "placeholder",
+	"backgroundColor": "rgb(25, 25, 25)",
+	"foregroundColor": "rgb(255, 255, 255)",
+	"labelColor": "rgb(170, 170, 170)",
+	"sharingProhibited": true,
+	"eventTicket": {
+		"headerFields": [],
+		"primaryFields": [],
+		"secondaryFields": [],
+		"auxiliaryFields": [],
+		"backFields": []
+	}
+}

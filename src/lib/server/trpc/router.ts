@@ -11,6 +11,7 @@ import { teamRouter } from './routers/team';
 import { emailRouter } from './routers/email';
 import { dashboardRouter } from './routers/dashboard';
 import { logRouter } from './routers/log';
+import { walletRouter } from './routers/wallet';
 
 export const appRouter = router({
 	user: userRouter,
@@ -24,7 +25,8 @@ export const appRouter = router({
 	team: teamRouter,
 	email: emailRouter,
 	dashboard: dashboardRouter,
-	log: logRouter
+	log: logRouter,
+	wallet: walletRouter
 });
 
 export type AppRouter = typeof appRouter;

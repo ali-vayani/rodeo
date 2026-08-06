@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
 	TEMPLATE_VARIABLES,
 	VARIABLE_KEYS,
+	RAW_VARIABLE_KEYS,
 	SAMPLE_VARS,
 	substituteVariables,
 	tokenizeTemplate,
@@ -121,7 +122,44 @@ describe('buildTemplateVars', () => {
 		expect(vars).toEqual({
 			name: 'Sarah Chen',
 			hackathon_start: new Date(2026, 3, 15).toLocaleDateString(),
-			rsvp_deadline: new Date(2026, 3, 1).toLocaleDateString()
+			rsvp_deadline: new Date(2026, 3, 1).toLocaleDateString(),
+			// Empty unless a caller supplies the block: this module cannot build it
+			// (Prisma, a QR encoder, and an attachment are all out of bounds here), and
+			// empty is also the right value for a recipient with no pass to show.
+			check_in_pass: ''
 		});
+	});
+
+	it('carries a supplied check-in block through', () => {
+		const vars = buildTemplateVars(
+			{ name: 'Sarah Chen' },
+			{ hackathonStartDate: new Date(2026, 3, 15), RSVPDeadline: new Date(2026, 3, 1) },
+			'<table>qr</table>'
+		);
+		expect(vars.check_in_pass).toBe('<table>qr</table>');
+	});
+});
+
+describe('raw block variables', () => {
+	const vars = { name: '<b>Sarah</b>', check_in_pass: '<table>qr</table>' };
+
+	it('is not escaped in a body, unlike every other value', () => {
+		// Escaping it would mail the hacker the HTML source of their own QR code,
+		// while `name` still has to be escaped because an applicant sets it.
+		const out = substituteVariables('{{name}} {{check_in_pass}}', vars, { escapeValues: true });
+		expect(out).toBe('&lt;b&gt;Sarah&lt;/b&gt; <table>qr</table>');
+	});
+
+	it('is dropped from a subject', () => {
+		// The editor's chips can insert into the subject field, and a subject is
+		// plain text — raw markup there would mail out a subject full of `<table>`.
+		const out = substituteVariables('Welcome {{name}}{{check_in_pass}}', vars, {
+			dropRawValues: true
+		});
+		expect(out).toBe('Welcome <b>Sarah</b>');
+	});
+
+	it('declares every raw key as a real variable', () => {
+		for (const key of RAW_VARIABLE_KEYS) expect(VARIABLE_KEYS).toContain(key);
 	});
 });

@@ -55,6 +55,13 @@ export const LOG_ACTIONS = [
 	{ key: 'email.custom.send', label: 'Custom email sent', group: 'Email' },
 	{ key: 'email.test.send', label: 'Test email sent', group: 'Email' },
 
+	// Wallet
+	{
+		key: 'wallet.provisionGoogleClass',
+		label: 'Google Wallet class provisioned',
+		group: 'Settings'
+	},
+
 	/**
 	 * Rows written before the audit-record migration, whose sentence was moved
 	 * into `summary` verbatim. Nothing writes this slug; it exists so old history

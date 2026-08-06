@@ -5,7 +5,7 @@ import { router, authedProcedure } from '../init';
 import { APPLICANT_ROLES } from '$lib/admissions/roles';
 import { normalizeEmail } from '$lib/blacklist/match';
 import { sendTemplatedEmail } from '$lib/server/email';
-import { buildTemplateVars } from '$lib/email/variables';
+import { buildEmailPersonalization } from '$lib/server/wallet/email-block';
 import { formatDateLong } from '$lib/format';
 
 /**
@@ -298,10 +298,14 @@ export const applicationRouter = router({
 		});
 
 		if (settings?.confirmTemplate) {
+			// The RSVP-confirmation email is exactly where a hacker wants their pass,
+			// so this send carries the check-in block if the template asks for it.
+			const { vars, attachments } = await buildEmailPersonalization(updated, settings);
 			await sendTemplatedEmail(
 				user.email,
 				{ subject: settings.confirmSubject, body: settings.confirmTemplate },
-				buildTemplateVars(user, settings)
+				vars,
+				attachments
 			).catch(() => {
 				/* fire-and-forget */
 			});
@@ -352,7 +356,7 @@ export const applicationRouter = router({
 			await sendTemplatedEmail(
 				user.email,
 				{ subject: settings.declineSubject, body: settings.declineTemplate },
-				buildTemplateVars(user, settings)
+				(await buildEmailPersonalization(user, settings)).vars
 			).catch(() => {
 				/* fire-and-forget */
 			});
@@ -463,10 +467,12 @@ export const applicationRouter = router({
 
 			// Send confirmation email
 			if (settings?.submitTemplate) {
+				const { vars, attachments } = await buildEmailPersonalization(updatedUser, settings);
 				await sendTemplatedEmail(
 					user.email,
 					{ subject: settings.submitSubject, body: settings.submitTemplate },
-					buildTemplateVars(updatedUser, settings)
+					vars,
+					attachments
 				).catch(() => {
 					/* fire-and-forget */
 				});

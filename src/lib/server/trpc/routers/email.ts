@@ -4,7 +4,9 @@ import { router, adminProcedure } from '../init';
 import { sendEmail } from '$lib/server/email';
 import { buildRecipientWhere, recipientFilterSchema } from '$lib/server/recipients';
 import { TEMPLATE_KEYS } from '$lib/email/templates';
-import { buildTemplateVars, substituteVariables, SAMPLE_VARS } from '$lib/email/variables';
+import { substituteVariables, SAMPLE_VARS } from '$lib/email/variables';
+import { buildEmailPersonalization } from '$lib/server/wallet/email-block';
+import { UserStatus } from '$lib/generated/prisma/client';
 import { logAction } from '$lib/server/log';
 
 export const emailRouter = router({
@@ -80,12 +82,18 @@ export const emailRouter = router({
 			// way it does in the lifecycle templates.
 			const settings = await ctx.prisma.settings.findFirst();
 			const results = await Promise.allSettled(
-				users.map((u) => {
-					const vars = settings ? buildTemplateVars(u, settings) : {};
+				users.map(async (u) => {
+					// Per recipient: the check-in block embeds that hacker's own QR as an
+					// inline attachment, and is empty for anyone who hasn't confirmed.
+					const { vars, attachments } = settings
+						? await buildEmailPersonalization(u, settings)
+						: { vars: {}, attachments: [] };
+
 					return sendEmail({
 						to: u.email,
-						subject: substituteVariables(subject, vars),
-						body: substituteVariables(body, vars, { escapeValues: true })
+						subject: substituteVariables(subject, vars, { dropRawValues: true }),
+						body: substituteVariables(body, vars, { escapeValues: true }),
+						attachments
 					});
 				})
 			);
@@ -138,14 +146,25 @@ export const emailRouter = router({
 			// body deliberately never written to EmailLog. "Yourself" is the whole feature.
 			const to = ctx.user.email;
 			const settings = await ctx.prisma.settings.findFirst();
+
 			// No Settings row yet on a fresh install — fall back to the preview samples
 			// so a test send still demonstrates substitution.
-			const vars = settings ? buildTemplateVars(ctx.user, settings) : SAMPLE_VARS;
+			//
+			// The status override is the one deliberate lie in this procedure. Most
+			// admins are not confirmed hackers, so a truthful render would drop
+			// `{{check_in_pass}}` to nothing and leave the organizer unable to
+			// proofread the block they just inserted — which is the entire purpose of
+			// a test send. The QR encodes the admin's own uid and the wallet links
+			// still refuse them at the endpoint, so nothing is granted by pretending.
+			const { vars, attachments } = settings
+				? await buildEmailPersonalization({ ...ctx.user, status: UserStatus.CONFIRMED }, settings)
+				: { vars: SAMPLE_VARS, attachments: [] };
 
 			await sendEmail({
 				to,
-				subject: substituteVariables(input.subject, vars),
-				body: substituteVariables(input.body, vars, { escapeValues: true })
+				subject: substituteVariables(input.subject, vars, { dropRawValues: true }),
+				body: substituteVariables(input.body, vars, { escapeValues: true }),
+				attachments
 			});
 
 			await logAction(ctx, {
