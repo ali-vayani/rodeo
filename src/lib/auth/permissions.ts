@@ -1,6 +1,8 @@
 // Imported relatively rather than through `$lib` so this module stays usable from
 // anywhere — including plain node scripts, which don't resolve SvelteKit aliases.
-import { Role } from '../generated/prisma/client';
+// The enums module, not the client barrel: this file is bundled for the browser
+// (admin layout), and the barrel drags in the Node-only Prisma runtime.
+import { Role } from '../generated/prisma/enums';
 
 /**
  * Who can see what in the admin portal.

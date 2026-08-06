@@ -1,6 +1,8 @@
 // Imported relatively rather than through `$lib` so prisma/seedUsers.ts can pull
-// this in under tsx, which doesn't resolve SvelteKit's aliases.
-import { Role } from '../generated/prisma/client';
+// this in under tsx, which doesn't resolve SvelteKit's aliases. The enums module,
+// not the client barrel: this file is bundled for the browser, and the barrel
+// drags in the Node-only Prisma runtime (fileURLToPath at module load).
+import { Role } from '../generated/prisma/enums';
 
 /**
  * The roles that actually go through admissions.
