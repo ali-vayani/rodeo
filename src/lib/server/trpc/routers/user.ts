@@ -1,8 +1,10 @@
 import { z } from 'zod';
+import { TRPCError } from '@trpc/server';
 import { Role, UserStatus, DecisionStatus, InvitationStatus } from '$lib/generated/prisma/client';
 import { router, authedProcedure, adminProcedure } from '../init';
 import { buildRecipientWhere, recipientFilterSchema } from '$lib/server/recipients';
 import { logAction, listOrNone, valueOrNone } from '$lib/server/log';
+import { TEAM_MEMBER_SELECT, SELF_USER_SELECT } from '$lib/server/trpc/selects';
 
 /**
  * One CSV cell, safe to open in a spreadsheet.
@@ -21,27 +23,47 @@ import { logAction, listOrNone, valueOrNone } from '$lib/server/log';
  */
 function csvCell(value: string | null | undefined): string {
 	const raw = value ?? '';
-	const neutralized = /^[=+\-@]/.test(raw) ? `'${raw}` : raw;
+	// `\t` and `\r` are formula triggers too: Excel treats a cell starting with either
+	// (before an `=`/`+`/`-`/`@`) as a formula, so they belong in the neutralization set.
+	const neutralized = /^[=+\-@\t\r]/.test(raw) ? `'${raw}` : raw;
 	return `"${neutralized.replace(/"/g, '""')}"`;
 }
 
 export const userRouter = router({
 	me: authedProcedure.query(async ({ ctx }) => {
+		// Explicit `select`, never `include`: this is `authedProcedure`, so the nested
+		// team members and invitees are *other people*. An `include` would return their
+		// full rows — email, status, and the embargoed `pendingDecision` — to any hacker.
+		// See $lib/server/trpc/selects for why each projection is shaped as it is.
 		return ctx.prisma.user.findUniqueOrThrow({
 			where: { uid: ctx.user.uid },
-			include: {
+			select: {
+				...SELF_USER_SELECT,
 				team: {
-					include: {
-						members: true,
+					select: {
+						id: true,
+						teamName: true,
+						inviteCode: true,
+						members: { select: TEAM_MEMBER_SELECT },
 						invitations: {
 							where: { status: InvitationStatus.PENDING },
-							include: { user: true }
+							select: { id: true, email: true, user: { select: TEAM_MEMBER_SELECT } }
 						}
 					}
 				},
 				invitations: {
 					where: { status: InvitationStatus.PENDING },
-					include: { team: { include: { members: true } } }
+					select: {
+						id: true,
+						email: true,
+						team: {
+							select: {
+								id: true,
+								teamName: true,
+								members: { select: TEAM_MEMBER_SELECT }
+							}
+						}
+					}
 				}
 			}
 		});
@@ -86,7 +108,7 @@ export const userRouter = router({
 	}),
 
 	updateRole: adminProcedure
-		.input(z.object({ uid: z.string(), roles: z.array(z.nativeEnum(Role)) }))
+		.input(z.object({ uid: z.string(), roles: z.array(z.nativeEnum(Role)).min(1) }))
 		.mutation(async ({ ctx, input }) => {
 			// Read first so the audit entry can record what the roles *were*. "Ali
 			// changed Sarah's roles to HACKER" answers half the question an audit gets
@@ -95,6 +117,23 @@ export const userRouter = router({
 				where: { uid: input.uid },
 				select: { name: true, roles: true }
 			});
+
+			// Don't let the platform be left with no admin. Removing ADMIN from someone who
+			// has it is refused unless another admin remains — otherwise a self-demotion (or
+			// a mis-click) locks everyone out of the admin portal with recovery only via the
+			// database. `adminProcedure` already proves the caller is currently an admin.
+			const removingAdmin = before.roles.includes(Role.ADMIN) && !input.roles.includes(Role.ADMIN);
+			if (removingAdmin) {
+				const otherAdmins = await ctx.prisma.user.count({
+					where: { roles: { has: Role.ADMIN }, uid: { not: input.uid } }
+				});
+				if (otherAdmins === 0) {
+					throw new TRPCError({
+						code: 'BAD_REQUEST',
+						message: 'This is the last admin — grant another account admin before removing it.'
+					});
+				}
+			}
 
 			const user = await ctx.prisma.user.update({
 				where: { uid: input.uid },

@@ -168,6 +168,9 @@
 	}
 
 	async function handleDecision(decision: DecisionStatus) {
+		// PENDING is a starting state, not a decision to publish — the bar never sends it,
+		// and setDecision no longer accepts it. Guard narrows the type for the mutate call.
+		if (decision === 'PENDING') return;
 		if (!selectedUid || !session.canDecide) return;
 		const uid = selectedUid;
 		const idx = applicants.findIndex((a) => a.uid === uid);

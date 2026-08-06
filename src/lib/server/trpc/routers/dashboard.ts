@@ -20,9 +20,12 @@ export const dashboardRouter = router({
 				_count: { status: true }
 			}),
 
+			// `_all`, not `_count: { activeDecision: true }`: a per-field count ignores nulls,
+			// so the "no decision yet" bucket would always read 0 no matter how many are
+			// undecided.
 			ctx.prisma.user.groupBy({
 				by: ['activeDecision'],
-				_count: { activeDecision: true }
+				_count: { _all: true }
 			}),
 
 			ctx.prisma.user.findMany({
@@ -55,7 +58,7 @@ export const dashboardRouter = router({
 		const decisionCounts: Partial<Record<string, number>> = {};
 		for (const row of byDecision) {
 			const key = row.activeDecision ?? 'null';
-			decisionCounts[key] = row._count.activeDecision;
+			decisionCounts[key] = row._count._all;
 		}
 
 		return {

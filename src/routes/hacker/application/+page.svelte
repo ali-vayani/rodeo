@@ -87,7 +87,9 @@
 		submitError = null;
 		submitting = true;
 		try {
-			await trpc.application.submit.mutate();
+			// Send the role the form was filled out as, so the server validates the right
+			// required set and records the applicant under that role rather than HACKER.
+			await trpc.application.submit.mutate({ role: selectedRole });
 			user.status = UserStatus.APPLIED;
 			currentState = 'submitted';
 		} catch (e: unknown) {

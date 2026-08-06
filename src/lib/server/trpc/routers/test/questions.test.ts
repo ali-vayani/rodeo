@@ -3,6 +3,7 @@ import { mockReset, type DeepMockProxy } from 'vitest-mock-extended';
 import type { PrismaClient } from '$lib/generated/prisma/client';
 import { Role, QuestionType } from '$lib/generated/prisma/client';
 import { createTestCaller, adminUser, hackerUser } from '../test-utils';
+import { APPLICANT_ROLES } from '$lib/admissions/roles';
 
 vi.mock('$lib/server/db', async () => {
 	const { mockDeep } = await import('vitest-mock-extended');
@@ -53,29 +54,42 @@ const questionInput = {
 };
 
 describe('questions.list', () => {
-	it('returns all questions when no role filter', async () => {
+	it('requires authentication (no longer public)', async () => {
+		// Was publicProcedure — it served every question, incl. staff-audience and
+		// regex/linkedField internals, to anyone. Now gated.
 		const caller = createTestCaller(db, null);
+		await expect(caller.questions.list({})).rejects.toMatchObject({ code: 'UNAUTHORIZED' });
+	});
+
+	it('returns applicant-audience questions when no role filter', async () => {
+		const caller = createTestCaller(db, hackerUser);
 		db.question.findMany.mockResolvedValue([allRolesQuestion, hackerQuestion]);
 		const result = await caller.questions.list({});
 		expect(result).toHaveLength(2);
 		expect(db.question.findMany).toHaveBeenCalledWith(
-			expect.objectContaining({ where: undefined })
+			expect.objectContaining({
+				where: {
+					OR: [{ targetRole: { isEmpty: true } }, { targetRole: { hasSome: APPLICANT_ROLES } }]
+				}
+			})
 		);
 	});
 
 	it('filters by role when specified', async () => {
-		const caller = createTestCaller(db, null);
+		const caller = createTestCaller(db, hackerUser);
 		db.question.findMany.mockResolvedValue([allRolesQuestion, hackerQuestion]);
 		await caller.questions.list({ role: Role.HACKER });
 		expect(db.question.findMany).toHaveBeenCalledWith(
 			expect.objectContaining({
-				where: { OR: [{ targetRole: { isEmpty: true } }, { targetRole: { has: Role.HACKER } }] }
+				where: {
+					OR: [{ targetRole: { isEmpty: true } }, { targetRole: { hasSome: [Role.HACKER] } }]
+				}
 			})
 		);
 	});
 
 	it('excludes questions for other roles', async () => {
-		const caller = createTestCaller(db, null);
+		const caller = createTestCaller(db, hackerUser);
 		// Mock returns only matching questions (DB handles the filtering)
 		db.question.findMany.mockResolvedValue([allRolesQuestion]);
 		const result = await caller.questions.list({ role: Role.HACKER });

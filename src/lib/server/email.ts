@@ -123,6 +123,7 @@ export async function sendTemplatedEmail(
 	await sendEmail({
 		to,
 		subject: substituteVariables(template.subject, vars),
-		body: substituteVariables(template.body, vars)
+		// Body becomes HTML via `marked` — escape user-controlled variable values.
+		body: substituteVariables(template.body, vars, { escapeValues: true })
 	});
 }

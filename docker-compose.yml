@@ -3,15 +3,17 @@ services:
     image: postgres:16-alpine
     restart: unless-stopped
     ports:
-      - '5432:5432'
+      # Bound to loopback so the dev database (which may hold a copy of applicant PII)
+      # isn't reachable from other machines on the network.
+      - '127.0.0.1:5432:5432'
     environment:
-      POSTGRES_USER: echo
-      POSTGRES_PASSWORD: echo
-      POSTGRES_DB: echo
+      POSTGRES_USER: rodeo
+      POSTGRES_PASSWORD: rodeo
+      POSTGRES_DB: rodeo-development
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U echo -d echo']
+      test: ['CMD-SHELL', 'pg_isready -U rodeo -d rodeo-development']
       interval: 5s
       timeout: 5s
       retries: 5

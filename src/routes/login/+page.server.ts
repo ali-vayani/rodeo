@@ -34,17 +34,22 @@ export const load: PageServerLoad = async ({ locals, url }) => {
  * and this path did not. Decoding a malformed escape throws, and a bad link
  * shouldn't 500 the login page, so that falls back to the default too.
  */
-function safeRedirect(raw: string | null): string {
+function safeRedirect(raw: string | null, origin: string): string {
 	if (!raw) return '/';
 
-	let path: string;
+	// Resolve against our own origin and require it to *stay* there. The prefix check
+	// this replaces (`startsWith('/') && !startsWith('//')`) let `/\evil.com` through:
+	// a backslash isn't `/`, but the browser treats it as one, so the value resolved to
+	// `https://evil.com`. `searchParams.get` has already decoded the value once, so there
+	// is no second decodeURIComponent here (that double-decode could inject a CR/LF and
+	// 500 the redirect).
+	let url: URL;
 	try {
-		path = decodeURIComponent(raw);
+		url = new URL(raw, origin);
 	} catch {
 		return '/';
 	}
-
-	return path.startsWith('/') && !path.startsWith('//') ? path : '/';
+	return url.origin === origin ? url.pathname + url.search + url.hash : '/';
 }
 
 /**
@@ -76,6 +81,6 @@ export const actions: Actions = {
 
 		setSessionCookie(event, user.uid);
 
-		redirect(302, safeRedirect(event.url.searchParams.get('redirectTo')));
+		redirect(302, safeRedirect(event.url.searchParams.get('redirectTo'), event.url.origin));
 	}
 };

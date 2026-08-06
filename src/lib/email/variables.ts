@@ -34,9 +34,36 @@ export const SAMPLE_VARS: Record<string, string> = Object.fromEntries(
 
 const VARIABLE_PATTERN = /\{\{(\w+)\}\}/g;
 
-/** Replace `{{key}}` with `vars[key]`. Unknown keys are left literal. */
-export function substituteVariables(template: string, vars: Record<string, string>): string {
-	return template.replace(VARIABLE_PATTERN, (_, key) => vars[key] ?? `{{${key}}}`);
+/** Escape the five HTML-significant characters. */
+function escapeHtml(value: string): string {
+	return value
+		.replace(/&/g, '&amp;')
+		.replace(/</g, '&lt;')
+		.replace(/>/g, '&gt;')
+		.replace(/"/g, '&quot;')
+		.replace(/'/g, '&#39;');
+}
+
+/**
+ * Replace `{{key}}` with `vars[key]`. Unknown keys are left literal.
+ *
+ * `escapeValues` HTML-escapes each substituted value and is used for the *body* of an
+ * outbound email, which is rendered through `marked` into HTML. Variable values include
+ * `name`, which is user-controlled (an applicant can set it via a linked question), so
+ * without escaping a name like `<script>…` or `<a href=…>` would inject live markup into
+ * the message. Subjects and the admin preview pass this false — a subject is plain text,
+ * and the preview escapes segments itself via Svelte.
+ */
+export function substituteVariables(
+	template: string,
+	vars: Record<string, string>,
+	{ escapeValues = false }: { escapeValues?: boolean } = {}
+): string {
+	return template.replace(VARIABLE_PATTERN, (_, key) => {
+		const value = vars[key];
+		if (value === undefined) return `{{${key}}}`;
+		return escapeValues ? escapeHtml(value) : value;
+	});
 }
 
 export type TemplateSegment =

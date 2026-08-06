@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { mockReset, type DeepMockProxy } from 'vitest-mock-extended';
 import type { PrismaClient } from '$lib/generated/prisma/client';
-import { InvitationStatus } from '$lib/generated/prisma/client';
+import { InvitationStatus, DecisionStatus, UserStatus } from '$lib/generated/prisma/client';
 import { createTestCaller, hackerUser, confirmedHacker } from '../test-utils';
 
 vi.mock('$lib/server/db', async () => {
@@ -29,6 +29,18 @@ function runTransactions() {
 
 /** What Prisma throws when Postgres rolls a serializable transaction back. */
 const writeConflict = Object.assign(new Error('write conflict'), { code: 'P2034' });
+
+/**
+ * `hackerUser` made team-eligible: ACCEPTED + CONFIRMED. Keeps `hacker-uid` so it
+ * stays distinct from `confirmedHacker` (used as the invitee), which matters for
+ * the self-invite guard. `teamId` is null, so the same object also satisfies the
+ * in-transaction `findUniqueOrThrow({ select: { teamId } })` re-read.
+ */
+const eligibleHacker = {
+	...hackerUser,
+	activeDecision: DecisionStatus.ACCEPTED,
+	status: UserStatus.CONFIRMED
+};
 
 const mockTeam = {
 	id: 'team-1',
@@ -64,7 +76,7 @@ describe('team.getMyTeam', () => {
 describe('team.createTeam', () => {
 	it('creates team with current user as member', async () => {
 		const caller = createTestCaller(db, hackerUser);
-		db.user.findUniqueOrThrow.mockResolvedValue({ ...hackerUser, teamId: null } as never);
+		db.user.findUniqueOrThrow.mockResolvedValue({ ...eligibleHacker, teamId: null } as never);
 		db.team.create.mockResolvedValue({ ...mockTeam } as never);
 
 		const result = await caller.team.createTeam({ teamName: 'Team Rocket' });
@@ -81,8 +93,9 @@ describe('team.createTeam', () => {
 
 	it('throws BAD_REQUEST if user is already on a team', async () => {
 		const caller = createTestCaller(db, hackerUser);
+		// Eligible, so the guard reached is the already-on-a-team one, not eligibility.
 		db.user.findUniqueOrThrow.mockResolvedValue({
-			...hackerUser,
+			...eligibleHacker,
 			teamId: 'existing-team'
 		} as never);
 
@@ -91,25 +104,47 @@ describe('team.createTeam', () => {
 			message: expect.stringContaining('already on a team')
 		});
 	});
+
+	it('throws BAD_REQUEST if the user is not a confirmed attendee', async () => {
+		const caller = createTestCaller(db, hackerUser);
+		// hackerUser: status CREATED, activeDecision null — not eligible.
+		db.user.findUniqueOrThrow.mockResolvedValue({ ...hackerUser, teamId: null } as never);
+
+		await expect(caller.team.createTeam({ teamName: 'Team Rocket' })).rejects.toMatchObject({
+			code: 'BAD_REQUEST',
+			message: expect.stringContaining('confirmed')
+		});
+		expect(db.team.create).not.toHaveBeenCalled();
+	});
 });
 
 describe('team.inviteMember', () => {
-	it('creates invitation on success', async () => {
+	it('creates the invitation and returns { sent: true } for an eligible invitee', async () => {
 		const caller = createTestCaller(db, hackerUser);
-		db.user.findUniqueOrThrow.mockResolvedValue({ ...hackerUser, team: mockTeam } as never);
-		db.user.findUnique.mockResolvedValue(confirmedHacker as never);
+		db.user.findUniqueOrThrow.mockResolvedValue({ ...eligibleHacker, team: mockTeam } as never);
+		db.user.findUnique.mockResolvedValue(confirmedHacker as never); // eligible, teamless, other uid
 		db.invitation.findFirst.mockResolvedValue(null);
 		db.invitation.create.mockResolvedValue(mockInvitation as never);
 
 		const result = await caller.team.inviteMember({ email: confirmedHacker.email });
-		expect(result).toMatchObject({ teamId: 'team-1', email: confirmedHacker.email });
+
+		expect(result).toEqual({ sent: true });
+		expect(db.invitation.create).toHaveBeenCalledWith(
+			expect.objectContaining({
+				data: expect.objectContaining({
+					teamId: 'team-1',
+					email: confirmedHacker.email,
+					userId: confirmedHacker.uid
+				})
+			})
+		);
 	});
 
 	it('lowercases and trims the address before looking it up or storing it', async () => {
 		// Regression guard: accounts are stored lowercased, so an invite typed with
 		// capitals used to report "User not found." for an account that exists.
 		const caller = createTestCaller(db, hackerUser);
-		db.user.findUniqueOrThrow.mockResolvedValue({ ...hackerUser, team: mockTeam } as never);
+		db.user.findUniqueOrThrow.mockResolvedValue({ ...eligibleHacker, team: mockTeam } as never);
 		db.user.findUnique.mockResolvedValue(confirmedHacker as never);
 		db.invitation.findFirst.mockResolvedValue(null);
 		db.invitation.create.mockResolvedValue(mockInvitation as never);
@@ -131,40 +166,67 @@ describe('team.inviteMember', () => {
 		);
 	});
 
-	it('throws NOT_FOUND if invitee does not exist', async () => {
+	it('reports { sent: true } without creating an invitation when the invitee does not exist', async () => {
+		// Anti-oracle: a missing account is indistinguishable from a delivered invite,
+		// so the endpoint cannot be used to probe which emails are registered.
 		const caller = createTestCaller(db, hackerUser);
-		db.user.findUniqueOrThrow.mockResolvedValue({ ...hackerUser, team: mockTeam } as never);
+		db.user.findUniqueOrThrow.mockResolvedValue({ ...eligibleHacker, team: mockTeam } as never);
 		db.user.findUnique.mockResolvedValue(null);
 
-		await expect(caller.team.inviteMember({ email: 'ghost@example.com' })).rejects.toMatchObject({
-			code: 'NOT_FOUND'
-		});
+		const result = await caller.team.inviteMember({ email: 'ghost@example.com' });
+
+		expect(result).toEqual({ sent: true });
+		expect(db.invitation.create).not.toHaveBeenCalled();
 	});
 
-	it('throws BAD_REQUEST if invitee is not ACCEPTED', async () => {
+	it('reports { sent: true } without creating an invitation when the invitee is not eligible', async () => {
 		const caller = createTestCaller(db, hackerUser);
-		db.user.findUniqueOrThrow.mockResolvedValue({ ...hackerUser, team: mockTeam } as never);
-		// hackerUser has activeDecision: null (not ACCEPTED)
+		db.user.findUniqueOrThrow.mockResolvedValue({ ...eligibleHacker, team: mockTeam } as never);
+		// Registered but not a confirmed attendee — must not be revealed or invited.
 		db.user.findUnique.mockResolvedValue({ ...hackerUser, activeDecision: null } as never);
 
-		await expect(caller.team.inviteMember({ email: hackerUser.email })).rejects.toMatchObject({
-			code: 'BAD_REQUEST',
-			message: expect.stringContaining('confirmed')
-		});
+		const result = await caller.team.inviteMember({ email: hackerUser.email });
+
+		expect(result).toEqual({ sent: true });
+		expect(db.invitation.create).not.toHaveBeenCalled();
 	});
 
-	it('throws BAD_REQUEST if invitee is already on a team', async () => {
+	it('reports { sent: true } without creating an invitation when the invitee is already on a team', async () => {
 		const caller = createTestCaller(db, hackerUser);
-		db.user.findUniqueOrThrow.mockResolvedValue({ ...hackerUser, team: mockTeam } as never);
+		db.user.findUniqueOrThrow.mockResolvedValue({ ...eligibleHacker, team: mockTeam } as never);
 		db.user.findUnique.mockResolvedValue({
 			...confirmedHacker,
 			teamId: 'other-team'
 		} as never);
 
+		const result = await caller.team.inviteMember({ email: confirmedHacker.email });
+
+		expect(result).toEqual({ sent: true });
+		expect(db.invitation.create).not.toHaveBeenCalled();
+	});
+
+	it('reports { sent: true } without creating an invitation on a self-invite', async () => {
+		const caller = createTestCaller(db, hackerUser);
+		// Inviter and invitee resolve to the same eligible account.
+		db.user.findUniqueOrThrow.mockResolvedValue({ ...eligibleHacker, team: mockTeam } as never);
+		db.user.findUnique.mockResolvedValue(eligibleHacker as never);
+
+		const result = await caller.team.inviteMember({ email: eligibleHacker.email });
+
+		expect(result).toEqual({ sent: true });
+		expect(db.invitation.create).not.toHaveBeenCalled();
+	});
+
+	it('throws BAD_REQUEST if the inviter is not a confirmed attendee', async () => {
+		const caller = createTestCaller(db, hackerUser);
+		// Inviter itself is ineligible — the endpoint refuses to run at all.
+		db.user.findUniqueOrThrow.mockResolvedValue({ ...hackerUser, team: mockTeam } as never);
+
 		await expect(caller.team.inviteMember({ email: confirmedHacker.email })).rejects.toMatchObject({
 			code: 'BAD_REQUEST',
-			message: expect.stringContaining('already on a team')
+			message: expect.stringContaining('confirmed')
 		});
+		expect(db.invitation.create).not.toHaveBeenCalled();
 	});
 
 	it('throws BAD_REQUEST if team is full', async () => {
@@ -173,7 +235,7 @@ describe('team.inviteMember', () => {
 			...mockTeam,
 			members: [{ uid: 'u1' }, { uid: 'u2' }, { uid: 'u3' }, { uid: 'u4' }]
 		};
-		db.user.findUniqueOrThrow.mockResolvedValue({ ...hackerUser, team: fullTeam } as never);
+		db.user.findUniqueOrThrow.mockResolvedValue({ ...eligibleHacker, team: fullTeam } as never);
 
 		await expect(caller.team.inviteMember({ email: confirmedHacker.email })).rejects.toMatchObject({
 			code: 'BAD_REQUEST',
@@ -183,7 +245,7 @@ describe('team.inviteMember', () => {
 
 	it('throws BAD_REQUEST if invite already pending', async () => {
 		const caller = createTestCaller(db, hackerUser);
-		db.user.findUniqueOrThrow.mockResolvedValue({ ...hackerUser, team: mockTeam } as never);
+		db.user.findUniqueOrThrow.mockResolvedValue({ ...eligibleHacker, team: mockTeam } as never);
 		db.user.findUnique.mockResolvedValue({ ...confirmedHacker, teamId: null } as never);
 		db.invitation.findFirst.mockResolvedValue(mockInvitation as never); // existing pending
 
@@ -191,6 +253,7 @@ describe('team.inviteMember', () => {
 			code: 'BAD_REQUEST',
 			message: expect.stringContaining('already sent')
 		});
+		expect(db.invitation.create).not.toHaveBeenCalled();
 	});
 });
 
@@ -201,6 +264,9 @@ describe('team.acceptInvite', () => {
 			...mockInvitation,
 			userId: hackerUser.uid // belongs to this user
 		} as never);
+		// Accepter lookup (Promise.all) and the in-transaction teamId re-read both hit
+		// this mock; eligibleHacker is eligible and has teamId null, satisfying both.
+		db.user.findUniqueOrThrow.mockResolvedValue(eligibleHacker as never);
 		runTransactions();
 		db.user.count.mockResolvedValue(1);
 
@@ -224,6 +290,7 @@ describe('team.acceptInvite', () => {
 			...mockInvitation,
 			userId: hackerUser.uid
 		} as never);
+		db.user.findUniqueOrThrow.mockResolvedValue(eligibleHacker as never);
 		runTransactions();
 		db.user.count.mockResolvedValue(1);
 
@@ -244,6 +311,7 @@ describe('team.acceptInvite', () => {
 			...mockInvitation,
 			userId: hackerUser.uid
 		} as never);
+		db.user.findUniqueOrThrow.mockResolvedValue(eligibleHacker as never);
 		runTransactions();
 		db.user.count.mockResolvedValue(4);
 
@@ -261,6 +329,7 @@ describe('team.acceptInvite', () => {
 			...mockInvitation,
 			userId: hackerUser.uid
 		} as never);
+		db.user.findUniqueOrThrow.mockResolvedValue(eligibleHacker as never);
 		db.$transaction.mockRejectedValue(writeConflict);
 
 		await expect(caller.team.acceptInvite({ invitationId: 'inv-1' })).rejects.toMatchObject({
@@ -275,6 +344,7 @@ describe('team.acceptInvite', () => {
 			...mockInvitation,
 			userId: hackerUser.uid
 		} as never);
+		db.user.findUniqueOrThrow.mockResolvedValue(eligibleHacker as never);
 		db.$transaction.mockRejectedValue(new Error('connection lost'));
 
 		await expect(caller.team.acceptInvite({ invitationId: 'inv-1' })).rejects.toThrow(
@@ -315,11 +385,31 @@ describe('team.acceptInvite', () => {
 			status: InvitationStatus.PENDING,
 			team: { ...mockTeam, members: [{ uid: 'u1' }, { uid: 'u2' }, { uid: 'u3' }, { uid: 'u4' }] }
 		} as never);
+		db.user.findUniqueOrThrow.mockResolvedValue(eligibleHacker as never);
 
 		await expect(caller.team.acceptInvite({ invitationId: 'inv-1' })).rejects.toMatchObject({
 			code: 'BAD_REQUEST',
 			message: expect.stringContaining('full')
 		});
+	});
+
+	it('throws BAD_REQUEST if the accepter is no longer a confirmed attendee', async () => {
+		// Re-checked at accept time: a stale invite must not carry a since-declined
+		// attendee onto a team.
+		const caller = createTestCaller(db, hackerUser);
+		db.invitation.findUniqueOrThrow.mockResolvedValue({
+			...mockInvitation,
+			userId: hackerUser.uid,
+			status: InvitationStatus.PENDING
+		} as never);
+		// Accepter resolves to an ineligible user (status CREATED, activeDecision null).
+		db.user.findUniqueOrThrow.mockResolvedValue(hackerUser as never);
+
+		await expect(caller.team.acceptInvite({ invitationId: 'inv-1' })).rejects.toMatchObject({
+			code: 'BAD_REQUEST',
+			message: expect.stringContaining('confirmed')
+		});
+		expect(db.$transaction).not.toHaveBeenCalled();
 	});
 });
 
@@ -349,6 +439,23 @@ describe('team.declineInvite', () => {
 		await expect(caller.team.declineInvite({ invitationId: 'inv-1' })).rejects.toMatchObject({
 			code: 'FORBIDDEN'
 		});
+	});
+
+	it('throws BAD_REQUEST if the invitation is no longer pending', async () => {
+		// Replaying decline on an already-accepted invite must not flip it to DECLINED
+		// while the user stays on the team.
+		const caller = createTestCaller(db, hackerUser);
+		db.invitation.findUniqueOrThrow.mockResolvedValue({
+			...mockInvitation,
+			userId: hackerUser.uid,
+			status: InvitationStatus.ACCEPTED
+		} as never);
+
+		await expect(caller.team.declineInvite({ invitationId: 'inv-1' })).rejects.toMatchObject({
+			code: 'BAD_REQUEST',
+			message: expect.stringContaining('pending')
+		});
+		expect(db.invitation.update).not.toHaveBeenCalled();
 	});
 });
 
@@ -450,10 +557,9 @@ describe('team.joinByCode', () => {
 describe('team.leaveTeam', () => {
 	it('removes user from team', async () => {
 		const caller = createTestCaller(db, hackerUser);
-		db.user.findUniqueOrThrow.mockResolvedValue({
-			...hackerUser,
-			team: { ...mockTeam, members: [hackerUser, { uid: 'u2' }] }
-		} as never);
+		db.user.findUniqueOrThrow.mockResolvedValue({ teamId: 'team-1' } as never);
+		runTransactions();
+		db.user.count.mockResolvedValue(1); // a teammate remains
 		db.user.update.mockResolvedValue({ ...hackerUser, teamId: null } as never);
 
 		const result = await caller.team.leaveTeam();
@@ -466,26 +572,25 @@ describe('team.leaveTeam', () => {
 		);
 	});
 
-	it('deletes team when last member leaves', async () => {
+	it('deletes team when the last member leaves', async () => {
 		const caller = createTestCaller(db, hackerUser);
-		db.user.findUniqueOrThrow.mockResolvedValue({
-			...hackerUser,
-			team: { ...mockTeam, members: [hackerUser] } // only member
-		} as never);
+		db.user.findUniqueOrThrow.mockResolvedValue({ teamId: 'team-1' } as never);
+		runTransactions();
+		db.user.count.mockResolvedValue(0); // nobody left after removal
 		db.user.update.mockResolvedValue({ ...hackerUser, teamId: null } as never);
 		db.team.delete.mockResolvedValue(mockTeam as never);
 
 		await caller.team.leaveTeam();
 
-		expect(db.team.delete).toHaveBeenCalledWith({ where: { id: mockTeam.id } });
+		expect(db.user.count).toHaveBeenCalledWith({ where: { teamId: 'team-1' } });
+		expect(db.team.delete).toHaveBeenCalledWith({ where: { id: 'team-1' } });
 	});
 
 	it('does not delete team when other members remain', async () => {
 		const caller = createTestCaller(db, hackerUser);
-		db.user.findUniqueOrThrow.mockResolvedValue({
-			...hackerUser,
-			team: { ...mockTeam, members: [hackerUser, { uid: 'u2' }] }
-		} as never);
+		db.user.findUniqueOrThrow.mockResolvedValue({ teamId: 'team-1' } as never);
+		runTransactions();
+		db.user.count.mockResolvedValue(2); // others still on the team
 		db.user.update.mockResolvedValue({ ...hackerUser, teamId: null } as never);
 
 		await caller.team.leaveTeam();
@@ -495,8 +600,9 @@ describe('team.leaveTeam', () => {
 
 	it('throws BAD_REQUEST if user is not on a team', async () => {
 		const caller = createTestCaller(db, hackerUser);
-		db.user.findUniqueOrThrow.mockResolvedValue({ ...hackerUser, team: null } as never);
+		db.user.findUniqueOrThrow.mockResolvedValue({ teamId: null } as never);
 
 		await expect(caller.team.leaveTeam()).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+		expect(db.$transaction).not.toHaveBeenCalled();
 	});
 });

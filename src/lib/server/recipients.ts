@@ -43,8 +43,15 @@ export function buildRecipientWhere(filters: RecipientFilters): Prisma.UserWhere
 	const conditions: Prisma.UserWhereInput[] = [];
 
 	// Explicit address list. Engaged-but-empty means nobody, not everybody.
+	// Lowercased to match stored addresses: accounts are written lowercase everywhere,
+	// so a pasted `Alice@X.com` against a stored `alice@x.com` would otherwise silently
+	// match nobody — and previewRecipients would report a real user as "unknown".
 	if (emails !== undefined) {
-		conditions.push(emails.length ? { email: { in: emails } } : { uid: MATCH_NOTHING });
+		conditions.push(
+			emails.length
+				? { email: { in: emails.map((e) => e.trim().toLowerCase()) } }
+				: { uid: MATCH_NOTHING }
+		);
 	}
 
 	if (search) {

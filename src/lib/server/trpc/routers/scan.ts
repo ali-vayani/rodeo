@@ -37,14 +37,32 @@ const scanSelect = { id: true, action: true, timestamp: true } as const;
  */
 const MIN_CODE_SUFFIX_LENGTH = 4;
 
-async function assertValidAction(prisma: PrismaClient, action: string): Promise<void> {
-	const settings = await prisma.settings.findFirst();
-	if (settings && !settings.scanActions.includes(action)) {
+/** The scan actions in force. Falls back to the default so a fresh install fails closed. */
+function allowedActions(settings: { scanActions: string[] } | null): string[] {
+	return settings?.scanActions?.length ? settings.scanActions : ['Check-In'];
+}
+
+/**
+ * The action that means "arrived at the event" and promotes CONFIRMED → CHECKED_IN.
+ * By convention the first configured action; `Check-In` on a fresh install.
+ */
+function checkInAction(settings: { scanActions: string[] } | null): string {
+	return allowedActions(settings)[0];
+}
+
+function assertActionAllowed(settings: { scanActions: string[] } | null, action: string): void {
+	// Fail closed before a Settings row exists: without this, any string was accepted
+	// and persisted as a scan action.
+	if (!allowedActions(settings).includes(action)) {
 		throw new TRPCError({
 			code: 'BAD_REQUEST',
-			message: `Invalid scan action "${action}". Valid actions: ${settings.scanActions.join(', ')}`
+			message: `Invalid scan action "${action}". Valid actions: ${allowedActions(settings).join(', ')}`
 		});
 	}
+}
+
+async function assertValidAction(prisma: PrismaClient, action: string): Promise<void> {
+	assertActionAllowed(await prisma.settings.findFirst(), action);
 }
 
 async function resolveUserByCode(prisma: PrismaClient, userCode: string) {
@@ -192,14 +210,34 @@ export const scanRouter = router({
 			// The write path runs the same helpers as `lookup` on purpose: it used to carry
 			// its own copy of the action check and the code lookup, which meant a fix to one
 			// left the other resolving codes the old way.
-			await assertValidAction(ctx.prisma, input.action);
+			const settings = await ctx.prisma.settings.findFirst();
+			assertActionAllowed(settings, input.action);
 			const user = await resolveUserByCode(ctx.prisma, input.userCode);
 			const isDuplicate = await isDuplicateToday(ctx.prisma, user.uid, input.action);
 
-			const scan = await ctx.prisma.scan.create({
-				data: { userId: user.uid, action: input.action },
-				select: scanSelect
+			// Checking in is what actually moves a CONFIRMED attendee to CHECKED_IN — nothing
+			// else in the app writes that status, so without this the check-in count, the
+			// hacker "checked in" view, and joinByCode's CHECKED_IN allowance were all dead.
+			// The scan row and the status change commit together so a recorded check-in can't
+			// exist without the status, or vice versa.
+			const promotesToCheckedIn =
+				input.action === checkInAction(settings) && user.status === UserStatus.CONFIRMED;
+
+			const scan = await ctx.prisma.$transaction(async (tx) => {
+				const created = await tx.scan.create({
+					data: { userId: user.uid, action: input.action },
+					select: scanSelect
+				});
+				if (promotesToCheckedIn) {
+					await tx.user.update({
+						where: { uid: user.uid },
+						data: { status: UserStatus.CHECKED_IN }
+					});
+				}
+				return created;
 			});
+
+			const resultUser = promotesToCheckedIn ? { ...user, status: UserStatus.CHECKED_IN } : user;
 
 			await logAction(ctx, {
 				action: 'scan.record',
@@ -207,10 +245,15 @@ export const scanRouter = router({
 					? `Scanned ${user.name} for "${input.action}" (already scanned today)`
 					: `Scanned ${user.name} for "${input.action}"`,
 				target: { id: user.uid, label: user.name },
-				metadata: { scanAction: input.action, duplicate: isDuplicate, scanId: scan.id }
+				metadata: {
+					scanAction: input.action,
+					duplicate: isDuplicate,
+					scanId: scan.id,
+					checkedIn: promotesToCheckedIn
+				}
 			});
 
-			return { scan, user, isDuplicate };
+			return { scan, user: resultUser, isDuplicate };
 		}),
 
 	getRecent: portalProcedure

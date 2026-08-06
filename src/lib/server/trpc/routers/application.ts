@@ -1,7 +1,8 @@
 import { z } from 'zod';
 import { TRPCError } from '@trpc/server';
-import { UserStatus, DecisionStatus } from '$lib/generated/prisma/client';
+import { UserStatus, DecisionStatus, QuestionType, Role } from '$lib/generated/prisma/client';
 import { router, authedProcedure } from '../init';
+import { APPLICANT_ROLES } from '$lib/admissions/roles';
 import { normalizeEmail } from '$lib/blacklist/match';
 import { sendTemplatedEmail } from '$lib/server/email';
 import { buildTemplateVars } from '$lib/email/variables';
@@ -76,6 +77,67 @@ function assertBeforeRSVPDeadline(settings: ApplicationWindow | null) {
 	}
 }
 
+/** The subset of a Question this router validates an answer against. */
+type AnswerableQuestion = {
+	linkedField: string | null;
+	targetRole: Role[];
+	type: QuestionType;
+	options: string[];
+	min: number | null;
+	max: number | null;
+	regex: string | null;
+};
+
+/**
+ * Validate a non-empty answer against its question definition.
+ *
+ * The client renders these constraints, but a direct tRPC call bypasses the browser
+ * entirely — so `type`, `options`, `min`/`max`, and `regex` have to be enforced here
+ * too or a reviewer ends up looking at a NUMBER field holding "potato" or a dropdown
+ * answer that was never one of the offered options. Empty values are handled by the
+ * caller (a blank draft field is allowed; a blank *required* answer is caught at submit).
+ */
+function assertAnswerValid(question: AnswerableQuestion, value: string) {
+	if (question.type === QuestionType.NUMBER) {
+		const n = Number(value);
+		if (!Number.isFinite(n)) {
+			throw new TRPCError({ code: 'BAD_REQUEST', message: 'This question expects a number.' });
+		}
+		if (question.min != null && n < question.min) {
+			throw new TRPCError({ code: 'BAD_REQUEST', message: `Must be at least ${question.min}.` });
+		}
+		if (question.max != null && n > question.max) {
+			throw new TRPCError({ code: 'BAD_REQUEST', message: `Must be at most ${question.max}.` });
+		}
+	}
+
+	// Single-select answers must be one of the offered options.
+	if (
+		(question.type === QuestionType.MULTIPLE_CHOICE || question.type === QuestionType.DROPDOWN) &&
+		question.options.length > 0 &&
+		!question.options.includes(value)
+	) {
+		throw new TRPCError({ code: 'BAD_REQUEST', message: 'That is not one of the choices.' });
+	}
+
+	if (question.regex) {
+		let re: RegExp;
+		try {
+			re = new RegExp(question.regex);
+		} catch {
+			// A malformed pattern stored on the question is not the applicant's fault —
+			// don't block them on it.
+			return;
+		}
+		if (!re.test(value)) {
+			throw new TRPCError({
+				code: 'BAD_REQUEST',
+				message: 'That answer is not in the expected format.'
+			});
+		}
+	}
+}
+
 export const applicationRouter = router({
 	/**
 	 * Get all responses for the current user
@@ -102,8 +164,10 @@ export const applicationRouter = router({
 	save: authedProcedure
 		.input(
 			z.object({
-				questionId: z.string(),
-				value: z.string()
+				questionId: z.string().min(1),
+				// Bounded so an answer can't be used to store megabytes — the value flows
+				// into admin tables, the CSV export, and (via linkedField) User.name.
+				value: z.string().max(10_000)
 			})
 		)
 		.mutation(async ({ ctx, input }) => {
@@ -113,7 +177,7 @@ export const applicationRouter = router({
 			const [user, settings] = await Promise.all([
 				ctx.prisma.user.findUniqueOrThrow({
 					where: { uid: ctx.user.uid },
-					select: { status: true }
+					select: { status: true, roles: true }
 				}),
 				ctx.prisma.settings.findFirst()
 			]);
@@ -130,13 +194,41 @@ export const applicationRouter = router({
 			// eslint-disable-next-line @typescript-eslint/no-explicit-any
 			const question = (await (ctx.prisma.question.findUnique as any)({
 				where: { id: input.questionId },
-				select: { linkedField: true }
-			})) as { linkedField?: string | null } | null;
+				select: {
+					linkedField: true,
+					targetRole: true,
+					type: true,
+					options: true,
+					min: true,
+					max: true,
+					regex: true
+				}
+			})) as AnswerableQuestion | null;
+
+			// A missing question would otherwise fall through to an upsert that violates the
+			// FK and surfaces as a 500. Reject it as a clean NOT_FOUND instead.
+			if (!question) {
+				throw new TRPCError({ code: 'NOT_FOUND', message: 'That question does not exist.' });
+			}
+
+			// Don't let an applicant answer a question aimed at a different audience: those
+			// answers would show up in their admissions detail as if they'd been asked.
+			if (
+				question.targetRole.length > 0 &&
+				!question.targetRole.some((r) => user.roles.includes(r))
+			) {
+				throw new TRPCError({ code: 'FORBIDDEN', message: 'This question was not asked of you.' });
+			}
+
+			// Constraints apply to real answers only — a blank draft field is allowed.
+			if (input.value.trim() !== '') {
+				assertAnswerValid(question, input.value);
+			}
 
 			// Write through to the user record for linked fields
 			const LINKED_USER_FIELDS = ['name', 'university', 'year'] as const;
 			if (
-				question?.linkedField &&
+				question.linkedField &&
 				(LINKED_USER_FIELDS as readonly string[]).includes(question.linkedField)
 			) {
 				await ctx.prisma.user.update({
@@ -179,6 +271,21 @@ export const applicationRouter = router({
 
 		if (user.status === UserStatus.CONFIRMED) {
 			throw new TRPCError({ code: 'BAD_REQUEST', message: "You have already RSVP'd." });
+		}
+
+		if (user.status === UserStatus.CHECKED_IN) {
+			throw new TRPCError({ code: 'BAD_REQUEST', message: 'You are already checked in.' });
+		}
+
+		// Declining releases the spot permanently — the confirm dialog says as much. A
+		// DECLINED user re-confirming is exactly the post-release headcount growth the
+		// deadline exists to prevent, so it is refused before *and* after the deadline.
+		if (user.status === UserStatus.DECLINED) {
+			throw new TRPCError({
+				code: 'BAD_REQUEST',
+				message:
+					'You released your spot and can no longer RSVP. Contact the organizers if you still plan to attend.'
+			});
 		}
 
 		// After the caller's own state, so someone who already RSVP'd is told that rather
@@ -225,6 +332,16 @@ export const applicationRouter = router({
 			throw new TRPCError({ code: 'BAD_REQUEST', message: 'You have already declined.' });
 		}
 
+		// A checked-in attendee tapping decline would erase their check-in with no audit
+		// trail and, past the RSVP deadline, could never re-confirm. They are physically
+		// here — refuse the downgrade.
+		if (user.status === UserStatus.CHECKED_IN) {
+			throw new TRPCError({
+				code: 'BAD_REQUEST',
+				message: 'You are already checked in and cannot decline.'
+			});
+		}
+
 		const updated = await ctx.prisma.user.update({
 			where: { uid: ctx.user.uid },
 			data: { status: UserStatus.DECLINED }
@@ -246,79 +363,115 @@ export const applicationRouter = router({
 
 	/**
 	 * Submit the application
+	 *
+	 * `role` is the audience the applicant filled the form out as (Hacker/Judge/Mentor/
+	 * Volunteer). The page renders questions for the selected role, so submission has to
+	 * persist it — otherwise a self-registered account stays `[HACKER]` and `submit`
+	 * validates the wrong required set, dead-ending anyone who applied as anything else.
 	 */
-	submit: authedProcedure.mutation(async ({ ctx }) => {
-		const user = await ctx.prisma.user.findUniqueOrThrow({
-			where: { uid: ctx.user.uid }
-		});
-		const settings = await ctx.prisma.settings.findFirst();
+	submit: authedProcedure
+		.input(z.object({ role: z.nativeEnum(Role).optional() }).optional())
+		.mutation(async ({ ctx, input }) => {
+			// Only an applicant role may be submitted as — never staff. A bad or staff role
+			// is ignored rather than rejected, falling back to the user's stored roles.
+			const submittedRole =
+				input?.role && APPLICANT_ROLES.includes(input.role) ? input.role : undefined;
 
-		if (user.status !== UserStatus.CREATED) {
-			throw new TRPCError({
-				code: 'BAD_REQUEST',
-				message: 'Application has already been submitted.'
+			const user = await ctx.prisma.user.findUniqueOrThrow({
+				where: { uid: ctx.user.uid }
 			});
-		}
+			const settings = await ctx.prisma.settings.findFirst();
 
-		assertWithinApplicationWindow(settings);
-
-		// Validate all required questions are answered
-		const userRoles = user.roles;
-		const questions = await ctx.prisma.question.findMany({
-			where: {
-				required: true,
-				OR: [
-					{ targetRole: { isEmpty: true } },
-					...(userRoles.length ? [{ targetRole: { hasSome: userRoles } }] : [])
-				]
+			if (user.status !== UserStatus.CREATED) {
+				throw new TRPCError({
+					code: 'BAD_REQUEST',
+					message: 'Application has already been submitted.'
+				});
 			}
-		});
 
-		const responses = await ctx.prisma.applicationResponse.findMany({
-			where: { userId: ctx.user.uid }
-		});
+			assertWithinApplicationWindow(settings);
 
-		const answeredIds = new Set(responses.map((r) => r.questionId));
-		const unanswered = questions.filter((q) => !answeredIds.has(q.id));
+			// The role the applicant is submitting as decides which required questions apply
+			// and is written onto the user below. Falls back to their stored roles when the
+			// client sends nothing, so older callers keep working.
+			const applicationRoles = submittedRole ? [submittedRole] : user.roles;
 
-		if (unanswered.length > 0) {
-			throw new TRPCError({
-				code: 'BAD_REQUEST',
-				message: `Please answer all required questions. Missing: ${unanswered.map((q) => q.title).join(', ')}`
+			// Validate all required questions are answered
+			const questions = await ctx.prisma.question.findMany({
+				where: {
+					required: true,
+					OR: [
+						{ targetRole: { isEmpty: true } },
+						...(applicationRoles.length ? [{ targetRole: { hasSome: applicationRoles } }] : [])
+					]
+				}
 			});
-		}
 
-		// Blacklist check.
-		//
-		// Only an exact email match auto-rejects. A blacklisted *name* is a heuristic --
-		// `admissions.list` matches names tolerantly enough to catch misspellings -- so it is
-		// surfaced as a flag for a human reviewer there and deliberately decides nothing here.
-		// A typo must never cost someone their application.
-		const blacklistedEmail = await ctx.prisma.blacklist.findUnique({
-			where: { email: normalizeEmail(user.email) },
-			select: { id: true }
-		});
+			const responses = await ctx.prisma.applicationResponse.findMany({
+				where: { userId: ctx.user.uid }
+			});
 
-		// Update user status and optionally set pendingDecision
-		const updatedUser = await ctx.prisma.user.update({
-			where: { uid: ctx.user.uid },
-			data: {
-				status: UserStatus.APPLIED,
-				...(blacklistedEmail && { pendingDecision: DecisionStatus.REJECTED })
+			// A response row with a blank value is not an answer. Building the set from row
+			// existence alone let an applicant satisfy every required question by saving ""
+			// (autosave fires on each keystroke, including the one that clears the field).
+			const answeredIds = new Set(
+				responses.filter((r) => r.value.trim() !== '').map((r) => r.questionId)
+			);
+			const unanswered = questions.filter((q) => !answeredIds.has(q.id));
+
+			if (unanswered.length > 0) {
+				throw new TRPCError({
+					code: 'BAD_REQUEST',
+					message: `Please answer all required questions. Missing: ${unanswered.map((q) => q.title).join(', ')}`
+				});
 			}
-		});
 
-		// Send confirmation email
-		if (settings?.submitTemplate) {
-			await sendTemplatedEmail(
-				user.email,
-				{ subject: settings.submitSubject, body: settings.submitTemplate },
-				buildTemplateVars(user, settings)
-			).catch(() => {
-				/* fire-and-forget */
+			// Blacklist check.
+			//
+			// Only an exact email match auto-rejects. A blacklisted *name* is a heuristic --
+			// `admissions.list` matches names tolerantly enough to catch misspellings -- so it is
+			// surfaced as a flag for a human reviewer there and deliberately decides nothing here.
+			// A typo must never cost someone their application.
+			const blacklistedEmail = await ctx.prisma.blacklist.findUnique({
+				where: { email: normalizeEmail(user.email) },
+				select: { id: true }
 			});
-		}
 
-		return updatedUser;
-	})
+			// Compare-and-swap on status: the guard above read CREATED, but two rapid submits
+			// would both pass it and both send the confirmation email. Gating the write on
+			// `status: CREATED` means only the first transitions the row; the loser sees
+			// count 0 and is told it's already in, mailing nothing twice.
+			const applied = await ctx.prisma.user.updateMany({
+				where: { uid: ctx.user.uid, status: UserStatus.CREATED },
+				data: {
+					status: UserStatus.APPLIED,
+					roles: applicationRoles,
+					...(blacklistedEmail && { pendingDecision: DecisionStatus.REJECTED })
+				}
+			});
+
+			if (applied.count === 0) {
+				throw new TRPCError({
+					code: 'BAD_REQUEST',
+					message: 'Application has already been submitted.'
+				});
+			}
+
+			const updatedUser = await ctx.prisma.user.findUniqueOrThrow({
+				where: { uid: ctx.user.uid }
+			});
+
+			// Send confirmation email
+			if (settings?.submitTemplate) {
+				await sendTemplatedEmail(
+					user.email,
+					{ subject: settings.submitSubject, body: settings.submitTemplate },
+					buildTemplateVars(updatedUser, settings)
+				).catch(() => {
+					/* fire-and-forget */
+				});
+			}
+
+			return updatedUser;
+		})
 });
