@@ -137,7 +137,10 @@
 		class="min-w-0 flex-1 space-y-5 overflow-y-auto p-4 md:p-8"
 	>
 		<!-- General section (layout 2 bordered block) -->
-		<div id="section-general" class="scroll-mt-topbar md:scroll-mt-0 overflow-hidden rounded-md border border-border">
+		<div
+			id="section-general"
+			class="scroll-mt-topbar overflow-hidden rounded-md border border-border md:scroll-mt-0"
+		>
 			<div class="border-b border-border bg-muted px-4 py-[9px]">
 				<span class="text-[10px] font-bold tracking-widest text-muted-foreground uppercase">
 					General
@@ -149,7 +152,10 @@
 		</div>
 
 		<!-- Dates section -->
-		<div id="section-dates" class="scroll-mt-topbar md:scroll-mt-0 overflow-hidden rounded-md border border-border">
+		<div
+			id="section-dates"
+			class="scroll-mt-topbar overflow-hidden rounded-md border border-border md:scroll-mt-0"
+		>
 			<div class="border-b border-border bg-muted px-4 py-[9px]">
 				<span class="text-[10px] font-bold tracking-widest text-muted-foreground uppercase">
 					Dates
@@ -169,7 +175,10 @@
 		</div>
 
 		<!-- Scan Groups section -->
-		<div id="section-scan-groups" class="scroll-mt-topbar md:scroll-mt-0 overflow-hidden rounded-md border border-border">
+		<div
+			id="section-scan-groups"
+			class="scroll-mt-topbar overflow-hidden rounded-md border border-border md:scroll-mt-0"
+		>
 			<div class="border-b border-border bg-muted px-4 py-[9px]">
 				<span class="text-[10px] font-bold tracking-widest text-muted-foreground uppercase">
 					Scan Groups
@@ -181,7 +190,10 @@
 		</div>
 
 		<!-- Danger Zone section -->
-		<div id="section-danger" class="scroll-mt-topbar md:scroll-mt-0 overflow-hidden rounded-md border border-[#fca5a5]">
+		<div
+			id="section-danger"
+			class="scroll-mt-topbar overflow-hidden rounded-md border border-[#fca5a5] md:scroll-mt-0"
+		>
 			<div class="border-b border-[#fca5a5] bg-[#fff3f3] px-4 py-[9px]">
 				<span class="font-mono text-[10px] font-medium tracking-[0.1em] text-destructive uppercase">
 					Danger Zone

@@ -99,11 +99,7 @@
 	class="fixed inset-x-0 top-0 z-30 flex h-topbar items-center gap-2 border-b border-border
 	       bg-card px-3 md:hidden"
 >
-	<IconButton
-		label="Open menu"
-		aria-expanded={drawerOpen}
-		onclick={() => (drawerOpen = true)}
-	>
+	<IconButton label="Open menu" aria-expanded={drawerOpen} onclick={() => (drawerOpen = true)}>
 		<Menu class="size-5" />
 	</IconButton>
 	<span class="font-mono text-lg font-medium text-foreground">{brand}</span>

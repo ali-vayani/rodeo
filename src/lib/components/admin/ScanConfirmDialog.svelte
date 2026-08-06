@@ -118,8 +118,8 @@
 						<line x1="12" y1="17" x2="12.01" y2="17"></line>
 					</svg>
 					<p class="text-[13px] leading-[1.5] text-[#92400e]">
-						Already scanned {scanCountForAction}&times; for {action} — confirming will still record
-						this scan.
+						Already scanned {scanCountForAction}&times; for {action} — confirming will still record this
+						scan.
 					</p>
 				</div>
 			{/if}

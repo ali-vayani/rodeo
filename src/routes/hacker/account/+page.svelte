@@ -88,7 +88,9 @@
 					{#if user.year}
 						<div class="flex justify-between gap-3 border-b border-border py-2.5 text-sm">
 							<span class="shrink-0 text-muted-foreground">Grad Year</span>
-							<span class="min-w-0 text-right font-medium break-words text-primary">{user.year}</span>
+							<span class="min-w-0 text-right font-medium break-words text-primary"
+								>{user.year}</span
+							>
 						</div>
 					{/if}
 					{#if decisionLabel}
