@@ -51,8 +51,8 @@ test-job:
     # lazy), and the dev-auth opt-in so validateEnv's development path passes.
     # These are for the throwaway CI build only — deploys build on Vercel with
     # real env.
-    DATABASE_URL: "postgresql://rodeo:rodeo@localhost:5432/rodeo-ci"
-    ALLOW_DEV_AUTH: "1"
+    DATABASE_URL: 'postgresql://rodeo:rodeo@localhost:5432/rodeo-ci'
+    ALLOW_DEV_AUTH: '1'
   script:
     # prepare (svelte-kit sync + prisma generate) runs during npm ci and needs
     # no DATABASE_URL — prisma.config.ts tolerates a missing datasource.
