@@ -21,7 +21,8 @@
 		"db:setup": "prisma db push && prisma generate && npx tsx prisma/seed.ts",
 		"db:studio": "prisma studio",
 		"db:seed": "npx tsx prisma/seed.ts",
-		"db:seed:fresh": "SEED_PRUNE=1 npx tsx prisma/seed.ts"
+		"db:seed:fresh": "SEED_PRUNE=1 npx tsx prisma/seed.ts",
+		"db:seed:demo": "npx tsx prisma/seedDemo.ts"
 	},
 	"devDependencies": {
 		"@eslint/compat": "^2.0.4",
