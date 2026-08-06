@@ -48,8 +48,7 @@ describe('organizer is denied everything holding user data', () => {
 	const denied: Record<string, (c: ReturnType<typeof createTestCaller>) => Promise<unknown>> = {
 		'user.list': (c) => c.user.list({ page: 1, pageSize: 10 }),
 		'user.getById': (c) => c.user.getById({ uid: hackerUser.uid }),
-		'user.updateRole': (c) =>
-			c.user.updateRole({ uid: hackerUser.uid, roles: ['HACKER'] as never }),
+		'user.updateRole': (c) => c.user.updateRole({ uid: hackerUser.uid, role: 'HACKER' as never }),
 		'user.exportCsv': (c) => c.user.exportCsv(),
 		'admissions.list': (c) => c.admissions.list({}),
 		'admissions.presence': (c) => c.admissions.presence(),

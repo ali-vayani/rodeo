@@ -302,7 +302,7 @@ function expand(states: StatePlan[]): StatePlan[] {
 export type GeneratedUser = {
 	name: string;
 	email: string;
-	roles: Role[];
+	role: Role;
 	status: UserStatus;
 	pendingDecision: DecisionStatus | null;
 	activeDecision: DecisionStatus | null;
@@ -338,7 +338,7 @@ export function generateUsers(): GeneratedUser[] {
 			out.push({
 				name: nameFor(seq),
 				email: `${plan.prefix}${i + 1}@yopmail.com`,
-				roles: [plan.role],
+				role: plan.role,
 				status: state.status,
 				pendingDecision: state.pendingDecision ?? null,
 				activeDecision: state.activeDecision ?? null,
@@ -412,7 +412,7 @@ function answerFor(q: Question, user: GeneratedUser, seq: number): string | null
 
 /** A question with no targetRole applies to everyone. */
 function appliesTo(q: Question, user: GeneratedUser): boolean {
-	return q.targetRole.length === 0 || q.targetRole.some((r) => user.roles.includes(r));
+	return q.targetRole.length === 0 || q.targetRole.includes(user.role);
 }
 
 export type GeneratedResponse = { userId: string; questionId: string; value: string };
@@ -428,7 +428,7 @@ export function generateResponses(
 		// Staff are provisioned directly and never apply. Generating responses for them
 		// would fabricate an application that production can't produce — and put an
 		// unreviewable row in the admissions queue.
-		if (!isApplicantRole(user.roles)) return;
+		if (!isApplicantRole(user.role)) return;
 
 		const mine = ordered.filter((q) => appliesTo(q, user));
 
@@ -507,7 +507,7 @@ export async function pruneUnmanagedUsers(prisma: PrismaClient): Promise<number>
 
 export function summarize(users: GeneratedUser[]): string[] {
 	return ROLE_PLANS.map((plan) => {
-		const mine = users.filter((u) => u.roles.includes(plan.role));
+		const mine = users.filter((u) => u.role === plan.role);
 		if (!mine.length) return `  ${plan.role.toLowerCase()}: none`;
 		const first = mine[0].email;
 		const last = mine[mine.length - 1].email;

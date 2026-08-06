@@ -63,7 +63,10 @@ export function buildRecipientWhere(filters: RecipientFilters): Prisma.UserWhere
 		});
 	}
 
-	if (roles?.length) conditions.push({ roles: { hasSome: roles } });
+	// `in`, not `hasSome`: `roles` is still a list here — it is the set of roles the
+	// admin ticked in the filter — but each *user* now holds exactly one, so the
+	// predicate is membership rather than array overlap.
+	if (roles?.length) conditions.push({ role: { in: roles } });
 	if (statuses?.length) conditions.push({ status: { in: statuses } });
 
 	// Decision filter: specific decisions AND/OR null (no decision yet).

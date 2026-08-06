@@ -21,11 +21,6 @@
 		return name.slice(0, 2).toUpperCase();
 	}
 
-	const APPLICATION_ROLES: Role[] = ['HACKER', 'JUDGE', 'MENTOR', 'VOLUNTEER'];
-
-	const primaryRole =
-		user.roles.find((r) => APPLICATION_ROLES.includes(r as Role)) ?? user.roles[0];
-
 	const decisionLabel = $derived(getApplicationStateLabel(user));
 
 	const showRsvp = $derived(
@@ -73,13 +68,11 @@
 					<div>
 						<p class="text-base leading-tight font-bold text-primary">{user.name}</p>
 						<p class="mb-2 text-xs text-muted-foreground">{user.email}</p>
-						{#if primaryRole}
-							<span
-								class="rounded border border-primary px-2 py-0.5 font-mono text-xs font-medium tracking-wide text-primary uppercase"
-							>
-								{primaryRole}
-							</span>
-						{/if}
+						<span
+							class="rounded border border-primary px-2 py-0.5 font-mono text-xs font-medium tracking-wide text-primary uppercase"
+						>
+							{user.role}
+						</span>
 					</div>
 				</div>
 
@@ -125,7 +118,7 @@
 				ondecline={handleDecline}
 				{declining}
 			/>
-		{:else if showEventContent && primaryRole == Role.HACKER}
+		{:else if showEventContent && user.role === Role.HACKER}
 			<TeamPanel
 				uid={user.uid}
 				initialTeam={user.team}

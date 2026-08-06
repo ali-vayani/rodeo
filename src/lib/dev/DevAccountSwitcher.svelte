@@ -14,7 +14,6 @@
 		loadFilters,
 		loadPosition,
 		POSITION_KEY,
-		primaryRole,
 		saveFilters,
 		savePosition,
 		sortAccounts,
@@ -289,7 +288,7 @@
 	// this seed never created rather than showing dead controls. `accounts` is already
 	// in role-rank order, and a Set keeps first-seen order, so the chips come out
 	// ranked without a sort.
-	const roleOptions = $derived([...new Set(accounts.flatMap((a) => a.roles))]);
+	const roleOptions = $derived([...new Set(accounts.map((a) => a.role))]);
 	const statusOptions = $derived([...new Set(accounts.map((a) => a.status))].sort());
 	const activeDecisionOptions = $derived(decisionOptions(accounts, 'activeDecision'));
 	const pendingDecisionOptions = $derived(decisionOptions(accounts, 'pendingDecision'));
@@ -331,13 +330,13 @@
 	 * no separate code path — a group filtered down to nothing simply never appears.
 	 */
 	function groupHeader(rows: IndexedAccount[], index: number): Role | null {
-		const role = primaryRole(rows[index].roles);
+		const role = rows[index].role;
 		if (index === 0) return role;
-		return primaryRole(rows[index - 1].roles) === role ? null : role;
+		return rows[index - 1].role === role ? null : role;
 	}
 
 	function groupCount(rows: IndexedAccount[], role: Role): number {
-		return rows.filter((r) => primaryRole(r.roles) === role).length;
+		return rows.filter((r) => r.role === role).length;
 	}
 
 	function onKeydown(event: KeyboardEvent) {
@@ -598,12 +597,10 @@
 						</span>
 
 						<span class="flex shrink-0 flex-wrap items-center justify-end gap-1">
-							{#each account.roles as role (role)}
-								<!-- Outline, not a colored tone: tone.ts reserves color for status, and
-								     /admin/users badges roles too — a privilege rainbow there would read
-								     as an alert. Role is separated from state by weight instead. -->
-								<Badge variant="outline">{humanizeEnum(role)}</Badge>
-							{/each}
+							<!-- Outline, not a colored tone: tone.ts reserves color for status, and
+							     /admin/users badges the role too — a privilege rainbow there would read
+							     as an alert. Role is separated from state by weight instead. -->
+							<Badge variant="outline">{humanizeEnum(account.role)}</Badge>
 
 							<Badge tone={statusTone(account.status)} dot>{humanizeEnum(account.status)}</Badge>
 

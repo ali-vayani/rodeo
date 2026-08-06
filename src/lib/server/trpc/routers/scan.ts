@@ -19,7 +19,7 @@ const scanUserSelect = {
 	email: true,
 	university: true,
 	year: true,
-	roles: true,
+	role: true,
 	status: true
 } as const;
 
@@ -143,7 +143,7 @@ export const scanRouter = router({
 			]);
 
 			const isUnconfirmedHacker =
-				user.roles.includes(Role.HACKER) &&
+				user.role === Role.HACKER &&
 				user.status !== UserStatus.CONFIRMED &&
 				user.status !== UserStatus.CHECKED_IN;
 
@@ -172,7 +172,7 @@ export const scanRouter = router({
 			]);
 
 			const isUnconfirmedHacker =
-				user.roles.includes(Role.HACKER) &&
+				user.role === Role.HACKER &&
 				user.status !== UserStatus.CONFIRMED &&
 				user.status !== UserStatus.CHECKED_IN;
 

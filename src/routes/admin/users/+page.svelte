@@ -15,6 +15,7 @@
 		buildRecipientParams
 	} from '$lib/admin/filters';
 	import { Role, UserStatus, DecisionStatus } from '$lib/generated/prisma/enums';
+	import { STAFF_ROLES } from '$lib/auth/permissions';
 
 	let { data }: { data: PageData } = $props();
 
@@ -127,7 +128,7 @@
 	let selectedUser = $state<User | null>(null);
 	// Typed as the enums rather than plain strings; '' is the modal's own "unset"
 	// for the two nullable decision fields and is mapped back to null on save.
-	let editRoles = $state<Role[]>([]);
+	let editRole = $state<Role>(Role.UNDECLARED);
 	let editStatus = $state<UserStatus>(UserStatus.CREATED);
 	let editPending = $state<DecisionStatus | ''>('');
 	let editActive = $state<DecisionStatus | ''>('');
@@ -135,7 +136,7 @@
 
 	function openModal(user: User) {
 		selectedUser = user;
-		editRoles = [...user.roles];
+		editRole = user.role;
 		editStatus = user.status;
 		editPending = user.pendingDecision ?? '';
 		editActive = user.activeDecision ?? '';
@@ -145,20 +146,12 @@
 		selectedUser = null;
 	}
 
-	function toggleEditRole(role: Role) {
-		if (editRoles.includes(role)) {
-			editRoles = editRoles.filter((r) => r !== role);
-		} else {
-			editRoles = [...editRoles, role];
-		}
-	}
-
 	async function saveAll() {
 		if (!selectedUser) return;
 		saving = true;
 		try {
 			const [roleResult, statusResult, decisionResult] = await Promise.all([
-				trpc.user.updateRole.mutate({ uid: selectedUser.uid, roles: editRoles }),
+				trpc.user.updateRole.mutate({ uid: selectedUser.uid, role: editRole }),
 				trpc.user.updateStatus.mutate({ uid: selectedUser.uid, status: editStatus }),
 				trpc.user.updateDecisions.mutate({
 					uid: selectedUser.uid,
@@ -274,11 +267,7 @@
 									{user.email}
 								</td>
 								<td class="px-[14px] py-[11px] text-[13px] text-[#333]">
-									{#if user.roles.length}
-										{user.roles[0].charAt(0) + user.roles[0].slice(1).toLowerCase()}
-									{:else}
-										—
-									{/if}
+									{user.role.charAt(0) + user.role.slice(1).toLowerCase()}
 								</td>
 								<td class="px-[14px] py-[11px]">
 									<span class="text-[11px] font-semibold tracking-[0.05em] text-[#555] uppercase">
@@ -427,26 +416,39 @@
 
 			<!-- Edit fields -->
 			<div class="flex flex-col gap-5 px-6 py-5">
-				<!-- Roles -->
+				<!-- Role. Radios, not checkboxes: roles are mutually exclusive, so the control
+				     has to make picking a second one *replace* the first rather than add to it.
+				     A checkbox group is what let an account be ADMIN and HACKER at once. -->
 				<div>
 					<div
 						class="mb-[10px] text-[10px] font-bold tracking-widest text-muted-foreground uppercase"
 					>
-						Roles
+						Role
 					</div>
-					<div class="flex flex-wrap gap-[10px_16px]">
+					<div class="flex flex-wrap gap-[10px_16px]" role="radiogroup" aria-label="Role">
 						{#each ALL_ROLES as role (role)}
 							<label class="flex cursor-pointer items-center gap-1.5 text-[13px] text-[#333]">
 								<input
-									type="checkbox"
-									checked={editRoles.includes(role)}
-									onchange={() => toggleEditRole(role)}
+									type="radio"
+									name="edit-role"
+									value={role}
+									checked={editRole === role}
+									onchange={() => (editRole = role)}
 									class="cursor-pointer accent-primary"
 								/>
 								{role.charAt(0) + role.slice(1).toLowerCase()}
 							</label>
 						{/each}
 					</div>
+					{#if STAFF_ROLES.includes(editRole) !== STAFF_ROLES.includes(selectedUser.role)}
+						<!-- Crossing the staff/attendee line moves the account between portals
+						     outright, which is a bigger edit than the control looks like. -->
+						<div class="mt-2 text-[11px] text-muted-foreground">
+							{STAFF_ROLES.includes(editRole)
+								? 'Saving moves this account into the admin portal and revokes its hacker portal access.'
+								: 'Saving moves this account into the hacker portal and revokes its admin portal access.'}
+						</div>
+					{/if}
 				</div>
 
 				<!-- Status + Decisions row -->

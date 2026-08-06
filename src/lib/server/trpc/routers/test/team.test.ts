@@ -182,7 +182,7 @@ describe('team.createTeam', () => {
 		const caller = createTestCaller(db, hackerUser);
 		db.user.findUniqueOrThrow.mockResolvedValue({
 			...eligibleHacker,
-			roles: [Role.MENTOR],
+			role: Role.MENTOR,
 			teamId: null
 		} as never);
 
@@ -275,7 +275,7 @@ describe('team.inviteMember', () => {
 		db.user.findUniqueOrThrow.mockResolvedValue({ ...eligibleHacker, team: mockTeam } as never);
 		db.user.findUnique.mockResolvedValue({
 			...outsider,
-			roles: [Role.JUDGE],
+			role: Role.JUDGE,
 			status: UserStatus.CONFIRMED,
 			activeDecision: DecisionStatus.ACCEPTED
 		} as never);
@@ -664,7 +664,7 @@ describe('team.joinByCode', () => {
 		const caller = createTestCaller(db, confirmedHacker);
 		db.user.findUniqueOrThrow.mockResolvedValue({
 			...confirmedHacker,
-			roles: [Role.JUDGE]
+			role: Role.JUDGE
 		} as never);
 
 		await expect(caller.team.joinByCode({ inviteCode: 'code-1' })).rejects.toMatchObject({

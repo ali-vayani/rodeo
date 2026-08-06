@@ -55,7 +55,7 @@ export const authedProcedure = t.procedure.use(({ ctx, next }) => {
  */
 export const adminProcedure = t.procedure.use(({ ctx, next }) => {
 	if (!ctx.user) throw new TRPCError({ code: 'UNAUTHORIZED' });
-	if (!isAdmin(ctx.user.roles)) throw new TRPCError({ code: 'FORBIDDEN' });
+	if (!isAdmin(ctx.user.role)) throw new TRPCError({ code: 'FORBIDDEN' });
 	return next({ ctx: { ...ctx, user: ctx.user } });
 });
 
@@ -67,7 +67,7 @@ export const adminProcedure = t.procedure.use(({ ctx, next }) => {
  */
 export const portalProcedure = t.procedure.use(({ ctx, next }) => {
 	if (!ctx.user) throw new TRPCError({ code: 'UNAUTHORIZED' });
-	if (!hasPortalAccess(ctx.user.roles)) throw new TRPCError({ code: 'FORBIDDEN' });
+	if (!hasPortalAccess(ctx.user.role)) throw new TRPCError({ code: 'FORBIDDEN' });
 	return next({ ctx: { ...ctx, user: ctx.user } });
 });
 

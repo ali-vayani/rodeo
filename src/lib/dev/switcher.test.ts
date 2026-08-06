@@ -10,7 +10,6 @@ import {
 	loadPosition,
 	NO_DECISION,
 	POSITION_KEY,
-	primaryRole,
 	saveFilters,
 	savePosition,
 	sortAccounts,
@@ -24,7 +23,7 @@ function account(overrides: Partial<DevAccount> & { email: string }): DevAccount
 	return {
 		uid: overrides.email,
 		name: 'Test Person',
-		roles: ['HACKER'] as Role[],
+		role: 'HACKER' as Role,
 		status: 'APPLIED' as UserStatus,
 		activeDecision: null,
 		pendingDecision: null,
@@ -33,27 +32,16 @@ function account(overrides: Partial<DevAccount> & { email: string }): DevAccount
 }
 
 const SEED = indexAccounts([
-	account({ email: 'admin1@yopmail.com', name: 'Alice Vaughn', roles: ['ADMIN'] as Role[] }),
+	account({ email: 'admin1@yopmail.com', name: 'Alice Vaughn', role: 'ADMIN' as Role }),
 	account({ email: 'hacker2@yopmail.com', name: 'Dana Liu' }),
 	account({ email: 'hacker10@yopmail.com', name: 'Eli Mora' }),
 	account({
 		email: 'judge1@yopmail.com',
 		name: 'Cara Kim',
-		roles: ['JUDGE'] as Role[],
+		role: 'JUDGE' as Role,
 		status: 'CONFIRMED' as UserStatus
 	})
 ]);
-
-describe('primaryRole', () => {
-	it('files a mixed-role account under the strongest role it holds', () => {
-		expect(primaryRole(['HACKER', 'ADMIN'] as Role[])).toBe('ADMIN');
-		expect(primaryRole(['VOLUNTEER', 'ORGANIZER'] as Role[])).toBe('ORGANIZER');
-	});
-
-	it('falls back for an account with no roles at all', () => {
-		expect(primaryRole([])).toBe('UNDECLARED');
-	});
-});
 
 describe('filterAccounts', () => {
 	const emails = (rows: { email: string }[]) => rows.map((r) => r.email);
@@ -83,13 +71,6 @@ describe('filterAccounts', () => {
 
 	it('treats an empty selection as no filter rather than as matching nothing', () => {
 		expect(filterAccounts(SEED, { roles: [], statuses: [] })).toHaveLength(4);
-	});
-
-	it('matches a role the account merely contains', () => {
-		const both = indexAccounts([
-			account({ email: 'x@yopmail.com', roles: ['HACKER', 'ADMIN'] as Role[] })
-		]);
-		expect(filterAccounts(both, { roles: ['ADMIN'] as Role[] })).toHaveLength(1);
 	});
 
 	it('ORs within the role group', () => {

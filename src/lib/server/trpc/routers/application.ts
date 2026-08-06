@@ -177,7 +177,7 @@ export const applicationRouter = router({
 			const [user, settings] = await Promise.all([
 				ctx.prisma.user.findUniqueOrThrow({
 					where: { uid: ctx.user.uid },
-					select: { status: true, roles: true }
+					select: { status: true, role: true }
 				}),
 				ctx.prisma.settings.findFirst()
 			]);
@@ -213,10 +213,7 @@ export const applicationRouter = router({
 
 			// Don't let an applicant answer a question aimed at a different audience: those
 			// answers would show up in their admissions detail as if they'd been asked.
-			if (
-				question.targetRole.length > 0 &&
-				!question.targetRole.some((r) => user.roles.includes(r))
-			) {
+			if (question.targetRole.length > 0 && !question.targetRole.includes(user.role)) {
 				throw new TRPCError({ code: 'FORBIDDEN', message: 'This question was not asked of you.' });
 			}
 
@@ -373,7 +370,10 @@ export const applicationRouter = router({
 		.input(z.object({ role: z.nativeEnum(Role).optional() }).optional())
 		.mutation(async ({ ctx, input }) => {
 			// Only an applicant role may be submitted as — never staff. A bad or staff role
-			// is ignored rather than rejected, falling back to the user's stored roles.
+			// is ignored rather than rejected, falling back to the user's stored role.
+			// This is the one place an account's role changes without an admin, which is
+			// why the staff roles are unreachable through it: submitting `role: "ADMIN"`
+			// must not be a privilege escalation.
 			const submittedRole =
 				input?.role && APPLICANT_ROLES.includes(input.role) ? input.role : undefined;
 
@@ -392,18 +392,15 @@ export const applicationRouter = router({
 			assertWithinApplicationWindow(settings);
 
 			// The role the applicant is submitting as decides which required questions apply
-			// and is written onto the user below. Falls back to their stored roles when the
+			// and is written onto the user below. Falls back to their stored role when the
 			// client sends nothing, so older callers keep working.
-			const applicationRoles = submittedRole ? [submittedRole] : user.roles;
+			const applicationRole = submittedRole ?? user.role;
 
 			// Validate all required questions are answered
 			const questions = await ctx.prisma.question.findMany({
 				where: {
 					required: true,
-					OR: [
-						{ targetRole: { isEmpty: true } },
-						...(applicationRoles.length ? [{ targetRole: { hasSome: applicationRoles } }] : [])
-					]
+					OR: [{ targetRole: { isEmpty: true } }, { targetRole: { has: applicationRole } }]
 				}
 			});
 
@@ -445,7 +442,7 @@ export const applicationRouter = router({
 				where: { uid: ctx.user.uid, status: UserStatus.CREATED },
 				data: {
 					status: UserStatus.APPLIED,
-					roles: applicationRoles,
+					role: applicationRole,
 					...(blacklistedEmail && { pendingDecision: DecisionStatus.REJECTED })
 				}
 			});

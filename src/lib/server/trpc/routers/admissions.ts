@@ -75,7 +75,7 @@ export const admissionsRouter = router({
 			// `OR` clause, and spreading both into one object literal silently dropped the
 			// decision `OR` (the later key wins) — so searching on the "Accepted" tab returned
 			// every match regardless of decision. Separate array entries can't collide.
-			const conditions: Prisma.UserWhereInput[] = [{ roles: { hasSome: applicantRoles } }];
+			const conditions: Prisma.UserWhereInput[] = [{ role: { in: applicantRoles } }];
 			if (noDecision) conditions.push({ pendingDecision: null, activeDecision: null });
 			if (decision !== undefined) {
 				conditions.push({ OR: [{ pendingDecision: decision }, { activeDecision: decision }] });

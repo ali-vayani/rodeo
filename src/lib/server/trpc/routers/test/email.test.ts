@@ -73,7 +73,7 @@ describe('email.sendCustom', () => {
 
 		expect(db.user.findMany).toHaveBeenCalledWith(
 			expect.objectContaining({
-				where: { AND: [{ roles: { hasSome: [Role.HACKER] } }] }
+				where: { AND: [{ role: { in: [Role.HACKER] } }] }
 			})
 		);
 	});

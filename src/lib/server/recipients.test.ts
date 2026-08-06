@@ -31,7 +31,7 @@ describe('buildRecipientWhere — empty-selection contract', () => {
 
 	it('does not engage the decision filter when both decision keys are absent', () => {
 		const where = buildRecipientWhere({ roles: [Role.HACKER] });
-		expect(conditions(where)).toEqual([{ roles: { hasSome: [Role.HACKER] } }]);
+		expect(conditions(where)).toEqual([{ role: { in: [Role.HACKER] } }]);
 	});
 
 	it('treats an empty roles array as "no role filter", not "no one"', () => {
@@ -94,9 +94,9 @@ describe('parseEmailList / malformedEmails', () => {
 });
 
 describe('buildRecipientWhere — predicate shapes', () => {
-	it('uses hasSome for roles, since User.roles is a list', () => {
+	it('uses `in` for roles, since each user holds exactly one', () => {
 		expect(conditions(buildRecipientWhere({ roles: [Role.HACKER, Role.MENTOR] }))).toEqual([
-			{ roles: { hasSome: [Role.HACKER, Role.MENTOR] } }
+			{ role: { in: [Role.HACKER, Role.MENTOR] } }
 		]);
 	});
 
