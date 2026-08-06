@@ -1,7 +1,7 @@
 import type { RequestEvent } from '@sveltejs/kit';
 import { prisma } from '$lib/server/db';
 import { createSupabaseServerClient } from '$lib/server/supabase';
-import { usesSupabaseAuth } from '$lib/server/env';
+import { usesSupabaseAuth, yopmailLoginEnabled } from '$lib/server/env';
 import { Role } from '$lib/generated/prisma/client';
 
 const COOKIE_NAME = 'session_uid';
@@ -23,9 +23,9 @@ export function setSessionCookie(event: RequestEvent, uid: string) {
 		httpOnly: true,
 		sameSite: 'lax',
 		maxAge: COOKIE_MAX_AGE,
-		// This cookie only exists on the dev bypass path, which never runs over
-		// HTTPS; production sessions are Supabase's own cookies.
-		secure: false
+		// The bypass runs on plain-HTTP localhost and on HTTPS preview deploys;
+		// production sessions are Supabase's own cookies.
+		secure: event.url.protocol === 'https:'
 	});
 }
 
@@ -74,5 +74,16 @@ async function getProdSession(event: RequestEvent) {
 // ---------------------------------------------------------------------------
 
 export async function getSession(event: RequestEvent) {
-	return usesSupabaseAuth() ? getProdSession(event) : getDevSession(event);
+	if (!usesSupabaseAuth()) return getDevSession(event);
+
+	const session = await getProdSession(event);
+	if (session) return session;
+
+	// Preview deploys also honor the yopmail bypass (see yopmailLoginEnabled for
+	// why that is safe there), but only for @yopmail.com accounts: the cookie is
+	// a bare uid, and without this check a guessed uid would impersonate a real
+	// Google-created account — seeded fixtures are fair game, people are not.
+	if (!yopmailLoginEnabled()) return null;
+	const devUser = await getDevSession(event);
+	return devUser?.email.endsWith('@yopmail.com') ? devUser : null;
 }

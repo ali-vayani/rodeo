@@ -46,33 +46,12 @@
 			<p class="mb-4 text-sm text-destructive">Sign-in failed. Please try again.</p>
 		{/if}
 
-		{#if !data.supabaseAuth}
-			<form method="POST" class="flex flex-col gap-3">
-				<input
-					type="email"
-					name="email"
-					placeholder="you@yopmail.com"
-					required
-					autocomplete="email"
-					class="w-full rounded border border-border px-3 py-2 text-sm outline-none focus:border-primary"
-				/>
-
-				{#if form?.error}
-					<p class="text-sm text-destructive">{form.error}</p>
-				{/if}
-
-				<button
-					type="submit"
-					class="w-full rounded bg-primary px-4 py-2 text-sm font-medium text-white transition-opacity hover:opacity-85"
-				>
-					Sign in →
-				</button>
-			</form>
-		{:else}
+		{#if data.supabaseAuth}
 			<!--
-				Google is the only sign-in path in a deployed environment, so there is
-				no password form and no separate sign-up: the first Google login
-				creates the account.
+				Google is the sign-in path in deployed environments — there is no
+				password form and no separate sign-up: the first Google login creates
+				the account. Preview deploys additionally render the yopmail form
+				below, for the seeded test accounts.
 			-->
 			<button
 				onclick={signInWithGoogle}
@@ -100,9 +79,41 @@
 				{signingIn ? 'Redirecting…' : 'Sign in with Google'}
 			</button>
 
-			{#if form?.error}
+			{#if form?.error && !data.yopmailLogin}
 				<p class="mt-3 text-sm text-destructive">{form.error}</p>
 			{/if}
+		{/if}
+
+		{#if data.supabaseAuth && data.yopmailLogin}
+			<div class="my-6 flex items-center gap-3">
+				<div class="h-px flex-1 bg-border"></div>
+				<span class="font-mono text-xs text-muted-foreground uppercase">or test account</span>
+				<div class="h-px flex-1 bg-border"></div>
+			</div>
+		{/if}
+
+		{#if data.yopmailLogin}
+			<form method="POST" class="flex flex-col gap-3">
+				<input
+					type="email"
+					name="email"
+					placeholder="you@yopmail.com"
+					required
+					autocomplete="email"
+					class="w-full rounded border border-border px-3 py-2 text-sm outline-none focus:border-primary"
+				/>
+
+				{#if form?.error}
+					<p class="text-sm text-destructive">{form.error}</p>
+				{/if}
+
+				<button
+					type="submit"
+					class="w-full rounded bg-primary px-4 py-2 text-sm font-medium text-white transition-opacity hover:opacity-85"
+				>
+					Sign in →
+				</button>
+			</form>
 		{/if}
 
 		<p class="mt-8 text-center font-mono text-xs text-muted-foreground">
