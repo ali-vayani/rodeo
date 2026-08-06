@@ -3,12 +3,30 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 const env: Record<string, string | undefined> = {};
 vi.mock('$env/dynamic/private', () => ({ env }));
 
-const { deployEnv, isProduction, usesSupabaseAuth, emailTransport, emailFrom, validateEnv } =
-	await import('./env');
+// `dev` is a build-time constant in the real app, so it has no runtime setter to
+// stub. A getter over a local lets the devSwitcherEnabled tests flip it, which is
+// the only way to prove the build-time layer of the gate is load-bearing.
+let devFlag = true;
+vi.mock('$app/environment', () => ({
+	get dev() {
+		return devFlag;
+	}
+}));
+
+const {
+	deployEnv,
+	isProduction,
+	usesSupabaseAuth,
+	emailTransport,
+	emailFrom,
+	validateEnv,
+	devSwitcherEnabled
+} = await import('./env');
 
 beforeEach(() => {
 	for (const key of Object.keys(env)) delete env[key];
 	vi.stubEnv('NODE_ENV', 'development');
+	devFlag = true;
 });
 
 afterEach(() => vi.unstubAllEnvs());
@@ -151,5 +169,70 @@ describe('validateEnv', () => {
 		// Preview exists to review UI; its outbound mail is already fenced to
 		// yopmail addresses, so a missing provider there isn't a boot failure.
 		expect(() => validateEnv()).not.toThrow();
+	});
+});
+
+describe('devSwitcherEnabled', () => {
+	/** The one configuration the switcher is allowed to run in. */
+	function workingDevEnv() {
+		devFlag = true;
+		env.ALLOW_DEV_AUTH = '1';
+		env.DATABASE_URL = 'postgres://localhost:5432/rodeo';
+	}
+
+	it('allows a local dev server that opted in', () => {
+		workingDevEnv();
+		expect(devSwitcherEnabled()).toBe(true);
+	});
+
+	// Each of the four conditions is removed on its own, so a test fails the moment
+	// anyone drops one from the predicate. This gate is the whole security story for
+	// a passwordless login-as-anyone endpoint, so it is worth spelling out.
+	it('refuses when `dev` is false, whatever the environment says', () => {
+		workingDevEnv();
+		devFlag = false;
+
+		// The self-hosted `node build` with NODE_ENV unset: deployEnv() falls through
+		// to 'development' and every runtime check passes, so the build-time constant
+		// is the only thing standing between that deploy and an open door.
+		expect(usesSupabaseAuth()).toBe(false);
+		expect(devSwitcherEnabled()).toBe(false);
+	});
+
+	it('refuses on a preview deploy', () => {
+		workingDevEnv();
+		env.VERCEL_ENV = 'preview';
+
+		// Preview runs against the production database, which makes it the highest
+		// value target of the three. Both `dev` and usesSupabaseAuth() reject it.
+		expect(devSwitcherEnabled()).toBe(false);
+	});
+
+	it('refuses in production', () => {
+		workingDevEnv();
+		env.VERCEL_ENV = 'production';
+		expect(devSwitcherEnabled()).toBe(false);
+	});
+
+	it('refuses without an explicit ALLOW_DEV_AUTH opt-in', () => {
+		workingDevEnv();
+		delete env.ALLOW_DEV_AUTH;
+		expect(devSwitcherEnabled()).toBe(false);
+	});
+
+	it('refuses against a remote database', () => {
+		workingDevEnv();
+		env.DATABASE_URL = 'postgres://user:pw@db.abcdefg.supabase.co:5432/postgres';
+
+		// The realistic local incident: a developer points DATABASE_URL at production
+		// to debug a data issue. validateEnv() would catch this too — but only while
+		// VERCEL_ENV is unset, so the switcher re-checks rather than inheriting it.
+		expect(devSwitcherEnabled()).toBe(false);
+	});
+
+	it('refuses a DATABASE_URL it cannot parse', () => {
+		workingDevEnv();
+		env.DATABASE_URL = 'not a url';
+		expect(devSwitcherEnabled()).toBe(false);
 	});
 });

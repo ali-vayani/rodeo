@@ -10,6 +10,7 @@
  */
 
 import { env } from '$env/dynamic/private';
+import { dev } from '$app/environment';
 
 export type DeployEnv = 'production' | 'preview' | 'development';
 
@@ -46,6 +47,33 @@ export function isProduction(): boolean {
  */
 export function usesSupabaseAuth(): boolean {
 	return deployEnv() !== 'development';
+}
+
+/**
+ * Whether the dev-only account switcher may run.
+ *
+ * Deliberately stricter than `usesSupabaseAuth()`, and deliberately redundant with
+ * `validateEnv()`. The switcher is a passwordless login-as-any-account endpoint that
+ * renders while signed out — a strictly larger capability than /login, which at least
+ * makes you know an address. /login gets away with a single `usesSupabaseAuth()` check
+ * only because `validateEnv()` refuses to boot in the dangerous states; that is safety
+ * borrowed from an assertion in another module, invisible at the call site. Re-asserting
+ * every condition here means loosening `validateEnv()` later cannot silently open this
+ * door.
+ *
+ * `dev` matters most: it is a build-time constant, so no runtime environment variable —
+ * a stray ALLOW_DEV_AUTH=1 on a preview deploy, a self-hosted `node build` with NODE_ENV
+ * unset — can turn it back on. The other three catch a `vite dev` process that has been
+ * pointed somewhere it shouldn't be, which `validateEnv()` alone does not: it skips the
+ * local-database check entirely once VERCEL_ENV is set.
+ */
+export function devSwitcherEnabled(): boolean {
+	return (
+		dev && // built bundles are never dev
+		!usesSupabaseAuth() && // preview and production are not development
+		env.ALLOW_DEV_AUTH === '1' && // opt-in, never inherited
+		databaseIsLocal(env.DATABASE_URL) // never against a remote database
+	);
 }
 
 function required(key: string): string {

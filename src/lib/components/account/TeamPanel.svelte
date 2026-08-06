@@ -1,6 +1,8 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
+	import { invalidateAll } from '$app/navigation';
 	import { createClient } from '$lib/trpc/client';
+	import { errorMessage } from '$lib/ui/errors';
 	import type { Role } from '$lib/generated/prisma/enums';
 
 	type Member = {
@@ -59,7 +61,7 @@
 			showCreateForm = false;
 			await refresh();
 		} catch (e) {
-			createError = e instanceof Error ? e.message : 'Failed to create team.';
+			createError = errorMessage(e, 'Failed to create team.');
 		} finally {
 			creating = false;
 		}
@@ -71,18 +73,39 @@
 	let inviteError = $state<string | null>(null);
 	let inviteSuccess = $state<string | null>(null);
 
+	/**
+	 * Checked on submit only, never while typing.
+	 *
+	 * Every address is malformed halfway through being typed, so a live check spends
+	 * most of its time calling a half-finished address wrong — the person already
+	 * knows they aren't done. Pressing Add is the point at which they've said the
+	 * address is what they meant.
+	 *
+	 * Deliberately loose — one @, something either side of it, a dot in the domain.
+	 * The server's zod schema is the authority on what gets stored; a stricter
+	 * pattern here would only invent rejections the server would have accepted.
+	 */
+	const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 	async function inviteMember() {
-		if (!inviteEmail.trim()) return;
+		const email = inviteEmail.trim();
+		if (!email) return;
+
+		inviteSuccess = null;
+		if (!EMAIL_PATTERN.test(email)) {
+			inviteError = `"${email}" is not a valid email address. Use the address they signed up with, like teammate@example.com.`;
+			return;
+		}
+
 		inviting = true;
 		inviteError = null;
-		inviteSuccess = null;
 		try {
-			await trpc.team.inviteMember.mutate({ email: inviteEmail.trim() });
-			inviteSuccess = `Invitation sent to ${inviteEmail.trim()}`;
+			await trpc.team.inviteMember.mutate({ email });
+			inviteSuccess = `Invitation sent to ${email}`;
 			inviteEmail = '';
 			await refresh();
 		} catch (e) {
-			inviteError = e instanceof Error ? e.message : 'Failed to send invitation.';
+			inviteError = errorMessage(e, 'Failed to send invitation.');
 		} finally {
 			inviting = false;
 		}
@@ -99,7 +122,7 @@
 			await trpc.team.acceptInvite.mutate({ invitationId: id });
 			await refresh();
 		} catch (e) {
-			respondError = e instanceof Error ? e.message : 'Failed to accept invite.';
+			respondError = errorMessage(e, 'Failed to accept invite.');
 		} finally {
 			respondingTo = null;
 		}
@@ -112,7 +135,7 @@
 			await trpc.team.declineInvite.mutate({ invitationId: id });
 			await refresh();
 		} catch (e) {
-			respondError = e instanceof Error ? e.message : 'Failed to decline invite.';
+			respondError = errorMessage(e, 'Failed to decline invite.');
 		} finally {
 			respondingTo = null;
 		}
@@ -121,15 +144,26 @@
 	// --- Leave team ---
 	let showLeaveConfirm = $state(false);
 	let leaving = $state(false);
+	let leaveError = $state<string | null>(null);
 
 	async function leaveTeam() {
 		leaving = true;
+		leaveError = null;
 		try {
 			await trpc.team.leaveTeam.mutate();
 			showLeaveConfirm = false;
+			// Clear the stale invite/create forms along with the team, so the panel that
+			// comes back is the one a teamless account should see.
+			inviteEmail = '';
+			inviteError = null;
+			inviteSuccess = null;
 			await refresh();
-		} catch {
-			// state stays unchanged
+			// The invite banner is rendered from the hacker layout's own load, which does
+			// not re-run for a mutation. Without this, leaving leaves that server data
+			// describing an account that is still on a team.
+			await invalidateAll();
+		} catch (e) {
+			leaveError = errorMessage(e, 'Failed to leave team.');
 		} finally {
 			leaving = false;
 		}
@@ -226,6 +260,7 @@
 						type="email"
 						bind:value={inviteEmail}
 						placeholder="teammate@example.com"
+						aria-describedby="invite-email-message"
 						onkeydown={(e) => e.key === 'Enter' && inviteMember()}
 						class="min-w-0 flex-1 rounded border border-border px-3 py-1.5 text-sm text-primary outline-none focus:ring-1 focus:ring-primary"
 					/>
@@ -239,12 +274,14 @@
 					</button>
 				</div>
 
-				{#if inviteError}
-					<p class="mt-2 text-xs text-destructive">{inviteError}</p>
-				{/if}
-				{#if inviteSuccess}
-					<p class="mt-2 text-xs text-primary">{inviteSuccess}</p>
-				{/if}
+				<!-- One slot, so a stale success line can't sit under a fresh error. -->
+				<div id="invite-email-message" aria-live="polite">
+					{#if inviteError}
+						<p class="mt-2 text-xs text-destructive">{inviteError}</p>
+					{:else if inviteSuccess}
+						<p class="mt-2 text-xs text-primary">{inviteSuccess}</p>
+					{/if}
+				</div>
 			{:else}
 				<p class="text-xs text-muted-foreground">Team is full (max 4).</p>
 			{/if}
@@ -273,6 +310,9 @@
 						The team will be deleted.
 					{/if}
 				</p>
+				{#if leaveError}
+					<p class="mb-2 text-xs text-destructive">{leaveError}</p>
+				{/if}
 				<div class="flex gap-2">
 					<button
 						type="button"

@@ -6,6 +6,7 @@ import {
 	canAccess,
 	canAccessHackerPortal,
 	hasPortalAccess,
+	homePathFor,
 	isAdmin,
 	sectionForPath
 } from '$lib/auth/permissions';
@@ -39,7 +40,7 @@ export const handle: Handle = async ({ event, resolve }) => {
 
 	// Redirect authenticated users away from login
 	if (pathname === '/login' && user) {
-		redirect(302, hasPortalAccess(user.roles) ? '/admin/dashboard' : '/hacker/application');
+		redirect(302, homePathFor(user.roles));
 	}
 
 	// Guard /hacker/* and /admin/* routes

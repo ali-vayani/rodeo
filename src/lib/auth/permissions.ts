@@ -72,6 +72,18 @@ export function hasPortalAccess(roles: Role[]): boolean {
 }
 
 /**
+ * Where an account belongs when no particular page was asked for.
+ *
+ * Used after login, on `/`, and by the dev account switcher. The rule was written out
+ * by hand in each of those places; a third copy is what prompted extracting it, since
+ * a landing page that disagrees between two of them is a bug nobody would think to
+ * look for.
+ */
+export function homePathFor(roles: Role[]): string {
+	return hasPortalAccess(roles) ? '/admin/dashboard' : '/hacker/application';
+}
+
+/**
  * Resolved by the strongest role held, so someone who is both ADMIN and ORGANIZER
  * gets the admin view rather than the intersection.
  */

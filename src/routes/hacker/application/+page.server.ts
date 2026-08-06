@@ -5,17 +5,17 @@ import { createContext } from '$lib/server/trpc/context';
 
 const createCaller = createCallerFactory(appRouter);
 
+// `?join=` is no longer read here — `hacker/+layout.server.ts` owns the invitation
+// now, so the banner it drives outlives this page.
 export const load: PageServerLoad = async (event) => {
 	const caller = createCaller(createContext(event));
-	const joinCode = event.url.searchParams.get('join');
 
-	const [questions, responses, rawSettings, joinTeam] = await Promise.all([
+	const [questions, responses, rawSettings] = await Promise.all([
 		caller.questions.list({}),
 		caller.application.getMyResponses(),
-		caller.settings.get(),
-		joinCode ? caller.team.getByInviteCode({ inviteCode: joinCode }) : Promise.resolve(null)
+		caller.settings.get()
 	]);
 	const settings = 'id' in rawSettings ? rawSettings : null;
 
-	return { user: event.locals.user!, questions, responses, settings, joinTeam };
+	return { user: event.locals.user!, questions, responses, settings };
 };

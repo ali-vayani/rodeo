@@ -6,6 +6,7 @@ import {
 	canAccess,
 	canAccessHackerPortal,
 	hasPortalAccess,
+	homePathFor,
 	isAdmin,
 	sectionForPath,
 	type AdminSection
@@ -110,5 +111,40 @@ describe('canAccessHackerPortal', () => {
 
 	it('lets an organizer who is genuinely also a hacker keep their application', () => {
 		expect(canAccessHackerPortal([Role.ORGANIZER, Role.HACKER])).toBe(true);
+	});
+});
+
+describe('homePathFor', () => {
+	it('sends staff to the dashboard', () => {
+		expect(homePathFor([Role.ADMIN])).toBe('/admin/dashboard');
+		expect(homePathFor([Role.ORGANIZER])).toBe('/admin/dashboard');
+	});
+
+	it('sends everyone else to their application', () => {
+		expect(homePathFor([Role.HACKER])).toBe('/hacker/application');
+		expect(homePathFor([Role.JUDGE])).toBe('/hacker/application');
+		expect(homePathFor([Role.UNDECLARED])).toBe('/hacker/application');
+		expect(homePathFor([])).toBe('/hacker/application');
+	});
+
+	it('resolves a mixed role set by the strongest role', () => {
+		// Matches hasPortalAccess, so someone who is both never lands on the page
+		// the guard would immediately bounce them off.
+		expect(homePathFor([Role.HACKER, Role.ADMIN])).toBe('/admin/dashboard');
+	});
+
+	it('always returns a path the holder of those roles may actually load', () => {
+		// The point of the helper: the destination and the route guard agree by
+		// construction, so a switch or a login never needs a second redirect hop.
+		const roleSets = [[Role.ADMIN], [Role.ORGANIZER], [Role.HACKER], [Role.MENTOR]];
+		for (const roles of roleSets) {
+			const home = homePathFor(roles);
+			if (home.startsWith('/admin/')) {
+				expect(hasPortalAccess(roles)).toBe(true);
+				expect(canAccess(roles, 'dashboard')).toBe(true);
+			} else {
+				expect(canAccessHackerPortal(roles)).toBe(true);
+			}
+		}
 	});
 });

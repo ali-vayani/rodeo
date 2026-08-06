@@ -1,8 +1,10 @@
 <script lang="ts">
 	import { page } from '$app/state';
 	import { resolve } from '$app/paths';
+	import TeamInviteBanner from '$lib/components/account/TeamInviteBanner.svelte';
+	import type { LayoutData } from './$types';
 
-	let { children } = $props();
+	let { children, data }: { children: import('svelte').Snippet; data: LayoutData } = $props();
 
 	const links = [
 		{ href: '/hacker/application', label: 'Application' },
@@ -43,6 +45,15 @@
 
 	<!-- Main content -->
 	<main class="ml-[210px] min-h-screen flex-1 bg-muted p-8">
+		<!--
+			Above the page, and keyed on the code so switching to a different invitation
+			resets the component's dismissed/joined flags rather than carrying them over.
+		-->
+		{#if data.invite}
+			{#key data.invite.inviteCode}
+				<TeamInviteBanner invite={data.invite} />
+			{/key}
+		{/if}
 		{@render children()}
 	</main>
 </div>

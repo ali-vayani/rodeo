@@ -6,12 +6,21 @@
 		question: QuestionModel;
 		value: string;
 		onchange: (value: string) => void;
+		/**
+		 * Renders the answer read-only. Set when the application window is shut, where
+		 * every autosave behind these fields would be refused by the server — an
+		 * editable field that silently discards what you type is worse than a locked
+		 * one, because you only find out at submit.
+		 */
+		disabled?: boolean;
 	}
 
-	let { question, value, onchange }: Props = $props();
+	let { question, value, onchange, disabled = false }: Props = $props();
 
-	const inputClass =
-		'w-full rounded border border-border px-3 py-2 text-sm text-primary bg-white outline-none transition-colors focus:border-primary';
+	const inputClass = $derived(
+		'w-full rounded border border-border px-3 py-2 text-sm text-primary bg-white outline-none transition-colors focus:border-primary' +
+			(disabled ? ' cursor-not-allowed bg-muted text-muted-foreground' : '')
+	);
 
 	// Use question id as the form element id
 	const inputId = $derived(`q-${question.id}`);
@@ -42,6 +51,7 @@
 			class={inputClass}
 			placeholder={question.placeholder ?? ''}
 			{value}
+			{disabled}
 			oninput={(e) => onchange((e.target as HTMLInputElement).value)}
 		/>
 	{:else if question.type === QuestionType.LONG_TEXT}
@@ -51,6 +61,7 @@
 			rows={4}
 			placeholder={question.placeholder ?? ''}
 			{value}
+			{disabled}
 			oninput={(e) => onchange((e.target as HTMLTextAreaElement).value)}
 		></textarea>
 	{:else if question.type === QuestionType.NUMBER}
@@ -62,13 +73,19 @@
 			min={question.min ?? undefined}
 			max={question.max ?? undefined}
 			{value}
+			{disabled}
 			oninput={(e) => onchange((e.target as HTMLInputElement).value)}
 		/>
 	{:else if question.type === QuestionType.CHECKBOX}
-		<label class="flex cursor-pointer items-center gap-2 text-sm text-primary">
+		<label
+			class="flex items-center gap-2 text-sm text-primary {disabled
+				? 'cursor-not-allowed text-muted-foreground'
+				: 'cursor-pointer'}"
+		>
 			<input
 				type="checkbox"
 				checked={value === 'true'}
+				{disabled}
 				onchange={(e) => onchange((e.target as HTMLInputElement).checked ? 'true' : 'false')}
 				class="h-4 w-4 rounded accent-primary"
 			/>
@@ -77,12 +94,17 @@
 	{:else if question.type === QuestionType.MULTIPLE_CHOICE}
 		<div class="flex flex-col gap-2">
 			{#each question.options as option (option)}
-				<label class="flex cursor-pointer items-center gap-2 text-sm text-primary">
+				<label
+					class="flex items-center gap-2 text-sm text-primary {disabled
+						? 'cursor-not-allowed text-muted-foreground'
+						: 'cursor-pointer'}"
+				>
 					<input
 						type="radio"
 						name={question.id}
 						value={option}
 						checked={value === option}
+						{disabled}
 						onchange={() => onchange(option)}
 						class="accent-primary"
 					/>
@@ -94,6 +116,7 @@
 		<select
 			id={inputId}
 			class={inputClass}
+			{disabled}
 			onchange={(e) => onchange((e.target as HTMLSelectElement).value)}
 		>
 			<option value="" disabled selected={!value}

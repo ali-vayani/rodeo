@@ -1,7 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { mockReset, type DeepMockProxy } from 'vitest-mock-extended';
+import { ZodError } from 'zod';
 import type { PrismaClient } from '$lib/generated/prisma/client';
-import { InvitationStatus, DecisionStatus, UserStatus } from '$lib/generated/prisma/client';
+import { InvitationStatus, DecisionStatus, Role, UserStatus } from '$lib/generated/prisma/client';
 import { createTestCaller, hackerUser, confirmedHacker } from '../test-utils';
 
 vi.mock('$lib/server/db', async () => {
@@ -42,6 +43,18 @@ const eligibleHacker = {
 	status: UserStatus.CONFIRMED
 };
 
+/**
+ * Someone with no relationship to `mockTeam`, for the invitee side of the tests.
+ *
+ * `hackerUser` is a *member* of `mockTeam`, so reusing it as the invitee now trips
+ * the already-on-your-team guard before the case under test is reached.
+ */
+const outsider = {
+	...hackerUser,
+	uid: 'outsider-uid',
+	email: 'outsider@example.com'
+};
+
 const mockTeam = {
 	id: 'team-1',
 	teamName: 'Team Rocket',
@@ -69,6 +82,52 @@ describe('team.getMyTeam', () => {
 
 		const result = await caller.team.getMyTeam();
 		expect(result.team).toMatchObject({ teamName: 'Team Rocket' });
+		expect(result.pendingInvitations).toEqual([]);
+	});
+
+	it('drops invitations addressed to someone already on a team', async () => {
+		// Rows written before joining settled them are still in the database. A member
+		// of the caller's own team must not come back as an outstanding invitee.
+		const caller = createTestCaller(db, hackerUser);
+		db.user.findUniqueOrThrow.mockResolvedValue({
+			...hackerUser,
+			teamId: null,
+			team: null,
+			invitations: []
+		} as never);
+
+		await caller.team.getMyTeam();
+
+		expect(db.user.findUniqueOrThrow).toHaveBeenCalledWith(
+			expect.objectContaining({
+				select: expect.objectContaining({
+					team: expect.objectContaining({
+						select: expect.objectContaining({
+							invitations: expect.objectContaining({
+								where: {
+									status: InvitationStatus.PENDING,
+									OR: [{ userId: null }, { user: { is: { teamId: null } } }]
+								}
+							})
+						})
+					})
+				})
+			})
+		);
+	});
+
+	it('offers no received invitations to someone who is already on a team', async () => {
+		// The stale row the other direction: an Accept button here can only produce
+		// `acceptInvite`'s already-on-a-team refusal.
+		const caller = createTestCaller(db, hackerUser);
+		db.user.findUniqueOrThrow.mockResolvedValue({
+			...hackerUser,
+			teamId: 'team-1',
+			team: mockTeam,
+			invitations: [mockInvitation]
+		} as never);
+
+		const result = await caller.team.getMyTeam();
 		expect(result.pendingInvitations).toEqual([]);
 	});
 });
@@ -113,6 +172,23 @@ describe('team.createTeam', () => {
 		await expect(caller.team.createTeam({ teamName: 'Team Rocket' })).rejects.toMatchObject({
 			code: 'BAD_REQUEST',
 			message: expect.stringContaining('confirmed')
+		});
+		expect(db.team.create).not.toHaveBeenCalled();
+	});
+
+	it('throws BAD_REQUEST for a confirmed non-hacker, naming the role and not the RSVP', async () => {
+		// Telling a judge to confirm their spot sends them to do something that will
+		// not help: they already did, and the rule they are hitting is the role one.
+		const caller = createTestCaller(db, hackerUser);
+		db.user.findUniqueOrThrow.mockResolvedValue({
+			...eligibleHacker,
+			roles: [Role.MENTOR],
+			teamId: null
+		} as never);
+
+		await expect(caller.team.createTeam({ teamName: 'Team Rocket' })).rejects.toMatchObject({
+			code: 'BAD_REQUEST',
+			message: expect.stringContaining('hackers')
 		});
 		expect(db.team.create).not.toHaveBeenCalled();
 	});
@@ -183,11 +259,61 @@ describe('team.inviteMember', () => {
 		const caller = createTestCaller(db, hackerUser);
 		db.user.findUniqueOrThrow.mockResolvedValue({ ...eligibleHacker, team: mockTeam } as never);
 		// Registered but not a confirmed attendee — must not be revealed or invited.
-		db.user.findUnique.mockResolvedValue({ ...hackerUser, activeDecision: null } as never);
+		db.user.findUnique.mockResolvedValue({ ...outsider, activeDecision: null } as never);
 
-		const result = await caller.team.inviteMember({ email: hackerUser.email });
+		const result = await caller.team.inviteMember({ email: outsider.email });
 
 		expect(result).toEqual({ sent: true });
+		expect(db.invitation.create).not.toHaveBeenCalled();
+	});
+
+	it('reports { sent: true } without creating an invitation when the invitee is not a hacker', async () => {
+		// A judge, mentor or volunteer clears the same accept/confirm funnel a hacker
+		// does, so status alone said yes to them. Silent like every other ineligible
+		// case: naming it would turn the endpoint into a probe for who holds what role.
+		const caller = createTestCaller(db, hackerUser);
+		db.user.findUniqueOrThrow.mockResolvedValue({ ...eligibleHacker, team: mockTeam } as never);
+		db.user.findUnique.mockResolvedValue({
+			...outsider,
+			roles: [Role.JUDGE],
+			status: UserStatus.CONFIRMED,
+			activeDecision: DecisionStatus.ACCEPTED
+		} as never);
+
+		const result = await caller.team.inviteMember({ email: outsider.email });
+
+		expect(result).toEqual({ sent: true });
+		expect(db.invitation.create).not.toHaveBeenCalled();
+	});
+
+	it('throws BAD_REQUEST when the address already belongs to a teammate', async () => {
+		// Not an oracle: the inviter is reading their own member list back.
+		const caller = createTestCaller(db, hackerUser);
+		db.user.findUniqueOrThrow.mockResolvedValue({ ...eligibleHacker, team: mockTeam } as never);
+
+		await expect(caller.team.inviteMember({ email: hackerUser.email })).rejects.toMatchObject({
+			code: 'BAD_REQUEST',
+			message: expect.stringContaining('already on your team')
+		});
+		expect(db.invitation.create).not.toHaveBeenCalled();
+	});
+
+	it('rejects a malformed address with a spelled-out reason', async () => {
+		// The sentence the inviter ends up reading. Asserted on the issue rather than
+		// the error message because a direct caller skips the errorFormatter that
+		// unwraps it at the HTTP boundary — that half is covered in init.test.ts.
+		const caller = createTestCaller(db, hackerUser);
+
+		const rejected = await caller.team
+			.inviteMember({ email: 'teammate@' })
+			.then(() => null)
+			.catch((error: { cause?: unknown }) => error);
+
+		expect(rejected).not.toBeNull();
+		expect((rejected as { cause: ZodError }).cause).toBeInstanceOf(ZodError);
+		expect((rejected as { cause: ZodError }).cause.issues[0].message).toBe(
+			'Enter a valid email address.'
+		);
 		expect(db.invitation.create).not.toHaveBeenCalled();
 	});
 
@@ -205,15 +331,17 @@ describe('team.inviteMember', () => {
 		expect(db.invitation.create).not.toHaveBeenCalled();
 	});
 
-	it('reports { sent: true } without creating an invitation on a self-invite', async () => {
+	it('refuses a self-invite by name — the inviter is in their own member list', async () => {
 		const caller = createTestCaller(db, hackerUser);
-		// Inviter and invitee resolve to the same eligible account.
+		// Inviter and invitee resolve to the same eligible account, which is also the
+		// member list's only entry. The `uid !== inviter.uid` check below stays as the
+		// backstop for a self-invite that somehow gets past the member list.
 		db.user.findUniqueOrThrow.mockResolvedValue({ ...eligibleHacker, team: mockTeam } as never);
-		db.user.findUnique.mockResolvedValue(eligibleHacker as never);
 
-		const result = await caller.team.inviteMember({ email: eligibleHacker.email });
-
-		expect(result).toEqual({ sent: true });
+		await expect(caller.team.inviteMember({ email: eligibleHacker.email })).rejects.toMatchObject({
+			code: 'BAD_REQUEST',
+			message: expect.stringContaining('already on your team')
+		});
 		expect(db.invitation.create).not.toHaveBeenCalled();
 	});
 
@@ -272,8 +400,14 @@ describe('team.acceptInvite', () => {
 
 		const result = await caller.team.acceptInvite({ invitationId: 'inv-1' });
 		expect(result).toEqual({ success: true });
-		expect(db.invitation.update).toHaveBeenCalledWith({
-			where: { id: 'inv-1' },
+		// Settled by address/uid rather than by the id the request named, so the same
+		// write covers the invite that was accepted and any duplicate left pending.
+		expect(db.invitation.updateMany).toHaveBeenCalledWith({
+			where: {
+				OR: [{ userId: hackerUser.uid }, { email: hackerUser.email }],
+				status: InvitationStatus.PENDING,
+				teamId: 'team-1'
+			},
 			data: { status: InvitationStatus.ACCEPTED }
 		});
 		expect(db.user.update).toHaveBeenCalledWith({
@@ -320,7 +454,7 @@ describe('team.acceptInvite', () => {
 			message: expect.stringContaining('full')
 		});
 		expect(db.user.update).not.toHaveBeenCalled();
-		expect(db.invitation.update).not.toHaveBeenCalled();
+		expect(db.invitation.updateMany).not.toHaveBeenCalled();
 	});
 
 	it('reports a rolled-back transaction as a full team, not a 500', async () => {
@@ -476,6 +610,70 @@ describe('team.joinByCode', () => {
 		});
 	});
 
+	it('settles the pending invitation the joiner never opened', async () => {
+		// The reported bug: emailed an invite, joined by pasting the link instead. The
+		// invitation stayed PENDING, so the team listed them under "Pending invitations"
+		// beside their own member row and a later re-invite was refused as a duplicate
+		// against a row nothing could clear.
+		const caller = createTestCaller(db, confirmedHacker);
+		db.user.findUniqueOrThrow.mockResolvedValue(confirmedHacker as never);
+		db.team.findUnique.mockResolvedValue({ ...mockTeam, members: [hackerUser] } as never);
+		runTransactions();
+		db.user.count.mockResolvedValue(1);
+		db.user.update.mockResolvedValue({ ...confirmedHacker, teamId: 'team-1' } as never);
+
+		await caller.team.joinByCode({ inviteCode: 'code-1' });
+
+		expect(db.invitation.updateMany).toHaveBeenCalledWith({
+			where: {
+				OR: [{ userId: confirmedHacker.uid }, { email: confirmedHacker.email }],
+				status: InvitationStatus.PENDING,
+				teamId: 'team-1'
+			},
+			data: { status: InvitationStatus.ACCEPTED }
+		});
+	});
+
+	it('kills the joiner’s pending invitations from every other team', async () => {
+		// You can only be on one team, so the rest are dead the moment this lands —
+		// otherwise they sit in the account offering an Accept that the
+		// already-on-a-team guard would refuse.
+		const caller = createTestCaller(db, confirmedHacker);
+		db.user.findUniqueOrThrow.mockResolvedValue(confirmedHacker as never);
+		db.team.findUnique.mockResolvedValue({ ...mockTeam, members: [hackerUser] } as never);
+		runTransactions();
+		db.user.count.mockResolvedValue(1);
+		db.user.update.mockResolvedValue({ ...confirmedHacker, teamId: 'team-1' } as never);
+
+		await caller.team.joinByCode({ inviteCode: 'code-1' });
+
+		expect(db.invitation.updateMany).toHaveBeenCalledWith({
+			where: {
+				OR: [{ userId: confirmedHacker.uid }, { email: confirmedHacker.email }],
+				status: InvitationStatus.PENDING,
+				teamId: { not: 'team-1' }
+			},
+			data: { status: InvitationStatus.DECLINED }
+		});
+	});
+
+	it('throws BAD_REQUEST for a non-hacker holding the link', async () => {
+		// A judge or mentor goes through the same accept/confirm funnel and reaches
+		// /hacker/* like anyone else, so status alone let a copied link put them on a
+		// team. The banner hides the button, but this is the boundary.
+		const caller = createTestCaller(db, confirmedHacker);
+		db.user.findUniqueOrThrow.mockResolvedValue({
+			...confirmedHacker,
+			roles: [Role.JUDGE]
+		} as never);
+
+		await expect(caller.team.joinByCode({ inviteCode: 'code-1' })).rejects.toMatchObject({
+			code: 'BAD_REQUEST',
+			message: expect.stringContaining('hackers')
+		});
+		expect(db.$transaction).not.toHaveBeenCalled();
+	});
+
 	it('refuses when the team filled up between the check and the write', async () => {
 		// A shared invite link is the easiest way to hit this: four people open the
 		// same URL, all four see room, and only the count inside the transaction
@@ -557,7 +755,10 @@ describe('team.joinByCode', () => {
 describe('team.leaveTeam', () => {
 	it('removes user from team', async () => {
 		const caller = createTestCaller(db, hackerUser);
-		db.user.findUniqueOrThrow.mockResolvedValue({ teamId: 'team-1' } as never);
+		db.user.findUniqueOrThrow.mockResolvedValue({
+			teamId: 'team-1',
+			email: hackerUser.email
+		} as never);
 		runTransactions();
 		db.user.count.mockResolvedValue(1); // a teammate remains
 		db.user.update.mockResolvedValue({ ...hackerUser, teamId: null } as never);
@@ -572,9 +773,37 @@ describe('team.leaveTeam', () => {
 		);
 	});
 
+	it('clears the invitations binding the leaver to the team', async () => {
+		// The other half of the reported bug: `teamId = null` alone left the settled
+		// invitation behind, and a former member is exactly who a team re-invites. The
+		// duplicate guard in inviteMember only looks at PENDING rows, but a row still
+		// addressed to someone who is no longer here describes a relationship that
+		// ended — leaving has to put the account back where it started.
+		const caller = createTestCaller(db, hackerUser);
+		db.user.findUniqueOrThrow.mockResolvedValue({
+			teamId: 'team-1',
+			email: hackerUser.email
+		} as never);
+		runTransactions();
+		db.user.count.mockResolvedValue(1);
+		db.user.update.mockResolvedValue({ ...hackerUser, teamId: null } as never);
+
+		await caller.team.leaveTeam();
+
+		expect(db.invitation.deleteMany).toHaveBeenCalledWith({
+			where: {
+				teamId: 'team-1',
+				OR: [{ userId: hackerUser.uid }, { email: hackerUser.email }]
+			}
+		});
+	});
+
 	it('deletes team when the last member leaves', async () => {
 		const caller = createTestCaller(db, hackerUser);
-		db.user.findUniqueOrThrow.mockResolvedValue({ teamId: 'team-1' } as never);
+		db.user.findUniqueOrThrow.mockResolvedValue({
+			teamId: 'team-1',
+			email: hackerUser.email
+		} as never);
 		runTransactions();
 		db.user.count.mockResolvedValue(0); // nobody left after removal
 		db.user.update.mockResolvedValue({ ...hackerUser, teamId: null } as never);
@@ -588,7 +817,10 @@ describe('team.leaveTeam', () => {
 
 	it('does not delete team when other members remain', async () => {
 		const caller = createTestCaller(db, hackerUser);
-		db.user.findUniqueOrThrow.mockResolvedValue({ teamId: 'team-1' } as never);
+		db.user.findUniqueOrThrow.mockResolvedValue({
+			teamId: 'team-1',
+			email: hackerUser.email
+		} as never);
 		runTransactions();
 		db.user.count.mockResolvedValue(2); // others still on the team
 		db.user.update.mockResolvedValue({ ...hackerUser, teamId: null } as never);

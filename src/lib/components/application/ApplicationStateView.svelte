@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { computeApplicationState } from '$lib/application/state';
+	import { isRsvpClosed } from '$lib/application/window';
 	import type { UserStatus, DecisionStatus } from '$lib/generated/prisma/enums';
 	import type { SettingsModel } from '$lib/generated/prisma/models/Settings';
 
@@ -17,11 +18,23 @@
 		settings: SettingsModel | null;
 		onrsvp: () => Promise<void>;
 		rsvping?: boolean;
+		/** Why the last RSVP attempt failed, verbatim from the server. */
+		rsvpError?: string | null;
 		ondecline?: () => Promise<void>;
 		declining?: boolean;
+		declineError?: string | null;
 	}
 
-	let { user, settings, onrsvp, rsvping = false, ondecline, declining = false }: Props = $props();
+	let {
+		user,
+		settings,
+		onrsvp,
+		rsvping = false,
+		rsvpError = null,
+		ondecline,
+		declining = false,
+		declineError = null
+	}: Props = $props();
 
 	const appState = $derived(computeApplicationState(user));
 
@@ -38,6 +51,14 @@
 
 	const rsvpDeadline = $derived(formatDate(settings?.RSVPDeadline));
 	const hackathonStart = $derived(formatDate(settings?.hackathonStartDate));
+
+	/**
+	 * Whether `application.rsvp` would refuse on the deadline alone.
+	 *
+	 * Decline is deliberately left enabled either way: the server accepts a late
+	 * decline on purpose, since it only shrinks the confirmed headcount.
+	 */
+	const rsvpClosed = $derived(isRsvpClosed(settings));
 
 	/**
 	 * The event links shown to a confirmed hacker.
@@ -170,14 +191,20 @@
 			You're in, {user.name.split(' ')[0]}!
 		</h2>
 		<p class="mb-6 text-sm leading-relaxed text-muted-foreground">
-			Confirm your spot before the deadline to secure your place at the hackathon.
+			{#if rsvpClosed}
+				The deadline to confirm your spot has passed. Contact the organizers if you still plan to
+				attend.
+			{:else}
+				Confirm your spot before the deadline to secure your place at the hackathon.
+			{/if}
 		</p>
 		<div class="mb-4 flex gap-3">
 			<button
 				type="button"
 				onclick={onrsvp}
-				disabled={rsvping}
-				class="rounded bg-primary px-5 py-2 text-sm font-medium text-white transition-opacity disabled:opacity-60"
+				disabled={rsvping || rsvpClosed}
+				title={rsvpClosed ? `The RSVP deadline passed on ${rsvpDeadline}.` : undefined}
+				class="rounded bg-primary px-5 py-2 text-sm font-medium text-white transition-opacity disabled:cursor-not-allowed disabled:opacity-40"
 			>
 				{rsvping ? 'Confirming…' : 'RSVP Yes'}
 			</button>
@@ -192,9 +219,13 @@
 				</button>
 			{/if}
 		</div>
+		{#if rsvpError}
+			<p class="mb-3 text-sm text-destructive" role="alert">{rsvpError}</p>
+		{/if}
 		{#if settings?.RSVPDeadline}
 			<p class="text-xs text-muted-foreground">
-				Deadline: {rsvpDeadline}
+				{rsvpClosed ? 'Deadline passed:' : 'Deadline:'}
+				{rsvpDeadline}
 			</p>
 		{/if}
 	</div>
@@ -302,6 +333,9 @@
 			<p class="mb-5 text-sm leading-relaxed text-muted-foreground">
 				This will permanently release your spot and cannot be undone.
 			</p>
+			{#if declineError}
+				<p class="mb-4 text-sm text-destructive" role="alert">{declineError}</p>
+			{/if}
 			<div class="flex gap-2">
 				<button
 					type="button"

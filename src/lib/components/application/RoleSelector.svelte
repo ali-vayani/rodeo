@@ -4,9 +4,11 @@
 	interface Props {
 		selected: Role;
 		onselect: (role: Role) => void;
+		/** Locked alongside the answers when the application window is shut. */
+		disabled?: boolean;
 	}
 
-	let { selected, onselect }: Props = $props();
+	let { selected, onselect, disabled = false }: Props = $props();
 
 	const roles: { value: Role; label: string }[] = [
 		{ value: Role.HACKER, label: 'Hacker' },
@@ -25,10 +27,13 @@
 			<button
 				type="button"
 				onclick={() => onselect(role.value)}
-				class="rounded border px-4 py-1.5 text-sm font-medium transition-colors {selected ===
+				{disabled}
+				class="rounded border px-4 py-1.5 text-sm font-medium transition-colors disabled:cursor-not-allowed {selected ===
 				role.value
 					? 'border-primary bg-primary text-white'
-					: 'border-border bg-white text-primary'}"
+					: 'border-border bg-white text-primary'} {disabled && selected !== role.value
+					? 'opacity-50'
+					: ''}"
 			>
 				{role.label}
 			</button>

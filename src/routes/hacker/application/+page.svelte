@@ -1,8 +1,10 @@
 <script lang="ts">
-	import { resolve } from '$app/paths';
 	import type { PageData } from './$types';
 	import { Role, UserStatus } from '$lib/generated/prisma/enums';
 	import { computeApplicationState, type ApplicationState } from '$lib/application/state';
+	import { applicationWindowState } from '$lib/application/window';
+	import { formatDateLong } from '$lib/format';
+	import { errorMessage } from '$lib/ui/errors';
 	import { createClient } from '$lib/trpc/client';
 	import { untrack } from 'svelte';
 	import RoleSelector from '$lib/components/application/RoleSelector.svelte';
@@ -58,12 +60,28 @@
 
 	let canSubmit = $derived(answeredRequiredCount === requiredQuestions.length);
 
+	// --- Application window ---
+	// `application.save` and `application.submit` are both gated on this window, so
+	// outside it the form was live but every keystroke it accepted was being thrown
+	// away by the server and reported as a bare "Save failed".
+	let windowState = $derived(applicationWindowState(data.settings));
+	let windowOpen = $derived(windowState === 'open');
+	let opensOn = $derived(formatDateLong(data.settings?.applicationOpen));
+	let closesOn = $derived(formatDateLong(data.settings?.applicationDeadline));
+
 	// --- Auto-save ---
 	type SaveStatus = 'idle' | 'saving' | 'saved' | 'error';
 	let saveStatus = $state<SaveStatus>('idle');
+	let saveError = $state<string | null>(null);
 	let saveTimers = $state<Record<string, ReturnType<typeof setTimeout>>>({});
 
 	async function handleQuestionChange(questionId: string, value: string) {
+		// Belt and braces: the fields are already disabled outside the window, so this
+		// is unreachable through the UI. It exists so a stale page that has been open
+		// since before the deadline can't fire a burst of writes the server will only
+		// refuse.
+		if (!windowOpen) return;
+
 		responses[questionId] = value;
 
 		// Debounce per question
@@ -73,8 +91,13 @@
 			try {
 				await trpc.application.save.mutate({ questionId, value });
 				saveStatus = 'saved';
-			} catch {
+				saveError = null;
+			} catch (e) {
+				// The reason, not just the fact. A save refused because the deadline passed
+				// while the tab sat open is the case worth naming — "Save failed" alone
+				// reads as a network blip and invites retrying forever.
 				saveStatus = 'error';
+				saveError = errorMessage(e, 'Save failed');
 			}
 		}, 800);
 	}
@@ -99,101 +122,80 @@
 		}
 	}
 
-	const { rsvping, handleRsvp } = createRsvpHandler({
+	// Destructured as aliases because both handlers expose `error`; the getters are
+	// re-wrapped below so the rename doesn't freeze the value at destructure time.
+	const rsvp = createRsvpHandler({
 		user,
 		onSuccess: () => {
 			currentState = 'rsvpd';
 		}
 	});
 
-	const { declining, handleDecline } = createDeclineHandler({
+	const decline = createDeclineHandler({
 		user,
 		onSuccess: () => {
 			currentState = 'declined';
 		}
 	});
 
-	// --- Team join via invite link ---
-	let joinTeam = $state(untrack(() => data.joinTeam));
-	let joining = $state(false);
-	let joinError = $state<string | null>(null);
-	let joinSuccess = $state(false);
-	let canJoinTeam = $derived(currentState === 'rsvpd' || currentState === 'checked-in');
-
-	async function handleJoinTeam() {
-		if (!joinTeam || !canJoinTeam) return;
-		joining = true;
-		joinError = null;
-		try {
-			await trpc.team.joinByCode.mutate({ inviteCode: joinTeam.inviteCode });
-			joinSuccess = true;
-		} catch (e) {
-			joinError = e instanceof Error ? e.message : 'Failed to join team.';
-		} finally {
-			joining = false;
-		}
-	}
+	// The team-invite banner used to live here. It now renders from `hacker/+layout`
+	// so it persists across the portal instead of only appearing on this page — see
+	// `$lib/server/invite.ts`.
 </script>
 
 <div class="mx-auto max-w-2xl">
-	<!-- Team invite link banner -->
-	{#if joinTeam && !joinSuccess && canJoinTeam}
-		<div class="mb-6 rounded border border-border bg-white p-5">
-			<p class="mb-0.5 text-xs font-medium tracking-widest text-muted-foreground uppercase">
-				Team Invitation
-			</p>
-			<p class="mb-3 text-base font-semibold text-primary">
-				Join <span class="font-bold">{joinTeam.teamName}</span>
-				<span class="ml-1 text-sm font-normal text-muted-foreground">
-					({joinTeam.memberCount}/4 members)
-				</span>
-			</p>
-			{#if joinError}
-				<p class="mb-3 text-sm text-destructive">{joinError}</p>
-			{/if}
-			<div class="flex gap-2">
-				<button
-					type="button"
-					onclick={handleJoinTeam}
-					disabled={joining}
-					class="rounded bg-primary px-4 py-2 text-sm font-medium text-white transition-opacity disabled:opacity-60"
-				>
-					{joining ? 'Joining…' : 'Join team'}
-				</button>
-				<button
-					type="button"
-					onclick={() => (joinTeam = null)}
-					class="rounded border border-border px-4 py-2 text-sm text-primary transition-colors hover:bg-[--color-muted]"
-				>
-					Dismiss
-				</button>
-			</div>
-		</div>
-	{:else if joinTeam && joinSuccess}
-		<div class="mb-6 rounded border border-border bg-white p-5">
-			<p class="text-sm font-medium text-primary">
-				You joined <strong>{joinTeam.teamName}</strong>.
-				<a href={resolve('/hacker/account')} class="ml-1 text-muted-foreground underline"
-					>Go to your account →</a
-				>
-			</p>
-		</div>
-	{/if}
-
 	{#if currentState === 'filling'}
 		<!-- Header -->
 		<div class="mb-6">
 			<h1 class="text-2xl font-semibold text-primary">Application</h1>
 			<p class="mt-1 text-sm text-muted-foreground">
-				Fill out the form below and submit when you're ready.
+				{#if windowState === 'closed'}
+					Applications closed on {closesOn}.
+				{:else if windowState === 'before'}
+					Applications open on {opensOn}.
+				{:else}
+					Fill out the form below and submit when you're ready.
+					<!-- The deadline while it still matters, not only once it's too late. -->
+					{#if data.settings}
+						Applications close on {closesOn}.
+					{/if}
+				{/if}
 			</p>
 		</div>
+
+		<!--
+			The window notice. Outside the window the form below is read-only, because
+			the server refuses both the autosave and the submission behind it — so the
+			only honest rendering is one that says so up front rather than at the end.
+		-->
+		{#if !windowOpen}
+			<div class="mb-6 rounded border border-border bg-white p-5">
+				<p class="mb-0.5 text-xs font-medium tracking-widest text-muted-foreground uppercase">
+					{windowState === 'closed' ? 'Applications closed' : 'Applications not open yet'}
+				</p>
+				{#if windowState === 'closed'}
+					<p class="text-sm leading-relaxed text-primary">
+						The deadline was <strong>{closesOn}</strong>. Your answers are shown below but can no
+						longer be changed or submitted. Contact the organizers if you believe this is a mistake.
+					</p>
+				{:else}
+					<p class="text-sm leading-relaxed text-primary">
+						Applications open on <strong>{opensOn}</strong>. You can read through the questions now
+						— you'll be able to answer them once the form opens.
+					</p>
+				{/if}
+			</div>
+		{/if}
 
 		<!-- Form card -->
 		<div class="rounded border border-border bg-white p-6">
 			<!-- Role selector -->
 			<div class="mb-6">
-				<RoleSelector selected={selectedRole} onselect={(r) => (selectedRole = r)} />
+				<RoleSelector
+					selected={selectedRole}
+					onselect={(r) => (selectedRole = r)}
+					disabled={!windowOpen}
+				/>
 			</div>
 
 			<div class="mb-6 border-t border-border"></div>
@@ -208,6 +210,7 @@
 							{question}
 							value={responses[question.id] ?? ''}
 							onchange={(v) => handleQuestionChange(question.id, v)}
+							disabled={!windowOpen}
 						/>
 					{/each}
 				</div>
@@ -222,12 +225,14 @@
 							{answeredRequiredCount} / {requiredQuestions.length} required
 						</span>
 					{/if}
-					{#if saveStatus === 'saving'}
+					{#if !windowOpen}
+						<span class="font-mono text-xs text-muted-foreground">Read-only</span>
+					{:else if saveStatus === 'saving'}
 						<span class="font-mono text-xs text-muted-foreground">Saving…</span>
 					{:else if saveStatus === 'saved'}
 						<span class="font-mono text-xs text-muted-foreground">Saved</span>
 					{:else if saveStatus === 'error'}
-						<span class="font-mono text-xs text-destructive">Save failed</span>
+						<span class="font-mono text-xs text-destructive">{saveError ?? 'Save failed'}</span>
 					{/if}
 				</div>
 
@@ -236,12 +241,17 @@
 					<button
 						type="button"
 						onclick={handleSubmit}
-						disabled={submitting || !canSubmit}
-						class="rounded bg-primary px-5 py-2 text-sm font-medium text-white transition-opacity disabled:opacity-40"
+						disabled={submitting || !canSubmit || !windowOpen}
+						title={windowOpen ? undefined : `Applications closed on ${closesOn}.`}
+						class="rounded bg-primary px-5 py-2 text-sm font-medium text-white transition-opacity disabled:cursor-not-allowed disabled:opacity-40"
 					>
 						{submitting ? 'Submitting…' : 'Submit Application'}
 					</button>
-					{#if !canSubmit && requiredQuestions.length > 0}
+					{#if windowState === 'closed'}
+						<span class="text-xs text-muted-foreground">The deadline has passed</span>
+					{:else if windowState === 'before'}
+						<span class="text-xs text-muted-foreground">Opens {opensOn}</span>
+					{:else if !canSubmit && requiredQuestions.length > 0}
 						<span class="text-xs text-muted-foreground"
 							>Answer all required questions to submit</span
 						>
@@ -261,10 +271,12 @@
 		<ApplicationStateView
 			{user}
 			settings={data.settings}
-			onrsvp={handleRsvp}
-			{rsvping}
-			ondecline={handleDecline}
-			{declining}
+			onrsvp={rsvp.handleRsvp}
+			rsvping={rsvp.rsvping}
+			rsvpError={rsvp.error}
+			ondecline={decline.handleDecline}
+			declining={decline.declining}
+			declineError={decline.error}
 		/>
 	{/if}
 </div>
