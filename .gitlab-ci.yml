@@ -1,0 +1,116 @@
+# Rodeo 2.0 pipeline: test → per-branch preview deploy → manual production
+# deploy. Modeled on the original Rodeo's pipeline.
+#
+# Required GitLab CI/CD variables (Settings > CI/CD > Variables):
+#   VERCEL_ORG_ID      Vercel team ID
+#   VERCEL_PROJECT_ID  Vercel project ID
+#   VERCEL_TOKEN       Vercel personal access token (masked)
+#   VERCEL_SCOPE       Vercel team slug
+#
+# Vercel is the source of truth for all other environment variables: jobs run
+# `vercel pull` and export the resulting .vercel/.env.<environment>.local.
+# DATABASE_URL and DIRECT_URL in the *preview* environment are stored WITHOUT
+# a trailing database name — this pipeline appends /postgres (for the admin
+# connection that creates and drops databases) or /$CI_COMMIT_REF_SLUG (the
+# per-branch database). The *production* environment stores complete URLs.
+#
+# DIRECT_URL is the Supabase session pooler (port 5432): migrations and psql
+# cannot run through the transaction pooler (6543) the app uses at runtime.
+#
+# !!! SECURITY !!!
+# Vercel tokens cannot be scoped, so every job shares $VERCEL_TOKEN. GitLab
+# MUST be configured (Settings > CI/CD > General pipelines > CI/CD
+# configuration file) to always use the mainline branch's pipeline config:
+#
+#   .gitlab-ci.yml@freetail-hackers/Rodeo-2.0:mainline
+#
+# so a branch cannot modify this file to exfiltrate the token.
+
+default:
+  image: registry.gitlab.com/freetail-hackers/rodeo-2.0
+
+workflow:
+  rules:
+    - if: $CI_COMMIT_TAG
+      when: never
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      when: never
+    - when: always
+
+stages:
+  - test
+  - deploy-preview
+  - deploy-production
+
+test-job:
+  stage: test
+  script:
+    # prepare (svelte-kit sync + prisma generate) runs during npm ci and needs
+    # no DATABASE_URL — prisma.config.ts tolerates a missing datasource.
+    - npm ci
+    - npm run build
+    - npm run check
+    - npm run lint
+    - npm test
+
+deploy-preview-job:
+  stage: deploy-preview
+  variables:
+    STAGING_URL: rodeo-2-0-nightly.vercel.app
+  environment:
+    name: review/$CI_COMMIT_REF_SLUG
+    url: $DOMAIN_NAME
+    on_stop: stop-preview-job
+  script:
+    - npm ci
+    - npx vercel@latest pull --yes --environment=preview --token=$VERCEL_TOKEN
+    - "export $(grep -v '^#' .vercel/.env.preview.local | xargs)"
+    # Fresh database per branch, named after the slug (slash-free, ≤63 chars —
+    # a valid Postgres identifier where raw branch names like feature/1-foo
+    # are not). FORCE, because Supavisor can hold connections to the database
+    # open for a little while after the previous deploy.
+    - echo "DROP DATABASE IF EXISTS \"$CI_COMMIT_REF_SLUG\" WITH (FORCE)" | psql "$DIRECT_URL/postgres"
+    - echo "CREATE DATABASE \"$CI_COMMIT_REF_SLUG\"" | psql "$DIRECT_URL/postgres"
+    # sslmode=require: psql and prisma treat it as encrypt-only; the app and
+    # seed read it through the libpq-compat shim in db.ts / seed.ts.
+    - export DATABASE_URL="$DATABASE_URL/$CI_COMMIT_REF_SLUG?sslmode=require"
+    - export DIRECT_URL="$DIRECT_URL/$CI_COMMIT_REF_SLUG?sslmode=require"
+    - npx prisma migrate deploy
+    - SEED_ALLOW_REMOTE=1 npx prisma db seed
+    - npx vercel@latest deploy --token=$VERCEL_TOKEN --env DATABASE_URL=$DATABASE_URL --env DIRECT_URL=$DIRECT_URL > domain.txt
+    - export DOMAIN_NAME=$(cat domain.txt)
+    - if [ "$CI_COMMIT_BRANCH" == "mainline" ]; then npx vercel@latest alias $DOMAIN_NAME $STAGING_URL --token=$VERCEL_TOKEN --scope=$VERCEL_SCOPE ; fi
+    - echo "DOMAIN_NAME=$DOMAIN_NAME" >> deploy.env
+  artifacts:
+    reports:
+      dotenv: deploy.env
+
+stop-preview-job:
+  stage: deploy-preview
+  variables:
+    GIT_STRATEGY: none
+  environment:
+    name: review/$CI_COMMIT_REF_SLUG
+    action: stop
+  when: manual
+  allow_failure: true
+  script:
+    # !!! WARNING !!! Drops the branch database. NEVER point this at production.
+    - npx vercel@latest pull --yes --environment=preview --token=$VERCEL_TOKEN
+    - "export $(grep -v '^#' .vercel/.env.preview.local | xargs)"
+    - echo "DROP DATABASE IF EXISTS \"$CI_COMMIT_REF_SLUG\" WITH (FORCE)" | psql "$DIRECT_URL/postgres"
+
+deploy-production-job:
+  stage: deploy-production
+  environment:
+    name: production
+    url: https://rodeo-2-0.vercel.app
+  when: manual
+  script:
+    - npm ci
+    - npx vercel@latest pull --yes --environment=production --token=$VERCEL_TOKEN
+    - mv .vercel/.env.production.local .env
+    - "export $(grep -v '^#' .env | xargs)"
+    # Runs over DIRECT_URL — prisma.config.ts prefers it over DATABASE_URL.
+    - npx prisma migrate deploy
+    - npx vercel@latest deploy --prod --token=$VERCEL_TOKEN > domain.txt
