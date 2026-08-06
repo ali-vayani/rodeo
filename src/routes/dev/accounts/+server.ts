@@ -1,8 +1,10 @@
 import { error, json } from '@sveltejs/kit';
 import { dev } from '$app/environment';
 import type { RequestHandler } from './$types';
+import type { RequestEvent } from '@sveltejs/kit';
 import { prisma } from '$lib/server/db';
-import { devSwitcherEnabled } from '$lib/server/env';
+import { devSwitcherEnabled, usesSupabaseAuth } from '$lib/server/env';
+import { createSupabaseServerClient } from '$lib/server/supabase';
 import { setSessionCookie, clearSessionCookie } from '$lib/server/auth';
 import { homePathFor } from '$lib/auth/permissions';
 
@@ -75,6 +77,16 @@ function assertEnabled(): void {
 }
 
 /**
+ * On preview deploys a live Google session would shadow the switched account —
+ * `getSession` checks Supabase before the bypass cookie — so becoming someone
+ * ends it first. Development has no Supabase session to end.
+ */
+async function endSupabaseSession(event: RequestEvent): Promise<void> {
+	if (!usesSupabaseAuth()) return;
+	await createSupabaseServerClient(event).auth.signOut();
+}
+
+/**
  * Every seeded account, for the switcher panel to filter client-side.
  *
  * Unauthenticated on purpose: the switcher's most useful moment is on `/login` while
@@ -128,6 +140,7 @@ export const POST: RequestHandler = async (event) => {
 	// Being signed out is a state worth one click too — the widget is the only way to
 	// reach it from a page with no sidebar.
 	if (uid === null) {
+		await endSupabaseSession(event);
 		clearSessionCookie(event);
 		return json({ redirectTo: '/login' });
 	}
@@ -149,6 +162,7 @@ export const POST: RequestHandler = async (event) => {
 	// be worthless here.
 	if (!user || !user.email.endsWith(SEED_EMAIL_SUFFIX)) error(404, 'No such account.');
 
+	await endSupabaseSession(event);
 	setSessionCookie(event, user.uid);
 
 	// The dev server's terminal, not a Log row. /admin/logs is a product surface and
