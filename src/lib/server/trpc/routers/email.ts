@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { TRPCError } from '@trpc/server';
 import { router, adminProcedure } from '../init';
 import { sendEmail } from '$lib/server/email';
 import { buildRecipientWhere, recipientFilterSchema } from '$lib/server/recipients';
@@ -34,11 +35,11 @@ export const emailRouter = router({
 			let unknownEmails: string[] = [];
 			if (filters.emails?.length) {
 				const matched = await ctx.prisma.user.findMany({
-					where: { email: { in: filters.emails } },
+					where: { email: { in: filters.emails.map((e) => e.trim().toLowerCase()) } },
 					select: { email: true }
 				});
 				const found = new Set(matched.map((u) => u.email.toLowerCase()));
-				unknownEmails = filters.emails.filter((e) => !found.has(e.toLowerCase()));
+				unknownEmails = filters.emails.filter((e) => !found.has(e.trim().toLowerCase()));
 			}
 
 			return { count, sample, unknownEmails };
@@ -47,17 +48,29 @@ export const emailRouter = router({
 	sendCustom: adminProcedure
 		.input(
 			z.object({
-				subject: z.string().min(1),
-				body: z.string().min(1),
-				filters: recipientFilterSchema
+				subject: z.string().min(1).max(200),
+				body: z.string().min(1).max(20000),
+				filters: recipientFilterSchema,
+				// The recipient count the admin saw in the confirm step. The send is bound to
+				// it: recipients.ts documents that `filters: {}` matches everyone, so a client
+				// bug or a replay that lost the filters would otherwise blast the whole
+				// database. If the set has changed since preview, we refuse rather than send.
+				expectedCount: z.number().int().min(0)
 			})
 		)
 		.mutation(async ({ ctx, input }) => {
-			const { subject, body, filters } = input;
+			const { subject, body, filters, expectedCount } = input;
 
 			const users = await ctx.prisma.user.findMany({
 				where: buildRecipientWhere(filters)
 			});
+
+			if (users.length !== expectedCount) {
+				throw new TRPCError({
+					code: 'CONFLICT',
+					message: `The recipient list changed since you previewed it (${expectedCount} then, ${users.length} now). Review and try again.`
+				});
+			}
 
 			if (users.length === 0) {
 				return { sent: 0 };
@@ -72,7 +85,7 @@ export const emailRouter = router({
 					return sendEmail({
 						to: u.email,
 						subject: substituteVariables(subject, vars),
-						body: substituteVariables(body, vars)
+						body: substituteVariables(body, vars, { escapeValues: true })
 					});
 				})
 			);
@@ -115,12 +128,15 @@ export const emailRouter = router({
 			z.object({
 				template: z.enum(TEMPLATE_KEYS),
 				subject: z.string().min(1).max(200),
-				body: z.string().min(1).max(20000),
-				to: z.string().email().optional()
+				body: z.string().min(1).max(20000)
 			})
 		)
 		.mutation(async ({ ctx, input }) => {
-			const to = input.to ?? ctx.user.email;
+			// Always to the admin's own address — this exists to read a draft in a real
+			// inbox. Accepting an arbitrary `to` turned it into an authenticated relay that
+			// could send hand-written HTML from the org's From: address to anyone, with the
+			// body deliberately never written to EmailLog. "Yourself" is the whole feature.
+			const to = ctx.user.email;
 			const settings = await ctx.prisma.settings.findFirst();
 			// No Settings row yet on a fresh install — fall back to the preview samples
 			// so a test send still demonstrates substitution.
@@ -129,7 +145,7 @@ export const emailRouter = router({
 			await sendEmail({
 				to,
 				subject: substituteVariables(input.subject, vars),
-				body: substituteVariables(input.body, vars)
+				body: substituteVariables(input.body, vars, { escapeValues: true })
 			});
 
 			await logAction(ctx, {

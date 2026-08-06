@@ -96,5 +96,9 @@ export function sectionForPath(pathname: string): AdminSection | null {
  */
 export function canAccessHackerPortal(roles: Role[]): boolean {
 	if (roles.includes(Role.HACKER)) return true;
+	// An admin keeps hacker-portal access even without the HACKER role; only a pure
+	// organizer loses it. Without this, someone who is both ADMIN and ORGANIZER (but not
+	// HACKER) was bounced out of /hacker/*, contradicting this function's own contract.
+	if (isAdmin(roles)) return true;
 	return !isOrganizer(roles);
 }

@@ -1,10 +1,19 @@
 <script lang="ts">
 	import { computeApplicationState } from '$lib/application/state';
-	import type { UserModel } from '$lib/generated/prisma/models/User';
+	import type { UserStatus, DecisionStatus } from '$lib/generated/prisma/enums';
 	import type { SettingsModel } from '$lib/generated/prisma/models/Settings';
 
+	// Only the fields this view renders, so it accepts the narrowed `user.me` payload
+	// (which deliberately omits pendingDecision and the claim columns).
+	type ApplicationUser = {
+		name: string;
+		email: string;
+		status: UserStatus;
+		activeDecision: DecisionStatus | null;
+	};
+
 	interface Props {
-		user: UserModel;
+		user: ApplicationUser;
 		settings: SettingsModel | null;
 		onrsvp: () => Promise<void>;
 		rsvping?: boolean;

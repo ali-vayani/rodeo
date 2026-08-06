@@ -9,6 +9,7 @@ import {
 	mockSettings,
 	mockGroupBy
 } from '../test-utils';
+import { UserStatus } from '$lib/generated/prisma/client';
 
 vi.mock('$lib/server/db', async () => {
 	const { mockDeep } = await import('vitest-mock-extended');
@@ -19,6 +20,18 @@ const { prisma } = await import('$lib/server/db');
 const db = prisma as DeepMockProxy<PrismaClient>;
 
 beforeEach(() => mockReset(db));
+
+/**
+ * Makes the mocked `$transaction` run its interactive callback against the same
+ * client, so `tx.scan.create` / `tx.user.update` inside `scanUser` land on `db`
+ * and can be asserted exactly like writes outside a transaction. The deep mock
+ * otherwise resolves `$transaction` without invoking the callback, leaving the
+ * scan-write-and-promote atom unexercised.
+ */
+function runTransactions() {
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any -- $transaction's overloads can't be spelled at a mock call site.
+	db.$transaction.mockImplementation(((fn: any) => fn(db)) as never);
+}
 
 const mockScan = {
 	id: 'scan-1',
@@ -46,10 +59,12 @@ const expectedUserSelect = {
 describe('scan.scanUser', () => {
 	it('creates scan and returns user on success', async () => {
 		const caller = createTestCaller(db, adminUser);
+		runTransactions();
 		db.settings.findFirst.mockResolvedValue(mockSettings);
 		db.user.findMany.mockResolvedValue([hackerUser] as never);
 		db.scan.findFirst.mockResolvedValue(null);
 		db.scan.create.mockResolvedValue(mockScan as never);
+		db.user.update.mockResolvedValue({} as never);
 		db.log.create.mockResolvedValue({} as never);
 
 		const result = await caller.scan.scanUser({ userCode: hackerUser.uid, action: 'Check-In' });
@@ -60,10 +75,12 @@ describe('scan.scanUser', () => {
 
 	it('sets isDuplicate=true when already scanned today', async () => {
 		const caller = createTestCaller(db, adminUser);
+		runTransactions();
 		db.settings.findFirst.mockResolvedValue(mockSettings);
 		db.user.findMany.mockResolvedValue([hackerUser] as never);
 		db.scan.findFirst.mockResolvedValue(mockScan as never); // duplicate found
 		db.scan.create.mockResolvedValue(mockScan as never);
+		db.user.update.mockResolvedValue({} as never);
 		db.log.create.mockResolvedValue({} as never);
 
 		const result = await caller.scan.scanUser({ userCode: hackerUser.uid, action: 'Check-In' });
@@ -90,24 +107,107 @@ describe('scan.scanUser', () => {
 		).rejects.toMatchObject({ code: 'BAD_REQUEST' });
 	});
 
-	it('allows any action when settings is null', async () => {
+	it('fails closed when settings is null: only Check-In is allowed', async () => {
 		const caller = createTestCaller(db, adminUser);
-		db.settings.findFirst.mockResolvedValue(null); // no settings = skip validation
+		runTransactions();
+		db.settings.findFirst.mockResolvedValue(null); // no settings row yet
 		db.user.findMany.mockResolvedValue([hackerUser] as never);
 		db.scan.findFirst.mockResolvedValue(null);
 		db.scan.create.mockResolvedValue(mockScan as never);
+		db.user.update.mockResolvedValue({} as never);
 		db.log.create.mockResolvedValue({} as never);
 
-		const result = await caller.scan.scanUser({ userCode: hackerUser.uid, action: 'Lunch' });
+		// The default 'Check-In' is still accepted without a Settings row...
+		const result = await caller.scan.scanUser({ userCode: hackerUser.uid, action: 'Check-In' });
 		expect(result.isDuplicate).toBe(false);
+
+		// ...but an arbitrary action is no longer silently persisted.
+		await expect(
+			caller.scan.scanUser({ userCode: hackerUser.uid, action: 'Lunch' })
+		).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+	});
+
+	it('promotes a CONFIRMED hacker to CHECKED_IN on the check-in action', async () => {
+		const caller = createTestCaller(db, adminUser);
+		runTransactions();
+		db.settings.findFirst.mockResolvedValue(mockSettings); // scanActions: ['Check-In']
+		db.user.findMany.mockResolvedValue([confirmedHacker] as never);
+		db.scan.findFirst.mockResolvedValue(null);
+		db.scan.create.mockResolvedValue(mockScan as never);
+		db.user.update.mockResolvedValue({} as never);
+		db.log.create.mockResolvedValue({} as never);
+
+		const result = await caller.scan.scanUser({
+			userCode: confirmedHacker.uid,
+			action: 'Check-In'
+		});
+
+		expect(db.user.update).toHaveBeenCalledWith({
+			where: { uid: confirmedHacker.uid },
+			data: { status: UserStatus.CHECKED_IN }
+		});
+		expect(result.user.status).toBe(UserStatus.CHECKED_IN);
+		// The scan row and the promotion commit together, inside one transaction.
+		expect(db.$transaction).toHaveBeenCalledWith(expect.any(Function));
+		expect(db.log.create).toHaveBeenCalledWith(
+			expect.objectContaining({
+				data: expect.objectContaining({
+					metadata: expect.objectContaining({ checkedIn: true })
+				})
+			})
+		);
+	});
+
+	it('does not promote on a non-check-in action', async () => {
+		const caller = createTestCaller(db, adminUser);
+		runTransactions();
+		db.settings.findFirst.mockResolvedValue({
+			...mockSettings,
+			scanActions: ['Check-In', 'Lunch']
+		});
+		db.user.findMany.mockResolvedValue([confirmedHacker] as never);
+		db.scan.findFirst.mockResolvedValue(null);
+		db.scan.create.mockResolvedValue({ ...mockScan, action: 'Lunch' } as never);
+		db.user.update.mockResolvedValue({} as never);
+		db.log.create.mockResolvedValue({} as never);
+
+		const result = await caller.scan.scanUser({ userCode: confirmedHacker.uid, action: 'Lunch' });
+
+		expect(db.user.update).not.toHaveBeenCalled();
+		expect(result.user.status).toBe(UserStatus.CONFIRMED);
+		expect(db.log.create).toHaveBeenCalledWith(
+			expect.objectContaining({
+				data: expect.objectContaining({
+					metadata: expect.objectContaining({ checkedIn: false })
+				})
+			})
+		);
+	});
+
+	it('does not promote a not-yet-CONFIRMED hacker on check-in', async () => {
+		const caller = createTestCaller(db, adminUser);
+		runTransactions();
+		db.settings.findFirst.mockResolvedValue(mockSettings);
+		db.user.findMany.mockResolvedValue([hackerUser] as never); // status CREATED
+		db.scan.findFirst.mockResolvedValue(null);
+		db.scan.create.mockResolvedValue(mockScan as never);
+		db.user.update.mockResolvedValue({} as never);
+		db.log.create.mockResolvedValue({} as never);
+
+		const result = await caller.scan.scanUser({ userCode: hackerUser.uid, action: 'Check-In' });
+
+		expect(db.user.update).not.toHaveBeenCalled();
+		expect(result.user.status).toBe(hackerUser.status);
 	});
 
 	it('creates a log entry', async () => {
 		const caller = createTestCaller(db, adminUser);
+		runTransactions();
 		db.settings.findFirst.mockResolvedValue(mockSettings);
 		db.user.findMany.mockResolvedValue([hackerUser] as never);
 		db.scan.findFirst.mockResolvedValue(null);
 		db.scan.create.mockResolvedValue(mockScan as never);
+		db.user.update.mockResolvedValue({} as never);
 		db.log.create.mockResolvedValue({} as never);
 
 		await caller.scan.scanUser({ userCode: hackerUser.uid, action: 'Check-In' });
@@ -119,7 +219,11 @@ describe('scan.scanUser', () => {
 					summary: expect.stringContaining(hackerUser.name),
 					actorId: adminUser.uid,
 					targetId: hackerUser.uid,
-					metadata: expect.objectContaining({ scanAction: 'Check-In', duplicate: false })
+					metadata: expect.objectContaining({
+						scanAction: 'Check-In',
+						duplicate: false,
+						checkedIn: false
+					})
 				})
 			})
 		);
@@ -127,10 +231,12 @@ describe('scan.scanUser', () => {
 
 	it('marks a repeat scan as a duplicate in the audit entry', async () => {
 		const caller = createTestCaller(db, adminUser);
+		runTransactions();
 		db.settings.findFirst.mockResolvedValue(mockSettings);
 		db.user.findMany.mockResolvedValue([hackerUser] as never);
 		db.scan.findFirst.mockResolvedValue(mockScan as never);
 		db.scan.create.mockResolvedValue(mockScan as never);
+		db.user.update.mockResolvedValue({} as never);
 		db.log.create.mockResolvedValue({} as never);
 
 		await caller.scan.scanUser({ userCode: hackerUser.uid, action: 'Check-In' });

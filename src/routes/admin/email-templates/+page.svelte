@@ -34,8 +34,8 @@
 	let active = $state<TemplateKey>('submit');
 	let saving = $state(false);
 	let sendingTest = $state(false);
-	/** Where Send Test goes. Prefilled with the admin's own address, editable. */
-	let testRecipient = $state(untrack(() => data.adminEmail));
+	/** Send Test always goes to the admin's own inbox — see email.sendTest. */
+	const adminEmail = untrack(() => data.adminEmail);
 	let lastSavedAt = $state<Date | null>(null);
 	let toast = $state<{ message: string; type: 'success' | 'error' } | null>(null);
 	let toastTimer: ReturnType<typeof setTimeout>;
@@ -92,9 +92,7 @@
 			const { to } = await trpc.email.sendTest.mutate({
 				template: active,
 				subject: drafts[active].subject,
-				body: drafts[active].body,
-				// Blank falls back to the caller's own address, server-side.
-				to: testRecipient.trim() || undefined
+				body: drafts[active].body
 			});
 			showToast(`Test email sent to ${to}`);
 		} catch (e: unknown) {
@@ -172,14 +170,12 @@
 
 		<!-- Actions pinned to the bottom -->
 		<div class="mt-auto flex shrink-0 items-center gap-2 border-t border-border pt-4">
-			<input
-				type="email"
-				bind:value={testRecipient}
-				placeholder="you@example.com"
-				aria-label="Send test email to"
-				title="Leave blank to send to yourself"
-				class="w-[220px] shrink-0 rounded border border-border bg-white px-3 py-[7px] text-[13px] text-primary outline-none focus:border-primary"
-			/>
+			<span
+				class="shrink-0 text-[13px] text-muted-foreground"
+				title="Test sends go to your own inbox"
+			>
+				Test → {adminEmail}
+			</span>
 			<button
 				onclick={sendTest}
 				disabled={sendingTest || !drafts[active].subject || !drafts[active].body}

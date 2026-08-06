@@ -130,7 +130,7 @@ describe('admissions.list', () => {
 		await caller.admissions.list({ roles: [Role.HACKER] });
 		expect(db.user.findMany).toHaveBeenCalledWith(
 			expect.objectContaining({
-				where: expect.objectContaining({ roles: { hasSome: [Role.HACKER] } })
+				where: { AND: expect.arrayContaining([{ roles: { hasSome: [Role.HACKER] } }]) }
 			})
 		);
 	});
@@ -143,7 +143,7 @@ describe('admissions.list', () => {
 		await caller.admissions.list({});
 		expect(db.user.findMany).toHaveBeenCalledWith(
 			expect.objectContaining({
-				where: expect.objectContaining({ roles: { hasSome: APPLICANT_ROLES } })
+				where: { AND: expect.arrayContaining([{ roles: { hasSome: APPLICANT_ROLES } }]) }
 			})
 		);
 		expect(APPLICANT_ROLES).not.toContain(Role.ORGANIZER);
@@ -156,7 +156,7 @@ describe('admissions.list', () => {
 		await caller.admissions.list({ roles: [Role.HACKER, Role.ORGANIZER] });
 		expect(db.user.findMany).toHaveBeenCalledWith(
 			expect.objectContaining({
-				where: expect.objectContaining({ roles: { hasSome: [Role.HACKER] } })
+				where: { AND: expect.arrayContaining([{ roles: { hasSome: [Role.HACKER] } }]) }
 			})
 		);
 	});
@@ -176,14 +176,39 @@ describe('admissions.list', () => {
 		await caller.admissions.list({ decision: DecisionStatus.ACCEPTED });
 		expect(db.user.findMany).toHaveBeenCalledWith(
 			expect.objectContaining({
-				where: expect.objectContaining({
-					OR: [
-						{ pendingDecision: DecisionStatus.ACCEPTED },
-						{ activeDecision: DecisionStatus.ACCEPTED }
-					]
-				})
+				where: {
+					AND: expect.arrayContaining([
+						{
+							OR: [
+								{ pendingDecision: DecisionStatus.ACCEPTED },
+								{ activeDecision: DecisionStatus.ACCEPTED }
+							]
+						}
+					])
+				}
 			})
 		);
+	});
+
+	it('keeps the decision filter when a search term is also present', async () => {
+		// Regression: both filters used to write a top-level `OR`, so search silently
+		// overwrote the decision clause and returned matches of any decision.
+		const caller = createTestCaller(db, adminUser);
+		db.user.findMany.mockResolvedValue([pendingUser] as never);
+		await caller.admissions.list({ decision: DecisionStatus.ACCEPTED, search: 'ana' });
+		const where = db.user.findMany.mock.calls[0]?.[0]?.where as { AND: unknown[] };
+		expect(where.AND).toContainEqual({
+			OR: [
+				{ pendingDecision: DecisionStatus.ACCEPTED },
+				{ activeDecision: DecisionStatus.ACCEPTED }
+			]
+		});
+		expect(where.AND).toContainEqual({
+			OR: [
+				{ name: { contains: 'ana', mode: 'insensitive' } },
+				{ email: { contains: 'ana', mode: 'insensitive' } }
+			]
+		});
 	});
 
 	it('throws FORBIDDEN for non-admin', async () => {
@@ -533,14 +558,16 @@ describe('admissions.release', () => {
 		db.user.findMany.mockResolvedValue([pendingUser] as never);
 		db.settings.findFirst.mockResolvedValue(null);
 		db.log.create.mockResolvedValue({} as never);
-		db.$transaction.mockResolvedValue([]);
+		// Each swap reports one row updated (the compare-and-swap took).
+		db.$transaction.mockResolvedValue([{ count: 1 }]);
 
 		const result = await caller.admissions.release({});
 		expect(result).toEqual({ released: 1 });
 		expect(db.$transaction).toHaveBeenCalled();
-		// user.update should be called once (inside the map)
-		expect(db.user.update).toHaveBeenCalledWith(
+		// updateMany is the compare-and-swap: keyed on the exact pending value we read.
+		expect(db.user.updateMany).toHaveBeenCalledWith(
 			expect.objectContaining({
+				where: { uid: pendingUser.uid, pendingDecision: pendingUser.pendingDecision },
 				data: {
 					activeDecision: pendingUser.pendingDecision,
 					pendingDecision: null,
@@ -556,11 +583,11 @@ describe('admissions.release', () => {
 		db.user.findMany.mockResolvedValue([pendingUser] as never);
 		db.settings.findFirst.mockResolvedValue(null);
 		db.log.create.mockResolvedValue({} as never);
-		db.$transaction.mockResolvedValue([]);
+		db.$transaction.mockResolvedValue([{ count: 1 }]);
 
 		await caller.admissions.release({});
 
-		const data = db.user.update.mock.calls[0]?.[0]?.data;
+		const data = db.user.updateMany.mock.calls[0]?.[0]?.data;
 		expect(data).toMatchObject({ claimedBy: null, claimedAt: null });
 	});
 
@@ -569,7 +596,7 @@ describe('admissions.release', () => {
 		db.user.findMany.mockResolvedValue([pendingUser] as never);
 		db.settings.findFirst.mockResolvedValue(null);
 		db.log.create.mockResolvedValue({} as never);
-		db.$transaction.mockResolvedValue([]);
+		db.$transaction.mockResolvedValue([{ count: 1 }]);
 
 		await caller.admissions.release({});
 
@@ -590,7 +617,7 @@ describe('admissions.release', () => {
 		db.user.findMany.mockResolvedValue([pendingUser] as never);
 		db.settings.findFirst.mockResolvedValue(mockSettings);
 		db.log.create.mockResolvedValue({} as never);
-		db.$transaction.mockResolvedValue([]);
+		db.$transaction.mockResolvedValue([{ count: 1 }]);
 
 		await caller.admissions.release({});
 

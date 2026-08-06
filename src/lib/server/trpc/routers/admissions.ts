@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { TRPCError } from '@trpc/server';
+import type { Prisma } from '$lib/generated/prisma/client';
 import { Role, DecisionStatus } from '$lib/generated/prisma/client';
 import { router, adminProcedure } from '../init';
 import { logAction } from '$lib/server/log';
@@ -70,20 +71,26 @@ export const admissionsRouter = router({
 			const applicantRoles = narrowToApplicants(roles);
 			if (applicantRoles.length === 0) return [];
 
+			// Stacked under AND: the decision filter and the search filter each contribute an
+			// `OR` clause, and spreading both into one object literal silently dropped the
+			// decision `OR` (the later key wins) — so searching on the "Accepted" tab returned
+			// every match regardless of decision. Separate array entries can't collide.
+			const conditions: Prisma.UserWhereInput[] = [{ roles: { hasSome: applicantRoles } }];
+			if (noDecision) conditions.push({ pendingDecision: null, activeDecision: null });
+			if (decision !== undefined) {
+				conditions.push({ OR: [{ pendingDecision: decision }, { activeDecision: decision }] });
+			}
+			if (search) {
+				conditions.push({
+					OR: [
+						{ name: { contains: search, mode: 'insensitive' as const } },
+						{ email: { contains: search, mode: 'insensitive' as const } }
+					]
+				});
+			}
+
 			const users = await ctx.prisma.user.findMany({
-				where: {
-					roles: { hasSome: applicantRoles },
-					...(noDecision && { pendingDecision: null, activeDecision: null }),
-					...(decision !== undefined && {
-						OR: [{ pendingDecision: decision }, { activeDecision: decision }]
-					}),
-					...(search && {
-						OR: [
-							{ name: { contains: search, mode: 'insensitive' as const } },
-							{ email: { contains: search, mode: 'insensitive' as const } }
-						]
-					})
-				},
+				where: { AND: conditions },
 				include: {
 					application: { include: { question: true } }
 				},
@@ -215,7 +222,13 @@ export const admissionsRouter = router({
 		.input(
 			z.object({
 				uid: z.string(),
-				decision: z.nativeEnum(DecisionStatus)
+				// PENDING is a starting state, not a decision anyone reviews toward. Allowing
+				// it here let `release` promote `activeDecision: PENDING` and email nothing.
+				decision: z.enum([
+					DecisionStatus.ACCEPTED,
+					DecisionStatus.REJECTED,
+					DecisionStatus.WAITLISTED
+				])
 			})
 		)
 		.mutation(async ({ ctx, input }) => {
@@ -298,11 +311,15 @@ export const admissionsRouter = router({
 			// Fetch settings for email templates
 			const settings = await ctx.prisma.settings.findFirst();
 
-			// Apply all pending decisions to active decisions in a transaction
-			await ctx.prisma.$transaction(
+			// Apply each pending decision as a compare-and-swap keyed on the exact value we
+			// read. Keying on `uid` alone would let a `setDecision`/`updateDecisions` change
+			// that landed between the read and here be silently overwritten with the stale
+			// value — and, worse, email the applicant that stale (irreversible) outcome. A
+			// row whose pendingDecision moved matches nothing and is dropped from this batch.
+			const swaps = await ctx.prisma.$transaction(
 				users.map((u) =>
-					ctx.prisma.user.update({
-						where: { uid: u.uid },
+					ctx.prisma.user.updateMany({
+						where: { uid: u.uid, pendingDecision: u.pendingDecision },
 						data: {
 							activeDecision: u.pendingDecision,
 							pendingDecision: null,
@@ -314,6 +331,9 @@ export const admissionsRouter = router({
 					})
 				)
 			);
+
+			// Only users whose swap actually took are released — and get mailed.
+			const releasedUsers = users.filter((_, i) => swaps[i].count === 1);
 
 			// Send emails per decision type (fire-and-forget in dev)
 			let emailsAttempted = 0;
@@ -336,7 +356,7 @@ export const admissionsRouter = router({
 					[DecisionStatus.PENDING]: { subject: '', body: '' }
 				};
 
-				const recipients = users.filter(
+				const recipients = releasedUsers.filter(
 					(u) => u.pendingDecision && templateMap[u.pendingDecision].body
 				);
 				emailsAttempted = recipients.length;
@@ -357,28 +377,34 @@ export const admissionsRouter = router({
 			// carries the full breakdown: who was affected, what each decision was,
 			// and how many notifications actually made it out.
 			const byDecision: Record<string, number> = {};
-			for (const u of users) {
+			for (const u of releasedUsers) {
 				const key = u.pendingDecision ?? 'none';
 				byDecision[key] = (byDecision[key] ?? 0) + 1;
 			}
 
+			// A row can be skipped if its pending decision moved between the read and the
+			// swap — surface that rather than silently reporting fewer released.
+			const skipped = users.length - releasedUsers.length;
+
 			await logAction(ctx, {
 				action: 'admissions.release',
 				summary:
-					`Released ${users.length} ${users.length === 1 ? 'decision' : 'decisions'} ` +
+					`Released ${releasedUsers.length} ${releasedUsers.length === 1 ? 'decision' : 'decisions'} ` +
 					`(${Object.entries(byDecision)
 						.map(([decision, count]) => `${count} ${decision.toLowerCase()}`)
 						.join(', ')})` +
+					(skipped > 0 ? ` — ${skipped} changed mid-release and were skipped` : '') +
 					(emailsFailed > 0 ? ` — ${emailsFailed} emails failed to send` : ''),
 				metadata: {
-					released: users.length,
+					released: releasedUsers.length,
 					...byDecision,
 					scope: restrictToUids ? 'selected' : 'all pending',
+					skipped,
 					emailsAttempted,
 					emailsFailed
 				}
 			});
 
-			return { released: users.length };
+			return { released: releasedUsers.length };
 		})
 });

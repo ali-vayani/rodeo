@@ -25,9 +25,10 @@ describe('dashboard.stats', () => {
 				{ status: UserStatus.CREATED, _count: { status: 7 } },
 				{ status: UserStatus.APPLIED, _count: { status: 3 } }
 			] as never)
+			// byDecision now counts with `_all` so the null bucket is a real count, not 0.
 			.mockResolvedValueOnce([
-				{ activeDecision: DecisionStatus.ACCEPTED, _count: { activeDecision: 2 } },
-				{ activeDecision: null, _count: { activeDecision: 8 } }
+				{ activeDecision: DecisionStatus.ACCEPTED, _count: { _all: 2 } },
+				{ activeDecision: null, _count: { _all: 8 } }
 			] as never);
 		db.user.findMany.mockResolvedValue([
 			{ roles: [Role.HACKER] } as never,

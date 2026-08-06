@@ -228,3 +228,130 @@ updating the existing row.
 - `.gitignore` covers `.env*` (except `.env.example`) and `src/lib/generated`; no secret or
   generated client is tracked.
 - The OAuth callback validates its `next` parameter against absolute URLs.
+
+---
+
+---
+
+# Second audit pass (post-`61bee0b`)
+
+A full re-audit of the whole codebase, run after the first round of fixes above. Six
+subsystem sweeps (auth/env/session, hacker routers, admin routers, portal/scan,
+route/page layer, config/schema/email) plus independent verification of every finding by
+reading the code path end to end. Everything below was **fixed** in this pass unless the
+heading says otherwise.
+
+Baseline after this pass: **454/454 tests pass** (was 433), `svelte-check` 0 errors,
+`npm run lint` clean, production build succeeds, dev server boots, and the route-guard
+bypass fix (C3) was verified against a live server.
+
+## Critical / High
+
+### C3. Route guard bypass via a percent-encoded path
+
+`src/hooks.server.ts`. The guard tested the raw `event.url.pathname` with
+`startsWith('/admin/')`, but SvelteKit routes on the _decoded_ path — so `/%61dmin/...`
+(`%61`→`a`) skipped the guard entirely while still resolving to the admin route. Any
+authenticated hacker could open `/%61dmin/settings`; an anonymous visitor got a 500 on
+`/%61dmin/users` instead of a login redirect. **Fix:** decode the path with SvelteKit's
+own `decode_pathname` algorithm before every guard check. Verified live: `/%61dmin/*` and
+`/%68acker/*` now redirect to `/login`.
+
+### H4. `user.me` / `team.getMyTeam` leaked other users' unreleased decisions and PII
+
+`src/lib/server/trpc/routers/user.ts`, `.../team.ts`. Both used `include` on nested team
+members and invitees, returning every scalar of _other people's_ `User` rows — email,
+university, status, `claimedBy`, and above all `pendingDecision`, the embargoed decision
+no one may see before `admissions.release`. Any hacker could read a teammate's (or a mere
+invitee's) fate early from the page payload. **Fix:** a shared whitelist projection
+(`src/lib/server/trpc/selects.ts`) — nested users expose only `{uid,name,email,roles}`,
+and the caller's own row drops `pendingDecision` and the claim columns.
+
+### H5. `application.submit` accepted blank answers to required questions
+
+`.../application.ts`. `submit` built its "answered" set from row _existence_, and `save`
+accepted `""`, so an applicant could satisfy every required question with empty strings.
+**Fix:** count only responses whose trimmed value is non-empty.
+
+### H6. `questions.list` was public and unfiltered
+
+`.../questions.ts`. `publicProcedure` with no role returned every question — the same rows
+`listAll` guards behind admin, including `regex`/`linkedField` internals and staff-audience
+questions — to anyone. **Fix:** `authedProcedure`, bounded to applicant-audience (or
+untargeted) questions; staff-only questions are never returned to the application form.
+
+## Medium
+
+- **M6. `admissions.list` dropped the decision filter when searching.** Two conditional
+  spreads both wrote a top-level `OR`, so search silently overwrote the decision clause.
+  Rebuilt as an `AND` array. (`admissions.ts`)
+- **M7. `admissions.release` was a stale check-then-write** — it could publish and email an
+  irreversible decision that another admin had changed mid-batch. Now a per-row
+  compare-and-swap (`updateMany` keyed on the exact pending value); rows that moved are
+  skipped and logged. (`admissions.ts`)
+- **M8. `email.sendCustom` was not bound to the previewed count** — `filters:{}` matches
+  everyone, so a client bug or replay could mail the whole database. Now requires an
+  `expectedCount` and refuses if the set drifted. (`email.ts`, custom-email page)
+- **M9. `email.sendTest` was an authenticated relay to any address** with the body never
+  audited. Restricted to the calling admin's own inbox. (`email.ts`, templates page)
+- **M10. Open redirect via backslash** — `startsWith('/') && !'//'` let `/\evil.com`
+  through (browsers normalize `\`→`/`). Both the dev-login action and the OAuth callback now
+  validate by parsing against the origin. (`login/+page.server.ts`, `auth/callback`)
+- **M11. `updateRole` could remove the last admin** (or self-demote to lockout). Now refuses
+  to strip ADMIN when no other admin remains, and rejects an empty role array. (`user.ts`)
+- **M12. Scan check-in never set `CHECKED_IN`** — the whole checked-in branch (dashboard
+  count, hacker view, `joinByCode` allowance) was dead. `scanUser` now promotes
+  CONFIRMED→CHECKED_IN on the check-in action, atomically with the scan row. (`scan.ts`)
+- **M13. Team lifecycle holes:** `acceptInvite` didn't check the caller was teamless
+  (team-hop → orphaned team); eligibility (accepted+confirmed/checked-in) was enforced
+  inconsistently across `createTeam`/`inviteMember`/`acceptInvite`/`joinByCode`;
+  `declineInvite` didn't require PENDING; `leaveTeam` was a non-atomic check-then-delete;
+  `inviteMember` was an account-existence/admission oracle. All fixed: a shared
+  `isTeamEligible`, an in-transaction teamId re-check, a PENDING guard, an atomic leave,
+  and a generic `{sent:true}` invite response. (`team.ts`)
+- **M14. RSVP could downgrade a CHECKED_IN attendee** and a declined spot could be
+  re-confirmed despite the "permanent" copy. `rsvp`/`rsvpDecline` now reject CHECKED_IN,
+  and `rsvp` rejects DECLINED. (`application.ts`)
+- **M15. No answer validation server-side** — a NUMBER field accepted "potato", a dropdown
+  accepted a non-option, values were unbounded (and flowed into `User.name` via
+  `linkedField`). `save` now validates type/options/min/max/regex, caps length, and rejects
+  a missing question (NOT_FOUND) or wrong-audience question (FORBIDDEN). (`application.ts`)
+- **M16. Application role selector was never persisted** — applying as Judge/Mentor/
+  Volunteer dead-ended because `submit` validated against `[HACKER]`. `submit` now accepts
+  and stores the applicant role. (`application.ts`, application page)
+- **M17. No security headers.** Added `X-Frame-Options: DENY`, `X-Content-Type-Options`,
+  and `Referrer-Policy` on every response. (`hooks.server.ts`)
+- **M18. `settings.update` bypassed the template bounds** `updateTemplates` enforces, and
+  had no date-ordering check. Added min/max on template/subject columns and a refine that
+  open ≤ deadline ≤ RSVP. (`settings.ts`)
+- **M19. Dev bypass could run against a remote DB.** `validateEnv` now refuses
+  `ALLOW_DEV_AUTH=1` unless `DATABASE_URL` is local, and `.env.example` ships the flag
+  commented out. (`env.ts`, `.env.example`)
+- **M20. Email markdown rendered user-controlled `{{name}}` as raw HTML.** Variable values
+  are now HTML-escaped for the body path (subjects and the preview are unaffected).
+  (`email/variables.ts`, `email.ts`)
+
+## Low (fixed)
+
+- `sectionForPath` fail-open — an unmapped `/admin/*` path is now admin-only. (`hooks`)
+- `canAccessHackerPortal` denied a combined ADMIN+ORGANIZER — admins keep access. (`permissions.ts`)
+- `dashboard.stats` "no decision" bucket was always 0 (per-field count ignores nulls) — now `_all`.
+- Recipient email filters were case-sensitive against lowercased stored addresses — now normalized. (`recipients.ts`, `email.ts`)
+- CSV formula-injection set missing `\t` and `\r`. (`user.ts`)
+- `schedule` events could end before they start, and a bad id 500'd instead of NOT_FOUND. (`schedule.ts`)
+- `getProdSession` did an upsert (a write + row lock) on every request — now read-first. (`auth.ts`)
+- `docker-compose` bound Postgres on all interfaces with `echo/echo` creds; now loopback-only and aligned to `.env.example`.
+- `.gitignore` un-ignored `.env.test`.
+- Added `Scan` indexes for the duplicate-check and recent-scans queries. (`schema.prisma`)
+
+## Verified as already handled or deliberately not changed
+
+- Root-router procedure wiring is correct: every per-person-data procedure is `adminProcedure`;
+  the only `portalProcedure` uses (scan, schedule, dashboard aggregates) expose no per-person data.
+- `admissions.setDecision` remains a clean compare-and-swap; the tempting applicant-role
+  pre-check was intentionally **not** added, to keep it a single conditional UPDATE (staff
+  uids never reach the endpoint via the UI).
+- No `@@unique([teamId,email])` was added to `Invitation`: the model keeps DECLINED rows, so
+  a unique constraint would break re-inviting a previously-declined address.
+- Supabase auth cookies stay `httpOnly:false` — required by the browser client that
+  initiates the OAuth redirect; noted, not changed.

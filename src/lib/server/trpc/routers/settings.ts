@@ -4,27 +4,44 @@ import { TEMPLATE_KEYS, type TemplateKey } from '$lib/email/templates';
 import { isAdmin } from '$lib/auth/permissions';
 import { logAction, listOrNone } from '$lib/server/log';
 
-const settingsInput = z.object({
-	applicationOpen: z.coerce.date(),
-	applicationDeadline: z.coerce.date(),
-	RSVPDeadline: z.coerce.date(),
-	admissionsSend: z.coerce.date().optional(),
-	hackathonStartDate: z.coerce.date(),
-	scanActions: z.array(z.string()),
-	submitTemplate: z.string(),
-	submitSubject: z.string(),
-	acceptTemplate: z.string(),
-	acceptSubject: z.string(),
-	confirmTemplate: z.string(),
-	confirmSubject: z.string(),
-	declineTemplate: z.string(),
-	declineSubject: z.string(),
-	rejectTemplate: z.string(),
-	rejectSubject: z.string(),
-	waitlistTemplate: z.string(),
-	waitlistSubject: z.string(),
-	timezone: z.string()
-});
+// Same bounds `updateTemplates` enforces — a subject is 1–200 chars, a body ≤20k. This
+// full-object PUT is the other write path to those columns, and leaving it unbounded let
+// it store an empty subject or a multi-megabyte template that `admissions.release` mails.
+const subject = z.string().min(1).max(200);
+const templateBody = z.string().max(20000);
+
+const settingsInput = z
+	.object({
+		applicationOpen: z.coerce.date(),
+		applicationDeadline: z.coerce.date(),
+		RSVPDeadline: z.coerce.date(),
+		admissionsSend: z.coerce.date().optional(),
+		hackathonStartDate: z.coerce.date(),
+		scanActions: z.array(z.string().min(1).max(100)).max(50),
+		submitTemplate: templateBody,
+		submitSubject: subject,
+		acceptTemplate: templateBody,
+		acceptSubject: subject,
+		confirmTemplate: templateBody,
+		confirmSubject: subject,
+		declineTemplate: templateBody,
+		declineSubject: subject,
+		rejectTemplate: templateBody,
+		rejectSubject: subject,
+		waitlistTemplate: templateBody,
+		waitlistSubject: subject,
+		timezone: z.string().min(1)
+	})
+	// Applications must open before they close, and RSVP can't fall before the deadline —
+	// otherwise the window guards lock every applicant out with a nonsensical message.
+	.refine((s) => s.applicationOpen <= s.applicationDeadline, {
+		message: 'Applications must open before they close.',
+		path: ['applicationDeadline']
+	})
+	.refine((s) => s.applicationDeadline <= s.RSVPDeadline, {
+		message: 'The RSVP deadline must be on or after the application deadline.',
+		path: ['RSVPDeadline']
+	});
 
 export const DEFAULT_SETTINGS = {
 	applicationOpen: new Date(),

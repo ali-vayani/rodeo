@@ -49,7 +49,7 @@ describe('email.sendCustom', () => {
 		db.user.findMany.mockResolvedValue([hackerUser, appliedHacker] as never);
 		db.emailLog.create.mockResolvedValue(emailLog as never);
 
-		const result = await caller.email.sendCustom(emailInput);
+		const result = await caller.email.sendCustom({ ...emailInput, expectedCount: 2 });
 
 		expect(result).toEqual({ sent: 2 });
 		expect(sendEmail).toHaveBeenCalledTimes(2);
@@ -67,7 +67,8 @@ describe('email.sendCustom', () => {
 
 		await caller.email.sendCustom({
 			...emailInput,
-			filters: { roles: [Role.HACKER] }
+			filters: { roles: [Role.HACKER] },
+			expectedCount: 1
 		});
 
 		expect(db.user.findMany).toHaveBeenCalledWith(
@@ -84,7 +85,8 @@ describe('email.sendCustom', () => {
 
 		await caller.email.sendCustom({
 			...emailInput,
-			filters: { statuses: [UserStatus.APPLIED] }
+			filters: { statuses: [UserStatus.APPLIED] },
+			expectedCount: 1
 		});
 
 		expect(db.user.findMany).toHaveBeenCalledWith(
@@ -98,7 +100,7 @@ describe('email.sendCustom', () => {
 		const caller = createTestCaller(db, adminUser);
 		db.user.findMany.mockResolvedValue([] as never);
 
-		const result = await caller.email.sendCustom(emailInput);
+		const result = await caller.email.sendCustom({ ...emailInput, expectedCount: 0 });
 
 		expect(result).toEqual({ sent: 0 });
 		expect(sendEmail).not.toHaveBeenCalled();
@@ -107,7 +109,9 @@ describe('email.sendCustom', () => {
 
 	it('throws FORBIDDEN for non-admin', async () => {
 		const caller = createTestCaller(db, hackerUser);
-		await expect(caller.email.sendCustom(emailInput)).rejects.toMatchObject({
+		await expect(
+			caller.email.sendCustom({ ...emailInput, expectedCount: 0 })
+		).rejects.toMatchObject({
 			code: 'FORBIDDEN'
 		});
 	});
@@ -121,7 +125,8 @@ describe('email.sendCustom', () => {
 		await caller.email.sendCustom({
 			subject: 'Hi {{name}}',
 			body: 'We start {{hackathon_start}}, {{name}}.',
-			filters: {}
+			filters: {},
+			expectedCount: 2
 		});
 
 		const start = mockSettings.hackathonStartDate.toLocaleDateString();
@@ -145,7 +150,12 @@ describe('email.sendCustom', () => {
 		db.settings.findFirst.mockResolvedValue(mockSettings);
 		db.emailLog.create.mockResolvedValue(emailLog as never);
 
-		await caller.email.sendCustom({ subject: 'Hi {{name}}', body: 'Body {{name}}', filters: {} });
+		await caller.email.sendCustom({
+			subject: 'Hi {{name}}',
+			body: 'Body {{name}}',
+			filters: {},
+			expectedCount: 1
+		});
 
 		expect(db.emailLog.create).toHaveBeenCalledWith(
 			expect.objectContaining({
@@ -161,7 +171,8 @@ describe('email.sendCustom', () => {
 
 		const result = await caller.email.sendCustom({
 			...emailInput,
-			filters: { decisions: [], includeNoDecision: false }
+			filters: { decisions: [], includeNoDecision: false },
+			expectedCount: 0
 		});
 
 		expect(db.user.findMany).toHaveBeenCalledWith(
@@ -271,13 +282,15 @@ describe('email.sendTest', () => {
 		});
 	});
 
-	it('honours an explicit recipient', async () => {
+	it('always sends to the calling admin, never an arbitrary address', async () => {
+		// The `to` field was removed: sendTest is a "read your draft in your own inbox"
+		// tool, not an authenticated relay to any address.
 		const caller = createTestCaller(db, adminUser);
 		db.settings.findFirst.mockResolvedValue(mockSettings);
 
-		const result = await caller.email.sendTest({ ...testInput, to: 'someone@yopmail.com' });
+		const result = await caller.email.sendTest(testInput);
 
-		expect(result.to).toBe('someone@yopmail.com');
+		expect(result.to).toBe(adminUser.email);
 	});
 
 	it('falls back to sample variables when no settings row exists', async () => {

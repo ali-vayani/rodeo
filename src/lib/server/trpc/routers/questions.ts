@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { Role, QuestionType } from '$lib/generated/prisma/client';
-import { router, publicProcedure, adminProcedure } from '../init';
+import { router, authedProcedure, adminProcedure } from '../init';
+import { APPLICANT_ROLES } from '$lib/admissions/roles';
 import { logAction } from '$lib/server/log';
 
 const questionInput = z.object({
@@ -18,15 +19,19 @@ const questionInput = z.object({
 });
 
 export const questionsRouter = router({
-	list: publicProcedure
+	// The application form. `authedProcedure`, not public: with no role it used to return
+	// every Question to anyone — the same rows `listAll` guards behind admin — including
+	// `regex`/`linkedField` internals and staff-audience questions. Now it is gated, and
+	// bounded to applicant-audience (or untargeted) questions so a hacker can pick which
+	// role to apply as without ever seeing an ORGANIZER/ADMIN-only question.
+	list: authedProcedure
 		.input(z.object({ role: z.nativeEnum(Role).optional() }))
 		.query(async ({ ctx, input }) => {
+			const audience = input.role ? [input.role] : APPLICANT_ROLES;
 			return ctx.prisma.question.findMany({
-				where: input.role
-					? {
-							OR: [{ targetRole: { isEmpty: true } }, { targetRole: { has: input.role } }]
-						}
-					: undefined,
+				where: {
+					OR: [{ targetRole: { isEmpty: true } }, { targetRole: { hasSome: audience } }]
+				},
 				orderBy: { order: 'asc' }
 			});
 		}),

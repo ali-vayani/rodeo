@@ -51,8 +51,14 @@ async function getProdSession(event: RequestEvent) {
 	const email = sbUser.email.toLowerCase();
 	const name = sbUser.user_metadata?.full_name ?? sbUser.user_metadata?.name ?? email.split('@')[0];
 
-	// Upsert rather than find-then-create: two tabs finishing the OAuth handshake
-	// at once would otherwise race on the unique email index and 500 one of them.
+	// The common case — a returning user — is a read: this runs on every routed request
+	// via hooks, and an unconditional upsert took a row-lock write per page view,
+	// contending with admissions.claim/heartbeat on the same rows. Only a first login
+	// falls through to the upsert, which still resolves the two-tabs handshake race (both
+	// tabs would otherwise collide on the unique email index and 500 one).
+	const existing = await prisma.user.findUnique({ where: { email } });
+	if (existing) return existing;
+
 	return prisma.user.upsert({
 		where: { email },
 		update: {},

@@ -127,7 +127,10 @@
 			const result = await trpc.email.sendCustom.mutate({
 				subject,
 				body,
-				filters: filters as never
+				filters: filters as never,
+				// Bind the send to the number just shown in the confirm step; the server
+				// refuses if the set drifted, so a stale filter can't silently mail everyone.
+				expectedCount: count
 			});
 			toast.success(`Sent to ${pluralize(result.sent, 'user')}`);
 			const refreshed = await trpc.email.getLogs.query({ page: 1, pageSize: 10 });

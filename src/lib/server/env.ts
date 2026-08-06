@@ -54,6 +54,18 @@ function required(key: string): string {
 	return value;
 }
 
+const LOCAL_DB_HOSTS = ['localhost', '127.0.0.1', '::1', '[::1]', 'db', 'postgres'];
+
+/** Whether DATABASE_URL points at a local Postgres. Unparseable counts as non-local. */
+function databaseIsLocal(url: string | undefined): boolean {
+	if (!url) return false;
+	try {
+		return LOCAL_DB_HOSTS.includes(new URL(url).hostname);
+	} catch {
+		return false;
+	}
+}
+
 /**
  * Whether an email transport is configured, and which one.
  *
@@ -93,6 +105,19 @@ export function validateEnv(): void {
 				'where /login signs in any @yopmail.com account with no password. ' +
 				'Set ALLOW_DEV_AUTH=1 if this really is local development; otherwise set ' +
 				'NODE_ENV=production (or VERCEL_ENV) so the deploy authenticates through Supabase.'
+		);
+	}
+
+	// The bypass and a remote database together are the dangerous combination: passwordless
+	// @yopmail.com logins against real applicant data. Even with ALLOW_DEV_AUTH=1 set on
+	// purpose, refuse to run the bypass unless DATABASE_URL is local — mirroring the seed
+	// guard, so a copied .env pointed at production Supabase fails at boot, not at login.
+	if (!usesSupabaseAuth() && env.ALLOW_DEV_AUTH === '1' && !databaseIsLocal(env.DATABASE_URL)) {
+		throw new Error(
+			'Refusing to start: ALLOW_DEV_AUTH=1 enables passwordless @yopmail.com logins, but ' +
+				'DATABASE_URL does not point at a local database. The dev bypass must never run ' +
+				'against a remote/production database. Point DATABASE_URL at localhost, or ' +
+				'authenticate through Supabase (set NODE_ENV=production / VERCEL_ENV).'
 		);
 	}
 

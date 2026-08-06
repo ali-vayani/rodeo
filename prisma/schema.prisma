@@ -191,6 +191,11 @@ model Scan {
   timestamp DateTime @default(now())
   userId    String
   user      User     @relation(fields: [userId], references: [uid], onDelete: Cascade)
+
+  // Backs isDuplicateToday's (userId, action, since-midnight) lookup and getHistory's
+  // per-user trail; the timestamp index backs getRecent's newest-first scan.
+  @@index([userId, action, timestamp])
+  @@index([timestamp])
 }
 
 /// The append-only audit trail: who did what, to whom, and with what detail.
