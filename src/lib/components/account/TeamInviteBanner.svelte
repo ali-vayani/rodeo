@@ -85,7 +85,7 @@
 {#if !dismissed}
 	<div class="mb-6 rounded border border-border bg-white p-5">
 		{#if joined}
-			<p class="text-sm font-medium text-primary">
+			<p class="text-sm font-medium break-words text-primary">
 				You joined <strong>{invite.teamName}</strong>.
 				<a href={resolve('/hacker/account')} class="ml-1 text-muted-foreground underline">
 					Go to your account →
@@ -95,7 +95,7 @@
 			<p class="mb-0.5 text-xs font-medium tracking-widest text-muted-foreground uppercase">
 				Team Invitation
 			</p>
-			<p class="mb-3 text-base font-semibold text-primary">
+			<p class="mb-3 text-base font-semibold break-words text-primary">
 				Join <span class="font-bold">{invite.teamName}</span>
 				<span class="ml-1 text-sm font-normal text-muted-foreground">
 					({invite.memberCount}/{MAX_TEAM_SIZE} members)
@@ -121,7 +121,7 @@
 				<p class="mb-3 text-sm text-destructive" role="alert">{joinError}</p>
 			{/if}
 
-			<div class="flex gap-2">
+			<div class="flex flex-wrap gap-2">
 				<button
 					type="button"
 					onclick={handleJoin}

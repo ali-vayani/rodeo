@@ -156,7 +156,7 @@
 
 <div class="flex flex-col gap-4">
 	<!-- Add form -->
-	<div class="grid grid-cols-[1fr_1fr_1.2fr_1.4fr_auto] gap-2">
+	<div class="grid grid-cols-2 gap-2 lg:grid-cols-[1fr_1fr_1.2fr_1.4fr_auto]">
 		<Input
 			bind:value={addFirstName}
 			placeholder="first name *"
@@ -178,6 +178,7 @@
 			mono
 			onkeydown={onAddKeydown}
 			aria-label="Email"
+			class="col-span-2 lg:col-span-1"
 		/>
 		<Input
 			bind:value={addReason}
@@ -185,8 +186,11 @@
 			mono
 			onkeydown={onAddKeydown}
 			aria-label="Reason"
+			class="col-span-2 lg:col-span-1"
 		/>
-		<Button onclick={addEntry} disabled={!canAdd} loading={adding}>+ Add</Button>
+		<Button onclick={addEntry} disabled={!canAdd} loading={adding} class="col-span-2 lg:col-span-1">
+			+ Add
+		</Button>
 	</div>
 
 	<!-- Toolbar -->

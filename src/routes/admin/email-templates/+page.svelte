@@ -104,7 +104,7 @@
 </script>
 
 <!-- Page header -->
-<div class="mb-4 flex items-center justify-between">
+<div class="mb-4 flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
 	<h1 class="text-[22px] font-bold text-primary">Email Templates</h1>
 	<div class="flex items-center gap-3">
 		<span class="font-mono text-[11px] text-muted-foreground">
@@ -124,19 +124,25 @@
 	</div>
 </div>
 
-<!-- Main card: template list + editor column -->
-<div class="flex h-[calc(100vh-136px)] overflow-hidden rounded-md border border-border bg-white">
+<!-- Main card: template list + editor column.
+     Below md the fixed-height split becomes a natural-height stack: the rail
+     flattens into a horizontal scroll strip on top, and the page scrolls. -->
+<div
+	class="flex flex-col rounded-md border border-border bg-white md:h-[calc(100vh-136px)] md:flex-row md:overflow-hidden"
+>
 	<!-- Template list -->
-	<div class="flex w-[160px] shrink-0 flex-col border-r border-border bg-muted">
+	<div
+		class="flex flex-row overflow-x-auto border-b border-border bg-muted md:w-[160px] md:shrink-0 md:flex-col md:overflow-x-visible md:border-r md:border-b-0"
+	>
 		<div
-			class="border-b border-border px-3 py-[11px] text-[10px] font-bold tracking-widest text-muted-foreground uppercase"
+			class="hidden border-b border-border px-3 py-[11px] text-[10px] font-bold tracking-widest text-muted-foreground uppercase md:block"
 		>
 			Templates
 		</div>
 		{#each EMAIL_TEMPLATES as t (t.key)}
 			<button
 				onclick={() => (active = t.key)}
-				class="flex cursor-pointer items-center justify-between gap-2 border-b border-border px-4 py-[11px] text-left text-[13px] transition-colors {active ===
+				class="flex shrink-0 cursor-pointer items-center justify-between gap-2 border-border px-4 py-[11px] text-left text-[13px] whitespace-nowrap transition-colors md:shrink md:border-b md:whitespace-normal {active ===
 				t.key
 					? 'bg-white font-semibold text-primary'
 					: 'bg-transparent text-primary hover:bg-[#ebebeb]'}"
@@ -150,7 +156,7 @@
 	</div>
 
 	<!-- Editor column -->
-	<div class="flex min-w-0 flex-1 flex-col gap-4 p-8">
+	<div class="flex min-w-0 flex-1 flex-col gap-4 p-4 md:p-8">
 		<div>
 			<h2 class="text-[15px] font-semibold text-primary">{activeMeta.label}</h2>
 			<p class="mt-0.5 text-xs text-muted-foreground">{activeMeta.description}</p>
@@ -168,10 +174,11 @@
 			<EmailPreview subject={drafts[active].subject} body={drafts[active].body} />
 		{/key}
 
-		<!-- Actions pinned to the bottom -->
-		<div class="mt-auto flex shrink-0 items-center gap-2 border-t border-border pt-4">
+		<!-- Actions pinned to the bottom. Wraps below md: the test-address line
+		     takes its own row so the buttons stay reachable at 320px. -->
+		<div class="mt-auto flex shrink-0 flex-wrap items-center gap-2 border-t border-border pt-4">
 			<span
-				class="shrink-0 text-[13px] text-muted-foreground"
+				class="w-full truncate text-[13px] text-muted-foreground md:w-auto md:shrink-0"
 				title="Test sends go to your own inbox"
 			>
 				Test → {adminEmail}
@@ -190,7 +197,7 @@
 			>
 				Revert
 			</button>
-			<span class="ml-auto truncate text-xs text-muted-foreground">
+			<span class="ml-auto min-w-0 truncate text-xs text-muted-foreground">
 				Dev builds log to the server console.
 			</span>
 		</div>

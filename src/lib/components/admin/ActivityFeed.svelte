@@ -32,7 +32,7 @@
 	}
 </script>
 
-<div class="flex h-full flex-col rounded-md border border-border bg-white px-6 py-5">
+<div class="flex h-full flex-col rounded-md border border-border bg-white p-4 sm:px-6 sm:py-5">
 	<div
 		class="mb-4 shrink-0 text-[11px] font-bold tracking-[0.12em] text-muted-foreground uppercase"
 	>
@@ -42,7 +42,10 @@
 	{#if entries.length === 0}
 		<div class="py-6 text-center text-[13px] text-muted-foreground">No activity yet</div>
 	{:else}
-		<div class="flex-1 overflow-y-auto">
+		<!-- Below lg the feed is stacked in an auto-height row; cap it so the
+		     page doesn't grow with every log entry. On lg+ the grid row
+		     (stretched to the chart column) bounds it instead. -->
+		<div class="max-h-96 flex-1 overflow-y-auto lg:max-h-none">
 			{#each entries as entry (entry.id)}
 				<div class="flex items-start gap-[10px] border-b border-[#f0f0f0] py-[10px]">
 					<div

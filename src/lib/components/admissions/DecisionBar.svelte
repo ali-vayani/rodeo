@@ -66,7 +66,12 @@
 	let actionIsPrimary = $derived(lockState === 'expired' || (lockState === 'locked' && lockFreed));
 </script>
 
-<div class="flex shrink-0 items-center justify-between border-t border-border bg-white px-5 py-3">
+<!-- Sticky below md so Accept/Waitlist/Reject stay reachable while the page
+     scrolls through a long application; static from md up, where the detail
+     pane scrolls internally and the bar is already pinned by the flex column. -->
+<div
+	class="sticky bottom-0 z-10 flex shrink-0 flex-wrap items-center justify-between gap-x-3 gap-y-2 border-t border-border bg-white px-4 py-3 sm:px-5 md:static md:z-auto"
+>
 	<!-- Prev / Next -->
 	<div class="flex gap-1.5">
 		<button
@@ -105,11 +110,11 @@
 			{/if}
 		</div>
 	{:else}
-		<div class="flex gap-2">
+		<div class="flex gap-2 max-md:w-full">
 			<button
 				onclick={() => onDecision('ACCEPTED')}
 				disabled={busy || pendingDecision === 'ACCEPTED'}
-				class="cursor-pointer rounded px-[18px] py-2 text-[13px] font-semibold transition-opacity {pendingDecision ===
+				class="cursor-pointer rounded px-[18px] py-2 text-[13px] font-semibold transition-opacity max-md:flex-1 {pendingDecision ===
 				'ACCEPTED'
 					? 'cursor-default border border-[#6ee7b7] bg-[#d1fae5] text-[#065f46] opacity-70'
 					: 'border border-primary bg-primary text-white'} {busy
@@ -121,7 +126,7 @@
 			<button
 				onclick={() => onDecision('WAITLISTED')}
 				disabled={busy || pendingDecision === 'WAITLISTED'}
-				class="cursor-pointer rounded px-[18px] py-2 text-[13px] font-medium transition-opacity {pendingDecision ===
+				class="cursor-pointer rounded px-[18px] py-2 text-[13px] font-medium transition-opacity max-md:flex-1 {pendingDecision ===
 				'WAITLISTED'
 					? 'cursor-default border border-[#fde68a] bg-[#fef9c3] text-[#713f12] opacity-70'
 					: 'border border-border bg-white text-primary'} {busy ? 'cursor-default opacity-50' : ''}"
@@ -131,7 +136,7 @@
 			<button
 				onclick={() => onDecision('REJECTED')}
 				disabled={busy || pendingDecision === 'REJECTED'}
-				class="cursor-pointer rounded px-[18px] py-2 text-[13px] font-medium transition-opacity {pendingDecision ===
+				class="cursor-pointer rounded px-[18px] py-2 text-[13px] font-medium transition-opacity max-md:flex-1 {pendingDecision ===
 				'REJECTED'
 					? 'cursor-default border border-[#fca5a5] bg-[#fee2e2] text-[#991b1b] opacity-70'
 					: 'border border-border bg-white text-muted-foreground'} {busy

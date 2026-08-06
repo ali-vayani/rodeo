@@ -122,10 +122,13 @@
 		}));
 	});
 
+	// Column widths only from lg up: below that the viewport (or the sidebar at
+	// md) can't afford them, and fixed widths inflate the table's intrinsic
+	// width, which pushes the whole page wider instead of scrolling the table.
 	const COLUMNS: Column<Entry>[] = [
-		{ key: 'timestamp', header: 'When', nowrap: true, width: 'w-40' },
-		{ key: 'actor', header: 'Admin', nowrap: true, width: 'w-44' },
-		{ key: 'action', header: 'Action', nowrap: true, width: 'w-52' },
+		{ key: 'timestamp', header: 'When', nowrap: true, width: 'lg:w-40' },
+		{ key: 'actor', header: 'Admin', nowrap: true, width: 'lg:w-44' },
+		{ key: 'action', header: 'Action', nowrap: true, width: 'lg:w-52' },
 		{ key: 'summary', header: 'Detail' }
 	];
 </script>
@@ -140,13 +143,14 @@
 
 <div class="flex flex-col gap-4">
 	<!-- Filters -->
-	<div class="grid grid-cols-[1.6fr_1fr_1fr_auto_auto_auto] items-end gap-2">
+	<div class="grid grid-cols-2 items-end gap-2 lg:grid-cols-[1.6fr_1fr_1fr_auto_auto_auto]">
 		<Input
 			bind:value={search}
 			oninput={onSearchInput}
 			placeholder="search admin, applicant, or detail…"
 			mono
 			aria-label="Search the activity log"
+			class="col-span-2 lg:col-span-1"
 		/>
 		<Select
 			bind:value={actorId}
@@ -154,6 +158,7 @@
 			placeholder="All admins"
 			ariaLabel="Filter by admin"
 			onValueChange={() => fetchPage(1)}
+			class="col-span-2 lg:col-span-1"
 		/>
 		<Select
 			bind:value={action}
@@ -161,6 +166,7 @@
 			placeholder="All actions"
 			ariaLabel="Filter by action"
 			onValueChange={() => fetchPage(1)}
+			class="col-span-2 lg:col-span-1"
 		/>
 		<Input
 			bind:value={from}
@@ -170,7 +176,9 @@
 			aria-label="From date"
 		/>
 		<Input bind:value={to} type="date" mono onchange={() => fetchPage(1)} aria-label="To date" />
-		<Button onclick={clearFilters} disabled={!hasFilters}>Clear</Button>
+		<Button onclick={clearFilters} disabled={!hasFilters} class="col-span-2 lg:col-span-1">
+			Clear
+		</Button>
 	</div>
 
 	<DataTable

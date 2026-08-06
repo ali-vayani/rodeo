@@ -17,7 +17,7 @@
 	<SidebarNav {links} />
 
 	<!-- Main content -->
-	<main class="mt-topbar min-h-screen flex-1 bg-muted p-4 md:mt-0 md:ml-sidebar md:p-8">
+	<main class="mt-topbar min-h-screen min-w-0 flex-1 bg-muted p-4 md:mt-0 md:ml-sidebar md:p-8">
 		<!--
 			Above the page, and keyed on the code so switching to a different invitation
 			resets the component's dismissed/joined flags rather than carrying them over.

@@ -20,7 +20,7 @@
 	const rsvpPct = $derived(accepted > 0 ? Math.round((confirmed / accepted) * 100) : 0);
 </script>
 
-<div class="h-full rounded-md border border-border bg-white px-6 py-5">
+<div class="h-full rounded-md border border-border bg-white p-4 sm:px-6 sm:py-5">
 	<div class="mb-4 text-[11px] font-bold tracking-[0.12em] text-muted-foreground uppercase">
 		Role Breakdown
 	</div>

@@ -43,7 +43,7 @@
 	<SidebarNav links={visibleLinks} />
 
 	<!-- Main content -->
-	<main class="mt-topbar min-h-screen flex-1 bg-muted p-4 md:mt-0 md:ml-sidebar md:p-8">
+	<main class="mt-topbar min-h-screen min-w-0 flex-1 bg-muted p-4 md:mt-0 md:ml-sidebar md:p-8">
 		{@render children()}
 	</main>
 </div>
