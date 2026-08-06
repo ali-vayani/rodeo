@@ -113,7 +113,7 @@ deploy-production-job:
   stage: deploy-production
   environment:
     name: production
-    url: https://rodeo-2-0.vercel.app
+    url: https://rodeo-2-0-iota.vercel.app
   when: manual
   script:
     - npm ci
