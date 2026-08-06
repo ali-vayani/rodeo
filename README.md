@@ -107,8 +107,10 @@ SEED_HACKERS=10 SEED_JUDGES=0 npm run db:seed
 
 **The seed refuses to run against a non-local database.** It writes passwordless admin
 accounts and can delete accounts, so it checks `DATABASE_URL` and bails on anything that isn't
-localhost, as well as on `NODE_ENV`/`VERCEL_ENV` of `production`. `SEED_ALLOW_PRODUCTION=1`
-overrides it if you genuinely mean to.
+localhost, as well as on `NODE_ENV`/`VERCEL_ENV` of `production`. Two overrides exist:
+`SEED_ALLOW_REMOTE=1` is what CI uses to seed per-branch preview databases — it lifts only the
+localhost check and still refuses production and any database named `postgres` — and
+`SEED_ALLOW_PRODUCTION=1` disables the guard entirely if you genuinely mean to.
 
 ### Schema changes
 
@@ -288,17 +290,63 @@ a test that asserts nothing fails.
 ## Deploying
 
 Vercel, using `@sveltejs/adapter-vercel` on the Node runtime rather than edge — every route
-talks to Postgres through Prisma, which needs a real TCP socket.
+talks to Postgres through Prisma, which needs a real TCP socket. Deploys are driven entirely
+by GitLab CI (`.gitlab-ci.yml`); the Vercel project has **no** Git integration.
 
-For **Supabase**, use the PostgreSQL connection string from your project (Settings → Database)
-as `DATABASE_URL`; prefer the pooler URL on serverless. For auth, enable the Google provider in
-the Supabase dashboard and register `https://<your-domain>/auth/callback` as an authorised
-redirect URL.
+### The pipeline
 
-Set `DATABASE_URL`, `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `EMAIL_FROM`, and one email transport
-(`RESEND_API_KEY`, or all of `EMAIL_HOST`/`EMAIL_USER`/`EMAIL_PASS`). Never set
-`ALLOW_DEV_AUTH` on a deployed environment. `.env.example` documents each variable and why it
-exists.
+Every push runs three stages:
+
+1. **test** — `npm ci`, build, `svelte-check`, lint, unit tests. No database needed:
+   `prisma generate` runs without one.
+2. **deploy-preview** — every branch gets its own preview deploy against its own Postgres
+   database on the shared Supabase server, named after `$CI_COMMIT_REF_SLUG`, dropped and
+   recreated, migrated, and seeded with the fake yopmail data on every run. Pushes to
+   `mainline` also alias the deploy to the staging URL (`rodeo-2-0-nightly.vercel.app`).
+   Branch databases live until someone runs the manual `stop-preview-job` from
+   Deployments → Environments (do this when a branch is done; abandoned databases
+   accumulate otherwise).
+3. **deploy-production** — manual. Runs `prisma migrate deploy` against the production
+   database, then `vercel deploy --prod`. Production is **never seeded**. To promote, a
+   Maintainer who was not the author of the commit runs the job from the pipeline or
+   Deployments → Environments.
+
+**Environment variables live in Vercel**, not GitLab: jobs run `vercel pull` and export the
+result. The GitLab side only stores `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID`, `VERCEL_TOKEN`, and
+`VERCEL_SCOPE` — and the pipeline configuration is pinned to
+`.gitlab-ci.yml@freetail-hackers/Rodeo-2.0:mainline` in the project settings so a branch
+cannot rewrite the pipeline to leak the token.
+
+### Database connections
+
+Two URLs, both stored in Vercel:
+
+- `DATABASE_URL` — the Supabase **transaction pooler** (port 6543). What the app queries
+  through at runtime; safe for many short-lived serverless connections.
+- `DIRECT_URL` — the Supabase **session pooler** (port 5432). What `prisma migrate`, the
+  seed, and psql go through; migrations cannot run over the transaction pooler.
+
+In the **preview** environment both are stored *without* a trailing database name — the
+pipeline appends `/postgres` (admin connection for CREATE/DROP DATABASE) or the branch slug.
+The **production** environment stores complete URLs ending in `/postgres`.
+
+### Supabase auth
+
+Enable the Google provider in the Supabase dashboard and register
+`https://<your-domain>/auth/callback` as an authorised redirect URL. Supabase is auth-only:
+the app talks to Postgres directly through Prisma, so keep the `public` schema out of the
+Data API's exposed schemas — Prisma tables carry no RLS policies.
+
+Set `DATABASE_URL`, `DIRECT_URL`, `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `EMAIL_FROM`, and one
+email transport (`RESEND_API_KEY`, or all of `EMAIL_HOST`/`EMAIL_USER`/`EMAIL_PASS`). Never
+set `ALLOW_DEV_AUTH` on a deployed environment. `.env.example` documents each variable and
+why it exists.
+
+### CI image
+
+Jobs run on `registry.gitlab.com/freetail-hackers/rodeo-2.0` — node:22 plus `psql`, built
+from the `Dockerfile` at the repo root. It changes roughly never; the build/push one-liner
+is in the Dockerfile's header comment.
 
 ## Docs
 

@@ -11,7 +11,16 @@ function createClient() {
 	if (!url) {
 		throw new Error('DATABASE_URL is not set');
 	}
-	const adapter = new PrismaPg({ connectionString: url });
+	const adapter = new PrismaPg({
+		connectionString: url,
+		// Every warm serverless instance holds its own pool, and many instances
+		// can run at once — keep the per-instance cap small so they don't
+		// collectively exhaust Supavisor's client-connection limit. Local dev is
+		// a single process, where 3 is still plenty.
+		max: Number(env.DATABASE_POOL_MAX ?? 3),
+		idleTimeoutMillis: 30_000,
+		connectionTimeoutMillis: 10_000
+	});
 	return new PrismaClient({ adapter });
 }
 
