@@ -218,13 +218,13 @@ describe('devSwitcherEnabled', () => {
 		expect(devSwitcherEnabled()).toBe(false);
 	});
 
-	it('refuses on a preview deploy', () => {
-		workingDevEnv();
+	it('allows preview deploys, with no other conditions', () => {
+		// Previews run against throwaway per-branch schemas of seeded fixtures,
+		// where the switcher grants nothing the /login yopmail form doesn't
+		// already grant — so it is on there even in a built (non-dev) bundle.
+		devFlag = false;
 		env.VERCEL_ENV = 'preview';
-
-		// Preview runs against the production database, which makes it the highest
-		// value target of the three. Both `dev` and usesSupabaseAuth() reject it.
-		expect(devSwitcherEnabled()).toBe(false);
+		expect(devSwitcherEnabled()).toBe(true);
 	});
 
 	it('refuses in production', () => {

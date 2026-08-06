@@ -9,7 +9,7 @@ import {
 
 /** A confirmed hacker — the one shape that may be on a team. */
 const confirmedHacker: TeamEligibilitySubject = {
-	roles: [Role.HACKER],
+	role: Role.HACKER,
 	activeDecision: DecisionStatus.ACCEPTED,
 	status: UserStatus.CONFIRMED
 };
@@ -32,13 +32,14 @@ describe('teamIneligibility', () => {
 			// the status half of the rule says yes to all of them. The reason has to be
 			// the role one or the banner tells a judge to go and confirm a spot they
 			// already confirmed.
-			expect(teamIneligibility({ ...confirmedHacker, roles: [role] })).toBe('NOT_HACKER');
+			expect(teamIneligibility({ ...confirmedHacker, role })).toBe('NOT_HACKER');
 		}
 	);
 
-	it('admits someone who is both staff and a hacker', () => {
-		// An admin who also applied keeps their own application, and their own team.
-		expect(teamIneligibility({ ...confirmedHacker, roles: [Role.ADMIN, Role.HACKER] })).toBeNull();
+	it('refuses staff outright, since they hold no hacker role to be eligible with', () => {
+		// There is no longer a "both staff and a hacker" account to admit: roles are
+		// exclusive, so taking ADMIN is what gives up the team, not an extra flag on it.
+		expect(teamIneligibility({ ...confirmedHacker, role: Role.ADMIN })).toBe('NOT_HACKER');
 	});
 
 	it('refuses a hacker who has not been accepted', () => {
@@ -66,7 +67,7 @@ describe('teamIneligibility', () => {
 
 	it('checks the role before the status, so a non-hacker is never told to confirm', () => {
 		const judgeWhoNeverApplied: TeamEligibilitySubject = {
-			roles: [Role.JUDGE],
+			role: Role.JUDGE,
 			activeDecision: null,
 			status: UserStatus.CREATED
 		};

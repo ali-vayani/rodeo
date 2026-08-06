@@ -52,7 +52,7 @@ const expectedUserSelect = {
 	email: true,
 	university: true,
 	year: true,
-	roles: true,
+	role: true,
 	status: true
 };
 

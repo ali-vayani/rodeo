@@ -1,8 +1,10 @@
 import { error, json } from '@sveltejs/kit';
 import { dev } from '$app/environment';
 import type { RequestHandler } from './$types';
+import type { RequestEvent } from '@sveltejs/kit';
 import { prisma } from '$lib/server/db';
-import { devSwitcherEnabled } from '$lib/server/env';
+import { devSwitcherEnabled, usesSupabaseAuth } from '$lib/server/env';
+import { createSupabaseServerClient } from '$lib/server/supabase';
 import { setSessionCookie, clearSessionCookie } from '$lib/server/auth';
 import { homePathFor } from '$lib/auth/permissions';
 
@@ -50,7 +52,7 @@ const DEV_ACCOUNT_SELECT = {
 	uid: true,
 	name: true,
 	email: true,
-	roles: true,
+	role: true,
 	status: true,
 	activeDecision: true,
 	pendingDecision: true
@@ -72,6 +74,16 @@ function assertEnabled(): void {
 		error(403, 'Dev account switcher is off. It needs ALLOW_DEV_AUTH=1 and a local DATABASE_URL.');
 	}
 	error(404, 'Not found');
+}
+
+/**
+ * On preview deploys a live Google session would shadow the switched account —
+ * `getSession` checks Supabase before the bypass cookie — so becoming someone
+ * ends it first. Development has no Supabase session to end.
+ */
+async function endSupabaseSession(event: RequestEvent): Promise<void> {
+	if (!usesSupabaseAuth()) return;
+	await createSupabaseServerClient(event).auth.signOut();
 }
 
 /**
@@ -128,6 +140,7 @@ export const POST: RequestHandler = async (event) => {
 	// Being signed out is a state worth one click too — the widget is the only way to
 	// reach it from a page with no sidebar.
 	if (uid === null) {
+		await endSupabaseSession(event);
 		clearSessionCookie(event);
 		return json({ redirectTo: '/login' });
 	}
@@ -141,7 +154,7 @@ export const POST: RequestHandler = async (event) => {
 	// presents as a mysterious logout rather than as the typo it is.
 	const user = await prisma.user.findUnique({
 		where: { uid },
-		select: { uid: true, email: true, name: true, roles: true }
+		select: { uid: true, email: true, name: true, role: true }
 	});
 
 	// The same 404 for "no such uid" and "not a seed account", so it is an oracle for
@@ -149,11 +162,12 @@ export const POST: RequestHandler = async (event) => {
 	// be worthless here.
 	if (!user || !user.email.endsWith(SEED_EMAIL_SUFFIX)) error(404, 'No such account.');
 
+	await endSupabaseSession(event);
 	setSessionCookie(event, user.uid);
 
 	// The dev server's terminal, not a Log row. /admin/logs is a product surface and
 	// filling it with impersonation noise would degrade the real audit trail.
 	console.info(`[dev-switcher] session → ${user.email} (${user.name})`);
 
-	return json({ redirectTo: homePathFor(user.roles) });
+	return json({ redirectTo: homePathFor(user.role) });
 };

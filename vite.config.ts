@@ -28,6 +28,12 @@ function excludeDevOnlyClientCode() {
 		enforce: 'pre' as const,
 		load(id: string) {
 			if (!DEV_ONLY.test(id)) return null;
+			// Preview builds keep the switcher — it is enabled there (see
+			// devSwitcherEnabled in src/lib/server/env.ts). Only a production
+			// build empties the modules. VERCEL_ENV is present at build time on
+			// Vercel; a local `vite build` keeps the code and relies on the
+			// runtime gates, same as preview.
+			if (process.env.VERCEL_ENV !== 'production') return null;
 			// A comment is a valid empty Svelte component; everything else is a module
 			// with nothing in it. Either way the chunk has no body to emit.
 			return id.endsWith('.svelte') ? '<!-- dev-only: excluded from this build -->' : 'export {};';

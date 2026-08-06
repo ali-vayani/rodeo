@@ -19,7 +19,7 @@ export interface DevAccount {
 	uid: string;
 	name: string;
 	email: string;
-	roles: Role[];
+	role: Role;
 	status: UserStatus;
 	activeDecision: DecisionStatus | null;
 	pendingDecision: DecisionStatus | null;
@@ -49,13 +49,9 @@ const ROLE_RANK: Role[] = [
 	'UNDECLARED'
 ] as Role[];
 
-/** The role a mixed-role account is filed under: the strongest one it holds. */
-export function primaryRole(roles: Role[]): Role {
-	for (const role of ROLE_RANK) {
-		if (roles.includes(role)) return role;
-	}
-	return (roles[0] ?? 'UNDECLARED') as Role;
-}
+// `primaryRole` used to live here, resolving a mixed-role account to the strongest
+// role it held. Roles are exclusive now, so an account *is* its role and the
+// grouping reads `account.role` directly. ROLE_RANK survives as sort order only.
 
 /** Trailing integer of a seeded address — `hacker42@yopmail.com` → 42. */
 function emailSequence(email: string): number {
@@ -73,8 +69,8 @@ function emailSequence(email: string): number {
 export function indexAccounts(accounts: readonly DevAccount[]): IndexedAccount[] {
 	return accounts.map((account) => ({
 		...account,
-		haystack: `${account.name} ${account.email} ${account.roles.join(' ')}`.toLowerCase(),
-		rank: ROLE_RANK.indexOf(primaryRole(account.roles)),
+		haystack: `${account.name} ${account.email} ${account.role}`.toLowerCase(),
+		rank: ROLE_RANK.indexOf(account.role),
 		seq: emailSequence(account.email)
 	}));
 }
@@ -172,7 +168,7 @@ export function filterAccounts(
 	const pendingDecisions = filters.pendingDecisions ?? [];
 
 	return accounts.filter((account) => {
-		if (roles.length && !account.roles.some((role) => roles.includes(role))) return false;
+		if (roles.length && !roles.includes(account.role)) return false;
 		if (statuses.length && !statuses.includes(account.status)) return false;
 		if (decisions.length && !decisions.includes(decisionValue(account, 'activeDecision'))) {
 			return false;

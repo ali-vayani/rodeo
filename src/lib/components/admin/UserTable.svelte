@@ -1,9 +1,11 @@
 <script lang="ts">
+	import { humanizeEnum } from '$lib/format';
+
 	type User = {
 		uid: string;
 		name: string;
 		email: string;
-		roles: string[];
+		role: string;
 		status: string;
 		pendingDecision: string | null;
 		activeDecision: string | null;
@@ -21,13 +23,6 @@
 
 	function formatDate(d: Date | string): string {
 		return new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-	}
-
-	function primaryRole(roles: string[]): string {
-		const order = ['HACKER', 'MENTOR', 'JUDGE', 'VOLUNTEER', 'ORGANIZER', 'ADMIN'];
-		for (const r of order) if (roles.includes(r)) return r.charAt(0) + r.slice(1).toLowerCase();
-		const first = roles[0];
-		return first ? first.charAt(0) + first.slice(1).toLowerCase() : '—';
 	}
 
 	function statusLabel(s: string): string {
@@ -61,7 +56,7 @@
 							{user.email}
 						</td>
 						<td class="px-[14px] py-[11px] text-[13px] text-[#333]">
-							{primaryRole(user.roles)}
+							{humanizeEnum(user.role)}
 						</td>
 						<td class="px-[14px] py-[11px]">
 							<span class="text-[11px] font-semibold tracking-[0.05em] text-[#555] uppercase">

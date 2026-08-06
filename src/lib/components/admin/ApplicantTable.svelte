@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { humanizeEnum } from '$lib/format';
+
 	let {
 		applicants
 	}: {
@@ -6,7 +8,7 @@
 			uid: string;
 			name: string;
 			email: string;
-			roles: string[];
+			role: string;
 			status: string;
 			activeDecision: string | null;
 			createdAt: Date | string;
@@ -22,14 +24,6 @@
 
 	function formatDate(d: Date | string): string {
 		return new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-	}
-
-	function primaryRole(roles: string[]): string {
-		const order = ['HACKER', 'MENTOR', 'JUDGE', 'VOLUNTEER', 'ORGANIZER', 'ADMIN'];
-		for (const r of order) {
-			if (roles.includes(r)) return r.charAt(0) + r.slice(1).toLowerCase();
-		}
-		return roles[0] ?? '—';
 	}
 </script>
 
@@ -82,7 +76,7 @@
 							{applicant.email}
 						</td>
 						<td class="px-4 py-3 text-[13px] text-[#333]">
-							{primaryRole(applicant.roles)}
+							{humanizeEnum(applicant.role)}
 						</td>
 						<td class="px-4 py-3">
 							<span class="text-[11px] font-semibold tracking-[0.06em] text-[#555] uppercase">

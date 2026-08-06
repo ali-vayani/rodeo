@@ -21,7 +21,7 @@ import { DecisionStatus, Role, UserStatus } from '$lib/generated/prisma/enums';
  * the status half and therefore lit the Join button up for judges.
  */
 export type TeamEligibilitySubject = {
-	roles: Role[];
+	role: Role;
 	activeDecision: DecisionStatus | null;
 	status: UserStatus;
 };
@@ -30,7 +30,7 @@ export type TeamEligibilitySubject = {
 export type TeamIneligibility = 'NOT_HACKER' | 'NOT_CONFIRMED';
 
 export function teamIneligibility(user: TeamEligibilitySubject): TeamIneligibility | null {
-	if (!user.roles.includes(Role.HACKER)) return 'NOT_HACKER';
+	if (user.role !== Role.HACKER) return 'NOT_HACKER';
 	if (user.activeDecision !== DecisionStatus.ACCEPTED) return 'NOT_CONFIRMED';
 	if (user.status !== UserStatus.CONFIRMED && user.status !== UserStatus.CHECKED_IN) {
 		return 'NOT_CONFIRMED';
