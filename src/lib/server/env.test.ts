@@ -17,6 +17,7 @@ const {
 	deployEnv,
 	isProduction,
 	usesSupabaseAuth,
+	yopmailLoginEnabled,
 	emailTransport,
 	emailFrom,
 	validateEnv,
@@ -69,9 +70,27 @@ describe('usesSupabaseAuth', () => {
 
 	it.each(['production', 'preview'])('is on for %s', (where) => {
 		env.VERCEL_ENV = where;
-		// The yopmail bypass against a preview deploy would be an unauthenticated
-		// door into the production database.
+		// Preview still authenticates through Supabase; the yopmail bypass there
+		// is an *additional* door, gated separately by yopmailLoginEnabled.
 		expect(usesSupabaseAuth()).toBe(true);
+	});
+});
+
+describe('yopmailLoginEnabled', () => {
+	it('is on in development', () => {
+		expect(yopmailLoginEnabled()).toBe(true);
+	});
+
+	it('is on for preview deploys', () => {
+		// Previews run against throwaway per-branch databases seeded with
+		// fixtures, mirroring the previous Rodeo's staging behavior.
+		env.VERCEL_ENV = 'preview';
+		expect(yopmailLoginEnabled()).toBe(true);
+	});
+
+	it('is never on in production', () => {
+		env.VERCEL_ENV = 'production';
+		expect(yopmailLoginEnabled()).toBe(false);
 	});
 });
 

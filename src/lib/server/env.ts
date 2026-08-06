@@ -35,18 +35,36 @@ export function isProduction(): boolean {
 }
 
 /**
- * Whether to authenticate through Supabase rather than the yopmail dev bypass.
+ * Whether Supabase (Google) sign-in is available.
  *
- * Preview counts. A preview deploy runs against the production database, so a
- * cookie-only bypass there would be an unauthenticated door into real applicant
- * data — the bypass exists for localhost and nowhere else.
+ * Preview counts: previews are production builds with real credentials, and
+ * Google login must work there. Whether the yopmail bypass is *also* available
+ * is a separate question — `yopmailLoginEnabled()` — because preview deploys
+ * run against throwaway per-branch databases of seeded fixtures, not real
+ * applicant data.
  *
- * This answers what the environment *looks* like, not whether the bypass is
+ * This answers what the environment *looks* like, not whether the dev bypass is
  * permitted: `validateEnv()` additionally demands ALLOW_DEV_AUTH=1 before the
- * app will boot with it on.
+ * app will boot with development auth on.
  */
 export function usesSupabaseAuth(): boolean {
 	return deployEnv() !== 'development';
+}
+
+/**
+ * Whether /login may sign in a seeded @yopmail.com account with no password.
+ *
+ * Development (behind validateEnv's ALLOW_DEV_AUTH and local-database gates)
+ * and preview deploys — never production. Preview is deliberate, mirroring the
+ * previous Rodeo's staging: every preview runs against its own throwaway
+ * per-branch database holding only seeded fixtures, outbound email there is
+ * already restricted to @yopmail.com recipients, and reviewers need to walk
+ * the admin portal without someone first granting their Google account roles.
+ * The bypass still only ever signs into @yopmail.com accounts, so a real
+ * person's Google-created account is never reachable through it.
+ */
+export function yopmailLoginEnabled(): boolean {
+	return !usesSupabaseAuth() || deployEnv() === 'preview';
 }
 
 /**

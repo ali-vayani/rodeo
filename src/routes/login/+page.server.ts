@@ -2,7 +2,7 @@ import { fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import { prisma } from '$lib/server/db';
 import { setSessionCookie } from '$lib/server/auth';
-import { usesSupabaseAuth } from '$lib/server/env';
+import { usesSupabaseAuth, yopmailLoginEnabled } from '$lib/server/env';
 import { env } from '$env/dynamic/private';
 
 export const load: PageServerLoad = async ({ locals, url }) => {
@@ -12,6 +12,8 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 
 	return {
 		supabaseAuth,
+		// Preview deploys offer both: Google, and the seeded test accounts.
+		yopmailLogin: yopmailLoginEnabled(),
 		oauthError: url.searchParams.get('error'),
 		// Where to land after the handshake. Carried through Supabase's redirect
 		// rather than a cookie, so a deep link survives the round trip.
@@ -53,15 +55,15 @@ function safeRedirect(raw: string | null, origin: string): string {
 }
 
 /**
- * The dev bypass, and only the dev bypass.
+ * The yopmail bypass: development and preview deploys, never production.
  *
- * Deployed environments sign in through Google, so there is no password form to
- * post to. The guard refuses outright rather than falling through to a lookup
- * that would log someone in on an email address alone.
+ * Production signs in only through Google, so there is no form to post to. The
+ * guard refuses outright rather than falling through to a lookup that would log
+ * someone in on an email address alone.
  */
 export const actions: Actions = {
 	default: async (event) => {
-		if (usesSupabaseAuth()) {
+		if (!yopmailLoginEnabled()) {
 			return fail(400, { error: 'Sign in with Google.' });
 		}
 
@@ -71,7 +73,7 @@ export const actions: Actions = {
 		if (!email) return fail(400, { error: 'Email is required.' });
 
 		if (!email.endsWith('@yopmail.com')) {
-			return fail(400, { error: 'Only @yopmail.com emails are allowed in dev mode.' });
+			return fail(400, { error: 'Only @yopmail.com test accounts can sign in this way.' });
 		}
 
 		const user = await prisma.user.findUnique({ where: { email } });
