@@ -41,10 +41,8 @@
 		};
 	}
 
-	function primaryRole(roles: string[]): string {
-		if (!roles.length) return 'Attendee';
-		const r = roles[0];
-		return r.charAt(0) + r.slice(1).toLowerCase();
+	function roleLabel(role: string): string {
+		return role.charAt(0) + role.slice(1).toLowerCase();
 	}
 
 	// --- State seeded from SSR load ---
@@ -189,7 +187,7 @@
 			scanState = result.isDuplicate ? 'duplicate' : 'success';
 			lastScan = {
 				name: result.user.name,
-				role: primaryRole(result.user.roles),
+				role: roleLabel(result.user.role),
 				school: result.user.university ?? '—'
 			};
 			recentScans = [

@@ -3,7 +3,7 @@ import { TRPCError } from '@trpc/server';
 import { Role, UserStatus, DecisionStatus, InvitationStatus } from '$lib/generated/prisma/client';
 import { router, authedProcedure, adminProcedure } from '../init';
 import { buildRecipientWhere, recipientFilterSchema } from '$lib/server/recipients';
-import { logAction, listOrNone, valueOrNone } from '$lib/server/log';
+import { logAction, valueOrNone } from '$lib/server/log';
 import { TEAM_MEMBER_SELECT, SELF_USER_SELECT } from '$lib/server/trpc/selects';
 
 /**
@@ -107,25 +107,35 @@ export const userRouter = router({
 		});
 	}),
 
+	/**
+	 * Set an account's role. Singular, and that is the whole point: roles are mutually
+	 * exclusive, so this replaces rather than adds. Granting someone ORGANIZER takes
+	 * away their HACKER role in the same statement, and with it their hacker portal —
+	 * see `$lib/auth/permissions` for why the two populations are disjoint.
+	 */
 	updateRole: adminProcedure
-		.input(z.object({ uid: z.string(), roles: z.array(z.nativeEnum(Role)).min(1) }))
+		.input(z.object({ uid: z.string(), role: z.nativeEnum(Role) }))
 		.mutation(async ({ ctx, input }) => {
-			// Read first so the audit entry can record what the roles *were*. "Ali
-			// changed Sarah's roles to HACKER" answers half the question an audit gets
-			// opened to answer; the other half is what it changed from.
+			// Read first so the audit entry can record what the role *was*. "Ali changed
+			// Sarah's role to HACKER" answers half the question an audit gets opened to
+			// answer; the other half is what it changed from.
 			const before = await ctx.prisma.user.findUniqueOrThrow({
 				where: { uid: input.uid },
-				select: { name: true, roles: true }
+				select: { name: true, role: true }
 			});
 
-			// Don't let the platform be left with no admin. Removing ADMIN from someone who
-			// has it is refused unless another admin remains — otherwise a self-demotion (or
-			// a mis-click) locks everyone out of the admin portal with recovery only via the
+			// Don't let the platform be left with no admin. Moving someone off ADMIN is
+			// refused unless another admin remains — otherwise a self-demotion (or a
+			// mis-click) locks everyone out of the admin portal with recovery only via the
 			// database. `adminProcedure` already proves the caller is currently an admin.
-			const removingAdmin = before.roles.includes(Role.ADMIN) && !input.roles.includes(Role.ADMIN);
-			if (removingAdmin) {
+			//
+			// Exclusive roles make this guard matter more, not less: an admin who takes the
+			// HACKER role no longer keeps admin alongside it, so what used to be an additive
+			// edit is now a demotion.
+			const losingAdmin = before.role === Role.ADMIN && input.role !== Role.ADMIN;
+			if (losingAdmin) {
 				const otherAdmins = await ctx.prisma.user.count({
-					where: { roles: { has: Role.ADMIN }, uid: { not: input.uid } }
+					where: { role: Role.ADMIN, uid: { not: input.uid } }
 				});
 				if (otherAdmins === 0) {
 					throw new TRPCError({
@@ -137,14 +147,14 @@ export const userRouter = router({
 
 			const user = await ctx.prisma.user.update({
 				where: { uid: input.uid },
-				data: { roles: input.roles }
+				data: { role: input.role }
 			});
 
 			await logAction(ctx, {
 				action: 'user.roles.update',
-				summary: `Changed ${user.name}'s roles to ${listOrNone(input.roles)}`,
+				summary: `Changed ${user.name}'s role to ${input.role}`,
 				target: { id: user.uid, label: user.name },
-				metadata: { from: before.roles, to: input.roles }
+				metadata: { from: before.role, to: input.role }
 			});
 
 			return user;
@@ -238,13 +248,13 @@ export const userRouter = router({
 			metadata: { count: users.length }
 		});
 
-		const header = 'uid,name,email,roles,status,pendingDecision,activeDecision,teamId,createdAt';
+		const header = 'uid,name,email,role,status,pendingDecision,activeDecision,teamId,createdAt';
 		const rows = users.map((u) =>
 			[
 				u.uid,
 				u.name,
 				u.email,
-				u.roles.join('|'),
+				u.role,
 				u.status,
 				u.pendingDecision ?? '',
 				u.activeDecision ?? '',

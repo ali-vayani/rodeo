@@ -22,7 +22,10 @@ export const LOG_ACTIONS = [
 	{ key: 'admissions.release', label: 'Decisions released', group: 'Admissions' },
 
 	// Users
-	{ key: 'user.roles.update', label: 'Roles changed', group: 'Users' },
+	// Slug stays plural though a user now holds one role: it is what existing Log rows
+	// were written with, and renaming it would orphan every historical entry from the
+	// logs-page filter. Only the label follows the schema.
+	{ key: 'user.roles.update', label: 'Role changed', group: 'Users' },
 	{ key: 'user.status.update', label: 'Status changed', group: 'Users' },
 	{ key: 'user.decision.override', label: 'Decision overridden', group: 'Users' },
 	{ key: 'user.export', label: 'User list exported', group: 'Users' },

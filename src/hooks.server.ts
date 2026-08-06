@@ -40,7 +40,7 @@ export const handle: Handle = async ({ event, resolve }) => {
 
 	// Redirect authenticated users away from login
 	if (pathname === '/login' && user) {
-		redirect(302, homePathFor(user.roles));
+		redirect(302, homePathFor(user.role));
 	}
 
 	// Guard /hacker/* and /admin/* routes
@@ -50,13 +50,16 @@ export const handle: Handle = async ({ event, resolve }) => {
 			redirect(302, `/login?redirectTo=${redirectTo}`);
 		}
 
-		// Organizers are staff, not attendees — they have no application to fill out.
-		if (pathname.startsWith('/hacker/') && !canAccessHackerPortal(user.roles)) {
-			redirect(302, '/admin/dashboard');
+		// The two portals are disjoint: staff are turned away from /hacker/* and
+		// attendees from /admin/*, each sent to the only portal their role has. Since
+		// `homePathFor` is derived from the same staff/attendee split these guards
+		// test, neither can redirect into a path the other will bounce back.
+		if (pathname.startsWith('/hacker/') && !canAccessHackerPortal(user.role)) {
+			redirect(302, homePathFor(user.role));
 		}
 
 		if (pathname.startsWith('/admin/')) {
-			if (!hasPortalAccess(user.roles)) redirect(302, '/hacker/application');
+			if (!hasPortalAccess(user.role)) redirect(302, homePathFor(user.role));
 
 			// Per-section check, so an organizer can't reach an admin-only page just by
 			// typing the URL. Guarding here rather than per-route also covers pages that
@@ -66,7 +69,7 @@ export const handle: Handle = async ({ event, resolve }) => {
 			// admin page added without a SECTION_PATHS entry must default to the stricter
 			// role, matching how the tRPC procedures fail closed. Only an admin passes.
 			const section = sectionForPath(pathname);
-			if (section ? !canAccess(user.roles, section) : !isAdmin(user.roles)) {
+			if (section ? !canAccess(user.role, section) : !isAdmin(user.role)) {
 				redirect(302, '/admin/dashboard');
 			}
 		}

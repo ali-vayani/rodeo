@@ -22,7 +22,7 @@
 			uid: string;
 			name: string;
 			email: string;
-			roles: string[];
+			role: string;
 			status: string;
 			pendingDecision: string | null;
 			activeDecision: string | null;
@@ -118,13 +118,11 @@
 			</div>
 			<div class="flex shrink-0 flex-wrap justify-end gap-1.5">
 				<BlacklistBadge match={applicant.blacklistMatch} size="md" />
-				{#if applicant.roles.length}
-					<span
-						class="inline-block rounded bg-[#f0f0f0] px-2 py-[3px] text-[11px] font-semibold tracking-[0.04em] text-[#555] uppercase"
-					>
-						{roleLabel(applicant.roles[0])}
-					</span>
-				{/if}
+				<span
+					class="inline-block rounded bg-[#f0f0f0] px-2 py-[3px] text-[11px] font-semibold tracking-[0.04em] text-[#555] uppercase"
+				>
+					{roleLabel(applicant.role)}
+				</span>
 				{#if applicant.pendingDecision}
 					<span
 						class="inline-block rounded px-2 py-[3px] text-[11px] font-semibold {DECISION_CLASS[
@@ -154,7 +152,7 @@
 				Role
 			</div>
 			<div class="text-[13px] text-[#333]">
-				{applicant.roles.length ? roleLabel(applicant.roles[0]) : '—'}
+				{roleLabel(applicant.role)}
 			</div>
 		</div>
 		<div>

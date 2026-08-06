@@ -130,7 +130,7 @@ describe('admissions.list', () => {
 		await caller.admissions.list({ roles: [Role.HACKER] });
 		expect(db.user.findMany).toHaveBeenCalledWith(
 			expect.objectContaining({
-				where: { AND: expect.arrayContaining([{ roles: { hasSome: [Role.HACKER] } }]) }
+				where: { AND: expect.arrayContaining([{ role: { in: [Role.HACKER] } }]) }
 			})
 		);
 	});
@@ -143,7 +143,7 @@ describe('admissions.list', () => {
 		await caller.admissions.list({});
 		expect(db.user.findMany).toHaveBeenCalledWith(
 			expect.objectContaining({
-				where: { AND: expect.arrayContaining([{ roles: { hasSome: APPLICANT_ROLES } }]) }
+				where: { AND: expect.arrayContaining([{ role: { in: APPLICANT_ROLES } }]) }
 			})
 		);
 		expect(APPLICANT_ROLES).not.toContain(Role.ORGANIZER);
@@ -156,7 +156,7 @@ describe('admissions.list', () => {
 		await caller.admissions.list({ roles: [Role.HACKER, Role.ORGANIZER] });
 		expect(db.user.findMany).toHaveBeenCalledWith(
 			expect.objectContaining({
-				where: { AND: expect.arrayContaining([{ roles: { hasSome: [Role.HACKER] } }]) }
+				where: { AND: expect.arrayContaining([{ role: { in: [Role.HACKER] } }]) }
 			})
 		);
 	});

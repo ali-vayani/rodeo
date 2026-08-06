@@ -99,25 +99,39 @@ describe('user.getById', () => {
 });
 
 describe('user.updateRole', () => {
-	it('updates roles array', async () => {
+	it('replaces the role', async () => {
 		const caller = createTestCaller(db, adminUser);
 		db.user.findUniqueOrThrow.mockResolvedValue(hackerUser as never);
-		db.user.update.mockResolvedValue({ ...hackerUser, roles: [Role.ADMIN] } as never);
+		db.user.update.mockResolvedValue({ ...hackerUser, role: Role.ADMIN } as never);
 
-		const result = await caller.user.updateRole({ uid: hackerUser.uid, roles: [Role.ADMIN] });
-		expect(result.roles).toContain(Role.ADMIN);
+		const result = await caller.user.updateRole({ uid: hackerUser.uid, role: Role.ADMIN });
+		expect(result.role).toBe(Role.ADMIN);
 		expect(db.user.update).toHaveBeenCalledWith({
 			where: { uid: hackerUser.uid },
-			data: { roles: [Role.ADMIN] }
+			data: { role: Role.ADMIN }
 		});
 	});
 
-	it('records the previous roles in the audit entry', async () => {
+	it('writes one role, so the previous one cannot survive alongside it', async () => {
+		// The mutual-exclusivity guarantee at its only general-purpose write path: the
+		// update is a replacement, never an addition. A caller that sends ORGANIZER for
+		// a hacker must not leave HACKER behind in any form.
 		const caller = createTestCaller(db, adminUser);
 		db.user.findUniqueOrThrow.mockResolvedValue(hackerUser as never);
-		db.user.update.mockResolvedValue({ ...hackerUser, roles: [Role.ADMIN] } as never);
+		db.user.update.mockResolvedValue({ ...hackerUser, role: Role.ORGANIZER } as never);
 
-		await caller.user.updateRole({ uid: hackerUser.uid, roles: [Role.ADMIN] });
+		await caller.user.updateRole({ uid: hackerUser.uid, role: Role.ORGANIZER });
+
+		const { data } = db.user.update.mock.calls[0][0] as { data: Record<string, unknown> };
+		expect(data).toEqual({ role: Role.ORGANIZER });
+	});
+
+	it('records the previous role in the audit entry', async () => {
+		const caller = createTestCaller(db, adminUser);
+		db.user.findUniqueOrThrow.mockResolvedValue(hackerUser as never);
+		db.user.update.mockResolvedValue({ ...hackerUser, role: Role.ADMIN } as never);
+
+		await caller.user.updateRole({ uid: hackerUser.uid, role: Role.ADMIN });
 
 		expect(db.log.create).toHaveBeenCalledWith({
 			data: expect.objectContaining({
@@ -125,16 +139,40 @@ describe('user.updateRole', () => {
 				actorId: adminUser.uid,
 				actorName: adminUser.name,
 				targetId: hackerUser.uid,
-				metadata: { from: hackerUser.roles, to: [Role.ADMIN] }
+				metadata: { from: hackerUser.role, to: Role.ADMIN }
 			})
 		});
 	});
 
+	it('refuses to demote the last admin', async () => {
+		// Exclusive roles make this reachable by an edit that reads as a promotion:
+		// giving the sole admin the HACKER role now *removes* their admin access.
+		const caller = createTestCaller(db, adminUser);
+		db.user.findUniqueOrThrow.mockResolvedValue(adminUser as never);
+		db.user.count.mockResolvedValue(0 as never);
+
+		await expect(
+			caller.user.updateRole({ uid: adminUser.uid, role: Role.HACKER })
+		).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+		expect(db.user.update).not.toHaveBeenCalled();
+	});
+
+	it('allows demoting an admin while another admin remains', async () => {
+		const caller = createTestCaller(db, adminUser);
+		db.user.findUniqueOrThrow.mockResolvedValue(adminUser as never);
+		db.user.count.mockResolvedValue(1 as never);
+		db.user.update.mockResolvedValue({ ...adminUser, role: Role.HACKER } as never);
+
+		await expect(
+			caller.user.updateRole({ uid: adminUser.uid, role: Role.HACKER })
+		).resolves.toMatchObject({ role: Role.HACKER });
+	});
+
 	it('throws FORBIDDEN for non-admin', async () => {
 		const caller = createTestCaller(db, hackerUser);
-		await expect(
-			caller.user.updateRole({ uid: 'uid', roles: [Role.HACKER] })
-		).rejects.toMatchObject({ code: 'FORBIDDEN' });
+		await expect(caller.user.updateRole({ uid: 'uid', role: Role.HACKER })).rejects.toMatchObject({
+			code: 'FORBIDDEN'
+		});
 	});
 });
 
@@ -167,7 +205,7 @@ describe('user.exportCsv', () => {
 		const csv = await caller.user.exportCsv();
 		const lines = csv.split('\n');
 		expect(lines[0]).toBe(
-			'uid,name,email,roles,status,pendingDecision,activeDecision,teamId,createdAt'
+			'uid,name,email,role,status,pendingDecision,activeDecision,teamId,createdAt'
 		);
 		expect(lines[1]).toContain(hackerUser.uid);
 		expect(lines[1]).toContain(hackerUser.email);

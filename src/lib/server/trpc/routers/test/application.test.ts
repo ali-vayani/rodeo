@@ -512,7 +512,7 @@ describe('application.submit', () => {
 				where: { uid: hackerUser.uid, status: UserStatus.CREATED },
 				data: expect.objectContaining({
 					status: UserStatus.APPLIED,
-					roles: hackerUser.roles
+					role: hackerUser.role
 				})
 			})
 		);

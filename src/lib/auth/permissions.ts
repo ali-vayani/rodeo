@@ -5,15 +5,28 @@
 import { Role } from '../generated/prisma/enums';
 
 /**
- * Who can see what in the admin portal.
+ * Who can see what, in both portals.
  *
- * ADMIN and ORGANIZER both get the portal shell, but they are not the same role.
- * An organizer is a mini-admin: they help run the event without seeing the people
- * in it. Anything holding real user data — the user table, admissions, mail, the
- * blacklist — is admin-only, as is the application editor, since that defines what
- * gets asked of applicants.
+ * Roles are mutually exclusive — a user holds exactly one (`User.role`) — and that
+ * exclusivity is what makes the portal split total rather than approximate:
  *
- * This module is the single source of truth for that split. `hooks.server.ts` routes
+ *   - Staff (ADMIN, ORGANIZER) live in /admin/* and cannot load /hacker/*. They have
+ *     no application, no team and no QR code, so those pages have nothing to show them.
+ *   - Everyone else (HACKER, JUDGE, MENTOR, VOLUNTEER, UNDECLARED) lives in /hacker/*
+ *     and cannot load /admin/*.
+ *
+ * The two sets are disjoint and together they are exhaustive, so every account has
+ * exactly one home and each portal denies the other's population outright. There is
+ * no "strongest role wins" precedence anywhere in here anymore: with one role per
+ * user there is nothing to break a tie between.
+ *
+ * Within the admin portal, ADMIN and ORGANIZER are still not the same role. An
+ * organizer is a mini-admin: they help run the event without seeing the people in it.
+ * Anything holding real user data — the user table, admissions, mail, the blacklist —
+ * is admin-only, as is the application editor, since that defines what gets asked of
+ * applicants.
+ *
+ * This module is the single source of truth for both splits. `hooks.server.ts` routes
  * with it, the tRPC procedures enforce with it, and the admin nav filters with it, so
  * a section can't be visible in one layer and denied in another.
  *
@@ -58,38 +71,46 @@ export const SECTION_PATHS: Record<AdminSection, string[]> = {
 	logs: ['/admin/logs']
 };
 
-export function isAdmin(roles: Role[]): boolean {
-	return roles.includes(Role.ADMIN);
+/** The roles that run the event. Disjoint from `APPLICANT_ROLES` by construction. */
+export const STAFF_ROLES: Role[] = [Role.ADMIN, Role.ORGANIZER];
+
+export function isAdmin(role: Role): boolean {
+	return role === Role.ADMIN;
 }
 
-export function isOrganizer(roles: Role[]): boolean {
-	return roles.includes(Role.ORGANIZER);
+export function isOrganizer(role: Role): boolean {
+	return role === Role.ORGANIZER;
+}
+
+/** Staff, i.e. the admin-portal population. The complement is the hacker portal's. */
+export function isStaff(role: Role): boolean {
+	return isAdmin(role) || isOrganizer(role);
 }
 
 /** Can load the admin portal shell at all. */
-export function hasPortalAccess(roles: Role[]): boolean {
-	return isAdmin(roles) || isOrganizer(roles);
+export function hasPortalAccess(role: Role): boolean {
+	return isStaff(role);
 }
 
 /**
  * Where an account belongs when no particular page was asked for.
  *
- * Used after login, on `/`, and by the dev account switcher. The rule was written out
- * by hand in each of those places; a third copy is what prompted extracting it, since
- * a landing page that disagrees between two of them is a bug nobody would think to
- * look for.
+ * Used after login, on `/`, by the dev account switcher, and by both portal guards as
+ * the place to send someone they turn away. The rule was written out by hand in each
+ * of those places; a third copy is what prompted extracting it, since a landing page
+ * that disagrees between two of them is a bug nobody would think to look for.
+ *
+ * Total by construction: every role is either staff or not, so this always returns a
+ * path the holder can actually load, and the two guards can never bounce someone back
+ * and forth between portals.
  */
-export function homePathFor(roles: Role[]): string {
-	return hasPortalAccess(roles) ? '/admin/dashboard' : '/hacker/application';
+export function homePathFor(role: Role): string {
+	return isStaff(role) ? '/admin/dashboard' : '/hacker/application';
 }
 
-/**
- * Resolved by the strongest role held, so someone who is both ADMIN and ORGANIZER
- * gets the admin view rather than the intersection.
- */
-export function canAccess(roles: Role[], section: AdminSection): boolean {
-	if (isAdmin(roles)) return true;
-	if (isOrganizer(roles)) return ORGANIZER_SECTIONS.includes(section);
+export function canAccess(role: Role, section: AdminSection): boolean {
+	if (isAdmin(role)) return true;
+	if (isOrganizer(role)) return ORGANIZER_SECTIONS.includes(section);
 	return false;
 }
 
@@ -104,15 +125,19 @@ export function sectionForPath(pathname: string): AdminSection | null {
 }
 
 /**
- * Organizers are staff, not attendees — they have no application, so /hacker/* has
- * nothing to show them. Only organizers lose it: an admin's access is unchanged, and
- * someone who is genuinely also a HACKER keeps their own application.
+ * Staff are not attendees — they have no application, no team and no QR code, so
+ * /hacker/* has nothing to show them and they are turned away from all of it.
+ *
+ * Admins included, deliberately. An admin used to keep hacker-portal access as a
+ * convenience, which meant the one account with the most authority was also the one
+ * account living in both portals — exactly the ambiguity the exclusive-role model
+ * exists to remove. An admin who needs to see what an applicant sees has
+ * /admin/application-editor's preview pane for the form and /admin/users for the
+ * person; neither requires borrowing an attendee's portal.
+ *
+ * The exact complement of `hasPortalAccess`, so the two guards partition every
+ * account rather than merely overlapping.
  */
-export function canAccessHackerPortal(roles: Role[]): boolean {
-	if (roles.includes(Role.HACKER)) return true;
-	// An admin keeps hacker-portal access even without the HACKER role; only a pure
-	// organizer loses it. Without this, someone who is both ADMIN and ORGANIZER (but not
-	// HACKER) was bounced out of /hacker/*, contradicting this function's own contract.
-	if (isAdmin(roles)) return true;
-	return !isOrganizer(roles);
+export function canAccessHackerPortal(role: Role): boolean {
+	return !isStaff(role);
 }

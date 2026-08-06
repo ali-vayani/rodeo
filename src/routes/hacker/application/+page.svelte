@@ -29,10 +29,11 @@
 	// --- Form state ---
 	const ROLES_FOR_APPLICATION: Role[] = [Role.HACKER, Role.JUDGE, Role.MENTOR, Role.VOLUNTEER];
 
-	// Pick initial role: first application-relevant role from user, or HACKER
+	// The account's own role when it is one you can apply as, else HACKER. An
+	// UNDECLARED account — the state a self-registered user can land in — has no
+	// application-relevant role yet, so the form opens on the common case.
 	function initialRole(): Role {
-		const existing = user.roles.find((r) => ROLES_FOR_APPLICATION.includes(r));
-		return existing ?? Role.HACKER;
+		return ROLES_FOR_APPLICATION.includes(user.role) ? user.role : Role.HACKER;
 	}
 
 	let selectedRole = $state<Role>(initialRole());

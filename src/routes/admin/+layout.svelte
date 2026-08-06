@@ -31,7 +31,7 @@
 	] as const;
 
 	// Cosmetic only — hooks.server.ts is what actually denies these routes.
-	const visibleLinks = $derived(links.filter((l) => canAccess(data.roles, l.section)));
+	const visibleLinks = $derived(links.filter((l) => canAccess(data.role, l.section)));
 </script>
 
 <div class="flex min-h-screen">
