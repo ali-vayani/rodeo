@@ -23,7 +23,7 @@
 	</div>
 
 	<!-- Stat cards -->
-	<div class="mb-5 grid grid-cols-5 gap-3">
+	<div class="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
 		<StatCard label="Total" value={data.stats.total} />
 		<StatCard label="Accepted" value={accepted} />
 		<StatCard label="Waitlisted" value={waitlisted} />
@@ -34,9 +34,9 @@
 	<!-- Bar chart + activity feed. Both named-user panels are absent for organizers,
 	     so the chart takes the full width rather than leaving a gap. -->
 	<div
-		class="mb-5 grid items-stretch gap-3 {data.stats.recentActivity
-			? 'grid-cols-[2fr_1fr]'
-			: 'grid-cols-1'}"
+		class="mb-5 grid grid-cols-1 gap-3 lg:items-stretch {data.stats.recentActivity
+			? 'lg:grid-cols-[2fr_1fr]'
+			: ''}"
 	>
 		<StatusBarChart byRole={data.stats.byRole} {accepted} confirmed={confirmedCount} />
 		{#if data.stats.recentActivity}
@@ -46,6 +46,14 @@
 
 	<!-- Recent applicants table -->
 	{#if data.recentApplicants}
-		<ApplicantTable applicants={data.recentApplicants} />
+		<!-- Data-dense reference table: scrolls horizontally on narrow viewports
+		     rather than squishing or card-stacking. `w-0 min-w-full` zeroes the
+		     scroller's intrinsic width so the forced table width can't propagate
+		     up through the layout's flex-1 main and widen the page. -->
+		<div class="w-0 min-w-full overflow-x-auto">
+			<div class="min-w-2xl">
+				<ApplicantTable applicants={data.recentApplicants} />
+			</div>
+		</div>
 	{/if}
 </div>

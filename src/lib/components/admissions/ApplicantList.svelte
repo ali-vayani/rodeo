@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { MediaQuery } from 'svelte/reactivity';
 	import BlacklistBadge from './BlacklistBadge.svelte';
 	import type { BlacklistMatch } from '$lib/blacklist/match';
 	import type { Role } from '$lib/generated/prisma/enums';
@@ -40,6 +41,13 @@
 		selfClaimUid: string | null;
 	} = $props();
 
+	// The collapsed rail is a desktop-only affordance — below md the list is a
+	// full-width stacked view and a 44px strip would be useless. Gate on the
+	// same 48rem breakpoint as `md:` so a collapse toggled on desktop doesn't
+	// leave a shrunken list behind after resizing down.
+	const mdUp = new MediaQuery('(min-width: 48rem)');
+	let isCollapsed = $derived(collapsed && mdUp.current);
+
 	const ROLE_TABS = [
 		{ key: 'ALL', label: 'All' },
 		{ key: 'HACKER', label: 'Hackers' },
@@ -65,11 +73,14 @@
 	}
 </script>
 
+<!-- Full-width below md (hidden once an applicant is open — the detail view
+     takes over); the classic 300px/44px rail from md up. -->
 <div
-	class="flex shrink-0 flex-col overflow-hidden border-r border-border transition-[width] duration-200 ease-[ease]"
-	style="width:{collapsed ? '44px' : '300px'};"
+	class="w-full shrink-0 flex-col overflow-hidden border-border transition-[width] duration-200 ease-[ease] md:flex md:border-r {selectedUid
+		? 'hidden'
+		: 'flex'} {isCollapsed ? 'md:w-11' : 'md:w-75'}"
 >
-	{#if collapsed}
+	{#if isCollapsed}
 		<!-- Collapsed strip -->
 		<div class="flex flex-col items-center gap-2 py-[10px]">
 			<button
@@ -101,11 +112,11 @@
 					</button>
 				{/each}
 			</div>
-			<!-- Collapse toggle -->
+			<!-- Collapse toggle (desktop rail only) -->
 			<button
 				onclick={onToggleCollapse}
 				title="Collapse sidebar"
-				class="shrink-0 cursor-pointer border-l border-none border-border bg-transparent px-[10px] text-sm text-muted-foreground"
+				class="hidden shrink-0 cursor-pointer border-l border-none border-border bg-transparent px-[10px] text-sm text-muted-foreground md:block"
 			>
 				‹
 			</button>
@@ -118,7 +129,7 @@
 				placeholder="Search by name or email…"
 				value={search}
 				oninput={(e) => onSearchInput((e.currentTarget as HTMLInputElement).value)}
-				class="w-full rounded border border-border bg-[#f9f9f9] px-[10px] py-1.5 text-xs text-primary outline-none"
+				class="w-full rounded border border-border bg-[#f9f9f9] px-[10px] py-1.5 text-touch text-primary outline-none sm:text-xs"
 			/>
 		</div>
 

@@ -197,7 +197,7 @@
 
 	{#if team}
 		<!-- Team name -->
-		<p class="mb-4 text-sm font-semibold text-primary">{team.teamName}</p>
+		<p class="mb-4 text-sm font-semibold break-words text-primary">{team.teamName}</p>
 
 		<!-- Member list -->
 		<div class="mb-4 flex flex-col gap-3">
@@ -277,9 +277,9 @@
 				<!-- One slot, so a stale success line can't sit under a fresh error. -->
 				<div id="invite-email-message" aria-live="polite">
 					{#if inviteError}
-						<p class="mt-2 text-xs text-destructive">{inviteError}</p>
+						<p class="mt-2 text-xs break-words text-destructive">{inviteError}</p>
 					{:else if inviteSuccess}
-						<p class="mt-2 text-xs text-primary">{inviteSuccess}</p>
+						<p class="mt-2 text-xs break-words text-primary">{inviteSuccess}</p>
 					{/if}
 				</div>
 			{:else}
@@ -304,7 +304,7 @@
 		<!-- Leave team -->
 		<div class="mt-4 border-t border-border pt-4">
 			{#if showLeaveConfirm}
-				<p class="mb-2 text-xs text-primary">
+				<p class="mb-2 text-xs break-words text-primary">
 					Are you sure you want to leave <strong>{team.teamName}</strong>?
 					{#if memberCount === 1}
 						The team will be deleted.

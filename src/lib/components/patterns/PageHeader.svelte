@@ -27,7 +27,7 @@
 	(8 uses), semibold at 24px (5 uses), and one extrabold that reached for a raw
 	ink hex instead of the token.
 -->
-<div class={cn('mb-5 flex items-start justify-between gap-4', className)}>
+<div class={cn('mb-5 flex flex-wrap items-start justify-between gap-x-4 gap-y-2', className)}>
 	<div class="min-w-0">
 		<h1 class="m-0 text-2xl font-bold text-foreground">{title}</h1>
 		{#if description}
@@ -38,7 +38,7 @@
 	</div>
 
 	{#if actions || meta}
-		<div class="flex shrink-0 items-center gap-3">
+		<div class="flex flex-wrap items-center gap-3">
 			{#if meta}<span class="font-mono text-xs text-foreground-tertiary">{@render meta()}</span
 				>{/if}
 			{#if actions}{@render actions()}{/if}

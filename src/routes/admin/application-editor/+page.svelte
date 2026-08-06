@@ -215,11 +215,11 @@
 </script>
 
 <!-- Page -->
-<div class="mx-auto flex min-h-screen max-w-[1200px] flex-col gap-5 px-8 py-7">
+<div class="mx-auto flex min-h-screen max-w-[1200px] flex-col gap-5 py-2 md:px-8 md:py-7">
 	<!-- Header -->
 	<div class="flex flex-col gap-2.5">
 		<!-- Top row -->
-		<div class="flex items-center justify-between">
+		<div class="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
 			<div class="flex items-center gap-3">
 				<h1 class="m-0 text-[22px] font-extrabold tracking-tight text-[#191919]">Applications</h1>
 				{#if isDirty}
@@ -263,7 +263,7 @@
 	</div>
 
 	<!-- Content grid -->
-	<div class="grid grid-cols-[60%_1fr] items-start gap-5 max-[900px]:grid-cols-1">
+	<div class="grid grid-cols-1 items-start gap-5 lg:grid-cols-[60%_1fr]">
 		<!-- Left: Question list -->
 		<div class="flex flex-col gap-2.5">
 			<!-- Col header -->
@@ -348,7 +348,7 @@
 		</div>
 
 		<!-- Right: Preview -->
-		<div class="sticky top-5 h-[calc(100vh-120px)] max-[900px]:static max-[900px]:h-[400px]">
+		<div class="lg:sticky lg:top-5 lg:h-[calc(100vh-120px)]">
 			<PreviewPane questions={workingQuestions} {selectedRole} />
 		</div>
 	</div>

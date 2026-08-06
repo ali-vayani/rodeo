@@ -152,7 +152,11 @@
 </PageHeader>
 
 <div class="flex workspace-h flex-col gap-5 overflow-y-auto">
-	<div class="flex shrink-0 overflow-hidden rounded-lg border border-border bg-card shadow-sm">
+	<!-- Below md the step rail (the vertical Tabs, which self-flattens into a
+	     horizontal strip) stacks on top of the step body. -->
+	<div
+		class="flex shrink-0 flex-col overflow-hidden rounded-lg border border-border bg-card shadow-sm md:flex-row"
+	>
 		<!-- Step rail. The shared vertical Tabs, so the wizard rail and the settings
 		     tabs are the same control instead of two lookalikes. -->
 		<Tabs
@@ -163,7 +167,7 @@
 		/>
 
 		<!-- Step body -->
-		<div class="flex min-h-130 min-w-0 flex-1 flex-col gap-4 p-8">
+		<div class="flex min-w-0 flex-1 flex-col gap-4 p-4 md:min-h-130 md:p-8">
 			{#if step === 1}
 				<RecipientFilter
 					bind:mode

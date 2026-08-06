@@ -9,9 +9,11 @@
 
 import { cn } from '$lib/utils';
 
-/** Height, radius, type, and the focus/disabled behavior. No border color. */
+/** Height, radius, type, and the focus/disabled behavior. No border color.
+ *  16px type below sm (iOS Safari zooms the page on focusing anything smaller),
+ *  the compact 13px scale from sm up. */
 export const CONTROL_BASE =
-	'w-full rounded-md bg-card text-base text-foreground ' +
+	'w-full rounded-md bg-card text-touch sm:text-base text-foreground ' +
 	'transition-[border-color,box-shadow] duration-150 outline-none placeholder:text-faint ' +
 	'focus-visible:border-primary focus-visible:shadow-ring ' +
 	'disabled:cursor-not-allowed disabled:bg-muted disabled:text-faint';

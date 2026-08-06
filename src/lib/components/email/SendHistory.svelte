@@ -25,39 +25,43 @@
 	{#if logs.length === 0}
 		<div class="px-4 py-6 text-center text-xs text-foreground-secondary">Nothing sent yet.</div>
 	{:else}
-		<table class="w-full text-base">
-			<thead>
-				<tr class="border-b border-border text-left">
-					<th
-						class="px-4 py-2 font-mono text-2xs font-medium tracking-eyebrow text-foreground-tertiary uppercase"
-					>
-						Subject
-					</th>
-					<th
-						class="w-28 px-4 py-2 font-mono text-2xs font-medium tracking-eyebrow text-foreground-tertiary uppercase"
-					>
-						Recipients
-					</th>
-					<th
-						class="w-48 px-4 py-2 font-mono text-2xs font-medium tracking-eyebrow text-foreground-tertiary uppercase"
-					>
-						Sent
-					</th>
-				</tr>
-			</thead>
-			<tbody>
-				{#each logs as log (log.id)}
-					<tr class="border-b border-border last:border-b-0">
-						<td class="max-w-0 truncate px-4 py-2 text-foreground" title={log.subject}>
-							{log.subject}
-						</td>
-						<td class="px-4 py-2 font-mono text-sm text-foreground">{log.userIds.length}</td>
-						<td class="px-4 py-2 font-mono text-sm text-foreground-secondary">
-							{new Date(log.sentAt).toLocaleString()}
-						</td>
+		<!-- Data-dense reference table: scrolls sideways on narrow screens rather
+		     than card-stacking. -->
+		<div class="overflow-x-auto">
+			<table class="w-full min-w-md text-base">
+				<thead>
+					<tr class="border-b border-border text-left">
+						<th
+							class="px-4 py-2 font-mono text-2xs font-medium tracking-eyebrow text-foreground-tertiary uppercase"
+						>
+							Subject
+						</th>
+						<th
+							class="w-28 px-4 py-2 font-mono text-2xs font-medium tracking-eyebrow text-foreground-tertiary uppercase"
+						>
+							Recipients
+						</th>
+						<th
+							class="w-48 px-4 py-2 font-mono text-2xs font-medium tracking-eyebrow text-foreground-tertiary uppercase"
+						>
+							Sent
+						</th>
 					</tr>
-				{/each}
-			</tbody>
-		</table>
+				</thead>
+				<tbody>
+					{#each logs as log (log.id)}
+						<tr class="border-b border-border last:border-b-0">
+							<td class="max-w-0 truncate px-4 py-2 text-foreground" title={log.subject}>
+								{log.subject}
+							</td>
+							<td class="px-4 py-2 font-mono text-sm text-foreground">{log.userIds.length}</td>
+							<td class="px-4 py-2 font-mono text-sm text-foreground-secondary">
+								{new Date(log.sentAt).toLocaleString()}
+							</td>
+						</tr>
+					{/each}
+				</tbody>
+			</table>
+		</div>
 	{/if}
 </div>

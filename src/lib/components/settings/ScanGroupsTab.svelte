@@ -69,18 +69,20 @@
 		{/if}
 	</div>
 
-	<div class="flex gap-2">
+	<!-- flex-wrap + min-w on the input: on a 320px screen the button drops to
+	     its own row instead of crushing the input (or being crushed itself). -->
+	<div class="flex flex-wrap gap-2">
 		<input
 			type="text"
 			bind:value={newGroup}
 			onkeydown={handleKeydown}
 			placeholder="Group name, or multiple separated by commas…"
-			class="flex-1 rounded border border-border bg-white px-3 py-[7px] text-[13px] text-primary outline-none"
+			class="min-w-[180px] flex-1 rounded border border-border bg-white px-3 py-[7px] text-[13px] text-primary outline-none"
 		/>
 		<button
 			onclick={addGroup}
 			disabled={saving || !newGroup.trim()}
-			class="cursor-pointer rounded-md border-none bg-primary px-[18px] py-[9px] text-[13px] font-semibold text-white disabled:opacity-50"
+			class="cursor-pointer rounded-md border-none bg-primary px-[18px] py-[9px] text-[13px] font-semibold whitespace-nowrap text-white disabled:opacity-50"
 		>
 			Add Group
 		</button>

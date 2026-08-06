@@ -65,9 +65,9 @@
 					>
 						{initials(user.name)}
 					</div>
-					<div>
-						<p class="text-base leading-tight font-bold text-primary">{user.name}</p>
-						<p class="mb-2 text-xs text-muted-foreground">{user.email}</p>
+					<div class="min-w-0">
+						<p class="text-base leading-tight font-bold break-words text-primary">{user.name}</p>
+						<p class="mb-2 text-xs break-words text-muted-foreground">{user.email}</p>
 						<span
 							class="rounded border border-primary px-2 py-0.5 font-mono text-xs font-medium tracking-wide text-primary uppercase"
 						>
@@ -78,15 +78,17 @@
 
 				<div class="border-t border-border">
 					{#if user.university}
-						<div class="flex justify-between border-b border-border py-2.5 text-sm">
-							<span class="text-muted-foreground">School</span>
-							<span class="font-medium text-primary">{user.university}</span>
+						<div class="flex justify-between gap-3 border-b border-border py-2.5 text-sm">
+							<span class="shrink-0 text-muted-foreground">School</span>
+							<span class="min-w-0 text-right font-medium break-words text-primary"
+								>{user.university}</span
+							>
 						</div>
 					{/if}
 					{#if user.year}
-						<div class="flex justify-between border-b border-border py-2.5 text-sm">
-							<span class="text-muted-foreground">Grad Year</span>
-							<span class="font-medium text-primary">{user.year}</span>
+						<div class="flex justify-between gap-3 border-b border-border py-2.5 text-sm">
+							<span class="shrink-0 text-muted-foreground">Grad Year</span>
+							<span class="min-w-0 text-right font-medium break-words text-primary">{user.year}</span>
 						</div>
 					{/if}
 					{#if decisionLabel}

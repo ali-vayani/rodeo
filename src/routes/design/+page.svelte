@@ -157,7 +157,7 @@
 
 <svelte:head><title>Rodeo — Design System</title></svelte:head>
 
-<div class="mx-auto max-w-4xl px-8 py-10">
+<div class="mx-auto max-w-4xl px-4 py-8 sm:px-8 sm:py-10">
 	<PageHeader
 		title="Design system"
 		subtitle="Every primitive and pattern, rendered from the real components."

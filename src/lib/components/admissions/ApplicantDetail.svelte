@@ -13,6 +13,7 @@
 		hasNext,
 		onPrev,
 		onNext,
+		onBack = undefined,
 		lockState,
 		claimerName,
 		lockFreed,
@@ -36,6 +37,8 @@
 		hasNext: boolean;
 		onPrev: () => void;
 		onNext: () => void;
+		/** Below md the detail view replaces the list; this returns to it. */
+		onBack?: () => void;
 		lockState: ReviewPhase;
 		claimerName: string | null;
 		lockFreed: boolean;
@@ -94,7 +97,7 @@
 	<!-- Read-only banner -->
 	{#if showBanner}
 		<div
-			class="flex shrink-0 items-center gap-2 border-b border-[#fde68a] bg-[#fffbeb] px-5 py-2.5"
+			class="flex shrink-0 items-center gap-2 border-b border-[#fde68a] bg-[#fffbeb] px-4 py-2.5 sm:px-5"
 		>
 			<span class="text-[12px] text-[#92400e]">
 				{#if banner}
@@ -108,7 +111,16 @@
 	{/if}
 
 	<!-- Header -->
-	<div class="shrink-0 border-b border-border px-6 pt-5 pb-4">
+	<div class="shrink-0 border-b border-border px-4 pt-4 pb-4 sm:px-6 sm:pt-5">
+		{#if onBack}
+			<!-- Mobile only: returns to the full-width list (and releases the claim) -->
+			<button
+				onclick={onBack}
+				class="mb-2 inline-flex cursor-pointer items-center gap-1 border-none bg-transparent p-0 text-base font-medium text-muted-foreground md:hidden"
+			>
+				← All applicants
+			</button>
+		{/if}
 		<div class="flex items-start justify-between gap-3">
 			<div>
 				<div class="text-[18px] leading-[1.2] font-bold text-primary">
@@ -146,7 +158,9 @@
 	</div>
 
 	<!-- Info grid -->
-	<div class="grid shrink-0 grid-cols-2 gap-3 border-b border-[#f0f0f0] px-6 py-4">
+	<div
+		class="grid shrink-0 grid-cols-1 gap-3 border-b border-[#f0f0f0] px-4 py-4 sm:grid-cols-2 sm:px-6"
+	>
 		<div>
 			<div class="mb-[3px] text-[10px] font-bold tracking-widest text-muted-foreground uppercase">
 				Role
@@ -182,7 +196,7 @@
 	</div>
 
 	<!-- Application responses -->
-	<div class="flex-1 overflow-y-auto px-6 py-5">
+	<div class="flex-1 px-4 py-5 sm:px-6 md:overflow-y-auto">
 		{#if sortedResponses.length === 0}
 			<div class="text-[13px] text-muted-foreground italic">No application responses.</div>
 		{:else}

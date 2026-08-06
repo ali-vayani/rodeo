@@ -11,12 +11,14 @@
 		decisionFilter,
 		onToggleDecision,
 		onClearDecision,
-		// Defaults to the Users-page sidebar. The custom-email wizard overrides this
-		// to render the same controls inline.
+		// Defaults to the Users-page sidebar: a full-width strip stacked on top
+		// below md, the fixed 200px left rail from md up. The custom-email wizard
+		// overrides this to render the same controls inline.
 		class:
-			className = 'w-[200px] shrink-0 bg-white border-r border-border px-4 py-5 overflow-y-auto',
+			className = 'w-full shrink-0 border-b border-border bg-white px-4 py-4 md:w-50 md:overflow-y-auto md:border-r md:border-b-0 md:py-5',
 		columns = false,
-		showHeading = true
+		showHeading = true,
+		collapsible = false
 	}: {
 		roleFilter: Record<string, boolean>;
 		onToggleRole: (r: string) => void;
@@ -31,7 +33,13 @@
 		/** Lay the three groups out side by side instead of stacked. */
 		columns?: boolean;
 		showHeading?: boolean;
+		/** Below md, collapse the groups behind a Filters toggle. No effect from md up. */
+		collapsible?: boolean;
 	} = $props();
+
+	// Collapsed by default on phones so the list doesn't push the results below
+	// the fold. md and up ignores this entirely — the rail is always expanded.
+	let expanded = $state(false);
 
 	const ROLES = ALL_ROLES;
 	const STATUSES = ALL_STATUSES;
@@ -45,13 +53,34 @@
 </script>
 
 <div class={className}>
+	{#if collapsible}
+		<button
+			type="button"
+			onclick={() => (expanded = !expanded)}
+			aria-expanded={expanded}
+			class="flex w-full cursor-pointer items-center justify-between border-none bg-transparent p-0 text-left md:hidden"
+		>
+			<span class="text-2xs font-bold tracking-eyebrow text-muted-foreground uppercase">
+				Filters
+			</span>
+			<span class="text-xs text-muted-foreground">{expanded ? 'Hide' : 'Show'}</span>
+		</button>
+	{/if}
 	{#if showHeading}
-		<div class="mb-3 text-[10px] font-bold tracking-[0.12em] text-muted-foreground uppercase">
+		<div
+			class="mb-3 text-2xs font-bold tracking-eyebrow text-muted-foreground uppercase {collapsible
+				? 'hidden md:block'
+				: ''}"
+		>
 			Filters
 		</div>
 	{/if}
 
-	<div class={columns ? 'flex flex-wrap gap-8' : ''}>
+	<div
+		class="{columns ? 'flex flex-wrap gap-8' : ''} {collapsible && !expanded
+			? 'hidden md:block'
+			: ''} {collapsible && expanded ? 'mt-4 md:mt-0' : ''}"
+	>
 		<!-- Role -->
 		<div class={groupClass}>
 			<div class="mb-2 flex items-center justify-between">

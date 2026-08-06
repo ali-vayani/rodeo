@@ -28,7 +28,7 @@
 	}
 </script>
 
-<div class="flex min-h-screen items-center justify-center bg-white">
+<div class="flex min-h-screen items-center justify-center bg-white px-6">
 	<div class="w-full max-w-sm">
 		<div class="mb-8 text-center">
 			<p class="font-mono text-xs tracking-widest text-muted-foreground uppercase">

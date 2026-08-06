@@ -106,6 +106,9 @@
 	--text-base--line-height: 1.55;
 	--text-md: 14px; /* comfortable body — hacker portal, long-form */
 	--text-md--line-height: 1.6;
+	--text-touch: 16px; /* form controls below sm — anything smaller makes
+	                       iOS Safari zoom the page on focus */
+	--text-touch--line-height: 1.4;
 	--text-lg: 15px; /* card and section titles */
 	--text-lg--line-height: 1.5;
 	--text-xl: 17px; /* modal titles */
@@ -157,6 +160,13 @@
 	--container-sidebar: 210px; /* both app layouts */
 	--container-prose: 640px; /* email previews, long-form hacker copy */
 
+	/* Named spacing so the layout offsets can be spoken as utilities:
+	   `md:ml-sidebar` mirrors --container-sidebar (same 210px, different
+	   namespace — spacing feeds margin/padding, container feeds widths), and
+	   `h-topbar`/`mt-topbar` size the mobile top bar and push content below it. */
+	--spacing-sidebar: 210px;
+	--spacing-topbar: 48px;
+
 	/* ── Motion ─────────────────────────────────────────────────────────────
 	   Fast and unfussy. Anything slower than 200ms feels laggy in a tool
 	   people use for six hours straight at a check-in desk.
@@ -203,9 +213,10 @@ body {
    instead of as `h-[calc(100vh-136px)]` scattered through the routes.
    ═══════════════════════════════════════════════════════════════════════════ */
 
-/* Scrollable region inside a modal — caps the panel below the viewport. */
+/* Scrollable region inside a modal — caps the panel below the viewport.
+   dvh, not vh: on mobile Safari 70vh can sit under the browser toolbars. */
 @utility panel-scroll {
-	max-height: 70vh;
+	max-height: 70dvh;
 	overflow-y: auto;
 }
 
@@ -222,12 +233,22 @@ body {
 }
 
 /* Full-height work surface below the app chrome: the admissions split pane,
-   the users table, the scan log. One number, one place. */
+   the users table, the scan log. One number, one place.
+
+   The pinned-height frame only exists from md up, where the chrome is the
+   fixed left rail. Below md the sidebar collapses into a top bar and these
+   surfaces stack, so they take their natural height and the page scrolls. */
 @utility workspace-h {
-	height: calc(100vh - 8.5rem);
+	height: auto;
+	@media (min-width: 48rem) {
+		height: calc(100dvh - 8.5rem);
+	}
 }
 
 @utility workspace-max-h {
-	max-height: calc(100vh - 8.5rem);
-	overflow-y: auto;
+	max-height: none;
+	@media (min-width: 48rem) {
+		max-height: calc(100dvh - 8.5rem);
+		overflow-y: auto;
+	}
 }

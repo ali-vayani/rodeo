@@ -93,15 +93,15 @@
 			Decisions are sent on a rolling basis. You'll hear from us soon.
 		</p>
 		<div class="border-t border-border pt-5">
-			<div class="mb-2 flex justify-between text-sm">
+			<div class="mb-2 flex justify-between gap-3 text-sm">
 				<span class="text-muted-foreground">Name</span>
-				<span class="font-medium text-primary">{user.name}</span>
+				<span class="min-w-0 text-right font-medium break-words text-primary">{user.name}</span>
 			</div>
-			<div class="mb-2 flex justify-between text-sm">
+			<div class="mb-2 flex justify-between gap-3 text-sm">
 				<span class="text-muted-foreground">Email</span>
-				<span class="font-medium text-primary">{user.email}</span>
+				<span class="min-w-0 text-right font-medium break-words text-primary">{user.email}</span>
 			</div>
-			<div class="flex justify-between text-sm">
+			<div class="flex justify-between gap-3 text-sm">
 				<span class="text-muted-foreground">Status</span>
 				<span
 					class="rounded bg-muted px-2 py-0.5 font-mono text-xs font-medium text-muted-foreground"
@@ -114,7 +114,7 @@
 {:else if appState === 'waitlisted'}
 	<!-- Waitlisted -->
 	<div class="mx-auto max-w-md rounded border border-border bg-white p-8">
-		<div class="mb-4 flex items-center justify-between">
+		<div class="mb-4 flex flex-wrap items-center justify-between gap-2">
 			<h2 class="text-base font-semibold text-primary">Application Status</h2>
 			<span
 				class="rounded border border-primary bg-muted px-2.5 py-0.5 font-mono text-xs font-medium tracking-wide text-primary uppercase"
@@ -123,15 +123,15 @@
 			</span>
 		</div>
 		<div class="border-t border-border">
-			<div class="flex justify-between border-b border-border py-2.5 text-sm">
+			<div class="flex justify-between gap-3 border-b border-border py-2.5 text-sm">
 				<span class="text-muted-foreground">Applicant</span>
-				<span class="font-medium text-primary">{user.name}</span>
+				<span class="min-w-0 text-right font-medium break-words text-primary">{user.name}</span>
 			</div>
-			<div class="flex justify-between border-b border-border py-2.5 text-sm">
+			<div class="flex justify-between gap-3 border-b border-border py-2.5 text-sm">
 				<span class="text-muted-foreground">Email</span>
-				<span class="font-medium text-primary">{user.email}</span>
+				<span class="min-w-0 text-right font-medium break-words text-primary">{user.email}</span>
 			</div>
-			<div class="flex justify-between py-2.5 text-sm">
+			<div class="flex justify-between gap-3 py-2.5 text-sm">
 				<span class="text-muted-foreground">Decision</span>
 				<span class="font-medium text-primary">Waitlisted</span>
 			</div>
@@ -149,7 +149,7 @@
 {:else if appState === 'rejected'}
 	<!-- Rejected -->
 	<div class="mx-auto max-w-md rounded border border-border bg-white p-8">
-		<div class="mb-4 flex items-center justify-between">
+		<div class="mb-4 flex flex-wrap items-center justify-between gap-2">
 			<h2 class="text-base font-semibold text-primary">Application Status</h2>
 			<span
 				class="rounded border border-border bg-muted px-2.5 py-0.5 font-mono text-xs font-medium tracking-wide text-muted-foreground uppercase"
@@ -158,13 +158,13 @@
 			</span>
 		</div>
 		<div class="border-t border-border">
-			<div class="flex justify-between border-b border-border py-2.5 text-sm">
+			<div class="flex justify-between gap-3 border-b border-border py-2.5 text-sm">
 				<span class="text-muted-foreground">Applicant</span>
-				<span class="font-medium text-primary">{user.name}</span>
+				<span class="min-w-0 text-right font-medium break-words text-primary">{user.name}</span>
 			</div>
-			<div class="flex justify-between py-2.5 text-sm">
+			<div class="flex justify-between gap-3 py-2.5 text-sm">
 				<span class="text-muted-foreground">Email</span>
-				<span class="font-medium text-primary">{user.email}</span>
+				<span class="min-w-0 text-right font-medium break-words text-primary">{user.email}</span>
 			</div>
 		</div>
 		<div class="mt-4 rounded border border-border bg-muted p-4">
@@ -198,7 +198,7 @@
 				Confirm your spot before the deadline to secure your place at the hackathon.
 			{/if}
 		</p>
-		<div class="mb-4 flex gap-3">
+		<div class="mb-4 flex flex-wrap gap-3">
 			<button
 				type="button"
 				onclick={onrsvp}
@@ -232,7 +232,7 @@
 {:else if appState === 'checked-in'}
 	<!-- Checked in -->
 	<div class="mx-auto max-w-md rounded border border-border bg-white p-8">
-		<div class="mb-4 flex items-center justify-between">
+		<div class="mb-4 flex flex-wrap items-center justify-between gap-2">
 			<h2 class="text-base font-semibold text-primary">Application Status</h2>
 			<span
 				class="rounded border border-primary bg-muted px-2.5 py-0.5 font-mono text-xs font-medium tracking-wide text-muted-foreground uppercase"
@@ -241,13 +241,13 @@
 			</span>
 		</div>
 		<div class="border-t border-border">
-			<div class="flex justify-between border-b border-border py-2.5 text-sm">
+			<div class="flex justify-between gap-3 border-b border-border py-2.5 text-sm">
 				<span class="text-muted-foreground">Applicant</span>
-				<span class="font-medium text-primary">{user.name}</span>
+				<span class="min-w-0 text-right font-medium break-words text-primary">{user.name}</span>
 			</div>
-			<div class="flex justify-between py-2.5 text-sm">
+			<div class="flex justify-between gap-3 py-2.5 text-sm">
 				<span class="text-muted-foreground">Email</span>
-				<span class="font-medium text-primary">{user.email}</span>
+				<span class="min-w-0 text-right font-medium break-words text-primary">{user.email}</span>
 			</div>
 		</div>
 		<div class="mt-4 rounded border border-border bg-muted p-4">
@@ -291,7 +291,7 @@
 {:else if appState === 'declined'}
 	<!-- Declined -->
 	<div class="mx-auto max-w-md rounded border border-border bg-white p-8">
-		<div class="mb-4 flex items-center justify-between">
+		<div class="mb-4 flex flex-wrap items-center justify-between gap-2">
 			<h2 class="text-base font-semibold text-primary">Invitation Declined</h2>
 			<span
 				class="rounded border border-border bg-muted px-2.5 py-0.5 font-mono text-xs font-medium tracking-wide text-muted-foreground uppercase"
@@ -300,13 +300,13 @@
 			</span>
 		</div>
 		<div class="border-t border-border">
-			<div class="flex justify-between border-b border-border py-2.5 text-sm">
+			<div class="flex justify-between gap-3 border-b border-border py-2.5 text-sm">
 				<span class="text-muted-foreground">Applicant</span>
-				<span class="font-medium text-primary">{user.name}</span>
+				<span class="min-w-0 text-right font-medium break-words text-primary">{user.name}</span>
 			</div>
-			<div class="flex justify-between py-2.5 text-sm">
+			<div class="flex justify-between gap-3 py-2.5 text-sm">
 				<span class="text-muted-foreground">Email</span>
-				<span class="font-medium text-primary">{user.email}</span>
+				<span class="min-w-0 text-right font-medium break-words text-primary">{user.email}</span>
 			</div>
 		</div>
 		<div class="mt-4 rounded border border-border bg-muted p-4">
@@ -324,11 +324,11 @@
 <!-- Decline confirmation modal -->
 {#if showDeclineConfirm}
 	<div
-		class="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+		class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
 		role="dialog"
 		aria-modal="true"
 	>
-		<div class="w-80 rounded border border-border bg-white p-6 shadow-lg">
+		<div class="w-full max-w-80 rounded border border-border bg-white p-6 shadow-lg">
 			<h3 class="mb-2 text-base font-semibold text-primary">Decline your spot?</h3>
 			<p class="mb-5 text-sm leading-relaxed text-muted-foreground">
 				This will permanently release your spot and cannot be undone.

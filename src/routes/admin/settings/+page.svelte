@@ -9,6 +9,7 @@
 	import ScanGroupsTab from '$lib/components/settings/ScanGroupsTab.svelte';
 	import DangerZoneTab from '$lib/components/settings/DangerZoneTab.svelte';
 	import Toast from '$lib/components/legacy/Toast.svelte';
+	import { Tabs } from '$lib/components/patterns';
 
 	let { data }: { data: PageData } = $props();
 
@@ -35,7 +36,21 @@
 
 	function handleScroll() {
 		if (!scrollContainer) return;
-		const containerTop = scrollContainer.getBoundingClientRect().top;
+		// From md up the sections scroll inside the container, so its top edge is
+		// the reading line. Below md the frame is auto-height and the page itself
+		// scrolls, so the container top goes negative — clamp the reading line to
+		// just below the fixed 48px top bar instead.
+		const containerTop = Math.max(scrollContainer.getBoundingClientRect().top, 48);
+		// The last section is shorter than the scroll area, so it can never climb
+		// to the reading line on its own — snap to it once scrolled to the end.
+		const atContainerBottom =
+			scrollContainer.scrollTop + scrollContainer.clientHeight >= scrollContainer.scrollHeight - 2;
+		const atPageBottom =
+			window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 2;
+		if (atContainerBottom && atPageBottom) {
+			activeSection = sectionIds[sectionIds.length - 1];
+			return;
+		}
 		for (let i = sectionIds.length - 1; i >= 0; i--) {
 			const el = document.getElementById(`section-${sectionIds[i]}`);
 			if (el && el.getBoundingClientRect().top - containerTop <= 48) {
@@ -93,59 +108,54 @@
 	}
 </script>
 
+<!-- Below md the page (not the container) scrolls, so the spy listens there too. -->
+<svelte:window onscroll={handleScroll} />
+
 <!-- Page header -->
 <div class="mb-4 flex items-center justify-between">
 	<h1 class="text-[22px] font-bold text-primary">Settings</h1>
 </div>
 
-<!-- Main card: sidebar + scrollable content -->
-<div class="flex h-[calc(100vh-136px)] overflow-hidden rounded-md border border-border bg-white">
-	<!-- Vertical sidebar (layout 5) -->
-	<div class="flex w-[160px] shrink-0 flex-col border-r border-border bg-muted">
-		<div
-			class="border-b border-border px-3 py-[11px] text-[10px] font-bold tracking-widest text-muted-foreground uppercase"
-		>
-			Settings
-		</div>
-		{#each sections as section (section.id)}
-			<button
-				onclick={() => scrollToSection(section.id)}
-				class="cursor-pointer border-b border-border px-4 py-[11px] text-left text-[13px] transition-colors {activeSection ===
-				section.id
-					? 'bg-white font-semibold text-primary'
-					: 'bg-transparent text-primary hover:bg-[#ebebeb]'}"
-			>
-				{section.label}
-			</button>
-		{/each}
-	</div>
+<!-- Main card: sidebar + scrollable content. Below md the vertical Tabs rail
+     flattens into a horizontal strip on top and the frame takes its natural
+     height (workspace-h is auto below md), so the page itself scrolls. -->
+<div
+	class="flex workspace-h flex-col overflow-hidden rounded-md border border-border bg-white md:flex-row"
+>
+	<!-- Section rail (scroll-spy over the shared Tabs vertical variant) -->
+	<Tabs
+		orientation="vertical"
+		tabs={sections.map((s) => ({ value: s.id, label: s.label }))}
+		bind:active={activeSection}
+		onChange={scrollToSection}
+	/>
 
 	<!-- Scrollable content area -->
 	<div
 		bind:this={scrollContainer}
 		onscroll={handleScroll}
-		class="flex-1 space-y-5 overflow-y-auto p-8"
+		class="min-w-0 flex-1 space-y-5 overflow-y-auto p-4 md:p-8"
 	>
 		<!-- General section (layout 2 bordered block) -->
-		<div id="section-general" class="overflow-hidden rounded-md border border-border">
+		<div id="section-general" class="scroll-mt-topbar md:scroll-mt-0 overflow-hidden rounded-md border border-border">
 			<div class="border-b border-border bg-muted px-4 py-[9px]">
 				<span class="text-[10px] font-bold tracking-widest text-muted-foreground uppercase">
 					General
 				</span>
 			</div>
-			<div class="p-6">
+			<div class="p-4 md:p-6">
 				<GeneralTab timezone={settings.timezone} {saving} onSave={(u) => save(u)} />
 			</div>
 		</div>
 
 		<!-- Dates section -->
-		<div id="section-dates" class="overflow-hidden rounded-md border border-border">
+		<div id="section-dates" class="scroll-mt-topbar md:scroll-mt-0 overflow-hidden rounded-md border border-border">
 			<div class="border-b border-border bg-muted px-4 py-[9px]">
 				<span class="text-[10px] font-bold tracking-widest text-muted-foreground uppercase">
 					Dates
 				</span>
 			</div>
-			<div class="p-6">
+			<div class="p-4 md:p-6">
 				<DatesTab
 					applicationOpen={settings.applicationOpen}
 					applicationDeadline={settings.applicationDeadline}
@@ -159,25 +169,25 @@
 		</div>
 
 		<!-- Scan Groups section -->
-		<div id="section-scan-groups" class="overflow-hidden rounded-md border border-border">
+		<div id="section-scan-groups" class="scroll-mt-topbar md:scroll-mt-0 overflow-hidden rounded-md border border-border">
 			<div class="border-b border-border bg-muted px-4 py-[9px]">
 				<span class="text-[10px] font-bold tracking-widest text-muted-foreground uppercase">
 					Scan Groups
 				</span>
 			</div>
-			<div class="p-6">
+			<div class="p-4 md:p-6">
 				<ScanGroupsTab scanActions={settings.scanActions} {saving} onSave={(u) => save(u)} />
 			</div>
 		</div>
 
 		<!-- Danger Zone section -->
-		<div id="section-danger" class="overflow-hidden rounded-md border border-[#fca5a5]">
+		<div id="section-danger" class="scroll-mt-topbar md:scroll-mt-0 overflow-hidden rounded-md border border-[#fca5a5]">
 			<div class="border-b border-[#fca5a5] bg-[#fff3f3] px-4 py-[9px]">
 				<span class="font-mono text-[10px] font-medium tracking-[0.1em] text-destructive uppercase">
 					Danger Zone
 				</span>
 			</div>
-			<div class="p-6">
+			<div class="p-4 md:p-6">
 				<DangerZoneTab onToast={showToast} />
 			</div>
 		</div>

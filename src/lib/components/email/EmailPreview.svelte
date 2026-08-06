@@ -79,14 +79,18 @@
 	<div
 		class="{HEIGHTS[height]} shrink-0 overflow-y-auto rounded-md border border-border bg-muted p-4"
 	>
-		<div class="mb-2 border-b border-border pb-2 text-base font-semibold text-foreground">
+		<div
+			class="mb-2 border-b border-border pb-2 text-base font-semibold break-words text-foreground"
+		>
 			{#if debouncedSubject === ''}
 				<span class="text-foreground-secondary italic">No subject</span>
 			{:else}<!--
 				-->{#each subjectSegments as seg, i (i)}{@render part(seg)}{/each}{/if}
 		</div>
 
-		<div class="text-base leading-relaxed whitespace-pre-wrap text-foreground">
+		<div
+			class="max-w-full text-base leading-relaxed break-words whitespace-pre-wrap text-foreground"
+		>
 			{#if debouncedBody === ''}
 				<span class="text-foreground-secondary italic">Nothing to preview yet.</span>
 			{:else}<!--

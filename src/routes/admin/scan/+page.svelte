@@ -257,7 +257,7 @@
 			{#each scanActions as action (action)}
 				<button
 					onclick={() => (selectedAction = action)}
-					class="flex shrink-0 cursor-pointer items-center gap-2 border-b-2 bg-transparent px-4 py-[10px] text-[13px] whitespace-nowrap transition-colors {selectedAction ===
+					class="flex shrink-0 cursor-pointer items-center gap-2 border-b-2 bg-transparent px-4 py-[10px] text-[13px] whitespace-nowrap transition-colors max-lg:min-h-11 {selectedAction ===
 					action
 						? 'border-b-primary font-semibold text-primary'
 						: 'border-b-transparent font-normal text-muted-foreground hover:text-primary'}"
@@ -436,7 +436,7 @@
 				{#if !showManual}
 					<button
 						onclick={toggleManual}
-						class="mx-auto block cursor-pointer bg-transparent py-1 font-mono text-[11px] text-muted-foreground underline underline-offset-[3px] transition-colors hover:text-primary"
+						class="mx-auto block cursor-pointer bg-transparent px-4 py-1 font-mono text-[11px] text-muted-foreground underline underline-offset-[3px] transition-colors hover:text-primary max-lg:py-3"
 					>
 						Can't scan? Enter manually
 					</button>
@@ -451,7 +451,7 @@
 							<button
 								onclick={toggleManual}
 								aria-label="Close manual lookup"
-								class="flex cursor-pointer items-center rounded bg-transparent p-0.5 text-muted-foreground transition-colors hover:text-primary"
+								class="flex cursor-pointer items-center rounded bg-transparent p-0.5 text-muted-foreground transition-colors hover:text-primary max-lg:-m-2 max-lg:p-2.5"
 							>
 								<svg
 									width="14"
@@ -471,7 +471,7 @@
 						<div class="flex gap-2 p-3">
 							<!-- svelte-ignore a11y_autofocus -->
 							<input
-								class="flex-1 rounded border border-border bg-[#f9f9f9] px-[10px] py-2 text-[13px] text-primary outline-none"
+								class="min-w-0 flex-1 rounded border border-border bg-[#f9f9f9] px-[10px] py-2 text-touch text-primary outline-none sm:text-base"
 								type="email"
 								placeholder="Email address…"
 								bind:value={manualInput}
