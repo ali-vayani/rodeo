@@ -19,7 +19,11 @@ function poolTls(url: string) {
 	return { connectionString: stripped.toString(), ssl: { rejectUnauthorized: false } };
 }
 
-const adapter = new PrismaPg(poolTls(connectionString));
+const adapter = new PrismaPg(
+	poolTls(connectionString),
+	// Same per-branch schema scoping as src/lib/server/db.ts.
+	process.env.DATABASE_SCHEMA ? { schema: process.env.DATABASE_SCHEMA } : undefined
+);
 const prisma = new PrismaClient({ adapter });
 
 // ---------------------------------------------------------------------------
@@ -66,25 +70,19 @@ function assertSafeToSeed(url: string | undefined): void {
 		refuse('this is a production environment (VERCEL_ENV / NODE_ENV).');
 	}
 
-	// CI seeds per-branch preview databases on the shared Supabase server.
-	// SEED_ALLOW_REMOTE lifts only the localhost requirement — the production
-	// refusal above still applies — and it still refuses the database literally
-	// named "postgres": that is the production database on Supabase, and no
-	// preview branch is ever named that (CI names databases after
-	// CI_COMMIT_REF_SLUG, and the default branch is "mainline").
+	// CI seeds per-branch preview schemas inside the shared Supabase database
+	// (the pooler only serves the default database, so preview isolation is by
+	// schema). SEED_ALLOW_REMOTE lifts only the localhost requirement — the
+	// production refusal above still applies — and it demands a DATABASE_SCHEMA
+	// that isn't `public`: public is production, and no preview branch is ever
+	// named that (schemas are named after CI_COMMIT_REF_SLUG).
 	if (process.env.SEED_ALLOW_REMOTE === '1') {
-		const dbName = (() => {
-			try {
-				return new URL(url ?? '').pathname.replace(/^\//, '') || null;
-			} catch {
-				return null;
-			}
-		})();
-		if (!dbName || dbName === 'postgres') {
+		const schema = process.env.DATABASE_SCHEMA;
+		if (!schema || schema === 'public') {
 			refuse(
-				`SEED_ALLOW_REMOTE=1 is set but DATABASE_URL points at ${
-					dbName ? `the "${dbName}" database` : 'a database this script could not parse'
-				} — that looks like production, not a preview branch.`
+				'SEED_ALLOW_REMOTE=1 is set but DATABASE_SCHEMA ' +
+					(schema ? 'is "public"' : 'is not set') +
+					' — that would seed production, not a preview branch schema.'
 			);
 		}
 		return;

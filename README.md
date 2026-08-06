@@ -300,12 +300,12 @@ Every push runs three stages:
 1. **test** — `npm ci`, build, `svelte-check`, lint, unit tests. No database needed:
    `prisma generate` runs without one.
 2. **deploy-preview** — every branch gets its own preview deploy against its own Postgres
-   database on the shared Supabase server, named after `$CI_COMMIT_REF_SLUG`, dropped and
-   recreated, migrated, and seeded with the fake yopmail data on every run. Pushes to
-   `mainline` also alias the deploy to the staging URL (`rodeo-2-0-nightly.vercel.app`).
-   Branch databases live until someone runs the manual `stop-preview-job` from
-   Deployments → Environments (do this when a branch is done; abandoned databases
-   accumulate otherwise).
+   **schema** inside the shared Supabase database, named after `$CI_COMMIT_REF_SLUG`,
+   dropped and recreated, migrated, and seeded with the fake yopmail data on every run.
+   Pushes to `mainline` also alias the deploy to the staging URL
+   (`rodeo-2-0-nightly.vercel.app`). Branch schemas live until someone runs the manual
+   `stop-preview-job` from Deployments → Environments (do this when a branch is done;
+   abandoned schemas accumulate otherwise).
 3. **deploy-production** — manual. Runs `prisma migrate deploy` against the production
    database, then `vercel deploy --prod`. Production is **never seeded**. To promote, a
    Maintainer who was not the author of the commit runs the job from the pipeline or
@@ -326,9 +326,12 @@ Two URLs, both stored in Vercel:
 - `DIRECT_URL` — the Supabase **session pooler** (port 5432). What `prisma migrate`, the
   seed, and psql go through; migrations cannot run over the transaction pooler.
 
-In the **preview** environment both are stored _without_ a trailing database name — the
-pipeline appends `/postgres` (admin connection for CREATE/DROP DATABASE) or the branch slug.
-The **production** environment stores complete URLs ending in `/postgres`.
+Both environments store complete URLs into the default `postgres` database — Supabase's
+pooler only serves the default database, which is why preview isolation is **by schema,
+not by database**. The pipeline passes `DATABASE_SCHEMA=$CI_COMMIT_REF_SLUG` to preview
+deploys; `prisma.config.ts` scopes CLI operations with `?schema=`, and the app and seeds
+hand it to the driver adapter, which qualifies every generated query (pooler-safe — no
+session state). Production and local dev never set it and live in `public`.
 
 ### Supabase auth
 
