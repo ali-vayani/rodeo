@@ -19,7 +19,9 @@ describe('dashboard.stats', () => {
 		const caller = createTestCaller(db, adminUser);
 
 		db.user.count.mockResolvedValue(10);
-		// groupBy is called twice: first for byStatus, then for byDecision
+		// groupBy is called three times: byStatus, byDecision, then byRole — the last
+		// became a real GROUP BY once a user held exactly one role, replacing a findMany
+		// that pulled every row back to be tallied in memory.
 		mockGroupBy(db.user.groupBy)
 			.mockResolvedValueOnce([
 				{ status: UserStatus.CREATED, _count: { status: 7 } },
@@ -29,11 +31,11 @@ describe('dashboard.stats', () => {
 			.mockResolvedValueOnce([
 				{ activeDecision: DecisionStatus.ACCEPTED, _count: { _all: 2 } },
 				{ activeDecision: null, _count: { _all: 8 } }
+			] as never)
+			.mockResolvedValueOnce([
+				{ role: Role.HACKER, _count: { role: 2 } },
+				{ role: Role.ORGANIZER, _count: { role: 1 } }
 			] as never);
-		db.user.findMany.mockResolvedValue([
-			{ roles: [Role.HACKER] } as never,
-			{ roles: [Role.HACKER, Role.ORGANIZER] } as never
-		]);
 		db.log.findMany.mockResolvedValue([]);
 
 		const result = await caller.dashboard.stats();

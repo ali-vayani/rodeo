@@ -21,7 +21,7 @@
 			uid: string;
 			name: string;
 			email: string;
-			roles: string[];
+			role: string;
 			pendingDecision: string | null;
 			blacklistMatch: BlacklistMatch | null;
 			createdAt: Date | string;
@@ -175,11 +175,9 @@
 							</div>
 						</div>
 						<!-- Row middle: role -->
-						{#if applicant.roles.length}
-							<div class="mt-0.5 text-[11px] text-muted-foreground">
-								{applicant.roles[0].charAt(0) + applicant.roles[0].slice(1).toLowerCase()}
-							</div>
-						{/if}
+						<div class="mt-0.5 text-[11px] text-muted-foreground">
+							{applicant.role.charAt(0) + applicant.role.slice(1).toLowerCase()}
+						</div>
 						<!-- Row bottom: applied date -->
 						<div class="mt-px font-mono text-[11px] text-[#cccccc]">
 							{formatShortDate(applicant.createdAt)}

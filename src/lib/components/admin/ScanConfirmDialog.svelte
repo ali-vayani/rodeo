@@ -7,7 +7,7 @@
 		email: string;
 		university: string | null;
 		year: string | null;
-		roles: Role[];
+		role: Role;
 		status: UserStatus;
 	}
 
@@ -56,7 +56,7 @@
 			<div class="border-b border-border px-6 pt-5 pb-4">
 				<div class="text-[16px] font-bold text-primary">{user.name}</div>
 				<div class="mt-1 font-mono text-[11px] text-muted-foreground capitalize">
-					{user.roles.join(', ')} &middot; {user.status.replace('_', ' ')}
+					{user.role} &middot; {user.status.replace('_', ' ')}
 				</div>
 			</div>
 

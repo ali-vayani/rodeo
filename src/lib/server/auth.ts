@@ -63,9 +63,9 @@ async function getProdSession(event: RequestEvent) {
 		where: { email },
 		update: {},
 		// A brand-new account is a HACKER in CREATED — the state the application
-		// page's "filling out" view expects. Roles are widened from /admin/users;
-		// nothing about an OAuth profile can grant someone organizer access.
-		create: { email, name, roles: [Role.HACKER] }
+		// page's "filling out" view expects. The role is changed from /admin/users;
+		// nothing about an OAuth profile can grant someone staff access.
+		create: { email, name, role: Role.HACKER }
 	});
 }
 

@@ -118,7 +118,7 @@ function changedFields(previous: Record<string, unknown>, next: Record<string, u
 export const settingsRouter = router({
 	get: authedProcedure.query(async ({ ctx }) => {
 		const settings = (await ctx.prisma.settings.findFirst()) ?? DEFAULT_SETTINGS;
-		if (isAdmin(ctx.user.roles)) return settings;
+		if (isAdmin(ctx.user.role)) return settings;
 		return { ...settings, ...REDACTED_TEMPLATES };
 	}),
 

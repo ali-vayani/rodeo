@@ -50,7 +50,7 @@ const DEV_ACCOUNT_SELECT = {
 	uid: true,
 	name: true,
 	email: true,
-	roles: true,
+	role: true,
 	status: true,
 	activeDecision: true,
 	pendingDecision: true
@@ -141,7 +141,7 @@ export const POST: RequestHandler = async (event) => {
 	// presents as a mysterious logout rather than as the typo it is.
 	const user = await prisma.user.findUnique({
 		where: { uid },
-		select: { uid: true, email: true, name: true, roles: true }
+		select: { uid: true, email: true, name: true, role: true }
 	});
 
 	// The same 404 for "no such uid" and "not a seed account", so it is an oracle for
@@ -155,5 +155,5 @@ export const POST: RequestHandler = async (event) => {
 	// filling it with impersonation noise would degrade the real audit trail.
 	console.info(`[dev-switcher] session → ${user.email} (${user.name})`);
 
-	return json({ redirectTo: homePathFor(user.roles) });
+	return json({ redirectTo: homePathFor(user.role) });
 };

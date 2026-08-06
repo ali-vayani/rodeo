@@ -20,9 +20,9 @@ import { Role } from '../generated/prisma/enums';
  */
 export const APPLICANT_ROLES: Role[] = [Role.HACKER, Role.JUDGE, Role.MENTOR, Role.VOLUNTEER];
 
-/** True when any of `roles` goes through admissions. */
-export function isApplicantRole(roles: Role[]): boolean {
-	return roles.some((r) => APPLICANT_ROLES.includes(r));
+/** True when this role goes through admissions. */
+export function isApplicantRole(role: Role): boolean {
+	return APPLICANT_ROLES.includes(role);
 }
 
 /**

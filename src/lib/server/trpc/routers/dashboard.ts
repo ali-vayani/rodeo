@@ -11,7 +11,7 @@ export const dashboardRouter = router({
 	 * dashboard can just check for it.
 	 */
 	stats: portalProcedure.query(async ({ ctx }) => {
-		const showActivity = isAdmin(ctx.user.roles);
+		const showActivity = isAdmin(ctx.user.role);
 		const [total, byStatus, byDecision, byRole, recentActivity] = await Promise.all([
 			ctx.prisma.user.count(),
 
@@ -28,8 +28,14 @@ export const dashboardRouter = router({
 				_count: { _all: true }
 			}),
 
-			ctx.prisma.user.findMany({
-				select: { roles: true }
+			// A real `groupBy` now that a user holds one role. This used to select every
+			// user's role array and tally it in memory, because a user counted once per
+			// role they held and no SQL aggregate expresses that. One role each makes the
+			// count a plain GROUP BY, so the whole table stops crossing the wire on every
+			// dashboard load.
+			ctx.prisma.user.groupBy({
+				by: ['role'],
+				_count: { role: true }
 			}),
 
 			// No `include: { actor: true }`: the feed renders `actorName`, which is
@@ -42,12 +48,9 @@ export const dashboardRouter = router({
 				: null
 		]);
 
-		// Flatten role counts (users have multiple roles)
 		const roleCounts: Partial<Record<Role, number>> = {};
-		for (const user of byRole) {
-			for (const role of user.roles) {
-				roleCounts[role] = (roleCounts[role] ?? 0) + 1;
-			}
+		for (const row of byRole) {
+			roleCounts[row.role] = row._count.role;
 		}
 
 		const statusCounts: Partial<Record<UserStatus, number>> = {};

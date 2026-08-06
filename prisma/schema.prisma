@@ -12,6 +12,10 @@ datasource db {
 // Enums
 // -----------------------------------------------------------------------------
 
+/// Roles are mutually exclusive: a `User` holds exactly one. Staff (ADMIN,
+/// ORGANIZER) and attendees (HACKER, JUDGE, MENTOR, VOLUNTEER) are disjoint
+/// populations, and the two portals are partitioned along that line — see
+/// `$lib/auth/permissions`, which is the single source of truth for the split.
 enum Role {
   HACKER
   JUDGE
@@ -76,7 +80,12 @@ model User {
   group           Group?              @relation(fields: [groupId], references: [id])
   pendingDecision DecisionStatus?
   activeDecision  DecisionStatus?
-  roles           Role[]              @default([UNDECLARED])
+  /// Exactly one. Singular and non-null on purpose: the array this replaced let an
+  /// account be ADMIN and HACKER at once, which made "which portal is this person
+  /// in" a question with no answer and forced every guard to invent a precedence
+  /// rule of its own. A scalar makes the exclusivity unrepresentable-otherwise
+  /// rather than merely enforced.
+  role            Role                @default(UNDECLARED)
   status          UserStatus          @default(CREATED)
   createdAt       DateTime            @default(now())
 

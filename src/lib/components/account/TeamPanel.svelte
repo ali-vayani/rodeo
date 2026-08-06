@@ -9,7 +9,7 @@
 		uid: string;
 		name: string;
 		email: string;
-		roles: Role[];
+		role: Role;
 	};
 
 	type TeamData = {
