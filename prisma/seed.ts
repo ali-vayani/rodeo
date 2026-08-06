@@ -8,7 +8,12 @@ if (!connectionString) {
 	throw new Error('DATABASE_URL is required for seeding');
 }
 
-const adapter = new PrismaPg({ connectionString });
+const adapter = new PrismaPg({
+	connectionString,
+	// Same libpq-compatible sslmode=require handling as src/lib/server/db.ts:
+	// encrypt without verifying, so the CI seed can reach Supabase's poolers.
+	...(connectionString.includes('sslmode=require') ? { ssl: { rejectUnauthorized: false } } : {})
+});
 const prisma = new PrismaClient({ adapter });
 
 // ---------------------------------------------------------------------------
@@ -46,12 +51,37 @@ function assertSafeToSeed(url: string | undefined): void {
 				'`npm run db:seed:fresh` deletes every @yopmail.com account it did not\n' +
 				'generate. Neither is survivable against a real database.\n\n' +
 				'  • Point DATABASE_URL at your local Postgres (see .env.example), or\n' +
+				'  • in CI, seed a per-branch preview database with SEED_ALLOW_REMOTE=1, or\n' +
 				'  • run with SEED_ALLOW_PRODUCTION=1 if you genuinely mean to seed this one.'
 		);
 	};
 
 	if (process.env.VERCEL_ENV === 'production' || process.env.NODE_ENV === 'production') {
 		refuse('this is a production environment (VERCEL_ENV / NODE_ENV).');
+	}
+
+	// CI seeds per-branch preview databases on the shared Supabase server.
+	// SEED_ALLOW_REMOTE lifts only the localhost requirement — the production
+	// refusal above still applies — and it still refuses the database literally
+	// named "postgres": that is the production database on Supabase, and no
+	// preview branch is ever named that (CI names databases after
+	// CI_COMMIT_REF_SLUG, and the default branch is "mainline").
+	if (process.env.SEED_ALLOW_REMOTE === '1') {
+		const dbName = (() => {
+			try {
+				return new URL(url ?? '').pathname.replace(/^\//, '') || null;
+			} catch {
+				return null;
+			}
+		})();
+		if (!dbName || dbName === 'postgres') {
+			refuse(
+				`SEED_ALLOW_REMOTE=1 is set but DATABASE_URL points at ${
+					dbName ? `the "${dbName}" database` : 'a database this script could not parse'
+				} — that looks like production, not a preview branch.`
+			);
+		}
+		return;
 	}
 
 	// Unreadable counts as remote: a URL this script can't parse is not one it can
