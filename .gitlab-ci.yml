@@ -9,10 +9,13 @@
 #
 # Vercel is the source of truth for all other environment variables: jobs run
 # `vercel pull` and export the resulting .vercel/.env.<environment>.local.
-# DATABASE_URL and DIRECT_URL in the *preview* environment are stored WITHOUT
-# a trailing database name — this pipeline appends /postgres (for the admin
-# connection that creates and drops databases) or /$CI_COMMIT_REF_SLUG (the
-# per-branch database). The *production* environment stores complete URLs.
+# DATABASE_URL and DIRECT_URL are complete URLs into the default `postgres`
+# database in both environments. Preview isolation is per-branch SCHEMAS, not
+# databases: Supabase's pooler only serves the default database, so this
+# pipeline creates a schema named after $CI_COMMIT_REF_SLUG and passes it as
+# DATABASE_SCHEMA — prisma.config.ts scopes migrations with ?schema=, and the
+# app/seed pass it to the driver adapter, which qualifies every query.
+# Production and local dev never set DATABASE_SCHEMA and live in `public`.
 #
 # DIRECT_URL is the Supabase session pooler (port 5432): migrations and psql
 # cannot run through the transaction pooler (6543) the app uses at runtime.
@@ -74,19 +77,15 @@ deploy-preview-job:
     - npm ci
     - npx vercel@latest pull --yes --environment=preview --token=$VERCEL_TOKEN
     - "export $(grep -v '^#' .vercel/.env.preview.local | xargs)"
-    # Fresh database per branch, named after the slug (slash-free, ≤63 chars —
-    # a valid Postgres identifier where raw branch names like feature/1-foo
-    # are not). FORCE, because Supavisor can hold connections to the database
-    # open for a little while after the previous deploy.
-    - echo "DROP DATABASE IF EXISTS \"$CI_COMMIT_REF_SLUG\" WITH (FORCE)" | psql "$DIRECT_URL/postgres"
-    - echo "CREATE DATABASE \"$CI_COMMIT_REF_SLUG\"" | psql "$DIRECT_URL/postgres"
-    # sslmode=require: psql and prisma treat it as encrypt-only; the app and
-    # seed read it through the libpq-compat shim in db.ts / seed.ts.
-    - export DATABASE_URL="$DATABASE_URL/$CI_COMMIT_REF_SLUG?sslmode=require"
-    - export DIRECT_URL="$DIRECT_URL/$CI_COMMIT_REF_SLUG?sslmode=require"
+    # Fresh schema per branch, named after the slug (slash-free, ≤63 chars —
+    # a valid quoted identifier where raw branch names like feature/1-foo
+    # are not).
+    - export DATABASE_SCHEMA=$CI_COMMIT_REF_SLUG
+    - echo "DROP SCHEMA IF EXISTS \"$DATABASE_SCHEMA\" CASCADE" | psql "$DIRECT_URL"
+    - echo "CREATE SCHEMA \"$DATABASE_SCHEMA\"" | psql "$DIRECT_URL"
     - npx prisma migrate deploy
     - SEED_ALLOW_REMOTE=1 npx prisma db seed
-    - npx vercel@latest deploy --token=$VERCEL_TOKEN --env DATABASE_URL=$DATABASE_URL --env DIRECT_URL=$DIRECT_URL > domain.txt
+    - npx vercel@latest deploy --token=$VERCEL_TOKEN --env DATABASE_URL=$DATABASE_URL --env DIRECT_URL=$DIRECT_URL --env DATABASE_SCHEMA=$DATABASE_SCHEMA > domain.txt
     - export DOMAIN_NAME=$(cat domain.txt)
     - if [ "$CI_COMMIT_BRANCH" == "mainline" ]; then npx vercel@latest alias $DOMAIN_NAME $STAGING_URL --token=$VERCEL_TOKEN --scope=$VERCEL_SCOPE ; fi
     - echo "DOMAIN_NAME=$DOMAIN_NAME" >> deploy.env
@@ -104,10 +103,10 @@ stop-preview-job:
   when: manual
   allow_failure: true
   script:
-    # !!! WARNING !!! Drops the branch database. NEVER point this at production.
+    # !!! WARNING !!! Drops the branch schema. NEVER point this at `public`.
     - npx vercel@latest pull --yes --environment=preview --token=$VERCEL_TOKEN
     - "export $(grep -v '^#' .vercel/.env.preview.local | xargs)"
-    - echo "DROP DATABASE IF EXISTS \"$CI_COMMIT_REF_SLUG\" WITH (FORCE)" | psql "$DIRECT_URL/postgres"
+    - echo "DROP SCHEMA IF EXISTS \"$CI_COMMIT_REF_SLUG\" CASCADE" | psql "$DIRECT_URL"
 
 deploy-production-job:
   stage: deploy-production

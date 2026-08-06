@@ -54,7 +54,11 @@ function poolTls(url: string) {
 	return { connectionString: stripped.toString(), ssl: { rejectUnauthorized: false } };
 }
 
-const adapter = new PrismaPg(poolTls(connectionString));
+const adapter = new PrismaPg(
+	poolTls(connectionString),
+	// Same per-branch schema scoping as src/lib/server/db.ts.
+	process.env.DATABASE_SCHEMA ? { schema: process.env.DATABASE_SCHEMA } : undefined
+);
 const prisma = new PrismaClient({ adapter });
 
 // ---------------------------------------------------------------------------
@@ -90,9 +94,11 @@ function assertSafeToSeed(url: string): void {
 	})();
 
 	if (process.env.SEED_ALLOW_REMOTE === '1') {
-		const dbName = parsed?.pathname.replace(/^\//, '') || null;
-		if (!dbName || dbName === 'postgres') {
-			refuse('SEED_ALLOW_REMOTE=1 is set but DATABASE_URL looks like production, not a preview.');
+		const schema = process.env.DATABASE_SCHEMA;
+		if (!schema || schema === 'public') {
+			refuse(
+				'SEED_ALLOW_REMOTE=1 requires DATABASE_SCHEMA naming a per-branch preview schema (not public).'
+			);
 		}
 		return;
 	}
@@ -278,17 +284,33 @@ function mapStatus(old: string): {
 	}
 }
 
-/** UNDECLARED-only accounts read as hackers here — that is what a first login creates. */
-function mapRoles(oldJson: string): Role[] {
+/**
+ * Collapse the old multi-role array to the one role this schema allows.
+ *
+ * Strongest-wins, matching the ranking the 20260805000000 migration used on the live
+ * table — an import that disagreed with the migration would produce demo data whose
+ * portal assignments don't match production's. UNDECLARED is dropped rather than
+ * ranked, and an account left with nothing reads as a hacker, which is what a first
+ * login creates.
+ */
+const ROLE_STRENGTH: Role[] = [
+	Role.ADMIN,
+	Role.ORGANIZER,
+	Role.JUDGE,
+	Role.MENTOR,
+	Role.VOLUNTEER,
+	Role.HACKER
+];
+
+function mapRole(oldJson: string): Role {
 	let parsed: string[];
 	try {
 		parsed = JSON.parse(oldJson) as string[];
 	} catch {
 		parsed = [];
 	}
-	const known = new Set(Object.values(Role) as string[]);
-	const roles = parsed.filter((r) => r !== 'UNDECLARED' && known.has(r)) as Role[];
-	return roles.length ? roles : [Role.HACKER];
+	const held = new Set(parsed);
+	return ROLE_STRENGTH.find((r) => held.has(r)) ?? Role.HACKER;
 }
 
 function mapScheduleType(oldType: string, name: string): ScheduleType {
@@ -416,8 +438,8 @@ async function main() {
 			scans.length && mapped.status === UserStatus.CONFIRMED
 				? UserStatus.CHECKED_IN
 				: mapped.status;
-		const roles = mapRoles(a.roles);
-		const academic = roles.some((r) => r === Role.HACKER || r === Role.VOLUNTEER);
+		const role = mapRole(a.roles);
+		const academic = role === Role.HACKER || role === Role.VOLUNTEER;
 
 		let app: Record<string, unknown> | null = null;
 		if (REAL && profile?.application) {
@@ -435,7 +457,7 @@ async function main() {
 			? {
 					name: realName,
 					email: a.email,
-					roles,
+					role,
 					status,
 					pendingDecision: mapped.pendingDecision,
 					activeDecision: mapped.activeDecision,
@@ -445,7 +467,7 @@ async function main() {
 			: {
 					name: demoName(i),
 					email: `demo${i + 1}@yopmail.com`,
-					roles,
+					role,
 					status,
 					pendingDecision: mapped.pendingDecision,
 					activeDecision: mapped.activeDecision,
