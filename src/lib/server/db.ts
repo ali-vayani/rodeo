@@ -6,19 +6,30 @@ const globalForPrisma = globalThis as unknown as {
 	prisma: PrismaClient;
 };
 
+/**
+ * Supabase's poolers present a certificate chain node-pg can't verify against
+ * its default CAs, and psql / prisma migrate read `sslmode=require` as
+ * "encrypt, don't verify" — so one stored URL serves all three consumers.
+ * node-pg instead parses it as verify-full and lets the URL win over an
+ * explicit `ssl` option, so strip the parameter and pass the intent directly.
+ * Local URLs carry no sslmode, so local dev stays plain TCP.
+ *
+ * Duplicated in prisma/seed.ts and prisma/seedDemo.ts (tsx, no $lib aliases).
+ */
+function poolTls(url: string) {
+	if (!url.includes('sslmode=require')) return { connectionString: url };
+	const stripped = new URL(url);
+	stripped.searchParams.delete('sslmode');
+	return { connectionString: stripped.toString(), ssl: { rejectUnauthorized: false } };
+}
+
 function createClient() {
 	const url = env.DATABASE_URL;
 	if (!url) {
 		throw new Error('DATABASE_URL is not set');
 	}
 	const adapter = new PrismaPg({
-		connectionString: url,
-		// Supabase's poolers present a certificate chain node-pg can't verify
-		// against its default CAs, and node-pg reads sslmode=require as
-		// verify-full. psql and prisma migrate read it as "encrypt, don't
-		// verify" — give node-pg those libpq semantics so one URL works for
-		// all three. Local URLs carry no sslmode, so local dev stays plain TCP.
-		...(url.includes('sslmode=require') ? { ssl: { rejectUnauthorized: false } } : {}),
+		...poolTls(url),
 		// Every warm serverless instance holds its own pool, and many instances
 		// can run at once — keep the per-instance cap small so they don't
 		// collectively exhaust Supavisor's client-connection limit. Local dev is

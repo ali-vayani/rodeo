@@ -41,11 +41,15 @@ if (!connectionString) {
 	throw new Error('DATABASE_URL is required for seeding');
 }
 
-const adapter = new PrismaPg({
-	connectionString,
-	// Same libpq-compatible sslmode=require handling as src/lib/server/db.ts.
-	...(connectionString.includes('sslmode=require') ? { ssl: { rejectUnauthorized: false } } : {})
-});
+// Same libpq-compatible sslmode=require handling as src/lib/server/db.ts.
+function poolTls(url: string) {
+	if (!url.includes('sslmode=require')) return { connectionString: url };
+	const stripped = new URL(url);
+	stripped.searchParams.delete('sslmode');
+	return { connectionString: stripped.toString(), ssl: { rejectUnauthorized: false } };
+}
+
+const adapter = new PrismaPg(poolTls(connectionString));
 const prisma = new PrismaClient({ adapter });
 
 // ---------------------------------------------------------------------------
