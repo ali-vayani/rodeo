@@ -28,16 +28,23 @@ function createClient() {
 	if (!url) {
 		throw new Error('DATABASE_URL is not set');
 	}
-	const adapter = new PrismaPg({
-		...poolTls(url),
-		// Every warm serverless instance holds its own pool, and many instances
-		// can run at once — keep the per-instance cap small so they don't
-		// collectively exhaust Supavisor's client-connection limit. Local dev is
-		// a single process, where 3 is still plenty.
-		max: Number(env.DATABASE_POOL_MAX ?? 3),
-		idleTimeoutMillis: 30_000,
-		connectionTimeoutMillis: 10_000
-	});
+	const adapter = new PrismaPg(
+		{
+			...poolTls(url),
+			// Every warm serverless instance holds its own pool, and many instances
+			// can run at once — keep the per-instance cap small so they don't
+			// collectively exhaust Supavisor's client-connection limit. Local dev is
+			// a single process, where 3 is still plenty.
+			max: Number(env.DATABASE_POOL_MAX ?? 3),
+			idleTimeoutMillis: 30_000,
+			connectionTimeoutMillis: 10_000
+		},
+		// Preview deploys are isolated per branch by schema, not by database —
+		// Supabase's pooler only serves the default database. The adapter
+		// qualifies generated queries with the schema name, so this is safe
+		// through the transaction pooler (no session state involved).
+		env.DATABASE_SCHEMA ? { schema: env.DATABASE_SCHEMA } : undefined
+	);
 	return new PrismaClient({ adapter });
 }
 
