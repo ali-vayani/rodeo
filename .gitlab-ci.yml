@@ -67,11 +67,14 @@ deploy-preview-job:
     - "export $(grep -v '^#' .vercel/.env.preview.local | xargs)"
     # Fresh database per branch, named after the slug (slash-free, ≤63 chars —
     # a valid Postgres identifier where raw branch names like feature/1-foo
-    # are not).
-    - echo "DROP DATABASE IF EXISTS \"$CI_COMMIT_REF_SLUG\"" | psql "$DIRECT_URL/postgres"
+    # are not). FORCE, because Supavisor can hold connections to the database
+    # open for a little while after the previous deploy.
+    - echo "DROP DATABASE IF EXISTS \"$CI_COMMIT_REF_SLUG\" WITH (FORCE)" | psql "$DIRECT_URL/postgres"
     - echo "CREATE DATABASE \"$CI_COMMIT_REF_SLUG\"" | psql "$DIRECT_URL/postgres"
-    - export DATABASE_URL=$DATABASE_URL/$CI_COMMIT_REF_SLUG
-    - export DIRECT_URL=$DIRECT_URL/$CI_COMMIT_REF_SLUG
+    # sslmode=require: psql and prisma treat it as encrypt-only; the app and
+    # seed read it through the libpq-compat shim in db.ts / seed.ts.
+    - export DATABASE_URL="$DATABASE_URL/$CI_COMMIT_REF_SLUG?sslmode=require"
+    - export DIRECT_URL="$DIRECT_URL/$CI_COMMIT_REF_SLUG?sslmode=require"
     - npx prisma migrate deploy
     - SEED_ALLOW_REMOTE=1 npx prisma db seed
     - npx vercel@latest deploy --token=$VERCEL_TOKEN --env DATABASE_URL=$DATABASE_URL --env DIRECT_URL=$DIRECT_URL > domain.txt
@@ -95,7 +98,7 @@ stop-preview-job:
     # !!! WARNING !!! Drops the branch database. NEVER point this at production.
     - npx vercel@latest pull --yes --environment=preview --token=$VERCEL_TOKEN
     - "export $(grep -v '^#' .vercel/.env.preview.local | xargs)"
-    - echo "DROP DATABASE IF EXISTS \"$CI_COMMIT_REF_SLUG\"" | psql "$DIRECT_URL/postgres"
+    - echo "DROP DATABASE IF EXISTS \"$CI_COMMIT_REF_SLUG\" WITH (FORCE)" | psql "$DIRECT_URL/postgres"
 
 deploy-production-job:
   stage: deploy-production

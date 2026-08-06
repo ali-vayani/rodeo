@@ -8,7 +8,12 @@ if (!connectionString) {
 	throw new Error('DATABASE_URL is required for seeding');
 }
 
-const adapter = new PrismaPg({ connectionString });
+const adapter = new PrismaPg({
+	connectionString,
+	// Same libpq-compatible sslmode=require handling as src/lib/server/db.ts:
+	// encrypt without verifying, so the CI seed can reach Supabase's poolers.
+	...(connectionString.includes('sslmode=require') ? { ssl: { rejectUnauthorized: false } } : {})
+});
 const prisma = new PrismaClient({ adapter });
 
 // ---------------------------------------------------------------------------
