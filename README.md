@@ -326,7 +326,7 @@ Two URLs, both stored in Vercel:
 - `DIRECT_URL` — the Supabase **session pooler** (port 5432). What `prisma migrate`, the
   seed, and psql go through; migrations cannot run over the transaction pooler.
 
-In the **preview** environment both are stored *without* a trailing database name — the
+In the **preview** environment both are stored _without_ a trailing database name — the
 pipeline appends `/postgres` (admin connection for CREATE/DROP DATABASE) or the branch slug.
 The **production** environment stores complete URLs ending in `/postgres`.
 
