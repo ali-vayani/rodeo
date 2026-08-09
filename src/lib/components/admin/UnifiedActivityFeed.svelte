@@ -65,7 +65,11 @@
 	{:else if entries.length === 0}
 		<EmptyState compact title="No activity" message={EMPTY_MESSAGE[source] ?? EMPTY_MESSAGE.all} />
 	{:else}
-		<ul class="flex-1">
+		<!-- Scrolls inside the card so the feed sits level with the chart beside it
+		     rather than setting the row's height. `min-h-0` is required: without it a
+		     flex child refuses to shrink below its content and the overflow never
+		     engages. -->
+		<ul class="min-h-0 flex-1 overflow-y-auto">
 			{#each entries as entry (entry.id)}
 				<li class="flex items-start gap-2.5 border-b border-border-subtle py-2.5 last:border-b-0">
 					<!-- Filled for the entries worth stopping on; hollow for routine

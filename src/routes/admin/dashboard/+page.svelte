@@ -227,11 +227,27 @@
 		{/if}
 	</div>
 
+	<!-- Who did the work, directly under the decision split it explains: the bars
+	     here are the same accepted/waitlisted/rejected counts as the card above,
+	     attributed to the people who set them. Reading one straight after the other
+	     is the point; a trend chart between them broke that. -->
+	{#if adminStats}
+		<div class="mb-4">
+			<AdminStatsChart
+				admins={adminStats.admins}
+				unattributed={adminStats.unattributed}
+				loading={rangeLoading}
+			/>
+		</div>
+	{/if}
+
 	<!-- Trend and the unified feed. Both are scoped by the range control above.
-	     `items-start`: the feed is the taller of the two and its height depends on
-	     how much happened, so stretching the chart to match it leaves a growing
-	     field of white under a chart that is already the size it wants to be. -->
-	<div class="mb-4 grid grid-cols-1 items-start gap-4 lg:grid-cols-[2fr_1fr]">
+	     The row is stretched and the feed scrolls inside its card, so the two stay
+	     level: the chart's height is deterministic (a fixed viewBox height, one
+	     unit per pixel) while the feed's depends on how much happened, and letting
+	     the feed drive left a growing field of white beside it. `min-h-0` is what
+	     stops the list's content from forcing the grid row taller. -->
+	<div class="mb-4 grid grid-cols-1 gap-4 lg:grid-cols-[2fr_1fr]">
 		<Card title="Applications & decisions per day">
 			{#snippet actions()}
 				<span class="font-mono text-2xs text-foreground-tertiary">
@@ -246,7 +262,18 @@
 		</Card>
 
 		{#if activity}
-			<Card title="Recent activity" bodyClass="h-full">
+			<!-- `lg:h-0 lg:min-h-full` is what makes the CHART set the row height rather
+			     than the feed. `min-h-0` alone only lets a grid item shrink; the row is
+			     still sized to its max-content, so eight entries stretched the chart card
+			     instead and the dead space simply moved. Zero height removes the list
+			     from that calculation entirely, then `min-h-full` fills whatever the
+			     chart decided. Only from lg — below that the two cards stack and the feed
+			     should take its natural height. -->
+			<Card
+				title="Recent activity"
+				class="flex flex-col lg:h-0 lg:min-h-full"
+				bodyClass="flex-1 min-h-0 flex flex-col"
+			>
 				<UnifiedActivityFeed
 					entries={activity}
 					bind:source={activitySource}
@@ -256,17 +283,6 @@
 			</Card>
 		{/if}
 	</div>
-
-	<!-- Who did the work. Absent for organizers, who don't get named-staff data. -->
-	{#if adminStats}
-		<div class="mb-4">
-			<AdminStatsChart
-				admins={adminStats.admins}
-				unattributed={adminStats.unattributed}
-				loading={rangeLoading}
-			/>
-		</div>
-	{/if}
 
 	<!-- Who the applicants are. -->
 	{#if data.demographics}
