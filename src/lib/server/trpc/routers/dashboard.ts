@@ -1,7 +1,18 @@
 import { z } from 'zod';
 import { router, adminProcedure, portalProcedure } from '../init';
 import { isAdmin } from '$lib/auth/permissions';
-import { UserStatus, Role } from '$lib/generated/prisma/client';
+import { APPLICANT_ROLES } from '$lib/admissions/roles';
+import { UserStatus, Role, DecisionStatus } from '$lib/generated/prisma/client';
+
+/** A count with the role split behind it, for the stat cards' hover breakdown. */
+export interface RoleTally {
+	total: number;
+	byRole: Partial<Record<Role, number>>;
+}
+
+function emptyTally(): RoleTally {
+	return { total: 0, byRole: {} };
+}
 
 export const dashboardRouter = router({
 	/**
@@ -12,7 +23,7 @@ export const dashboardRouter = router({
 	 */
 	stats: portalProcedure.query(async ({ ctx }) => {
 		const showActivity = isAdmin(ctx.user.role);
-		const [total, byStatus, byDecision, byRole, recentActivity] = await Promise.all([
+		const [total, byStatus, byDecision, byRole, applicantRows, recentActivity] = await Promise.all([
 			ctx.prisma.user.count(),
 
 			ctx.prisma.user.groupBy({
@@ -36,6 +47,18 @@ export const dashboardRouter = router({
 			ctx.prisma.user.groupBy({
 				by: ['role'],
 				_count: { role: true }
+			}),
+
+			// Decision × role, bounded to the people who actually go through admissions.
+			// The `byDecision` tally above counts every user, which puts 60-odd staff
+			// accounts — who never apply and never hold a decision — into its null
+			// bucket. The stat cards read from this instead, so "Accepted" and
+			// "Awaiting" describe applicants rather than the whole table, and the role
+			// split each card shows on hover comes off the same rows as its number.
+			ctx.prisma.user.groupBy({
+				by: ['activeDecision', 'role'],
+				where: { role: { in: APPLICANT_ROLES } },
+				_count: { _all: true }
 			}),
 
 			// No `include: { actor: true }`: the feed renders `actorName`, which is
@@ -64,11 +87,42 @@ export const dashboardRouter = router({
 			decisionCounts[key] = row._count._all;
 		}
 
+		// One pass over the decision × role rows fills every stat card and its hover
+		// breakdown. `awaiting` collects both a null activeDecision and the PENDING
+		// placeholder: PENDING is a starting state rather than an outcome, so a user
+		// carrying it has not been decided either way.
+		const applicants = {
+			total: 0,
+			accepted: emptyTally(),
+			rejected: emptyTally(),
+			waitlisted: emptyTally(),
+			awaiting: emptyTally(),
+			byRole: {} as Partial<Record<Role, number>>
+		};
+
+		const TALLY_FOR: Record<string, keyof typeof applicants> = {
+			[DecisionStatus.ACCEPTED]: 'accepted',
+			[DecisionStatus.REJECTED]: 'rejected',
+			[DecisionStatus.WAITLISTED]: 'waitlisted'
+		};
+
+		for (const row of applicantRows) {
+			const count = row._count._all;
+			const key = row.activeDecision ? (TALLY_FOR[row.activeDecision] ?? 'awaiting') : 'awaiting';
+			const tally = applicants[key] as RoleTally;
+
+			tally.total += count;
+			tally.byRole[row.role] = (tally.byRole[row.role] ?? 0) + count;
+			applicants.total += count;
+			applicants.byRole[row.role] = (applicants.byRole[row.role] ?? 0) + count;
+		}
+
 		return {
 			total,
 			byStatus: statusCounts,
 			byDecision: decisionCounts,
 			byRole: roleCounts,
+			applicants,
 			recentActivity
 		};
 	}),

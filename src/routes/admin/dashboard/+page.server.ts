@@ -14,10 +14,14 @@ export const load: PageServerLoad = async (event) => {
 	// for them would throw FORBIDDEN and take the whole page load down with it.
 	const admin = isAdmin(event.locals.user?.role ?? Role.UNDECLARED);
 
-	const [stats, recentApplicants] = await Promise.all([
+	// adminStats ranks named staff against each other, so it follows recentApplicants
+	// rather than the anonymous aggregates: admin-only, and null for organizers so the
+	// page's shape doesn't change between the two.
+	const [stats, recentApplicants, adminStats] = await Promise.all([
 		caller.dashboard.stats(),
-		admin ? caller.dashboard.recentApplicants({ amount: 10 }) : null
+		admin ? caller.dashboard.recentApplicants({ amount: 10 }) : null,
+		admin ? caller.stats.byAdmin({}) : null
 	]);
 
-	return { stats, recentApplicants };
+	return { stats, recentApplicants, adminStats };
 };

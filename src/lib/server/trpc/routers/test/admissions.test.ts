@@ -4,6 +4,8 @@ import type { PrismaClient } from '$lib/generated/prisma/client';
 import { Role, DecisionStatus } from '$lib/generated/prisma/client';
 import { CLAIM_TTL_MS } from '$lib/admissions/lock';
 import { APPLICANT_ROLES } from '$lib/admissions/roles';
+import { NO_VALUE } from '$lib/linkedFields';
+import { EXACT_MATCH_FLOOR, MAX_FUZZY_NAMES, NO_EXPANSION } from '$lib/server/recipients';
 import {
 	createTestCaller,
 	adminUser,
@@ -77,14 +79,14 @@ describe('admissions.list', () => {
 		const caller = createTestCaller(db, adminUser);
 		db.user.findMany.mockResolvedValue([hackerUser, pendingUser] as never);
 		const result = await caller.admissions.list({});
-		expect(result).toHaveLength(2);
+		expect(result.applicants).toHaveLength(2);
 	});
 
 	it('reports no blacklist match when the table is empty', async () => {
 		const caller = createTestCaller(db, adminUser);
 		db.user.findMany.mockResolvedValue([hackerUser] as never);
 		const result = await caller.admissions.list({});
-		expect(result[0].blacklistMatch).toBeNull();
+		expect(result.applicants[0].blacklistMatch).toBeNull();
 	});
 
 	it('flags an applicant whose email is blacklisted', async () => {
@@ -95,7 +97,7 @@ describe('admissions.list', () => {
 		] as never);
 
 		const result = await caller.admissions.list({});
-		expect(result[0].blacklistMatch).toBe('EMAIL');
+		expect(result.applicants[0].blacklistMatch).toBe('EMAIL');
 	});
 
 	it('flags an applicant whose name is blacklisted, without deciding anything', async () => {
@@ -107,8 +109,8 @@ describe('admissions.list', () => {
 		] as never);
 
 		const result = await caller.admissions.list({});
-		expect(result[0].blacklistMatch).toBe('NAME_EXACT');
-		expect(result[0].pendingDecision).toBe(hackerUser.pendingDecision);
+		expect(result.applicants[0].blacklistMatch).toBe('NAME_EXACT');
+		expect(result.applicants[0].pendingDecision).toBe(hackerUser.pendingDecision);
 	});
 
 	it('catches an entry added after the applicant already applied', async () => {
@@ -121,7 +123,7 @@ describe('admissions.list', () => {
 		] as never);
 
 		const result = await caller.admissions.list({});
-		expect(result[0].blacklistMatch).toBe('EMAIL');
+		expect(result.applicants[0].blacklistMatch).toBe('EMAIL');
 	});
 
 	it('filters by roles', async () => {
@@ -166,7 +168,8 @@ describe('admissions.list', () => {
 		const result = await caller.admissions.list({
 			roles: [Role.ORGANIZER, Role.ADMIN]
 		});
-		expect(result).toEqual([]);
+		expect(result.applicants).toEqual([]);
+		expect(result.search).toEqual(NO_EXPANSION);
 		expect(db.user.findMany).not.toHaveBeenCalled();
 	});
 
@@ -195,6 +198,9 @@ describe('admissions.list', () => {
 		// overwrote the decision clause and returned matches of any decision.
 		const caller = createTestCaller(db, adminUser);
 		db.user.findMany.mockResolvedValue([pendingUser] as never);
+		// The term returns a real result set, so the fuzzy fold stays out of the way and
+		// the only findMany is the listing itself.
+		db.user.count.mockResolvedValue(EXACT_MATCH_FLOOR as never);
 		await caller.admissions.list({ decision: DecisionStatus.ACCEPTED, search: 'ana' });
 		const where = db.user.findMany.mock.calls[0]?.[0]?.where as { AND: unknown[] };
 		expect(where.AND).toContainEqual({
@@ -442,6 +448,11 @@ describe('admissions.setDecision', () => {
 			where: claimableWhere(hackerUser.uid, adminUser.uid),
 			data: {
 				pendingDecision: DecisionStatus.ACCEPTED,
+				// Attribution rides along in the same statement as the decision — the
+				// CAS above can miss, and an attribution that could land without its
+				// decision is exactly the drift this column exists to prevent.
+				decidedBy: adminUser.uid,
+				decidedAt: new Date(),
 				claimedBy: null,
 				claimedAt: null
 			}
@@ -591,6 +602,25 @@ describe('admissions.release', () => {
 		expect(data).toMatchObject({ claimedBy: null, claimedAt: null });
 	});
 
+	/**
+	 * Release publishes decisions other admins made. Crediting the releaser would
+	 * hand one person the entire batch and erase the reviewers who did the work —
+	 * so the attribution columns must survive the promotion untouched.
+	 */
+	it('leaves decision attribution with the original reviewer', async () => {
+		const caller = createTestCaller(db, adminUser);
+		db.user.findMany.mockResolvedValue([pendingUser] as never);
+		db.settings.findFirst.mockResolvedValue(null);
+		db.log.create.mockResolvedValue({} as never);
+		db.$transaction.mockResolvedValue([{ count: 1 }]);
+
+		await caller.admissions.release({});
+
+		const data = db.user.updateMany.mock.calls[0]?.[0]?.data;
+		expect(data).not.toHaveProperty('decidedBy');
+		expect(data).not.toHaveProperty('decidedAt');
+	});
+
 	it('creates log entry after release', async () => {
 		const caller = createTestCaller(db, adminUser);
 		db.user.findMany.mockResolvedValue([pendingUser] as never);
@@ -635,5 +665,247 @@ describe('admissions.release', () => {
 		await expect(caller.admissions.release({})).rejects.toMatchObject({
 			code: 'BAD_REQUEST'
 		});
+	});
+});
+
+describe('admissions.list — linked application fields', () => {
+	/** The AND conditions the router handed Prisma. */
+	function whereConditions() {
+		const where = db.user.findMany.mock.calls.at(-1)?.[0]?.where as { AND: unknown[] };
+		return where.AND;
+	}
+
+	beforeEach(() => {
+		db.user.findMany.mockResolvedValue([hackerUser] as never);
+	});
+
+	it('filters by university with an exact IN', async () => {
+		await createTestCaller(db, adminUser).admissions.list({ universities: ['Rice University'] });
+		expect(whereConditions()).toContainEqual({ university: { in: ['Rice University'] } });
+	});
+
+	it('matches nothing when a linked filter is engaged but empty', async () => {
+		// Same rule as the recipient predicate, and the reason the clause is shared:
+		// these two lists must never disagree about what an empty selection means.
+		await createTestCaller(db, adminUser).admissions.list({ years: [] });
+		expect(whereConditions()).toContainEqual({ uid: 'IMPOSSIBLE_NO_MATCH' });
+	});
+
+	it('adds no clause at all when the linked filters are absent', async () => {
+		await createTestCaller(db, adminUser).admissions.list({});
+		expect(JSON.stringify(whereConditions())).not.toContain('university');
+	});
+
+	it('selects both spellings of absent for the NO_VALUE sentinel', async () => {
+		await createTestCaller(db, adminUser).admissions.list({ universities: [NO_VALUE] });
+		expect(whereConditions()).toContainEqual({
+			OR: [{ university: null }, { university: '' }]
+		});
+	});
+
+	it('ANDs linked fields with the decision filter rather than replacing it', async () => {
+		await createTestCaller(db, adminUser).admissions.list({
+			decision: DecisionStatus.ACCEPTED,
+			universities: ['Rice University']
+		});
+		const cond = whereConditions();
+		expect(cond).toContainEqual({
+			OR: [
+				{ pendingDecision: DecisionStatus.ACCEPTED },
+				{ activeDecision: DecisionStatus.ACCEPTED }
+			]
+		});
+		expect(cond).toContainEqual({ university: { in: ['Rice University'] } });
+	});
+
+	it('still matches pendingDecision OR activeDecision, unlike the recipient predicate', async () => {
+		// The two predicates share their search and linked-field clauses but must NOT
+		// be unified: the admissions queue reviews unreleased decisions, mail does not.
+		await createTestCaller(db, adminUser).admissions.list({ decision: DecisionStatus.ACCEPTED });
+		expect(JSON.stringify(whereConditions())).toContain('pendingDecision');
+	});
+});
+
+describe('admissions.list — typo-tolerant search', () => {
+	beforeEach(() => {
+		db.user.findMany.mockResolvedValue([hackerUser] as never);
+	});
+
+	it('leaves a productive search alone, without scanning names', async () => {
+		db.user.count.mockResolvedValue(EXACT_MATCH_FLOOR as never);
+		await createTestCaller(db, adminUser).admissions.list({ search: 'Hacker' });
+
+		// One findMany: the listing itself. No fold, no widened predicate.
+		expect(db.user.findMany).toHaveBeenCalledTimes(1);
+		const where = db.user.findMany.mock.calls[0]?.[0]?.where as { AND: unknown[] };
+		expect(where.AND).toContainEqual({
+			OR: [
+				{ name: { contains: 'Hacker', mode: 'insensitive' } },
+				{ email: { contains: 'Hacker', mode: 'insensitive' } }
+			]
+		});
+	});
+
+	it('falls back to close names when the typed term matches nobody', async () => {
+		db.user.count.mockResolvedValue(0 as never);
+		db.user.findMany
+			.mockResolvedValueOnce([{ name: 'Hacker User' }] as never)
+			.mockResolvedValueOnce([hackerUser] as never);
+
+		await createTestCaller(db, adminUser).admissions.list({ search: 'Hackr' });
+
+		const where = db.user.findMany.mock.calls.at(-1)?.[0]?.where as { AND: unknown[] };
+		expect(where.AND).toContainEqual({
+			OR: [
+				{ name: { contains: 'Hackr', mode: 'insensitive' } },
+				{ email: { contains: 'Hackr', mode: 'insensitive' } },
+				{ name: { in: ['Hacker User'] } }
+			]
+		});
+	});
+
+	it('reports no fallback for a term that matched exactly', async () => {
+		// The strip must stay hidden when the typed term was fine — `fuzzy` is what the
+		// UI gates on, so a productive search reporting anything else would show a
+		// "did you mean" over results the admin explicitly asked for.
+		db.user.count.mockResolvedValue(EXACT_MATCH_FLOOR as never);
+		const result = await createTestCaller(db, adminUser).admissions.list({ search: 'Hacker' });
+		expect(result.search).toEqual({ ...NO_EXPANSION, exact: EXACT_MATCH_FLOOR });
+	});
+
+	it('reports the fallback names, ranked, when the term matched nobody', async () => {
+		db.user.count.mockResolvedValue(0 as never);
+		db.user.findMany
+			// Neither contains the typed term, so both are genuine suggestions. A candidate
+			// spelled exactly like the query would not be one — the substring clause has it.
+			.mockResolvedValueOnce([{ name: 'Hacker User' }, { name: 'Hacker Userz' }] as never)
+			.mockResolvedValueOnce([hackerUser] as never);
+
+		const result = await createTestCaller(db, adminUser).admissions.list({ search: 'Hackr Userz' });
+
+		expect(result.search.fuzzy).toBe(true);
+		expect(result.search.capped).toBe(false);
+		// Ranked by mean similarity across query tokens, so the closer name leads.
+		expect(result.search.names).toEqual(['Hacker Userz', 'Hacker User']);
+	});
+
+	it('reports a truncated suggestion list rather than swallowing the cap', async () => {
+		// A capped list is a different answer from a complete one, and the strip says
+		// "showing the N closest" off this flag.
+		db.user.count.mockResolvedValue(0 as never);
+		const nearMisses = Array.from({ length: MAX_FUZZY_NAMES + 1 }, (_, i) => ({
+			name: `Hacker User ${i}`
+		}));
+		db.user.findMany
+			.mockResolvedValueOnce(nearMisses as never)
+			.mockResolvedValueOnce([hackerUser] as never);
+
+		const result = await createTestCaller(db, adminUser).admissions.list({ search: 'Hackr' });
+
+		expect(result.search.capped).toBe(true);
+		expect(result.search.names).toHaveLength(MAX_FUZZY_NAMES);
+	});
+
+	it('describes the same expansion the rows were selected with', async () => {
+		// One `expandSearch` call feeding both the predicate and the response — a second
+		// call could disagree with the first, and the strip would then be captioning a
+		// result set it did not produce.
+		db.user.count.mockResolvedValue(0 as never);
+		db.user.findMany
+			.mockResolvedValueOnce([{ name: 'Hacker User' }] as never)
+			.mockResolvedValueOnce([hackerUser] as never);
+
+		const result = await createTestCaller(db, adminUser).admissions.list({ search: 'Hackr' });
+
+		const where = db.user.findMany.mock.calls.at(-1)?.[0]?.where as { AND: unknown[] };
+		expect(where.AND).toContainEqual({
+			OR: [
+				{ name: { contains: 'Hackr', mode: 'insensitive' } },
+				{ email: { contains: 'Hackr', mode: 'insensitive' } },
+				{ name: { in: result.search.names } }
+			]
+		});
+	});
+
+	/**
+	 * The live bug: `adm` had 8 exact substring hits across the whole `User` table —
+	 * `admin1@yopmail.com`…`admin5@yopmail.com` plus three undeclared accounts — so the
+	 * probe cleared the floor and skipped the fold. None of them are applicants, so the
+	 * queue came back empty *and* never offered `Adam Hmaidan`. The probe has to be
+	 * counted inside the queue's own predicate, not across the table.
+	 */
+	describe('the exact-match probe is scoped to the queue', () => {
+		/** The AND conditions of the count `expandSearch` probed with. */
+		function probeConditions() {
+			const where = db.user.count.mock.calls[0]?.[0]?.where as { AND: unknown[] };
+			return where.AND;
+		}
+
+		it('probes within the applicant-role bound', async () => {
+			db.user.count.mockResolvedValue(0 as never);
+			db.user.findMany.mockResolvedValueOnce([{ name: 'Adam Hmaidan' }] as never);
+
+			await createTestCaller(db, adminUser).admissions.list({ search: 'adm' });
+
+			expect(probeConditions()).toContainEqual({ role: { in: APPLICANT_ROLES } });
+		});
+
+		it('probes within the decision tab and the linked-field filters too', async () => {
+			db.user.count.mockResolvedValue(0 as never);
+			db.user.findMany.mockResolvedValueOnce([] as never);
+
+			await createTestCaller(db, adminUser).admissions.list({
+				search: 'adm',
+				decision: DecisionStatus.ACCEPTED,
+				universities: ['Rice University']
+			});
+
+			const probe = probeConditions();
+			expect(probe).toContainEqual({
+				OR: [
+					{ pendingDecision: DecisionStatus.ACCEPTED },
+					{ activeDecision: DecisionStatus.ACCEPTED }
+				]
+			});
+			expect(probe).toContainEqual({ university: { in: ['Rice University'] } });
+			// The scope is everything BUT the search clause, and the probe appends the bare
+			// substring test to it. It can never carry the expanded `name: { in: [...] }`
+			// half — that is built from the expansion this very probe decides.
+			expect(JSON.stringify(probe.slice(0, -1))).not.toContain('contains');
+			expect(JSON.stringify(probe)).not.toContain('"in":["Adam');
+			expect(probe.at(-1)).toEqual({
+				OR: [
+					{ name: { contains: 'adm', mode: 'insensitive' } },
+					{ email: { contains: 'adm', mode: 'insensitive' } }
+				]
+			});
+		});
+
+		it('folds and suggests a name the global count would have suppressed', async () => {
+			// 0 in scope; the eight out-of-scope hits are no longer consulted.
+			db.user.count.mockResolvedValue(0 as never);
+			db.user.findMany
+				.mockResolvedValueOnce([{ name: 'Adam Hmaidan' }, { name: 'Admin User' }] as never)
+				.mockResolvedValueOnce([hackerUser] as never);
+
+			const result = await createTestCaller(db, adminUser).admissions.list({ search: 'adm' });
+
+			expect(result.search.fuzzy).toBe(true);
+			expect(result.search.names).toContain('Adam Hmaidan');
+		});
+	});
+
+	it('keeps the applicant-role bound even when the fuzzy fold widens the search', async () => {
+		// The fold scans every distinct name, staff included; the role clause is what
+		// keeps an admin whose name is a near miss out of the review queue.
+		db.user.count.mockResolvedValue(0 as never);
+		db.user.findMany
+			.mockResolvedValueOnce([{ name: 'Admin User' }] as never)
+			.mockResolvedValueOnce([] as never);
+
+		await createTestCaller(db, adminUser).admissions.list({ search: 'Admn' });
+
+		const where = db.user.findMany.mock.calls.at(-1)?.[0]?.where as { AND: unknown[] };
+		expect(where.AND).toContainEqual({ role: { in: APPLICANT_ROLES } });
 	});
 });

@@ -42,7 +42,9 @@ export const adminUser: User = {
 	groupId: null,
 	createdAt: new Date('2024-01-01'),
 	claimedBy: null,
-	claimedAt: null
+	claimedAt: null,
+	decidedBy: null,
+	decidedAt: null
 };
 
 /** A second admin, for exercising review-lock contention between two reviewers. */
@@ -67,7 +69,9 @@ export const organizerUser: User = {
 	groupId: null,
 	createdAt: new Date('2024-01-01'),
 	claimedBy: null,
-	claimedAt: null
+	claimedAt: null,
+	decidedBy: null,
+	decidedAt: null
 };
 
 export const hackerUser: User = {
@@ -84,7 +88,9 @@ export const hackerUser: User = {
 	groupId: null,
 	createdAt: new Date('2024-01-01'),
 	claimedBy: null,
-	claimedAt: null
+	claimedAt: null,
+	decidedBy: null,
+	decidedAt: null
 };
 
 /** An applicant currently locked by `adminUser2`. Override claimedAt per test. */

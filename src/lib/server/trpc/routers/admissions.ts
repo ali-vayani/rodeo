@@ -9,6 +9,13 @@ import { buildTemplateVars } from '$lib/email/variables';
 import { CLAIM_TTL_MS } from '$lib/admissions/lock';
 import { narrowToApplicants } from '$lib/admissions/roles';
 import { prepareBlacklist, matchApplicant } from '$lib/blacklist/match';
+import {
+	NO_EXPANSION,
+	expandSearch,
+	linkedFieldConditions,
+	linkedFieldFilterSchema,
+	searchCondition
+} from '$lib/server/recipients';
 
 /**
  * Rows this admin is allowed to claim or act on: unclaimed, already theirs (at any
@@ -50,9 +57,23 @@ export const admissionsRouter = router({
 	 * Each row carries a `blacklistMatch`, computed here rather than stored, so that entries
 	 * added after someone applied still show up against them.
 	 *
+	 * The predicate is this router's own — it matches `pendingDecision` OR
+	 * `activeDecision`, where `buildRecipientWhere` deliberately reads only the released
+	 * `activeDecision` — but the parts that are supposed to be identical (the search
+	 * clause and the linked-field filters) are imported rather than restated. Those two
+	 * had already drifted once as copy-pasted literals.
+	 *
+	 * Returns `{ applicants, search }` rather than a bare array, matching `user.list` and
+	 * `email.previewRecipients`. The extra key is the search expansion: whether the typed
+	 * term fell back to close names, which names those were (ranked), and whether that
+	 * list hit its cap. A bare array could not report any of it, so the queue had no way
+	 * to say "no exact match — did you mean" and a misspelled search looked like an empty
+	 * queue instead of a near miss.
+	 *
 	 * @param roles - narrow further within the applicant roles; staff roles match nothing
 	 * @param decision - filter by decision (pending & active)
-	 * @param search - search by name or email
+	 * @param search - search by name or email, with a typo-tolerant fallback
+	 * @param names/universities/years - linked application fields; `[]` matches nobody
 	 */
 	list: adminProcedure
 		.input(
@@ -60,7 +81,8 @@ export const admissionsRouter = router({
 				roles: z.array(z.nativeEnum(Role)).optional(),
 				decision: z.nativeEnum(DecisionStatus).optional(),
 				noDecision: z.boolean().optional(),
-				search: z.string().optional()
+				search: z.string().optional(),
+				...linkedFieldFilterSchema.shape
 			})
 		)
 		.query(async ({ ctx, input }) => {
@@ -69,7 +91,10 @@ export const admissionsRouter = router({
 			// Always bounded to roles that actually apply, so staff accounts stay out of the
 			// queue even on the "All" tab, which sends no role filter of its own.
 			const applicantRoles = narrowToApplicants(roles);
-			if (applicantRoles.length === 0) return [];
+			// No expansion reported, because none was computed — the term was never
+			// resolved against the database, so claiming `fuzzy: false` about it here is
+			// the honest answer rather than a guess.
+			if (applicantRoles.length === 0) return { applicants: [], search: NO_EXPANSION };
 
 			// Stacked under AND: the decision filter and the search filter each contribute an
 			// `OR` clause, and spreading both into one object literal silently dropped the
@@ -80,14 +105,22 @@ export const admissionsRouter = router({
 			if (decision !== undefined) {
 				conditions.push({ OR: [{ pendingDecision: decision }, { activeDecision: decision }] });
 			}
-			if (search) {
-				conditions.push({
-					OR: [
-						{ name: { contains: search, mode: 'insensitive' as const } },
-						{ email: { contains: search, mode: 'insensitive' as const } }
-					]
-				});
-			}
+			conditions.push(...linkedFieldConditions(input));
+
+			// Every condition above is in place before the probe runs, and that ordering is
+			// the point: `expandSearch` counts exact hits *inside this queue* rather than
+			// across the whole User table. A global count let `adm` clear the floor on five
+			// staff addresses and three undeclared accounts — none of them applicants — so
+			// the queue came back empty with the fold suppressed and never offered
+			// `Adam Hmaidan`. The search clause is appended after, because it is built from
+			// the expansion the probe decides.
+			//
+			// Kept in a local rather than inlined: it is both half of the predicate and
+			// half of the response, and the UI's "did you mean" strip has to be describing
+			// the same expansion the rows were actually selected with.
+			const expansion = await expandSearch(ctx.prisma, search, conditions);
+			const searchClause = searchCondition(search, expansion);
+			if (searchClause) conditions.push(searchClause);
 
 			const users = await ctx.prisma.user.findMany({
 				where: { AND: conditions },
@@ -107,7 +140,13 @@ export const admissionsRouter = router({
 				})
 			);
 
-			return users.map((user) => ({ ...user, blacklistMatch: matchApplicant(user, blacklist) }));
+			return {
+				applicants: users.map((user) => ({
+					...user,
+					blacklistMatch: matchApplicant(user, blacklist)
+				})),
+				search: expansion
+			};
 		}),
 
 	/**
@@ -237,6 +276,12 @@ export const admissionsRouter = router({
 					where: claimableBy(input.uid, ctx.user.uid),
 					data: {
 						pendingDecision: input.decision,
+						// Set in the same statement as the decision, never as a follow-up
+						// write: the CAS above can miss, and an attribution that could
+						// land without its decision is exactly the drift this column
+						// exists to make impossible.
+						decidedBy: ctx.user.uid,
+						decidedAt: new Date(),
 						claimedBy: null,
 						claimedAt: null
 					}
@@ -323,6 +368,11 @@ export const admissionsRouter = router({
 						data: {
 							activeDecision: u.pendingDecision,
 							pendingDecision: null,
+							// `decidedBy`/`decidedAt` are deliberately untouched. Release
+							// publishes decisions other admins made; crediting the releaser
+							// would hand one person the entire batch and erase the reviewers
+							// who actually did the work.
+							//
 							// Published decisions end any review session — don't leave the
 							// applicant showing as "being reviewed" until the claim goes stale.
 							claimedBy: null,

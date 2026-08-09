@@ -3,6 +3,7 @@ import { mockReset, type DeepMockProxy } from 'vitest-mock-extended';
 import type { PrismaClient } from '$lib/generated/prisma/client';
 import { Role, UserStatus, DecisionStatus } from '$lib/generated/prisma/client';
 import { createTestCaller, adminUser, hackerUser, mockGroupBy } from '../test-utils';
+import { APPLICANT_ROLES } from '$lib/admissions/roles';
 
 vi.mock('$lib/server/db', async () => {
 	const { mockDeep } = await import('vitest-mock-extended');
@@ -35,6 +36,13 @@ describe('dashboard.stats', () => {
 			.mockResolvedValueOnce([
 				{ role: Role.HACKER, _count: { role: 2 } },
 				{ role: Role.ORGANIZER, _count: { role: 1 } }
+			] as never)
+			// Fourth: decision × role, bounded to applicant roles — what the stat cards
+			// and their hover breakdowns read from.
+			.mockResolvedValueOnce([
+				{ activeDecision: DecisionStatus.ACCEPTED, role: Role.HACKER, _count: { _all: 2 } },
+				{ activeDecision: null, role: Role.HACKER, _count: { _all: 5 } },
+				{ activeDecision: null, role: Role.JUDGE, _count: { _all: 1 } }
 			] as never);
 		db.log.findMany.mockResolvedValue([]);
 
@@ -48,6 +56,68 @@ describe('dashboard.stats', () => {
 		expect(result.byRole[Role.HACKER]).toBe(2);
 		expect(result.byRole[Role.ORGANIZER]).toBe(1);
 		expect(result.recentActivity).toEqual([]);
+	});
+
+	describe('applicant stat cards', () => {
+		/** Mocks the four groupBys; the fourth is the decision × role cross-tab. */
+		function mockStats(applicantRows: unknown[]) {
+			db.user.count.mockResolvedValue(0);
+			mockGroupBy(db.user.groupBy)
+				.mockResolvedValueOnce([] as never)
+				.mockResolvedValueOnce([] as never)
+				.mockResolvedValueOnce([] as never)
+				.mockResolvedValueOnce(applicantRows as never);
+			db.log.findMany.mockResolvedValue([]);
+			return createTestCaller(db, adminUser);
+		}
+
+		it('splits each decision into a per-role breakdown', async () => {
+			const caller = mockStats([
+				{ activeDecision: DecisionStatus.ACCEPTED, role: Role.HACKER, _count: { _all: 40 } },
+				{ activeDecision: DecisionStatus.ACCEPTED, role: Role.JUDGE, _count: { _all: 5 } },
+				{ activeDecision: DecisionStatus.REJECTED, role: Role.HACKER, _count: { _all: 8 } }
+			]);
+
+			const { applicants } = await caller.dashboard.stats();
+
+			expect(applicants.accepted.total).toBe(45);
+			expect(applicants.accepted.byRole[Role.HACKER]).toBe(40);
+			expect(applicants.accepted.byRole[Role.JUDGE]).toBe(5);
+			expect(applicants.rejected.total).toBe(8);
+			expect(applicants.total).toBe(53);
+			expect(applicants.byRole[Role.HACKER]).toBe(48);
+		});
+
+		/**
+		 * The bug this replaced: the card read `activeDecision === 'PENDING'`, so it
+		 * showed the two users carrying the placeholder rather than the 88 nobody had
+		 * decided on. Both belong in the same bucket — neither has an outcome.
+		 */
+		it('counts undecided and the PENDING placeholder together as awaiting', async () => {
+			const caller = mockStats([
+				{ activeDecision: null, role: Role.HACKER, _count: { _all: 88 } },
+				{ activeDecision: DecisionStatus.PENDING, role: Role.HACKER, _count: { _all: 2 } }
+			]);
+
+			const { applicants } = await caller.dashboard.stats();
+
+			expect(applicants.awaiting.total).toBe(90);
+			expect(applicants.accepted.total).toBe(0);
+		});
+
+		it('bounds the query to applicant roles, so staff never land in a bucket', async () => {
+			const caller = mockStats([]);
+
+			await caller.dashboard.stats();
+
+			expect(db.user.groupBy).toHaveBeenNthCalledWith(
+				4,
+				expect.objectContaining({
+					by: ['activeDecision', 'role'],
+					where: { role: { in: APPLICANT_ROLES } }
+				})
+			);
+		});
 	});
 
 	it('throws FORBIDDEN for non-admin', async () => {

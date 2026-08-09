@@ -42,10 +42,14 @@
 	{#if entries.length === 0}
 		<div class="py-6 text-center text-[13px] text-muted-foreground">No activity yet</div>
 	{:else}
-		<!-- Below lg the feed is stacked in an auto-height row; cap it so the
-		     page doesn't grow with every log entry. On lg+ the grid row
-		     (stretched to the chart column) bounds it instead. -->
-		<div class="max-h-96 flex-1 overflow-y-auto lg:max-h-none">
+		<!-- Capped at every width, not just below lg. The previous `lg:max-h-none`
+		     handed the height back to the grid row, but this feed is the tallest
+		     thing in that row — twenty entries run past 800px — so the row grew to
+		     fit it and stretched the chart beside it into a tall empty panel. A
+		     fixed cap bounds both: the feed scrolls internally and the chart column
+		     stops inheriting dead space. Sized to sit close to the chart's natural
+		     height so the two cards stay level. -->
+		<div class="max-h-72 flex-1 overflow-y-auto">
 			{#each entries as entry (entry.id)}
 				<div class="flex items-start gap-[10px] border-b border-[#f0f0f0] py-[10px]">
 					<div

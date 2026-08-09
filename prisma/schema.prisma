@@ -95,6 +95,19 @@ model User {
   claimer         User?               @relation("ApplicationClaims", fields: [claimedBy], references: [uid])
   claims          User[]              @relation("ApplicationClaims")
 
+  // Decision attribution: which admin last set this applicant's decision.
+  // Written in the same UPDATE as the decision itself, never as a follow-up
+  // statement — that is what makes per-admin stats impossible to drift. A
+  // counter table would need a decrement here ("whose accepted count goes
+  // down?"), a question this column answers for free: reattributing the row
+  // moves it between GROUP BY buckets with no arithmetic to get wrong.
+  // Null means nobody is accountable — pre-migration history, or the
+  // blacklist auto-reject in `application.submit`, where no admin acted.
+  decidedBy       String?
+  decidedAt       DateTime?
+  decider         User?               @relation("ApplicationDecisions", fields: [decidedBy], references: [uid])
+  decisions       User[]              @relation("ApplicationDecisions")
+
   invitations Invitation[]
   logs        Log[]
 
@@ -102,6 +115,10 @@ model User {
   // claimedAt is deliberately NOT indexed — heartbeat rewrites it every 30s per
   // active reviewer, which would be pure index churn on a hot write path.
   @@index([claimedBy])
+  // Serves `stats.byAdmin`'s groupBy. Unlike claimedAt, decidedAt IS worth
+  // covering: it is written once per decision, not every 30s, and the stats
+  // page filters on it by time window.
+  @@index([decidedBy, decidedAt])
 }
 
 model ApplicationResponse {
