@@ -12,6 +12,7 @@ import {
 	adminUser2,
 	claimedHacker,
 	hackerUser,
+	mockGroupBy,
 	mockSettings
 } from '../test-utils';
 
@@ -907,5 +908,349 @@ describe('admissions.list — typo-tolerant search', () => {
 
 		const where = db.user.findMany.mock.calls.at(-1)?.[0]?.where as { AND: unknown[] };
 		expect(where.AND).toContainEqual({ role: { in: APPLICANT_ROLES } });
+	});
+});
+
+describe('admissions.setScore', () => {
+	it('saves the score with its attribution and releases the claim', async () => {
+		const caller = createTestCaller(db, adminUser);
+		db.user.update.mockResolvedValue({ ...hackerUser, score: 17 } as never);
+		db.log.create.mockResolvedValue({} as never);
+
+		const result = await caller.admissions.setScore({
+			uid: hackerUser.uid,
+			score: 17,
+			notes: 'Strong project history'
+		});
+
+		expect(result.score).toBe(17);
+		expect(db.user.update).toHaveBeenCalledWith({
+			where: claimableWhere(hackerUser.uid, adminUser.uid),
+			data: {
+				score: 17,
+				notes: 'Strong project history',
+				// Attribution rides in the same statement as the score, for the same
+				// reason `decidedBy` does: the CAS above can miss.
+				scoredBy: adminUser.uid,
+				scoredAt: new Date(),
+				claimedBy: null,
+				claimedAt: null
+			}
+		});
+	});
+
+	it('sets no decision — scoring and deciding are separate passes', async () => {
+		const caller = createTestCaller(db, adminUser);
+		db.user.update.mockResolvedValue(hackerUser as never);
+		db.log.create.mockResolvedValue({} as never);
+
+		await caller.admissions.setScore({ uid: hackerUser.uid, score: 12 });
+
+		const callArg = db.user.update.mock.calls[0]?.[0];
+		expect(callArg?.data).not.toHaveProperty('pendingDecision');
+		expect(callArg?.data).not.toHaveProperty('activeDecision');
+	});
+
+	it('stores blank notes as null so a note can be deleted', async () => {
+		const caller = createTestCaller(db, adminUser);
+		db.user.update.mockResolvedValue(hackerUser as never);
+		db.log.create.mockResolvedValue({} as never);
+
+		await caller.admissions.setScore({ uid: hackerUser.uid, score: 3, notes: '   ' });
+
+		const callArg = db.user.update.mock.calls[0]?.[0];
+		expect((callArg?.data as { notes: unknown }).notes).toBeNull();
+	});
+
+	it('logs an audit entry naming the score', async () => {
+		const caller = createTestCaller(db, adminUser);
+		db.user.update.mockResolvedValue({ ...hackerUser, score: 20 } as never);
+		db.log.create.mockResolvedValue({} as never);
+
+		await caller.admissions.setScore({ uid: hackerUser.uid, score: 20 });
+
+		expect(db.log.create).toHaveBeenCalledWith(
+			expect.objectContaining({
+				data: expect.objectContaining({
+					action: 'admissions.score.set',
+					actorId: adminUser.uid,
+					targetId: hackerUser.uid,
+					metadata: expect.objectContaining({ score: 20, hasNotes: false })
+				})
+			})
+		);
+	});
+
+	it('throws CONFLICT naming the holder when another admin has it locked', async () => {
+		const caller = createTestCaller(db, adminUser);
+		db.user.update.mockRejectedValue(recordNotFound());
+		db.user.findUnique.mockResolvedValue({
+			name: claimedHacker.name,
+			claimer: { name: adminUser2.name }
+		} as never);
+
+		await expect(
+			caller.admissions.setScore({ uid: claimedHacker.uid, score: 10 })
+		).rejects.toMatchObject({
+			code: 'CONFLICT',
+			message: expect.stringContaining('Second Admin')
+		});
+	});
+
+	it('throws NOT_FOUND when the applicant does not exist', async () => {
+		const caller = createTestCaller(db, adminUser);
+		db.user.update.mockRejectedValue(recordNotFound());
+		db.user.findUnique.mockResolvedValue(null as never);
+
+		await expect(caller.admissions.setScore({ uid: 'ghost-uid', score: 10 })).rejects.toMatchObject(
+			{ code: 'NOT_FOUND' }
+		);
+	});
+
+	it('rejects a score outside the scale, and a fractional one', async () => {
+		const caller = createTestCaller(db, adminUser);
+
+		await expect(caller.admissions.setScore({ uid: hackerUser.uid, score: 21 })).rejects.toThrow();
+		await expect(caller.admissions.setScore({ uid: hackerUser.uid, score: -1 })).rejects.toThrow();
+		await expect(
+			caller.admissions.setScore({ uid: hackerUser.uid, score: 17.5 })
+		).rejects.toThrow();
+		expect(db.user.update).not.toHaveBeenCalled();
+	});
+});
+
+describe('admissions.setDecisions', () => {
+	it('applies one decision to many, guarded by claim and role', async () => {
+		const caller = createTestCaller(db, adminUser);
+		db.user.updateMany.mockResolvedValue({ count: 3 } as never);
+		db.log.create.mockResolvedValue({} as never);
+
+		const result = await caller.admissions.setDecisions({
+			uids: ['a', 'b', 'c'],
+			decision: DecisionStatus.ACCEPTED
+		});
+
+		expect(result).toEqual({ updated: 3, skipped: 0 });
+		expect(db.user.updateMany).toHaveBeenCalledWith({
+			where: {
+				uid: { in: ['a', 'b', 'c'] },
+				role: { in: APPLICANT_ROLES },
+				OR: [
+					{ claimedBy: null },
+					{ claimedBy: adminUser.uid },
+					{ claimedAt: { lt: new Date(NOW.getTime() - CLAIM_TTL_MS) } }
+				]
+			},
+			data: {
+				pendingDecision: DecisionStatus.ACCEPTED,
+				decidedBy: adminUser.uid,
+				decidedAt: new Date(),
+				claimedBy: null,
+				claimedAt: null
+			}
+		});
+	});
+
+	it('reports rows it could not take rather than silently deciding fewer', async () => {
+		const caller = createTestCaller(db, adminUser);
+		db.user.updateMany.mockResolvedValue({ count: 2 } as never);
+		db.log.create.mockResolvedValue({} as never);
+
+		const result = await caller.admissions.setDecisions({
+			uids: ['a', 'b', 'c'],
+			decision: DecisionStatus.REJECTED
+		});
+
+		expect(result).toEqual({ updated: 2, skipped: 1 });
+		expect(db.log.create).toHaveBeenCalledWith(
+			expect.objectContaining({
+				data: expect.objectContaining({
+					action: 'admissions.decision.bulk',
+					summary: expect.stringContaining('1 skipped'),
+					metadata: expect.objectContaining({ updated: 2, skipped: 1 })
+				})
+			})
+		);
+	});
+
+	it('refuses PENDING and an empty selection', async () => {
+		const caller = createTestCaller(db, adminUser);
+
+		await expect(
+			// @ts-expect-error PENDING is deliberately not in the input union
+			caller.admissions.setDecisions({ uids: ['a'], decision: DecisionStatus.PENDING })
+		).rejects.toThrow();
+		await expect(
+			caller.admissions.setDecisions({ uids: [], decision: DecisionStatus.ACCEPTED })
+		).rejects.toThrow();
+		expect(db.user.updateMany).not.toHaveBeenCalled();
+	});
+});
+
+describe('admissions.stats', () => {
+	/** groupBy first, then the scored and unscored counts, in that order. */
+	function mockStats(
+		rows: Array<{
+			pendingDecision: DecisionStatus | null;
+			activeDecision: DecisionStatus | null;
+			count: number;
+		}>,
+		scored = 0,
+		unscored = 0
+	) {
+		mockGroupBy(db.user.groupBy).mockResolvedValueOnce(
+			rows.map((r) => ({
+				pendingDecision: r.pendingDecision,
+				activeDecision: r.activeDecision,
+				_count: { _all: r.count }
+			})) as never
+		);
+		db.user.count.mockResolvedValueOnce(scored as never).mockResolvedValueOnce(unscored as never);
+	}
+
+	it('counts a decision at its effective value — pending shadows active', async () => {
+		const caller = createTestCaller(db, adminUser);
+		mockStats([
+			// Released as rejected, then re-decided to accepted and not yet released.
+			// The applicant is accepted; counting the released value would say otherwise.
+			{
+				pendingDecision: DecisionStatus.ACCEPTED,
+				activeDecision: DecisionStatus.REJECTED,
+				count: 2
+			},
+			{ pendingDecision: null, activeDecision: DecisionStatus.REJECTED, count: 5 },
+			{ pendingDecision: DecisionStatus.WAITLISTED, activeDecision: null, count: 3 }
+		]);
+
+		const stats = await caller.admissions.stats();
+
+		expect(stats.accepted).toBe(2);
+		expect(stats.rejected).toBe(5);
+		expect(stats.waitlisted).toBe(3);
+	});
+
+	it('counts rows with no decision — and a leftover PENDING — as undecided', async () => {
+		const caller = createTestCaller(db, adminUser);
+		mockStats([
+			{ pendingDecision: null, activeDecision: null, count: 40 },
+			{ pendingDecision: DecisionStatus.PENDING, activeDecision: null, count: 2 }
+		]);
+
+		const stats = await caller.admissions.stats();
+
+		expect(stats.undecided).toBe(42);
+		expect(stats.accepted).toBe(0);
+	});
+
+	it('counts pending separately from the outcome buckets', async () => {
+		// `pending` is what Release acts on, and it cuts across accepted/rejected:
+		// an accepted applicant is accepted whether or not they have been emailed.
+		const caller = createTestCaller(db, adminUser);
+		mockStats([
+			{ pendingDecision: DecisionStatus.ACCEPTED, activeDecision: null, count: 4 },
+			{ pendingDecision: null, activeDecision: DecisionStatus.ACCEPTED, count: 6 }
+		]);
+
+		const stats = await caller.admissions.stats();
+
+		expect(stats.accepted).toBe(10);
+		expect(stats.pending).toBe(4);
+	});
+
+	it('splits the undecided queue into scored and unscored', async () => {
+		const caller = createTestCaller(db, adminUser);
+		mockStats([{ pendingDecision: null, activeDecision: null, count: 30 }], 12, 18);
+
+		const stats = await caller.admissions.stats();
+
+		expect(stats.scored).toBe(12);
+		expect(stats.unscored).toBe(18);
+		// The two halves are the same population the groupBy called undecided.
+		expect(stats.scored + stats.unscored).toBe(stats.undecided);
+	});
+});
+
+describe('admissions.list — scoring filters', () => {
+	it('narrows to the unscored half of the queue', async () => {
+		db.user.count.mockResolvedValue(0 as never);
+		db.user.findMany.mockResolvedValue([] as never);
+
+		await createTestCaller(db, adminUser).admissions.list({ noDecision: true, scored: false });
+
+		const where = db.user.findMany.mock.calls.at(-1)?.[0]?.where as { AND: unknown[] };
+		expect(where.AND).toContainEqual({ score: null });
+	});
+
+	it('narrows to the scored half', async () => {
+		db.user.count.mockResolvedValue(0 as never);
+		db.user.findMany.mockResolvedValue([] as never);
+
+		await createTestCaller(db, adminUser).admissions.list({ scored: true });
+
+		const where = db.user.findMany.mock.calls.at(-1)?.[0]?.where as { AND: unknown[] };
+		expect(where.AND).toContainEqual({ score: { not: null } });
+	});
+
+	it('applies no score filter when the flag is omitted', async () => {
+		db.user.count.mockResolvedValue(0 as never);
+		db.user.findMany.mockResolvedValue([] as never);
+
+		await createTestCaller(db, adminUser).admissions.list({});
+
+		const where = db.user.findMany.mock.calls.at(-1)?.[0]?.where as { AND: unknown[] };
+		expect(where.AND).not.toContainEqual({ score: null });
+		expect(where.AND).not.toContainEqual({ score: { not: null } });
+	});
+
+	it('ranks highest first, breaking ties on who applied earliest', async () => {
+		// Deterministic ties matter: the ranked list is worked top-down in batches,
+		// so two applicants on the same score must not swap places between reloads.
+		db.user.count.mockResolvedValue(0 as never);
+		db.user.findMany.mockResolvedValue([] as never);
+
+		await createTestCaller(db, adminUser).admissions.list({ scored: true, sort: 'score' });
+
+		expect(db.user.findMany.mock.calls.at(-1)?.[0]?.orderBy).toEqual([
+			{ score: { sort: 'desc', nulls: 'last' } },
+			{ createdAt: 'asc' }
+		]);
+	});
+});
+
+describe('admissions — a literal PENDING is not a decision', () => {
+	it('keeps PENDING applicants in the queue rather than filtering them out', async () => {
+		// The seed writes PENDING for "in the queue, untouched", and setDecision
+		// refuses to write it at all. Matching only on NULL hid those applicants
+		// from the very page that exists to review them.
+		db.user.count.mockResolvedValue(0 as never);
+		db.user.findMany.mockResolvedValue([] as never);
+
+		await createTestCaller(db, adminUser).admissions.list({ noDecision: true });
+
+		const where = db.user.findMany.mock.calls.at(-1)?.[0]?.where as { AND: unknown[] };
+		expect(where.AND).toContainEqual({
+			OR: [{ pendingDecision: null }, { pendingDecision: DecisionStatus.PENDING }],
+			activeDecision: null
+		});
+	});
+
+	it('falls through to the released decision when the pending one is PENDING', async () => {
+		const caller = createTestCaller(db, adminUser);
+		mockGroupBy(db.user.groupBy).mockResolvedValueOnce([
+			{
+				pendingDecision: DecisionStatus.PENDING,
+				activeDecision: DecisionStatus.ACCEPTED,
+				_count: { _all: 3 }
+			}
+		] as never);
+		db.user.count.mockResolvedValueOnce(0 as never).mockResolvedValueOnce(0 as never);
+
+		const stats = await caller.admissions.stats();
+
+		// Already accepted and told so — PENDING alongside it must not undo that.
+		expect(stats.accepted).toBe(3);
+		expect(stats.undecided).toBe(0);
+		// ...and it is not releasable, because there is no real pending decision.
+		expect(stats.pending).toBe(0);
 	});
 });

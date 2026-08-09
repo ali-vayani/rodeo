@@ -2,6 +2,7 @@
 	import { MediaQuery } from 'svelte/reactivity';
 	import BlacklistBadge from './BlacklistBadge.svelte';
 	import LinkedFieldFilters from '$lib/components/admin/LinkedFieldFilters.svelte';
+	import type { ScoreFilter } from '$lib/admissions/score';
 	import type { BlacklistMatch } from '$lib/blacklist/match';
 	import type { Role } from '$lib/generated/prisma/enums';
 	import type { LinkedFacet, LinkedUserField } from '$lib/linkedFields';
@@ -14,6 +15,8 @@
 		onRoleTabChange,
 		search,
 		onSearchInput,
+		scoreFilter,
+		onScoreFilterChange,
 		facets,
 		linkedSelected,
 		onLinkedFiltersChange,
@@ -30,6 +33,7 @@
 			name: string;
 			email: string;
 			role: string;
+			score: number | null;
 			pendingDecision: string | null;
 			blacklistMatch: BlacklistMatch | null;
 			createdAt: Date | string;
@@ -40,6 +44,13 @@
 		onRoleTabChange: (tab: Role | 'ALL') => void;
 		search: string;
 		onSearchInput: (value: string) => void;
+		/**
+		 * Which half of the queue is on screen. Defaults to `unscored` — the pass is
+		 * "work until this list is empty" — but scored applicants have to stay
+		 * reachable or a mistyped score would be uncorrectable from the UI.
+		 */
+		scoreFilter: ScoreFilter;
+		onScoreFilterChange: (value: ScoreFilter) => void;
 		/** One per application question that writes through to a `User` column. */
 		facets: LinkedFacet[];
 		linkedSelected: Partial<Record<LinkedUserField, string[]>>;
@@ -142,6 +153,12 @@
 		{ key: 'VOLUNTEER', label: 'Volunteers' }
 	] as const;
 
+	const SCORE_FILTERS: ReadonlyArray<{ key: ScoreFilter; label: string }> = [
+		{ key: 'unscored', label: 'To score' },
+		{ key: 'scored', label: 'Scored' },
+		{ key: 'all', label: 'All' }
+	];
+
 	const DECISION_CLASS: Record<string, string> = {
 		ACCEPTED: 'bg-[#d1fae5] text-[#065f46]',
 		WAITLISTED: 'bg-[#fef9c3] text-[#713f12]',
@@ -208,8 +225,26 @@
 			</button>
 		</div>
 
-		<!-- Search -->
+		<!-- Scored / unscored split, then search -->
 		<div class="shrink-0 border-b border-border px-3 py-[10px]">
+			<!-- Built from the same plain buttons as the role tabs directly above rather
+			     than a shared control: the two sit two rows apart in a 300px rail and
+			     have to read as one set of filters, not as two borrowed widgets. -->
+			<div class="mb-2 flex gap-1" role="group" aria-label="Filter by scoring state">
+				{#each SCORE_FILTERS as option (option.key)}
+					<button
+						type="button"
+						aria-pressed={scoreFilter === option.key}
+						onclick={() => onScoreFilterChange(option.key)}
+						class="flex-1 cursor-pointer rounded border px-2 py-1 text-[11px] transition-colors
+						       focus-visible:shadow-ring {scoreFilter === option.key
+							? 'border-primary bg-primary font-semibold text-primary-foreground'
+							: 'border-border bg-card text-muted-foreground hover:bg-[#f5f5f5]'}"
+					>
+						{option.label}
+					</button>
+				{/each}
+			</div>
 			<input
 				type="text"
 				placeholder="Search by name or email…"
@@ -345,6 +380,13 @@
 								{applicant.name}
 							</span>
 							<div class="flex shrink-0 items-center gap-1">
+								{#if applicant.score !== null}
+									<span
+										class="inline-block rounded bg-[#eef2ff] px-1.5 py-0.5 font-mono text-[10px] font-semibold text-[#3730a3] tabular-nums"
+									>
+										{applicant.score}
+									</span>
+								{/if}
 								<BlacklistBadge match={applicant.blacklistMatch} />
 								{#if applicant.uid === selfClaimUid}
 									<span
@@ -364,7 +406,9 @@
 										Reviewing
 									</span>
 								{/if}
-								{#if applicant.pendingDecision}
+								<!-- A literal PENDING means untouched, not decided — chipping it
+								     would put a badge on every row in the scoring queue. -->
+								{#if applicant.pendingDecision && applicant.pendingDecision !== 'PENDING'}
 									<span
 										class="inline-block rounded px-1.5 py-0.5 text-[10px] font-semibold {DECISION_CLASS[
 											applicant.pendingDecision

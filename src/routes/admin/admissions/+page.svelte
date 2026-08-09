@@ -8,10 +8,13 @@
 	import ApplicantList from '$lib/components/admissions/ApplicantList.svelte';
 	import ApplicantDetail from '$lib/components/admissions/ApplicantDetail.svelte';
 	import IdleWarningModal from '$lib/components/admissions/IdleWarningModal.svelte';
+	import RankedList from '$lib/components/admissions/RankedList.svelte';
 	import Toast from '$lib/components/legacy/Toast.svelte';
 	import { Modal, Button } from '$lib/components/ui';
+	import { Tabs } from '$lib/components/patterns';
 	import { createReviewSession, pickNextUnlocked } from '$lib/admissions/reviewSession.svelte';
 	import { PRESENCE_POLL_MS } from '$lib/admissions/lock';
+	import { MAX_SCORE, type ScoreFilter } from '$lib/admissions/score';
 	import type { LinkedUserField } from '$lib/linkedFields';
 
 	let { data }: { data: PageData } = $props();
@@ -20,10 +23,28 @@
 
 	type Applicant = (typeof data.applicants)[number];
 
+	/**
+	 * The two passes, in the order they happen: score the whole queue, then work the
+	 * ranking. They are tabs rather than pages because they share the release action
+	 * and the counts above them, and because moving between them mid-pass — to check
+	 * where a borderline applicant landed — is normal, not a navigation.
+	 */
+	let tab = $state<'review' | 'decide'>('review');
+
 	let applicants = $state<Applicant[]>(untrack(() => [...data.applicants]));
 	let selectedUid = $state<string | null>(null);
 	let roleTab = $state<Role | 'ALL'>('ALL');
 	let search = $state('');
+	let scoreFilter = $state<ScoreFilter>('unscored');
+	let stats = $state(untrack(() => data.stats));
+
+	// The ranked list is fetched on arrival at the Decide tab, never eagerly: it
+	// carries every scored applicant's answers, and scores keep moving while the
+	// decision pass is open, so a copy loaded with the page would be stale by the
+	// time anyone looked at it.
+	let ranked = $state<Applicant[]>([]);
+	let rankedLoading = $state(false);
+	let deciding = $state(false);
 
 	/** Chosen values per linked application field, `NO_VALUE` included. */
 	let linkedSelected = $state<Partial<Record<LinkedUserField, string[]>>>({});
@@ -42,7 +63,7 @@
 	let nameFromSuggestion = $state(false);
 
 	let loading = $state(false);
-	let decisionLoading = $state(false);
+	let scoreLoading = $state(false);
 	let sidebarCollapsed = $state(false);
 
 	// Presence: uid → claimerName, other admins only (the poll filters out our own uid)
@@ -66,7 +87,11 @@
 
 	let selectedIndex = $derived(applicants.findIndex((a) => a.uid === selectedUid));
 	let selected = $derived(selectedIndex >= 0 ? applicants[selectedIndex] : null);
-	let pendingCount = $derived(applicants.filter((a) => a.pendingDecision !== null).length);
+	// From the server rather than counted off the list: neither tab holds every
+	// applicant with a pending decision — the review queue shows the undecided and
+	// the ranked list only the scored — so a local count would understate what
+	// Release is about to send.
+	let pendingCount = $derived(stats.pending);
 	let hasPrev = $derived(selectedIndex > 0);
 	let hasNext = $derived(selectedIndex >= 0 && selectedIndex < applicants.length - 1);
 
@@ -185,6 +210,9 @@
 		try {
 			const result = await trpc.admissions.list.query({
 				noDecision: true,
+				// `all` sends no score filter at all; the other two are a boolean the
+				// server reads as "has a score" / "has none".
+				scored: scoreFilter === 'all' ? undefined : scoreFilter === 'scored',
 				roles: roleTab !== 'ALL' ? [roleTab] : undefined,
 				search: search.trim() || undefined,
 				...linkedFilterArgs(linkedSelected)
@@ -195,6 +223,38 @@
 			showToast(errorMessage(e, 'Failed to load applicants'), 'error');
 		} finally {
 			loading = false;
+		}
+	}
+
+	async function loadRanked() {
+		rankedLoading = true;
+		try {
+			const result = await trpc.admissions.list.query({ scored: true, sort: 'score' });
+			ranked = result.applicants;
+		} catch (e) {
+			showToast(errorMessage(e, 'Failed to load the ranked list'), 'error');
+		} finally {
+			rankedLoading = false;
+		}
+	}
+
+	/** Best-effort: the counts are a readout, and failing to refresh them is not
+	    worth an error toast on top of whatever the operator just did. */
+	async function refreshStats() {
+		try {
+			stats = await trpc.admissions.stats.query();
+		} catch {
+			// keep the last known counts
+		}
+	}
+
+	function onTabChange(next: string) {
+		tab = next === 'decide' ? 'decide' : 'review';
+		if (tab === 'decide') {
+			// Refetched on every arrival, not just the first: whatever was scored
+			// since the last visit is exactly what the operator came back to see.
+			void loadRanked();
+			void refreshStats();
 		}
 	}
 
@@ -222,6 +282,15 @@
 		loadApplicants();
 	}
 
+	function onScoreFilterChange(next: ScoreFilter) {
+		scoreFilter = next;
+		// The selected applicant is very likely about to leave the list — drop the
+		// selection rather than leaving the detail pane showing someone the queue no
+		// longer contains, which would strand their claim until it went stale.
+		selectedUid = null;
+		loadApplicants();
+	}
+
 	/**
 	 * Narrow to one suggested name — or, clicking the active chip, back out of it.
 	 *
@@ -236,38 +305,98 @@
 		loadApplicants();
 	}
 
-	async function handleDecision(decision: DecisionStatus) {
-		// PENDING is a starting state, not a decision to publish — the bar never sends it,
-		// and setDecision no longer accepts it. Guard narrows the type for the mutate call.
-		if (decision === 'PENDING') return;
+	async function handleSaveScore(score: number, notes: string) {
 		if (!selectedUid || !session.canDecide) return;
 		const uid = selectedUid;
 		const idx = applicants.findIndex((a) => a.uid === uid);
 
-		// Deciding is activity — don't let a slow request time out into the idle modal.
+		// Saving is activity — don't let a slow request time out into the idle modal.
 		session.noteActivity();
-		decisionLoading = true;
+		scoreLoading = true;
 		try {
-			await trpc.admissions.setDecision.mutate({ uid, decision });
+			const saved = await trpc.admissions.setScore.mutate({ uid, score, notes });
 
-			// setDecision already cleared the claim server-side — skip the teardown release
-			session.markDecided(uid);
+			// setScore already cleared the claim server-side — skip the teardown release
+			session.markClaimCleared(uid);
 
 			// Navigated away mid-flight; don't clobber the new selection
 			if (selectedUid !== uid) return;
 
-			// Remove from list — they now have a pending decision
-			applicants = applicants.filter((a) => a.uid !== uid);
-			// Same index in the new array = the next person, skipping anyone locked
-			rollToNextUnlocked(idx, uid);
+			if (scoreFilter === 'unscored') {
+				// Scoring is what takes an applicant out of this view, so the row leaves
+				// and the queue closes up behind it — same index, next person, skipping
+				// anyone another admin holds.
+				applicants = applicants.filter((a) => a.uid !== uid);
+				rollToNextUnlocked(idx, uid);
+			} else {
+				// Revisiting a scored applicant: the row stays put and updates in place,
+				// because removing it would be the view contradicting its own filter.
+				applicants = applicants.map((a) =>
+					a.uid === uid
+						? {
+								...a,
+								score: saved.score,
+								notes: saved.notes,
+								scoredAt: saved.scoredAt,
+								scorer: { name: data.adminName }
+							}
+						: a
+				);
+				selectNext();
+			}
+			showToast(`Saved ${score}/${MAX_SCORE}`);
+			void refreshStats();
 		} catch (e) {
 			if (isTRPCErrorCode(e, 'CONFLICT')) {
 				// Someone else got there first — the server refused the write.
 				session.reclaim();
 			}
-			showToast(errorMessage(e, 'Failed to update decision'), 'error');
+			showToast(errorMessage(e, 'Failed to save score'), 'error');
 		} finally {
-			decisionLoading = false;
+			scoreLoading = false;
+		}
+	}
+
+	/**
+	 * Apply a pending decision from the ranked list, one row or a selection.
+	 *
+	 * A single applicant goes through `setDecision` rather than the bulk path even
+	 * though the bulk path would handle it: only `setDecision` can name the admin
+	 * whose lock blocked it, and only it writes the blocked-decision audit row. The
+	 * bulk mutation can report a count of skipped rows and nothing more, which is
+	 * the right answer for two hundred and the wrong one for one.
+	 */
+	async function handleDecide(uids: string[], decision: DecisionStatus) {
+		if (decision === 'PENDING' || uids.length === 0) return;
+		deciding = true;
+		try {
+			let skipped = 0;
+			if (uids.length === 1) {
+				await trpc.admissions.setDecision.mutate({ uid: uids[0], decision });
+				showToast(`Set to ${decision.toLowerCase()}`);
+			} else {
+				const result = await trpc.admissions.setDecisions.mutate({ uids, decision });
+				skipped = result.skipped;
+				showToast(
+					`Set ${result.updated} to ${decision.toLowerCase()}` +
+						(skipped > 0 ? ` — ${skipped} skipped, being reviewed` : '')
+				);
+			}
+
+			if (skipped > 0) {
+				// Which rows were skipped isn't in the response, so the list is refetched
+				// rather than guessed at — a decision chip that says ACCEPTED next to
+				// someone who wasn't is worse than a second round trip.
+				await loadRanked();
+			} else {
+				const applied = new Set(uids);
+				ranked = ranked.map((a) => (applied.has(a.uid) ? { ...a, pendingDecision: decision } : a));
+			}
+			void refreshStats();
+		} catch (e) {
+			showToast(errorMessage(e, 'Failed to update decisions'), 'error');
+		} finally {
+			deciding = false;
 		}
 	}
 
@@ -275,11 +404,12 @@
 		releasing = true;
 		try {
 			const result = await trpc.admissions.release.mutate({});
-			applicants = applicants.map((a) => ({
+			ranked = ranked.map((a) => ({
 				...a,
 				activeDecision: a.pendingDecision ?? a.activeDecision,
 				pendingDecision: null
 			}));
+			void refreshStats();
 			showReleaseModal = false;
 			releaseConfirmText = '';
 			showToast(
@@ -309,7 +439,8 @@
 	<div>
 		<h1 class="text-[22px] font-bold text-primary">Admissions</h1>
 		<span class="mt-0.5 block text-[13px] text-muted-foreground">
-			{applicants.length} remaining · {pendingCount} pending review
+			{stats.unscored} left to score · {stats.accepted} accepted · {stats.rejected} rejected ·
+			{stats.waitlisted} waitlisted · {pendingCount} pending release
 		</span>
 	</div>
 	<button
@@ -320,60 +451,103 @@
 	</button>
 </div>
 
-<!-- Split pane from md up; stacked list ⇄ detail navigation below md -->
-<div class="flex workspace-h rounded-md border border-border bg-white md:overflow-hidden">
-	<ApplicantList
-		{applicants}
-		{selectedUid}
-		onSelect={(uid) => (selectedUid = uid)}
-		{roleTab}
-		{onRoleTabChange}
-		{search}
-		{onSearchInput}
-		facets={data.facets}
-		{linkedSelected}
-		{onLinkedFiltersChange}
-		{searchInfo}
-		{onSuggestionSelect}
-		{loading}
-		collapsed={sidebarCollapsed}
-		onToggleCollapse={() => (sidebarCollapsed = !sidebarCollapsed)}
-		{presenceMap}
-		selfClaimUid={session.phase === 'owned' || session.phase === 'warning' ? selectedUid : null}
+<!--
+	The tabs are a fixed-size row of a column that is itself exactly one workspace
+	tall, and the pane below takes whatever is left. Stacking them above a
+	`workspace-h` pane instead would push the pane's own bottom edge — and with it
+	the score field, the thing the reviewer is here to use — off the screen.
+
+	The counts that used to sit here as four tiles now live on one line under the
+	page title: they were costing 118px of the reviewing surface to say what fits
+	in a sentence, and being pinned above a scrolling pane made them read as
+	chrome that would not go away.
+-->
+<div class="flex flex-col md:workspace-h md:overflow-hidden">
+	<Tabs
+		tabs={[
+			{ value: 'review', label: 'Review', badge: stats.unscored },
+			{ value: 'decide', label: 'Decide', badge: stats.scored }
+		]}
+		active={tab}
+		onChange={onTabChange}
+		class="mb-4 shrink-0"
 	/>
 
-	<!-- Right detail pane. Below md it replaces the list when an applicant is
-	     selected, and disappears entirely (no room for an empty-state pane)
-	     when none is. -->
-	<div
-		bind:this={paneEl}
-		class="min-w-0 flex-1 flex-col md:flex md:overflow-hidden {selected ? 'flex' : 'hidden'}"
-	>
-		{#if selected}
-			<ApplicantDetail
-				applicant={selected}
-				onDecision={handleDecision}
-				{decisionLoading}
-				{hasPrev}
-				{hasNext}
-				onPrev={selectPrev}
-				onNext={selectNext}
-				onBack={() => (selectedUid = null)}
-				lockState={session.phase}
-				claimerName={session.claimerName}
-				lockFreed={session.lockFreed}
-				onReclaim={session.reclaim}
+	{#if tab === 'review'}
+		<!-- Split pane from md up; stacked list ⇄ detail navigation below md -->
+		<div
+			class="flex rounded-md border border-border bg-white md:min-h-0 md:flex-1 md:overflow-hidden"
+		>
+			<ApplicantList
+				{applicants}
+				{selectedUid}
+				onSelect={(uid) => (selectedUid = uid)}
+				{roleTab}
+				{onRoleTabChange}
+				{search}
+				{onSearchInput}
+				{scoreFilter}
+				{onScoreFilterChange}
+				facets={data.facets}
+				{linkedSelected}
+				{onLinkedFiltersChange}
+				{searchInfo}
+				{onSuggestionSelect}
+				{loading}
+				collapsed={sidebarCollapsed}
+				onToggleCollapse={() => (sidebarCollapsed = !sidebarCollapsed)}
+				{presenceMap}
+				selfClaimUid={session.phase === 'owned' || session.phase === 'warning' ? selectedUid : null}
 			/>
-		{:else}
-			<div class="flex flex-1 items-center justify-center text-[13px] text-muted-foreground">
-				{applicants.length === 0
-					? 'All applicants have been reviewed'
-					: Object.keys(presenceMap).length >= applicants.length
-						? 'Everyone in this view is being reviewed. Try another role tab or clear your search.'
-						: 'Select an applicant to review their application'}
+
+			<!-- Right detail pane. Below md it replaces the list when an applicant is
+		     selected, and disappears entirely (no room for an empty-state pane)
+		     when none is. -->
+			<div
+				bind:this={paneEl}
+				class="min-w-0 flex-1 flex-col md:flex md:overflow-hidden {selected ? 'flex' : 'hidden'}"
+			>
+				{#if selected}
+					<ApplicantDetail
+						applicant={selected}
+						onSaveScore={handleSaveScore}
+						{scoreLoading}
+						{hasPrev}
+						{hasNext}
+						onPrev={selectPrev}
+						onNext={selectNext}
+						onBack={() => (selectedUid = null)}
+						lockState={session.phase}
+						claimerName={session.claimerName}
+						lockFreed={session.lockFreed}
+						onReclaim={session.reclaim}
+					/>
+				{:else}
+					<div class="flex flex-1 items-center justify-center text-[13px] text-muted-foreground">
+						{applicants.length === 0
+							? scoreFilter === 'unscored'
+								? 'Every application here has been scored — head to Decide'
+								: 'No applicants in this view'
+							: Object.keys(presenceMap).length >= applicants.length
+								? 'Everyone in this view is being reviewed. Try another role tab or clear your search.'
+								: 'Select an applicant to score their application'}
+					</div>
+				{/if}
 			</div>
-		{/if}
-	</div>
+		</div>
+	{:else}
+		<!-- The ranked list scrolls inside the same remaining height, so the bulk
+		     toolbar stays put while the table moves under it. -->
+		<div class="md:min-h-0 md:flex-1 md:overflow-y-auto">
+			<RankedList
+				applicants={ranked}
+				loading={rankedLoading}
+				{deciding}
+				unscoredCount={stats.unscored}
+				onDecide={handleDecide}
+			/>
+		</div>
+	{/if}
 </div>
 
 <!-- Idle warning: lock is still held while this counts down -->

@@ -7,7 +7,9 @@ import { logAction } from '$lib/server/log';
 import { sendTemplatedEmail } from '$lib/server/email';
 import { buildTemplateVars } from '$lib/email/variables';
 import { CLAIM_TTL_MS } from '$lib/admissions/lock';
-import { narrowToApplicants } from '$lib/admissions/roles';
+import { effectiveDecision } from '$lib/admissions/decision';
+import { MAX_SCORE, MIN_SCORE } from '$lib/admissions/score';
+import { APPLICANT_ROLES, narrowToApplicants } from '$lib/admissions/roles';
 import { prepareBlacklist, matchApplicant } from '$lib/blacklist/match';
 import {
 	NO_EXPANSION,
@@ -46,6 +48,24 @@ function isRecordNotFound(e: unknown): boolean {
 	);
 }
 
+/**
+ * Applicants nobody has decided on yet — the population both passes work through.
+ *
+ * One predicate rather than three inlined copies, because `stats` reports the
+ * scoring queue's size and `list` selects its rows: a tab badge counting a
+ * different set than the list under it shows is worse than no badge.
+ *
+ * A literal `PENDING` is read as no decision, not as one. It is the enum's
+ * starting value — `setDecision` refuses to write it, `release` emails nothing
+ * for it, and the seed writes it to mean "in the queue, untouched". Matching
+ * only on NULL hid every such applicant from the queue while still counting
+ * them somewhere, which is the exact drift this constant exists to prevent.
+ */
+const UNDECIDED: Prisma.UserWhereInput = {
+	OR: [{ pendingDecision: null }, { pendingDecision: DecisionStatus.PENDING }],
+	activeDecision: null
+};
+
 export const admissionsRouter = router({
 	/**
 	 * List applicants with optional filters.
@@ -73,6 +93,8 @@ export const admissionsRouter = router({
 	 * @param roles - narrow further within the applicant roles; staff roles match nothing
 	 * @param decision - filter by decision (pending & active)
 	 * @param search - search by name or email, with a typo-tolerant fallback
+	 * @param scored - true: only applicants a reviewer has scored; false: only unscored
+	 * @param sort - `score` ranks highest-first for the decision pass; `recent` is the queue's own order
 	 * @param names/universities/years - linked application fields; `[]` matches nobody
 	 */
 	list: adminProcedure
@@ -81,12 +103,14 @@ export const admissionsRouter = router({
 				roles: z.array(z.nativeEnum(Role)).optional(),
 				decision: z.nativeEnum(DecisionStatus).optional(),
 				noDecision: z.boolean().optional(),
+				scored: z.boolean().optional(),
+				sort: z.enum(['recent', 'score']).default('recent'),
 				search: z.string().optional(),
 				...linkedFieldFilterSchema.shape
 			})
 		)
 		.query(async ({ ctx, input }) => {
-			const { roles, decision, noDecision, search } = input;
+			const { roles, decision, noDecision, scored, sort, search } = input;
 
 			// Always bounded to roles that actually apply, so staff accounts stay out of the
 			// queue even on the "All" tab, which sends no role filter of its own.
@@ -101,7 +125,8 @@ export const admissionsRouter = router({
 			// decision `OR` (the later key wins) — so searching on the "Accepted" tab returned
 			// every match regardless of decision. Separate array entries can't collide.
 			const conditions: Prisma.UserWhereInput[] = [{ role: { in: applicantRoles } }];
-			if (noDecision) conditions.push({ pendingDecision: null, activeDecision: null });
+			if (noDecision) conditions.push(UNDECIDED);
+			if (scored !== undefined) conditions.push({ score: scored ? { not: null } : null });
 			if (decision !== undefined) {
 				conditions.push({ OR: [{ pendingDecision: decision }, { activeDecision: decision }] });
 			}
@@ -125,9 +150,18 @@ export const admissionsRouter = router({
 			const users = await ctx.prisma.user.findMany({
 				where: { AND: conditions },
 				include: {
-					application: { include: { question: true } }
+					application: { include: { question: true } },
+					// Notes are read by whoever runs the decision pass, not by their author,
+					// so an unattributed note is a note nobody can follow up on.
+					scorer: { select: { name: true } }
 				},
-				orderBy: { createdAt: 'desc' }
+				// Ties break on earliest applied rather than falling to whatever order the
+				// planner returns: the ranked list is worked top-down and accepted in
+				// batches, so two applicants on 17 must not swap places between reloads.
+				orderBy:
+					sort === 'score'
+						? [{ score: { sort: 'desc', nulls: 'last' } }, { createdAt: 'asc' }]
+						: { createdAt: 'desc' }
 			});
 
 			// Fuzzy name matching can't be expressed as a WHERE clause, so the blacklist is
@@ -323,6 +357,187 @@ export const admissionsRouter = router({
 				});
 			}
 		}),
+
+	/**
+	 * Score an applicant 0–20 and save the reviewer's notes.
+	 *
+	 * The first of the two passes. Scoring deliberately sets no decision: the whole
+	 * point of splitting the workflow is that nobody is accepted or rejected until
+	 * the queue has been scored and can be ranked against itself.
+	 *
+	 * Guarded by the same claim CAS as `setDecision`, and releases the claim on
+	 * success for the same reason — the reviewer is done with this applicant and is
+	 * about to be handed the next one.
+	 *
+	 * Re-scoring is allowed and simply overwrites, including the attribution: the
+	 * reviewer who last touched the score is the one who owns it.
+	 *
+	 * @param uid - the applicant
+	 * @param score - whole number within the shared scale
+	 * @param notes - free text shown to every admin during the decision pass; blank clears
+	 */
+	setScore: adminProcedure
+		.input(
+			z.object({
+				uid: z.string(),
+				score: z.number().int().min(MIN_SCORE).max(MAX_SCORE),
+				// Always sent by the review pane, blank included — that is what makes
+				// deleting a note possible. An omitted field would be indistinguishable
+				// from an emptied one.
+				notes: z.string().max(5000).optional()
+			})
+		)
+		.mutation(async ({ ctx, input }) => {
+			const notes = input.notes?.trim() || null;
+			try {
+				const applicant = await ctx.prisma.user.update({
+					where: claimableBy(input.uid, ctx.user.uid),
+					data: {
+						score: input.score,
+						notes,
+						scoredBy: ctx.user.uid,
+						scoredAt: new Date(),
+						claimedBy: null,
+						claimedAt: null
+					}
+				});
+
+				await logAction(ctx, {
+					action: 'admissions.score.set',
+					summary: `Scored ${applicant.name} ${input.score}/${MAX_SCORE}`,
+					target: { id: applicant.uid, label: applicant.name },
+					metadata: { score: input.score, hasNotes: notes !== null }
+				});
+
+				return applicant;
+			} catch (e) {
+				if (!isRecordNotFound(e)) throw e;
+
+				const target = await ctx.prisma.user.findUnique({
+					where: { uid: input.uid },
+					select: { name: true, claimer: { select: { name: true } } }
+				});
+				if (!target) {
+					throw new TRPCError({ code: 'NOT_FOUND', message: 'Applicant not found.' });
+				}
+
+				// No `admissions.score.blocked` counterpart to the decision path's audit
+				// row. A blocked decision is worth a permanent record because the thing
+				// it stopped is irreversible once released; a blocked score costs the
+				// reviewer one re-entry and would only add noise to the feed.
+				throw new TRPCError({
+					code: 'CONFLICT',
+					message: `${target.claimer?.name ?? 'Another admin'} is reviewing this applicant. Your score was not saved.`
+				});
+			}
+		}),
+
+	/**
+	 * Set the same pending decision on many applicants at once — the decision pass
+	 * working down the ranked list, or taking everyone above a score cutoff.
+	 *
+	 * One statement rather than a loop over `setDecision`: a hundred sequential
+	 * round trips is the difference between a click and a progress bar, and a
+	 * partial failure halfway down would leave the operator with no idea which half
+	 * landed.
+	 *
+	 * Rows another admin holds a fresh claim on are skipped, not overwritten — the
+	 * same rule `setDecision` enforces one row at a time. They come back as
+	 * `skipped` so the caller can say so rather than silently reporting fewer.
+	 *
+	 * @param uids - applicants to decide; non-applicants are ignored
+	 * @param decision - the pending decision to apply to all of them
+	 */
+	setDecisions: adminProcedure
+		.input(
+			z.object({
+				uids: z.array(z.string()).min(1),
+				decision: z.enum([
+					DecisionStatus.ACCEPTED,
+					DecisionStatus.REJECTED,
+					DecisionStatus.WAITLISTED
+				])
+			})
+		)
+		.mutation(async ({ ctx, input }) => {
+			const result = await ctx.prisma.user.updateMany({
+				where: {
+					uid: { in: input.uids },
+					// A uid list arrives from the client, so the role guard is what keeps a
+					// stale or hand-edited selection from putting a decision on staff.
+					role: { in: APPLICANT_ROLES },
+					OR: [
+						{ claimedBy: null },
+						{ claimedBy: ctx.user.uid },
+						{ claimedAt: { lt: new Date(Date.now() - CLAIM_TTL_MS) } }
+					]
+				},
+				data: {
+					pendingDecision: input.decision,
+					decidedBy: ctx.user.uid,
+					decidedAt: new Date(),
+					claimedBy: null,
+					claimedAt: null
+				}
+			});
+
+			const skipped = input.uids.length - result.count;
+
+			await logAction(ctx, {
+				action: 'admissions.decision.bulk',
+				summary:
+					`Set ${result.count} pending ${result.count === 1 ? 'decision' : 'decisions'} to ${input.decision}` +
+					(skipped > 0 ? ` — ${skipped} skipped (claimed or not an applicant)` : ''),
+				metadata: { decision: input.decision, updated: result.count, skipped }
+			});
+
+			return { updated: result.count, skipped };
+		}),
+
+	/**
+	 * Headline counts for the admissions page.
+	 *
+	 * Decisions are counted at their *effective* value — the pending one if there is
+	 * one, otherwise the released one. That is what the page's own list shows, and
+	 * counting only released decisions would leave the strip reading all zeros
+	 * through the entire decision pass, which is exactly when it is being watched.
+	 */
+	stats: adminProcedure.query(async ({ ctx }) => {
+		const applicants = { role: { in: APPLICANT_ROLES } };
+
+		const [rows, scored, unscored] = await Promise.all([
+			ctx.prisma.user.groupBy({
+				by: ['pendingDecision', 'activeDecision'],
+				where: applicants,
+				_count: { _all: true }
+			}),
+			ctx.prisma.user.count({ where: { ...applicants, ...UNDECIDED, score: { not: null } } }),
+			ctx.prisma.user.count({ where: { ...applicants, ...UNDECIDED, score: null } })
+		]);
+
+		const tally = { accepted: 0, rejected: 0, waitlisted: 0, undecided: 0, pending: 0 };
+		for (const row of rows) {
+			const effective = effectiveDecision(row);
+			const count = row._count._all;
+			if (effective === DecisionStatus.ACCEPTED) tally.accepted += count;
+			else if (effective === DecisionStatus.REJECTED) tally.rejected += count;
+			else if (effective === DecisionStatus.WAITLISTED) tally.waitlisted += count;
+			else tally.undecided += count;
+
+			// Cuts across the three above rather than being one of them: `pending`
+			// counts decisions that exist but haven't been emailed, which is what the
+			// release gate acts on. An accepted applicant is in `accepted` whether or
+			// not they have been told.
+			if (row.pendingDecision !== null && row.pendingDecision !== DecisionStatus.PENDING) {
+				tally.pending += count;
+			}
+		}
+
+		// Both halves of the scoring queue, which together are `undecided`. Reported
+		// separately because the decision pass only ever sees the scored half, and
+		// the unscored count is the one number that says how much it can't see.
+		return { ...tally, scored, unscored };
+	}),
 
 	/**
 	 * Release pending decisions to active decisions and notify by email.
