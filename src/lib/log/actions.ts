@@ -39,6 +39,10 @@ export const LOG_ACTIONS = [
 	{ key: 'question.reorder', label: 'Questions reordered', group: 'Application' },
 	{ key: 'question.batch', label: 'Application form saved', group: 'Application' },
 
+	// Data
+	{ key: 'data.export', label: 'Full database exported', group: 'Settings' },
+	{ key: 'data.wipe', label: 'Database wiped', group: 'Settings' },
+
 	// Settings
 	{ key: 'settings.update', label: 'Settings updated', group: 'Settings' },
 	{ key: 'settings.templates.update', label: 'Email templates updated', group: 'Settings' },
