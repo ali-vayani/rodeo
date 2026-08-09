@@ -9,6 +9,7 @@
  * than on the first hacker who tries to log in.
  */
 
+import { createHash, timingSafeEqual } from 'node:crypto';
 import { env } from '$env/dynamic/private';
 import { dev } from '$app/environment';
 
@@ -96,6 +97,39 @@ export function devSwitcherEnabled(): boolean {
 		env.ALLOW_DEV_AUTH === '1' && // opt-in, never inherited
 		databaseIsLocal(env.DATABASE_URL) // never against a remote database
 	);
+}
+
+/**
+ * Whether the second factor on the two whole-database operations is configured.
+ *
+ * `ADMIN_DATA_PASSWORD` gates the full export and the export-and-wipe. Being an
+ * admin is not enough for either: one hands over every applicant's name, email
+ * and answers in a single file, and the other destroys them. The password is a
+ * deliberate second step — a shared secret held outside the app, so a hijacked
+ * admin session cannot exfiltrate or erase the database on its own.
+ *
+ * Unset means both operations refuse. Failing closed is the only safe default:
+ * treating "no password configured" as "no password required" would turn a
+ * missing variable into an open door, which is the exact mistake `ALLOW_DEV_AUTH`
+ * exists to prevent elsewhere in this file.
+ */
+export function dataPasswordConfigured(): boolean {
+	return Boolean(env.ADMIN_DATA_PASSWORD);
+}
+
+/**
+ * Constant-time check of a submitted password.
+ *
+ * Both sides are hashed first so `timingSafeEqual` gets equal-length buffers —
+ * it throws otherwise — and so the comparison time cannot leak the length of the
+ * real password the way comparing raw buffers would.
+ */
+export function verifyDataPassword(candidate: string): boolean {
+	const expected = env.ADMIN_DATA_PASSWORD;
+	if (!expected) return false;
+	const submitted = createHash('sha256').update(candidate, 'utf8').digest();
+	const actual = createHash('sha256').update(expected, 'utf8').digest();
+	return timingSafeEqual(submitted, actual);
 }
 
 function required(key: string): string {

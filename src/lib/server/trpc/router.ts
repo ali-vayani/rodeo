@@ -13,6 +13,7 @@ import { dashboardRouter } from './routers/dashboard';
 import { logRouter } from './routers/log';
 import { filtersRouter } from './routers/filters';
 import { statsRouter } from './routers/stats';
+import { dataRouter } from './routers/data';
 
 export const appRouter = router({
 	user: userRouter,
@@ -28,7 +29,8 @@ export const appRouter = router({
 	dashboard: dashboardRouter,
 	log: logRouter,
 	filters: filtersRouter,
-	stats: statsRouter
+	stats: statsRouter,
+	data: dataRouter
 });
 
 export type AppRouter = typeof appRouter;
