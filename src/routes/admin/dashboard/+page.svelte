@@ -1,44 +1,105 @@
 <script lang="ts">
 	import type { PageData } from './$types';
 	import { untrack } from 'svelte';
+	import { Card, SegmentedControl } from '$lib/components/ui';
 	import StatCard from '$lib/components/admin/StatCard.svelte';
-	import StatusBarChart from '$lib/components/admin/StatusBarChart.svelte';
-	import ActivityFeed from '$lib/components/admin/ActivityFeed.svelte';
-	import ApplicantTable from '$lib/components/admin/ApplicantTable.svelte';
 	import AdminStatsChart from '$lib/components/admin/AdminStatsChart.svelte';
+	import UnifiedActivityFeed from '$lib/components/admin/UnifiedActivityFeed.svelte';
+	import FunnelChart from '$lib/components/admin/charts/FunnelChart.svelte';
+	import DecisionBreakdown from '$lib/components/admin/charts/DecisionBreakdown.svelte';
+	import TrendChart from '$lib/components/admin/charts/TrendChart.svelte';
+	import HBarChart from '$lib/components/admin/charts/HBarChart.svelte';
 	import { createClient } from '$lib/trpc/client';
 	import { toast } from '$lib/ui/toast.svelte';
+	import { pluralize } from '$lib/format';
 
 	let { data }: { data: PageData } = $props();
 
 	const trpc = createClient();
+	const nf = new Intl.NumberFormat('en-US');
 
-	// Only the default window is server-rendered; changing it refetches over tRPC
-	// rather than reloading the page, so the rest of the dashboard stays put.
-	let adminStats = $state(untrack(() => data.adminStats));
-	let statsWindow = $state('all');
-	let statsLoading = $state(false);
-
-	const DAY_MS = 24 * 60 * 60 * 1000;
+	type Window = '7d' | '30d' | 'all';
+	type Source = 'all' | 'admin' | 'hacker';
 
 	/**
-	 * Windows are relative to now, resolved at click time rather than at load.
-	 * Built by subtracting from the epoch rather than mutating a Date, so the
-	 * value handed to the query can't be changed out from under it.
+	 * One time range for the whole page, rather than a control per card.
+	 *
+	 * Per-card ranges let two panels sitting side by side describe different
+	 * slices with nothing on screen saying so. This replaces the window picker
+	 * `AdminStatsChart` used to own.
+	 *
+	 * It scopes only what it can honestly scope — the trend, the feed and the
+	 * per-admin tallies, all of which have a timestamp to filter on. The funnel and
+	 * the decision split are present-state counts (`UserStatus` records where
+	 * someone *is*, never when they got there), so they are marked "current" and
+	 * left alone. A control that appeared to filter them would be a lie.
+	 */
+	const WINDOWS = [
+		{ value: '7d', label: '7d' },
+		{ value: '30d', label: '30d' },
+		{ value: 'all', label: 'All time' }
+	];
+
+	// Only the default window is server-rendered; changing it refetches over tRPC so
+	// the rest of the page stays put instead of blanking through a full navigation.
+	let window = $state<string>(untrack(() => data.window));
+	let trend = $state(untrack(() => data.trend));
+	let activity = $state(untrack(() => data.activity));
+	let adminStats = $state(untrack(() => data.adminStats));
+	let activitySource = $state<string>('all');
+	let rangeLoading = $state(false);
+	let feedLoading = $state(false);
+
+	/**
+	 * `stats.byAdmin` predates the shared window and takes a date rather than a
+	 * window name. Resolved at call time, so a page left open overnight doesn't keep
+	 * asking for yesterday's seven days.
 	 */
 	function windowStart(value: string): Date | undefined {
 		const days = value === '7d' ? 7 : value === '30d' ? 30 : 0;
-		return days === 0 ? undefined : new Date(Date.now() - days * DAY_MS);
+		return days === 0 ? undefined : new Date(Date.now() - days * 24 * 60 * 60 * 1000);
 	}
 
-	async function loadAdminStats(value: string) {
-		statsLoading = true;
+	async function loadWindow(next: string) {
+		rangeLoading = true;
 		try {
-			adminStats = await trpc.stats.byAdmin.query({ from: windowStart(value) });
+			const [nextTrend, nextActivity, nextAdminStats] = await Promise.all([
+				trpc.dashboard.overTime.query({ window: next as Window }),
+				// `data.activity` rather than the live `activity`: it records whether this
+				// reader is an admin at all. An organizer must not start fetching a feed
+				// they were deliberately not served.
+				data.activity
+					? trpc.dashboard.activity.query({
+							source: activitySource as Source,
+							window: next as Window,
+							limit: 8
+						})
+					: null,
+				data.adminStats ? trpc.stats.byAdmin.query({ from: windowStart(next) }) : null
+			]);
+			trend = nextTrend;
+			activity = nextActivity;
+			adminStats = nextAdminStats;
 		} catch (e) {
-			toast.fromError(e, 'Failed to load admin activity');
+			toast.fromError(e, 'Failed to load the selected range');
 		} finally {
-			statsLoading = false;
+			rangeLoading = false;
+		}
+	}
+
+	async function loadActivity(source: string) {
+		activitySource = source;
+		feedLoading = true;
+		try {
+			activity = await trpc.dashboard.activity.query({
+				source: source as Source,
+				window: window as Window,
+				limit: 8
+			});
+		} catch (e) {
+			toast.fromError(e, 'Failed to load activity');
+		} finally {
+			feedLoading = false;
 		}
 	}
 
@@ -46,13 +107,13 @@
 	// and never hold a decision, so counting them made every card describe a
 	// population that isn't being admitted.
 	const a = $derived(data.stats.applicants);
-	const accepted = $derived(a.accepted.total);
-	const waitlisted = $derived(a.waitlisted.total);
-	const rejected = $derived(a.rejected.total);
-	const awaiting = $derived(a.awaiting.total);
-	const confirmed = $derived(data.stats.byStatus['CONFIRMED'] ?? 0);
-	const checkedIn = $derived(data.stats.byStatus['CHECKED_IN'] ?? 0);
-	const confirmedCount = $derived(confirmed + checkedIn);
+
+	const decisionCounts = $derived({
+		accepted: a.accepted.total,
+		waitlisted: a.waitlisted.total,
+		rejected: a.rejected.total,
+		awaiting: a.awaiting.total
+	});
 
 	const ROLE_LABELS: Record<string, string> = {
 		HACKER: 'Hackers',
@@ -61,64 +122,198 @@
 		VOLUNTEER: 'Volunteers'
 	};
 
-	/** Role split for a card's hover breakdown, ordered biggest first. */
+	/** Role split behind a decision, ordered biggest first. */
 	function split(byRole: Partial<Record<string, number>>) {
 		return Object.entries(byRole)
 			.map(([role, value]) => ({ label: ROLE_LABELS[role] ?? role, value: value ?? 0 }))
 			.sort((x, y) => y.value - x.value);
 	}
+
+	const decisionByRole = $derived({
+		accepted: split(a.accepted.byRole),
+		waitlisted: split(a.waitlisted.byRole),
+		rejected: split(a.rejected.byRole),
+		awaiting: split(a.awaiting.byRole)
+	});
+
+	const stageCount = $derived(
+		(key: string) => data.funnel.find((stage) => stage.key === key)?.count ?? 0
+	);
+	// The funnel is the one place stage counts are derived, so the header and the
+	// charts can never disagree about how many people applied. Conversion rates
+	// live on the funnel itself rather than being recomputed here.
+	const applied = $derived(stageCount('applied'));
+
+	const totals = $derived({
+		scans: (adminStats?.admins ?? []).reduce((sum, admin) => sum + admin.scans, 0),
+		campaigns: (adminStats?.admins ?? []).reduce((sum, admin) => sum + admin.emailCampaigns, 0),
+		recipients: (adminStats?.admins ?? []).reduce((sum, admin) => sum + admin.emailRecipients, 0)
+	});
 </script>
 
 <div>
-	<div class="mb-6">
-		<h1 class="text-[22px] font-bold text-primary">Dashboard</h1>
+	<div class="mb-5 flex flex-wrap items-end justify-between gap-3">
+		<div>
+			<h1 class="text-2xl font-bold text-foreground">Dashboard</h1>
+			<p class="mt-0.5 text-sm text-foreground-secondary">
+				{nf.format(applied)} applicants · {nf.format(a.awaiting.total)} awaiting a decision
+			</p>
+		</div>
+		<SegmentedControl
+			bind:value={window}
+			options={WINDOWS}
+			ariaLabel="Time range"
+			disabled={rangeLoading}
+			onValueChange={loadWindow}
+		/>
 	</div>
 
-	<!-- Stat cards -->
-	<div class="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-		<StatCard label="Total applicants" value={a.total} breakdown={split(a.byRole)} />
-		<StatCard label="Accepted" value={accepted} breakdown={split(a.accepted.byRole)} />
-		<StatCard label="Waitlisted" value={waitlisted} breakdown={split(a.waitlisted.byRole)} />
-		<StatCard label="Rejected" value={rejected} breakdown={split(a.rejected.byRole)} />
-		<StatCard label="Awaiting decision" value={awaiting} breakdown={split(a.awaiting.byRole)} />
+	<!-- The pipeline leads: it is the question the dashboard exists to answer —
+	     where is this cycle right now. -->
+	<div class="mb-4">
+		<Card title="Admissions funnel">
+			{#snippet actions()}
+				<span class="font-mono text-2xs text-foreground-tertiary">current</span>
+			{/snippet}
+			<FunnelChart stages={data.funnel} />
+		</Card>
 	</div>
 
-	<!-- Bar chart + activity feed. Both named-user panels are absent for organizers,
-	     so the chart takes the full width rather than leaving a gap. -->
+	<!-- The headline number and its breakdown as one unit, with the derived rates
+	     beside it rather than as four more cards competing with them. -->
+	<!-- The tile column is admin-only data, so for an organizer the breakdown card
+	     takes the full width rather than leaving a gap where the tiles would be. -->
 	<div
-		class="mb-5 grid grid-cols-1 gap-3 lg:items-stretch {data.stats.recentActivity
+		class="mb-4 grid grid-cols-1 gap-4 {adminStats || data.demographics
 			? 'lg:grid-cols-[2fr_1fr]'
 			: ''}"
 	>
-		<StatusBarChart byRole={data.stats.byRole} {accepted} confirmed={confirmedCount} />
-		{#if data.stats.recentActivity}
-			<ActivityFeed entries={data.stats.recentActivity} />
+		<Card title="Applicants by decision">
+			{#snippet actions()}
+				<span class="font-mono text-2xs text-foreground-tertiary">current</span>
+			{/snippet}
+			<div class="mb-4 flex items-baseline gap-2.5">
+				<span class="text-3xl font-bold text-foreground">{nf.format(a.total)}</span>
+				<span class="text-sm text-foreground-secondary">applicants</span>
+			</div>
+			<DecisionBreakdown counts={decisionCounts} byRole={decisionByRole} total={a.total} />
+		</Card>
+
+		<!-- Counts, never rates. The funnel already spells out every conversion, and
+		     `StatCard` renders a plain number — a tile reading "72" under "RSVP rate"
+		     would be a percentage with its sign filed off. These carry the operational
+		     figures the funnel and the decision bar don't. -->
+		{#if adminStats || data.demographics}
+			<div class="grid grid-cols-2 gap-4 self-start">
+				<StatCard label="Awaiting" value={a.awaiting.total} breakdown={decisionByRole.awaiting} />
+				{#if data.demographics}
+					<StatCard
+						label="Universities"
+						value={data.demographics.distinctUniversities}
+						breakdown={data.demographics.universities
+							.slice(0, 3)
+							.map((row) => ({ label: row.label, value: row.count }))}
+					/>
+				{/if}
+				{#if adminStats}
+					<StatCard label="Scans" value={totals.scans} />
+					<StatCard
+						label="Campaigns"
+						value={totals.campaigns}
+						breakdown={[{ label: 'Recipients reached', value: totals.recipients }]}
+					/>
+				{/if}
+			</div>
 		{/if}
 	</div>
 
-	<!-- Per-admin activity. Absent for organizers, who don't get named-staff data. -->
+	<!-- Trend and the unified feed. Both are scoped by the range control above.
+	     `items-start`: the feed is the taller of the two and its height depends on
+	     how much happened, so stretching the chart to match it leaves a growing
+	     field of white under a chart that is already the size it wants to be. -->
+	<div class="mb-4 grid grid-cols-1 items-start gap-4 lg:grid-cols-[2fr_1fr]">
+		<Card title="Applications & decisions per day">
+			{#snippet actions()}
+				<span class="font-mono text-2xs text-foreground-tertiary">
+					{pluralize(trend.points.length, 'day')}
+				</span>
+			{/snippet}
+			<!-- Held at reduced opacity on refetch rather than swapped for a skeleton:
+			     the axis and the shape stay put, so the card never jumps. -->
+			<div class={rangeLoading ? 'opacity-60 transition-opacity duration-150' : ''}>
+				<TrendChart series={trend} />
+			</div>
+		</Card>
+
+		{#if activity}
+			<Card title="Recent activity" bodyClass="h-full">
+				<UnifiedActivityFeed
+					entries={activity}
+					bind:source={activitySource}
+					loading={feedLoading || rangeLoading}
+					onSourceChange={loadActivity}
+				/>
+			</Card>
+		{/if}
+	</div>
+
+	<!-- Who did the work. Absent for organizers, who don't get named-staff data. -->
 	{#if adminStats}
-		<div class="mb-5">
+		<div class="mb-4">
 			<AdminStatsChart
 				admins={adminStats.admins}
 				unattributed={adminStats.unattributed}
-				bind:window={statsWindow}
-				loading={statsLoading}
-				onWindowChange={loadAdminStats}
+				loading={rangeLoading}
 			/>
 		</div>
 	{/if}
 
-	<!-- Recent applicants table -->
-	{#if data.recentApplicants}
-		<!-- Data-dense reference table: scrolls horizontally on narrow viewports
-		     rather than squishing or card-stacking. `w-0 min-w-full` zeroes the
-		     scroller's intrinsic width so the forced table width can't propagate
-		     up through the layout's flex-1 main and widen the page. -->
-		<div class="w-0 min-w-full overflow-x-auto">
-			<div class="min-w-2xl">
-				<ApplicantTable applicants={data.recentApplicants} />
-			</div>
+	<!-- Who the applicants are. -->
+	{#if data.demographics}
+		{@const demo = data.demographics}
+		<div class="grid grid-cols-1 gap-4 lg:grid-cols-2">
+			<!-- Titled with the question's own wording rather than "Top universities":
+			     the label is whatever the form asks, and "Top where do you study?" is
+			     what string-concatenating a title gets you. The count of what is shown
+			     goes in the actions slot, where it needs no grammar. -->
+			<Card title={demo.universityLabel}>
+				{#snippet actions()}
+					<span class="font-mono text-2xs text-foreground-tertiary">
+						top {demo.universities.length} of {nf.format(demo.distinctUniversities)}
+					</span>
+				{/snippet}
+				<HBarChart rows={demo.universities} total={applied} wideLabels />
+
+				{#if demo.tail}
+					<!-- The tail is a residual, not a peer category. Drawn as a bar it would
+					     out-length the largest single school and read as if it were one. -->
+					<div
+						class="mt-2.5 grid grid-cols-[minmax(5rem,11rem)_1fr_auto] items-center gap-2.5 border-t border-border pt-2.5"
+					>
+						<span class="text-right text-xs text-foreground-tertiary">Other</span>
+						<span class="text-2xs text-foreground-tertiary">
+							{nf.format(demo.tail.schools)} more, none above {nf.format(demo.tail.largest)}
+						</span>
+						<span
+							class="w-10 text-right text-xs font-semibold text-foreground-secondary tabular-nums"
+						>
+							{nf.format(demo.tail.applicants)}
+						</span>
+					</div>
+				{/if}
+
+				{#if demo.noUniversity > 0}
+					<p class="mt-2 text-2xs text-foreground-tertiary">
+						{nf.format(demo.noUniversity)} with none recorded.
+					</p>
+				{/if}
+			</Card>
+
+			<Card title={demo.yearLabel}>
+				<!-- `ordered`: Freshman → Senior is the sequence the reader expects, and
+				     re-sorting by headcount makes the shape of the cohort unreadable. -->
+				<HBarChart rows={demo.years} ordered emphasizeFirst={false} total={applied} />
+			</Card>
 		</div>
 	{/if}
 </div>

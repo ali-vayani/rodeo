@@ -27,7 +27,9 @@ const SCOPES = [
 	'src/lib/components/schedule',
 	'src/lib/components/email',
 	'src/routes/admin/custom-email',
-	'src/routes/admin/logs'
+	'src/routes/admin/logs',
+	'src/routes/admin/dashboard',
+	'src/lib/components/admin/charts'
 	// Pages are appended here as they migrate. Everything not listed still
 	// predates the design system — see docs/component-library-plan.md for the
 	// remaining queue.

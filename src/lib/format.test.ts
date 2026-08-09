@@ -1,10 +1,11 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import {
 	EM_DASH,
 	formatDate,
 	formatDateLong,
 	formatTime,
 	formatDateTime,
+	formatRelativeTime,
 	humanizeEnum,
 	initials,
 	pluralize
@@ -96,5 +97,46 @@ describe('pluralize', () => {
 
 	it('defaults to a trailing s', () => {
 		expect(pluralize(0, 'row')).toBe('0 rows');
+	});
+});
+
+describe('formatRelativeTime', () => {
+	const NOW = new Date('2026-03-10T12:00:00Z');
+	const ago = (ms: number) => new Date(NOW.getTime() - ms);
+
+	afterEach(() => vi.useRealTimers());
+
+	function at(now: Date) {
+		vi.useFakeTimers();
+		vi.setSystemTime(now);
+	}
+
+	it('steps through seconds, minutes, hours and days', () => {
+		at(NOW);
+		expect(formatRelativeTime(ago(5_000))).toBe('5s');
+		expect(formatRelativeTime(ago(90_000))).toBe('1m');
+		expect(formatRelativeTime(ago(3 * 3_600_000))).toBe('3h');
+		expect(formatRelativeTime(ago(5 * 86_400_000))).toBe('5d');
+	});
+
+	it('switches unit exactly at the boundary, not before it', () => {
+		at(NOW);
+		expect(formatRelativeTime(ago(59_000))).toBe('59s');
+		expect(formatRelativeTime(ago(60_000))).toBe('1m');
+		expect(formatRelativeTime(ago(3_599_000))).toBe('59m');
+		expect(formatRelativeTime(ago(3_600_000))).toBe('1h');
+	});
+
+	it('clamps a future timestamp to zero rather than printing a negative', () => {
+		// Clock skew between the app server and the database can date a row a few
+		// hundred ms ahead. "-1s ago" reads as a bug; "0s" reads as "just now".
+		at(NOW);
+		expect(formatRelativeTime(new Date(NOW.getTime() + 500))).toBe('0s');
+	});
+
+	it('returns the em dash for an absent or unparseable value', () => {
+		at(NOW);
+		expect(formatRelativeTime(null)).toBe(EM_DASH);
+		expect(formatRelativeTime('not a date')).toBe(EM_DASH);
 	});
 });

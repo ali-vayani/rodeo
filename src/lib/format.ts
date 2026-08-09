@@ -68,6 +68,33 @@ export function formatDateTime(value: DateInput, timeZone?: string): string {
 }
 
 /**
+ * `40s` / `12m` / `3h` / `5d` — elapsed time, for a feed where the exact instant
+ * matters less than how long ago it was.
+ *
+ * Moved here from `ActivityFeed`, which owned the only copy until the dashboard
+ * feed replaced it. Deliberately terse and unsuffixed: these sit in a narrow
+ * right-hand column beside every row, where "3 hours ago" would wrap.
+ *
+ * Caps at days rather than rolling over to weeks or months. A feed showing
+ * anything that old has bigger problems than its formatting, and "5w" reads as a
+ * typo more often than it reads as five weeks.
+ */
+export function formatRelativeTime(value: DateInput): string {
+	const date = toDate(value);
+	if (!date) return EM_DASH;
+
+	// Clamped at zero: a row written a few hundred ms into the future by clock skew
+	// between the app server and the database should read "0s", never "-1s".
+	const seconds = Math.max(0, Math.floor((Date.now() - date.getTime()) / 1000));
+	if (seconds < 60) return `${seconds}s`;
+	const minutes = Math.floor(seconds / 60);
+	if (minutes < 60) return `${minutes}m`;
+	const hours = Math.floor(minutes / 60);
+	if (hours < 24) return `${hours}h`;
+	return `${Math.floor(hours / 24)}d`;
+}
+
+/**
  * `CHECKED_IN` → `Checked in`. Every enum the UI shows a user goes through
  * here, so a schema rename never leaves a raw SCREAMING_CASE string on screen.
  */
