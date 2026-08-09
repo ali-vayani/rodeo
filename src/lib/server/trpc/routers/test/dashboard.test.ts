@@ -110,11 +110,15 @@ describe('dashboard.stats', () => {
 
 			await caller.dashboard.stats();
 
+			// CREATED is excluded alongside the role bound: `dashboard.funnel` draws the
+			// same population, and an account that never submitted is not awaiting a
+			// decision. If the two ever disagree the page shows two different applicant
+			// counts side by side.
 			expect(db.user.groupBy).toHaveBeenNthCalledWith(
 				4,
 				expect.objectContaining({
 					by: ['activeDecision', 'role'],
-					where: { role: { in: APPLICANT_ROLES } }
+					where: { role: { in: APPLICANT_ROLES }, status: { not: UserStatus.CREATED } }
 				})
 			);
 		});

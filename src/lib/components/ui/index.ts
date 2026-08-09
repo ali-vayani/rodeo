@@ -20,6 +20,7 @@ export { default as IconButton } from './IconButton.svelte';
 export { default as Input } from './Input.svelte';
 export { default as Modal } from './Modal.svelte';
 export { default as MultiCombobox } from './MultiCombobox.svelte';
+export { default as SegmentedControl } from './SegmentedControl.svelte';
 export { default as Select } from './Select.svelte';
 export { default as Spinner } from './Spinner.svelte';
 export { default as Switch } from './Switch.svelte';
