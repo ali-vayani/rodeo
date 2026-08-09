@@ -1,6 +1,5 @@
 <script lang="ts">
-	import { Card, EmptyState, Select, Spinner } from '$lib/components/ui';
-	import type { SelectOption } from '$lib/components/ui/types';
+	import { Card, EmptyState, Spinner } from '$lib/components/ui';
 	import type { AdminStats, UnattributedStats } from '$lib/stats';
 	import { pluralize } from '$lib/format';
 
@@ -15,25 +14,21 @@
 	 * spelled out as a number underneath**: the bar is the comparison, the digits
 	 * are the data, and nothing here is legible by hue alone.
 	 */
+	/**
+	 * The time window used to live here, as a `Select` in this card's header. It
+	 * moved up to the dashboard, which now owns one range for every panel that can
+	 * honestly be scoped by one — a filter inside a chart card lets two panels side
+	 * by side describe different slices with nothing on screen saying so.
+	 */
 	let {
 		admins,
 		unattributed,
-		window = $bindable('all'),
-		loading = false,
-		onWindowChange
+		loading = false
 	}: {
 		admins: AdminStats[];
 		unattributed: UnattributedStats;
-		window?: string;
 		loading?: boolean;
-		onWindowChange?: (value: string) => void;
 	} = $props();
-
-	const WINDOW_OPTIONS: SelectOption[] = [
-		{ value: 'all', label: 'All time' },
-		{ value: '30d', label: 'Last 30 days' },
-		{ value: '7d', label: 'Last 7 days' }
-	];
 
 	/**
 	 * Written out rather than built as `bg-${tone}-500` — Tailwind scans source
@@ -61,12 +56,9 @@
 
 <Card title="Admin activity" class="h-full">
 	{#snippet actions()}
-		<Select
-			bind:value={window}
-			options={WINDOW_OPTIONS}
-			ariaLabel="Time window"
-			onValueChange={(v) => onWindowChange?.(v)}
-		/>
+		<span class="font-mono text-2xs text-foreground-tertiary">
+			decisions are current · scans and emails accumulate
+		</span>
 	{/snippet}
 
 	{#if loading}
@@ -141,10 +133,13 @@
 			<!-- Decisions nobody is on the hook for: made before attribution existed, or
 			     by the blacklist auto-reject, which no admin triggered. Shown rather than
 			     dropped so the bars above sum to the real decision totals. -->
+			<!-- `pluralize` already emits the count, so pairing it with a formatted
+			     number printed "98 unattributed 98 decisions". The formatted number wins
+			     — it is the one that groups thousands. -->
 			<p class="mt-4 border-t border-border pt-3 text-xs text-foreground-tertiary">
 				<span class="font-mono tabular-nums">{nf.format(unattributed.total)}</span>
-				unattributed {pluralize(unattributed.total, 'decision')} — recorded before attribution existed,
-				or applied automatically.
+				unattributed {unattributed.total === 1 ? 'decision' : 'decisions'} — recorded before attribution
+				existed, or applied automatically.
 			</p>
 		{/if}
 	{/if}
