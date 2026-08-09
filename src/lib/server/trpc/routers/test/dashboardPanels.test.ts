@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { mockReset, type DeepMockProxy } from 'vitest-mock-extended';
 import type { PrismaClient } from '$lib/generated/prisma/client';
-import { Role, UserStatus, DecisionStatus } from '$lib/generated/prisma/client';
+import { UserStatus, DecisionStatus } from '$lib/generated/prisma/client';
 import { createTestCaller, adminUser, organizerUser, mockGroupBy } from '../test-utils';
 
 vi.mock('$lib/server/db', async () => {
