@@ -4,6 +4,7 @@ import { UserStatus, DecisionStatus, QuestionType, Role } from '$lib/generated/p
 import { router, authedProcedure } from '../init';
 import { APPLICANT_ROLES } from '$lib/admissions/roles';
 import { normalizeEmail } from '$lib/blacklist/match';
+import { isLinkedUserField } from '$lib/linkedFields';
 import { sendTemplatedEmail } from '$lib/server/email';
 import { buildTemplateVars } from '$lib/email/variables';
 import { formatDateLong } from '$lib/format';
@@ -222,12 +223,11 @@ export const applicationRouter = router({
 				assertAnswerValid(question, input.value);
 			}
 
-			// Write through to the user record for linked fields
-			const LINKED_USER_FIELDS = ['name', 'university', 'year'] as const;
-			if (
-				question.linkedField &&
-				(LINKED_USER_FIELDS as readonly string[]).includes(question.linkedField)
-			) {
+			// Write through to the user record for linked fields. The allowlist lives in
+			// `$lib/linkedFields` because the admin filter panels derive their vocabulary
+			// from the same three columns — an inline copy here is what stopped anything
+			// else from reusing it.
+			if (isLinkedUserField(question.linkedField)) {
 				await ctx.prisma.user.update({
 					where: { uid: ctx.user.uid },
 					data: { [question.linkedField]: input.value }

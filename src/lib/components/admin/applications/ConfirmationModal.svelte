@@ -198,6 +198,7 @@
 		gap: 12px;
 		padding: 20px 24px 16px;
 		border-bottom: 1px solid #e0e0e0;
+		flex-shrink: 0;
 	}
 
 	.header-icon {
@@ -226,12 +227,28 @@
 		margin: 0;
 	}
 
+	/* Takes the leftover height between header and footer and scrolls inside it.
+	   `min-height: 0` is what lets it shrink past its content — a column flex
+	   item otherwise refuses to go below its content height and the change list
+	   pushes the footer out of the modal. */
 	.modal-body {
+		flex: 1 1 auto;
+		min-height: 0;
 		overflow-y: auto;
 		padding: 20px 24px;
 		display: flex;
 		flex-direction: column;
 		gap: 14px;
+	}
+
+	/* The body is itself a column flex container, so its children are flex items
+	   and shrink by default. `.change-section` has `overflow: hidden`, which
+	   zeroes its automatic minimum size — so a long list was silently squashed
+	   and clipped inside the section instead of overflowing the body, which is
+	   why no scrollbar ever appeared. Pinning the children at their natural
+	   height is what makes the body a real overflow container. */
+	.modal-body > * {
+		flex-shrink: 0;
 	}
 
 	.intro {
@@ -375,6 +392,7 @@
 		display: flex;
 		justify-content: flex-end;
 		gap: 8px;
+		flex-shrink: 0;
 	}
 
 	.btn-cancel {

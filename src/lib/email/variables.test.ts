@@ -6,6 +6,9 @@ import {
 	substituteVariables,
 	tokenizeTemplate,
 	buildTemplateVars,
+	buildEventVars,
+	buildExternalTemplateVars,
+	EXTERNAL_NAME_FALLBACK,
 	type TemplateSegment
 } from './variables';
 
@@ -48,7 +51,9 @@ describe('tokenizeTemplate', () => {
 	it('classifies text, known and unknown segments in order', () => {
 		expect(tokenizeTemplate('Hi {{name}}, {{bogus}} bye')).toEqual([
 			{ type: 'text', value: 'Hi ' },
-			{ type: 'known', value: 'Sarah Chen', key: 'name' },
+			// Read off SAMPLE_VARS rather than hardcoded: this asserts that the default
+			// substitution happens, not what the placeholder currently reads.
+			{ type: 'known', value: SAMPLE_VARS.name, key: 'name' },
 			{ type: 'text', value: ', ' },
 			{ type: 'unknown', value: '{{bogus}}', key: 'bogus' },
 			{ type: 'text', value: ' bye' }
@@ -57,7 +62,7 @@ describe('tokenizeTemplate', () => {
 
 	it('emits no empty text segments around edge-anchored variables', () => {
 		expect(tokenizeTemplate('{{name}}')).toEqual([
-			{ type: 'known', value: 'Sarah Chen', key: 'name' }
+			{ type: 'known', value: SAMPLE_VARS.name, key: 'name' }
 		]);
 	});
 
@@ -123,5 +128,44 @@ describe('buildTemplateVars', () => {
 			hackathon_start: new Date(2026, 3, 15).toLocaleDateString(),
 			rsvp_deadline: new Date(2026, 3, 1).toLocaleDateString()
 		});
+	});
+});
+
+describe('buildEventVars / buildExternalTemplateVars', () => {
+	const settings = {
+		hackathonStartDate: new Date(2026, 3, 15),
+		RSVPDeadline: new Date(2026, 3, 1)
+	};
+
+	it('carries everything except the recipient-dependent name', () => {
+		// This is what the server hands the compose preview, so the browser never
+		// re-formats a date in its own locale.
+		const vars = buildEventVars(settings);
+		expect(Object.keys(vars).sort()).toEqual([...VARIABLE_KEYS].filter((k) => k !== 'name').sort());
+	});
+
+	it('substitutes the nameless fallback for a recipient with no account', () => {
+		expect(buildExternalTemplateVars(settings).name).toBe(EXTERNAL_NAME_FALLBACK);
+	});
+
+	it('reads as a sentence in the salutation it has to survive', () => {
+		// "Hi there," is the whole reason the fallback is a filler and not a name.
+		expect(substituteVariables('Hi {{name}},', buildExternalTemplateVars(settings))).toBe(
+			'Hi there,'
+		);
+	});
+
+	it('gives an external recipient the same dates as a user', () => {
+		const user = buildTemplateVars({ name: 'Sarah Chen' }, settings);
+		const external = buildExternalTemplateVars(settings);
+		expect(external.hackathon_start).toBe(user.hackathon_start);
+		expect(external.rsvp_deadline).toBe(user.rsvp_deadline);
+	});
+
+	it('leaves no placeholder unsubstituted for an external recipient', () => {
+		// The preview shows exactly this map, so a gap here would be a preview that
+		// disagrees with the inbox.
+		const template = VARIABLE_KEYS.map((k) => `{{${k}}}`).join(' ');
+		expect(substituteVariables(template, buildExternalTemplateVars(settings))).not.toMatch(/\{\{/);
 	});
 });

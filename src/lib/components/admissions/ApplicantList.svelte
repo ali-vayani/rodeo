@@ -1,8 +1,10 @@
 <script lang="ts">
 	import { MediaQuery } from 'svelte/reactivity';
 	import BlacklistBadge from './BlacklistBadge.svelte';
+	import LinkedFieldFilters from '$lib/components/admin/LinkedFieldFilters.svelte';
 	import type { BlacklistMatch } from '$lib/blacklist/match';
 	import type { Role } from '$lib/generated/prisma/enums';
+	import type { LinkedFacet, LinkedUserField } from '$lib/linkedFields';
 
 	let {
 		applicants,
@@ -12,6 +14,11 @@
 		onRoleTabChange,
 		search,
 		onSearchInput,
+		facets,
+		linkedSelected,
+		onLinkedFiltersChange,
+		searchInfo,
+		onSuggestionSelect,
 		loading,
 		collapsed,
 		onToggleCollapse,
@@ -33,6 +40,17 @@
 		onRoleTabChange: (tab: Role | 'ALL') => void;
 		search: string;
 		onSearchInput: (value: string) => void;
+		/** One per application question that writes through to a `User` column. */
+		facets: LinkedFacet[];
+		linkedSelected: Partial<Record<LinkedUserField, string[]>>;
+		onLinkedFiltersChange: (selected: Partial<Record<LinkedUserField, string[]>>) => void;
+		/**
+		 * What the last query did with the search term. `names` is ranked most-relevant
+		 * first; the rows below are `createdAt desc` and are not, which is why the
+		 * suggestions are a strip of their own rather than a reordering of the list.
+		 */
+		searchInfo: { names: string[]; fuzzy: boolean; capped: boolean; exact: number };
+		onSuggestionSelect: (name: string) => void;
 		loading: boolean;
 		collapsed: boolean;
 		onToggleCollapse: () => void;
@@ -47,6 +65,74 @@
 	// leave a shrunken list behind after resizing down.
 	const mdUp = new MediaQuery('(min-width: 48rem)');
 	let isCollapsed = $derived(collapsed && mdUp.current);
+
+	/**
+	 * The filter panel is a disclosure at every width, not just on phones.
+	 *
+	 * `LinkedFieldFilters` has a `collapsible` of its own, but it only folds below md —
+	 * right for a full-width page, wrong here. This column is 300px wide and already
+	 * spends its first two rows on tabs and a search box; three facets open underneath
+	 * them (two comboboxes and a six-row checkbox list) push the queue itself off a
+	 * laptop screen. So the disclosure is owned here and applies at all breakpoints,
+	 * and the panel is capped and scrolls rather than growing without bound.
+	 *
+	 * `LinkedFieldFilters` now folds each facet individually as well. The two are one
+	 * mechanism at two scales, not two competing ones: this toggle decides whether the
+	 * panel is on screen at all, and only once it is do the per-facet folds inside it
+	 * mean anything. `collapsible` is still not forwarded — a third, breakpoint-gated
+	 * toggle for the same panel is the one combination that would fight.
+	 *
+	 * Shut on arrival, deliberately: the per-facet folds start open, so opening this
+	 * shows every facet, and nothing about the first paint of the queue changes.
+	 */
+	let filtersOpen = $state(false);
+
+	/** How many values are selected across every facet — the badge on a shut panel. */
+	let activeFilterCount = $derived(
+		Object.values(linkedSelected).reduce((total, values) => total + (values?.length ?? 0), 0)
+	);
+
+	/**
+	 * Shown only when there is something to suggest.
+	 *
+	 * `fuzzy` means the fold ran, not that it found anything: a term matching nobody and
+	 * resembling nobody still sets it, and "did you mean:" followed by nothing is worse
+	 * than the plain empty state.
+	 */
+	let showSuggestions = $derived(searchInfo.fuzzy && searchInfo.names.length > 0);
+
+	/**
+	 * The wording follows `exact`, not `fuzzy`.
+	 *
+	 * `fuzzy` only says the fold ran, and it runs below a floor of five rather than at
+	 * zero — so on a queue this size it runs constantly over terms that DID match. Keying
+	 * the sentence off it put "No exact match" above three people named Vayani, which
+	 * reads as a broken search rather than a suggestion.
+	 */
+	let suggestionsPrefix = $derived(
+		searchInfo.exact > 0 ? 'Similar names:' : 'No exact match — did you mean:'
+	);
+
+	/**
+	 * Built here rather than in markup so the sentence keeps its spacing — Svelte trims
+	 * whitespace at an `{#if}` boundary, which glued the cap onto the colon.
+	 *
+	 * The cap is stated, never hidden: a list that stopped at 25 is a different answer
+	 * from one that ran out, and an organizer who can't find their person needs to know
+	 * which of the two they are looking at.
+	 */
+	let suggestionsLabel = $derived(
+		searchInfo.capped
+			? `${suggestionsPrefix} (showing the ${searchInfo.names.length} closest)`
+			: suggestionsPrefix
+	);
+
+	function clearLinkedFilters() {
+		onLinkedFiltersChange({});
+	}
+
+	const uid = $props.id();
+	const filtersPanelId = `${uid}-filters`;
 
 	const ROLE_TABS = [
 		{ key: 'ALL', label: 'All' },
@@ -133,11 +219,115 @@
 			/>
 		</div>
 
+		<!--
+			"Did you mean" — the fallback the server actually applied, in the order it
+			ranked. Rendered as its own strip rather than folded into the list because
+			the rows below are `createdAt desc`: reordering them to match this would
+			imply a relevance the queue does not have.
+		-->
+		{#if showSuggestions}
+			<div class="shrink-0 border-b border-border bg-muted px-3 py-2">
+				<div class="text-2xs text-foreground-secondary">{suggestionsLabel}</div>
+				<!--
+					Capped and scrolled for the same reason the filter panel is: at the cap
+					this is 25 full names, which wraps to ten-odd rows and would leave two
+					applicants visible on a laptop. The strip corrects the search; the queue
+					is still the thing on screen.
+				-->
+				<div class="mt-1.5 flex max-h-40 flex-wrap gap-1 overflow-y-auto">
+					{#each searchInfo.names as name (name)}
+						{@const active = linkedSelected.name?.includes(name) ?? false}
+						<button
+							type="button"
+							aria-pressed={active}
+							onclick={() => onSuggestionSelect(name)}
+							class="max-w-full cursor-pointer truncate rounded-sm border px-1.5 py-0.5 text-xs
+							       transition-colors duration-150 focus-visible:shadow-ring {active
+								? 'border-primary bg-primary text-primary-foreground'
+								: 'border-border bg-card text-foreground hover:bg-surface-hover'}"
+						>
+							{name}
+						</button>
+					{/each}
+				</div>
+			</div>
+		{/if}
+
+		<!-- Linked application fields, behind a disclosure so the queue stays in view -->
+		{#if facets.length > 0}
+			<div class="shrink-0 border-b border-border">
+				<div class="flex items-stretch">
+					<button
+						type="button"
+						onclick={() => (filtersOpen = !filtersOpen)}
+						aria-expanded={filtersOpen}
+						aria-controls={filtersPanelId}
+						class="flex flex-1 cursor-pointer items-center justify-between gap-2 border-none
+						       bg-transparent px-3 py-2 text-left text-xs text-foreground-secondary
+						       transition-colors hover:text-foreground focus-visible:shadow-ring"
+					>
+						<span class="flex items-center gap-1.5">
+							Filters
+							<!--
+								The count is what keeps a shut panel honest: a filter you cannot see
+								is still narrowing the queue, and this is the only thing that says so.
+							-->
+							{#if activeFilterCount > 0}
+								<span
+									class="rounded-sm bg-primary px-1 font-mono text-2xs text-primary-foreground tabular-nums"
+								>
+									{activeFilterCount}
+								</span>
+							{/if}
+						</span>
+						<!-- Same rotating chevron as the per-facet folds inside the panel, so the
+						     two read as one mechanism at two scales. -->
+						<span
+							aria-hidden="true"
+							class="inline-block text-md leading-none transition-transform duration-150 ease-out-quick {filtersOpen
+								? ''
+								: '-rotate-90'}">▾</span
+						>
+					</button>
+					{#if activeFilterCount > 0}
+						<button
+							type="button"
+							onclick={clearLinkedFilters}
+							class="shrink-0 cursor-pointer border-none bg-transparent px-3 text-2xs
+							       text-foreground-tertiary underline transition-colors hover:text-foreground
+							       focus-visible:shadow-ring"
+						>
+							Clear
+						</button>
+					{/if}
+				</div>
+
+				{#if filtersOpen}
+					<div
+						id={filtersPanelId}
+						class="max-h-64 overflow-y-auto border-t border-border-subtle px-3 py-3"
+					>
+						<LinkedFieldFilters
+							{facets}
+							selected={linkedSelected}
+							onChange={onLinkedFiltersChange}
+						/>
+					</div>
+				{/if}
+			</div>
+		{/if}
+
 		<!-- List -->
 		<div class="flex-1 overflow-y-auto transition-opacity" class:opacity-50={loading}>
 			{#if applicants.length === 0}
 				<div class="px-4 py-8 text-center text-xs text-muted-foreground">
-					{loading ? 'Loading…' : 'No applicants found'}
+					{#if loading}
+						Loading…
+					{:else if activeFilterCount > 0}
+						No applicants match these filters
+					{:else}
+						No applicants found
+					{/if}
 				</div>
 			{:else}
 				{#each applicants as applicant (applicant.uid)}

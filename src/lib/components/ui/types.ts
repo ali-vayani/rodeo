@@ -11,6 +11,22 @@ export interface SelectOption {
 	disabled?: boolean;
 }
 
+/**
+ * One option in a `MultiCombobox`.
+ *
+ * `label` is optional because the common case is a vocabulary of raw stored values
+ * that are already their own display text; `count` is optional because not every
+ * caller has one, but when it exists it is load-bearing — it is the only thing that
+ * tells an organizer that two near-identical universities are two real populations
+ * and not a rendering glitch.
+ */
+export interface MultiComboboxOption {
+	value: string;
+	label?: string;
+	count?: number;
+	disabled?: boolean;
+}
+
 /** One tab in a `Tabs` rail. */
 export interface TabItem {
 	value: string;

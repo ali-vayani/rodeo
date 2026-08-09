@@ -19,6 +19,7 @@ export { default as Field } from './Field.svelte';
 export { default as IconButton } from './IconButton.svelte';
 export { default as Input } from './Input.svelte';
 export { default as Modal } from './Modal.svelte';
+export { default as MultiCombobox } from './MultiCombobox.svelte';
 export { default as Select } from './Select.svelte';
 export { default as Spinner } from './Spinner.svelte';
 export { default as Switch } from './Switch.svelte';
@@ -26,5 +27,5 @@ export { default as Textarea } from './Textarea.svelte';
 export { default as Tooltip } from './Tooltip.svelte';
 
 export { controlClass, CONTROL_BASE, CONTROL_SIZED, controlBorder } from './controlStyles';
-export type { SelectOption, Column } from './types';
+export type { SelectOption, MultiComboboxOption, Column } from './types';
 export type { Tone } from '$lib/ui/tone';

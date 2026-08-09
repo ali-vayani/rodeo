@@ -1,4 +1,5 @@
 import { Role, UserStatus, DecisionStatus } from '$lib/generated/prisma/enums';
+import { LINKED_USER_FIELDS, type LinkedUserField } from '$lib/linkedFields';
 
 /**
  * Shared checkbox-filter vocabulary and the translation from checkbox state to
@@ -26,6 +27,13 @@ export function allChecked(options: readonly string[]): FilterState {
 	return Object.fromEntries(options.map((o) => [o, true]));
 }
 
+/** The wire keys for the linked application fields, mirroring `linkedFieldFilterSchema`. */
+export type LinkedParams = {
+	names?: string[];
+	universities?: string[];
+	years?: string[];
+};
+
 export type RecipientParams = {
 	search?: string;
 	roles?: Role[];
@@ -33,7 +41,44 @@ export type RecipientParams = {
 	decisions?: DecisionStatus[];
 	includeNoDecision?: boolean;
 	emails?: string[];
-};
+} & LinkedParams;
+
+/** What `LinkedFieldFilters` binds: chosen values per field, `NO_VALUE` included. */
+export type LinkedSelection = Partial<Record<LinkedUserField, string[]>>;
+
+/** `User` column → the plural wire key `recipientFilterSchema` accepts for it. */
+const LINKED_PARAM_KEY = {
+	name: 'names',
+	university: 'universities',
+	year: 'years'
+} as const satisfies Record<LinkedUserField, keyof LinkedParams>;
+
+/**
+ * Translate a linked-field selection into tRPC filter params.
+ *
+ * **A field with nothing selected must be omitted, never sent as `[]`.** The two are
+ * opposite instructions to the shared predicate: `$lib/server/recipients` reads an
+ * absent key as "no filter" and an empty array as "match nobody", because a checkbox
+ * group the admin engaged and then emptied means "show nobody". Every one of these
+ * controls starts empty, so sending `[]` for an untouched filter would make the Users
+ * page show zero rows and — through that same predicate — make the custom-email count
+ * read 0 while the wizard still offers to send.
+ *
+ * The asymmetry with the role/status/decision groups is real and is a property of the
+ * controls, not an inconsistency: those default to *all* checked, so "no filter" is a
+ * full selection, while these default to *none* checked, so "no filter" is an empty
+ * one. Both end up as an omitted key, which is the only thing the server sees.
+ */
+export function linkedParams(selected: LinkedSelection = {}): LinkedParams {
+	const params: LinkedParams = {};
+	for (const field of LINKED_USER_FIELDS) {
+		const values = selected[field];
+		// Copied, not aliased: these params travel to a tRPC call while the caller's
+		// state keeps mutating under the filter panel.
+		if (values && values.length > 0) params[LINKED_PARAM_KEY[field]] = [...values];
+	}
+	return params;
+}
 
 /**
  * Split a pasted blob into addresses. Accepts commas, semicolons, whitespace and
@@ -66,12 +111,16 @@ export function malformedEmails(emails: string[]): string[] {
  * `includeNoDecision: false`, which `buildRecipientWhere` reads as "match nothing".
  * That asymmetry is deliberate and is what stops a "0 recipients" display from
  * turning into a send to the entire database.
+ *
+ * The linked application fields come through `linkedParams`, which encodes the same
+ * omitted-vs-empty convention from the other end — see its note.
  */
 export function buildRecipientParams(
 	roleFilter: FilterState,
 	statusFilter: FilterState,
 	decisionFilter: FilterState,
-	search = ''
+	search = '',
+	linked: LinkedSelection = {}
 ): RecipientParams {
 	const selRoles = ALL_ROLES.filter((r) => roleFilter[r]);
 	const selStatuses = ALL_STATUSES.filter((s) => statusFilter[s]);
@@ -84,6 +133,7 @@ export function buildRecipientParams(
 		roles: selRoles.length < ALL_ROLES.length ? selRoles : undefined,
 		statuses: selStatuses.length < ALL_STATUSES.length ? selStatuses : undefined,
 		decisions: allDecisionsDefault ? undefined : selDecisions,
-		includeNoDecision: allDecisionsDefault ? undefined : noneChecked
+		includeNoDecision: allDecisionsDefault ? undefined : noneChecked,
+		...linkedParams(linked)
 	};
 }

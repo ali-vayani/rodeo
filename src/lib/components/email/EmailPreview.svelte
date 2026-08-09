@@ -1,3 +1,24 @@
+<script module lang="ts">
+	/**
+	 * Whose substitution a preview is showing.
+	 *
+	 * Omitted by callers previewing a *template* rather than a message — the lifecycle
+	 * editor at /admin/email-templates has no concrete recipient, so it keeps the
+	 * placeholder samples and shows no attribution line.
+	 */
+	export type PreviewAs = {
+		name: string;
+		email: string;
+		/** No User row: `{{name}}` is the nameless-recipient fallback, not their name. */
+		external: boolean;
+		/** 0-based position among the sampled recipients. */
+		index: number;
+		/** Zero means nobody is selected yet, so `vars` are placeholders. */
+		total: number;
+		onNext: () => void;
+	};
+</script>
+
 <script lang="ts">
 	import { untrack } from 'svelte';
 	import { tokenizeTemplate, SAMPLE_VARS, type TemplateSegment } from '$lib/email/variables';
@@ -8,12 +29,15 @@
 		/** Values to substitute. Defaults to the placeholder samples. */
 		vars = SAMPLE_VARS,
 		/** Height of the scrollable preview box. */
-		height = 'md'
+		height = 'md',
+		/** Whose values `vars` are. Null previews a template, not a message. */
+		previewAs = null
 	}: {
 		subject: string;
 		body: string;
 		vars?: Record<string, string>;
 		height?: 'sm' | 'md' | 'lg';
+		previewAs?: PreviewAs | null;
 	} = $props();
 
 	// Named sizes rather than a class string, so a caller cannot smuggle an
@@ -75,6 +99,41 @@
 			</span>
 		{/if}
 	</div>
+
+	{#if previewAs}
+		<!-- Who this is rendered for. Wraps rather than scrolls: at 320px the address
+		     and the pager both have to stay on screen. -->
+		<div class="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-foreground-secondary">
+			{#if previewAs.total === 0}
+				<span>No recipients selected — showing placeholder values.</span>
+			{:else}
+				<span class="min-w-0">
+					Previewing as
+					<span class="font-semibold text-foreground">{previewAs.name}</span>
+					<span class="font-mono break-all text-foreground">{previewAs.email}</span>
+				</span>
+				{#if previewAs.external}
+					<span
+						class="rounded-sm border border-info-200 bg-info-50 px-1.5 py-0.5 font-mono text-2xs tracking-eyebrow text-info-700 uppercase"
+					>
+						No account
+					</span>
+				{/if}
+				{#if previewAs.total > 1}
+					<span class="font-mono text-2xs text-foreground-tertiary">
+						{previewAs.index + 1} of {previewAs.total}
+					</span>
+					<button
+						type="button"
+						onclick={previewAs.onNext}
+						class="cursor-pointer border-none bg-transparent p-0 text-xs text-foreground underline underline-offset-2 hover:opacity-70 focus-visible:shadow-ring"
+					>
+						Next recipient →
+					</button>
+				{/if}
+			{/if}
+		</div>
+	{/if}
 
 	<div
 		class="{HEIGHTS[height]} shrink-0 overflow-y-auto rounded-md border border-border bg-muted p-4"

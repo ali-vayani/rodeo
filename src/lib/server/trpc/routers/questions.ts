@@ -4,18 +4,25 @@ import { router, authedProcedure, adminProcedure } from '../init';
 import { APPLICANT_ROLES } from '$lib/admissions/roles';
 import { logAction } from '$lib/server/log';
 
+// `placeholder`, `min`, `max`, `regex` and `linkedField` are nullable columns, so
+// Prisma hands them back as `null`. The application editor loads a question, round-
+// trips it through JSON untouched and posts it back — and zod's `.optional()` accepts
+// only `undefined`, so every save containing an added or modified question was
+// rejected with "expected string, received null". `.nullish()` accepts both, and
+// `null` is exactly what Prisma wants for "clear this column" on create and update
+// alike, so the parsed value can go straight through.
 const questionInput = z.object({
 	title: z.string().min(1),
 	type: z.nativeEnum(QuestionType),
 	order: z.number().int().default(0),
 	required: z.boolean().default(false),
 	targetRole: z.array(z.nativeEnum(Role)).default([]),
-	placeholder: z.string().optional(),
+	placeholder: z.string().nullish(),
 	options: z.array(z.string()).default([]),
-	min: z.number().optional(),
-	max: z.number().optional(),
-	regex: z.string().optional(),
-	linkedField: z.string().optional()
+	min: z.number().nullish(),
+	max: z.number().nullish(),
+	regex: z.string().nullish(),
+	linkedField: z.string().nullish()
 });
 
 export const questionsRouter = router({

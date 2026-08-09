@@ -80,13 +80,24 @@
 			const original = questions.find((q) => q.id === wq.id);
 			return original && JSON.stringify(original) !== JSON.stringify(wq);
 		});
-		const reordered = workingQuestions
-			.filter((q) => q.id && !q.id.startsWith('temp-'))
-			.map((q, i) => ({ id: q.id!, order: i }))
-			.filter(({ id, order }) => {
-				const original = questions.find((q) => q.id === id);
-				return original && original.order !== order;
-			});
+		// `order` in the database is sparse — 0,1,2,10,11,12,20,21,… — because it only
+		// has to sort, not count. Comparing a stored `order` against its array index
+		// therefore flagged most of the list as reordered the moment the page loaded,
+		// which is what lit "Unsaved changes" on an untouched page. Compare *sequences*
+		// instead: whoever was loaded into slot N versus whoever occupies it now. The
+		// values sent to the server stay index-based — that part was always right.
+		const persisted = workingQuestions.filter((q) => q.id && !q.id.startsWith('temp-'));
+		// Deleting a row closes the gap it left, and that is not a reorder, so the
+		// baseline is the loaded sequence with deleted rows taken out of it.
+		const loadedSequence = questions
+			.filter((q) => persisted.some((p) => p.id === q.id))
+			.map((q) => q.id);
+		const sequenceChanged = persisted.some((q, i) => loadedSequence[i] !== q.id);
+		// When the sequence moves, renumber the whole list rather than only the rows
+		// that shifted. Because the stored values are sparse, writing index-based
+		// numbers to a subset would let an untouched row's larger legacy value
+		// (say 10) sort behind a neighbour that just became 4.
+		const reordered = sequenceChanged ? persisted.map((q, i) => ({ id: q.id!, order: i })) : [];
 
 		return { added, modified, deleted, reordered };
 	});
@@ -113,19 +124,144 @@
 		return () => window.removeEventListener('beforeunload', handleBeforeUnload);
 	});
 
-	function moveUp(index: number) {
-		if (index === 0) return;
+	// ── Reordering ───────────────────────────────────────────────────────────────
+	//
+	// The list renders `filteredQuestions`, so a row's visible index is NOT its index
+	// in `workingQuestions` whenever the Role dropdown hides something. The old
+	// index-based moveUp/moveDown indexed straight into `workingQuestions` and so
+	// moved the wrong question under any filter. Everything below works by id and
+	// resolves positions against the full array.
+
+	let listEl = $state<HTMLDivElement | null>(null);
+
+	type DragState = {
+		id: string;
+		/** Visible index the row started at. */
+		fromIndex: number;
+		/** Visible index it will land on if released now. */
+		toIndex: number;
+		startY: number;
+		offset: number;
+		/** Row geometry, measured once at pointerdown — nothing reflows mid-drag. */
+		rects: { top: number; height: number }[];
+		/** Height of the dragged row plus the list gap: how far the rows it passes slide. */
+		slot: number;
+		minOffset: number;
+		maxOffset: number;
+	};
+
+	let drag = $state<DragState | null>(null);
+
+	/**
+	 * Move `id` so that it takes the slot the visible row at `toIndex` occupies,
+	 * rewriting `workingQuestions` — the full array — around it.
+	 *
+	 * Note what this deliberately does not do: touch `order`. Rewriting `order` on
+	 * every row made a one-row move look like eighteen edits. Array position is the
+	 * source of truth; `pendingChanges.reordered` derives the numbers at save time.
+	 */
+	function moveQuestion(id: string, toIndex: number) {
+		const visible = filteredQuestions;
+		const fromIndex = visible.findIndex((q) => q.id === id);
+		if (fromIndex === -1 || toIndex === fromIndex) return;
+		if (toIndex < 0 || toIndex >= visible.length) return;
+
+		const anchorId = visible[toIndex].id;
 		const arr = [...workingQuestions];
-		[arr[index - 1], arr[index]] = [arr[index], arr[index - 1]];
-		workingQuestions = arr.map((q, i) => ({ ...q, order: i }));
+		const from = arr.findIndex((q) => q.id === id);
+		if (from === -1) return;
+		const [moved] = arr.splice(from, 1);
+		const anchor = arr.findIndex((q) => q.id === anchorId);
+		if (anchor === -1) return;
+		// Past the anchor when moving down, in front of it when moving up.
+		arr.splice(toIndex > fromIndex ? anchor + 1 : anchor, 0, moved);
+		workingQuestions = arr;
 	}
 
-	function moveDown(index: number) {
-		if (index === workingQuestions.length - 1) return;
-		const arr = [...workingQuestions];
-		[arr[index], arr[index + 1]] = [arr[index + 1], arr[index]];
-		workingQuestions = arr.map((q, i) => ({ ...q, order: i }));
+	/** Where the dragged row would land if the pointer were released at `clientY`. */
+	function dropIndexFor(state: DragState, clientY: number) {
+		let insertion = 0;
+		for (const rect of state.rects) {
+			if (clientY >= rect.top + rect.height / 2) insertion++;
+			else break;
+		}
+		if (insertion > state.fromIndex) insertion--;
+		return Math.max(0, Math.min(state.rects.length - 1, insertion));
 	}
+
+	function startDrag(id: string, clientY: number) {
+		const rows = listEl ? Array.from(listEl.children) : [];
+		const fromIndex = filteredQuestions.findIndex((q) => q.id === id);
+		if (fromIndex === -1 || rows.length !== filteredQuestions.length) return;
+
+		const rects = rows.map((el) => {
+			const r = el.getBoundingClientRect();
+			return { top: r.top, height: r.height };
+		});
+		const first = rects[0];
+		const last = rects[rects.length - 1];
+		const gap = rects.length > 1 ? rects[1].top - (first.top + first.height) : 0;
+		drag = {
+			id,
+			fromIndex,
+			toIndex: fromIndex,
+			startY: clientY,
+			offset: 0,
+			rects,
+			slot: rects[fromIndex].height + gap,
+			// Keep the floating row inside the list rather than letting it fly away.
+			minOffset: first.top - rects[fromIndex].top,
+			maxOffset: last.top + last.height - (rects[fromIndex].top + rects[fromIndex].height)
+		};
+	}
+
+	function updateDrag(clientY: number) {
+		if (!drag) return;
+		const offset = Math.max(drag.minOffset, Math.min(drag.maxOffset, clientY - drag.startY));
+		drag = { ...drag, offset, toIndex: dropIndexFor(drag, clientY) };
+	}
+
+	function endDrag(cancelled: boolean) {
+		if (!drag) return;
+		const { id, toIndex } = drag;
+		drag = null;
+		if (!cancelled) moveQuestion(id, toIndex);
+	}
+
+	/**
+	 * How far the visible row at `index` should slide while a drag is in flight.
+	 *
+	 * The dragged row follows the pointer; every row it has passed slides one slot the
+	 * other way, which opens the gap it will drop into. Nothing moves in the DOM until
+	 * the pointer is released, so the geometry measured at pointerdown stays valid.
+	 */
+	function dragOffsetFor(index: number) {
+		if (!drag) return 0;
+		const { fromIndex, toIndex, slot, offset } = drag;
+		if (index === fromIndex) return offset;
+		// Everything the row has passed slides by the *dragged* row's height — the size
+		// of the hole it left. Shifting by each row's own height instead would leave
+		// overlaps wherever two rows differ in height (they do: role chips wrap).
+		if (fromIndex < toIndex && index > fromIndex && index <= toIndex) return -slot;
+		if (fromIndex > toIndex && index >= toIndex && index < fromIndex) return slot;
+		return 0;
+	}
+
+	/** ArrowUp/ArrowDown on a focused handle — the keyboard path to reordering. */
+	function moveByKeyboard(id: string, delta: -1 | 1) {
+		const fromIndex = filteredQuestions.findIndex((q) => q.id === id);
+		if (fromIndex === -1) return;
+		moveQuestion(id, fromIndex + delta);
+	}
+
+	$effect(() => {
+		if (!drag) return;
+		const onKeydown = (e: KeyboardEvent) => {
+			if (e.key === 'Escape') endDrag(true);
+		};
+		window.addEventListener('keydown', onKeydown);
+		return () => window.removeEventListener('keydown', onKeydown);
+	});
 
 	function openEdit(q: Question) {
 		editingQuestion = {
@@ -161,9 +297,10 @@
 
 	function deleteQuestion(id: string | undefined) {
 		if (!id) return;
-		workingQuestions = workingQuestions
-			.filter((q) => q.id !== id)
-			.map((q, i) => ({ ...q, order: i }));
+		// No `order` rewrite here either: renumbering the survivors made every
+		// remaining row look edited. `order` only has to sort, and removing one row
+		// leaves the rest in the same relative sequence.
+		workingQuestions = workingQuestions.filter((q) => q.id !== id);
 	}
 
 	function handleQuickAdd() {
@@ -277,26 +414,36 @@
 			</div>
 
 			<!-- List -->
-			<div class="flex flex-col gap-1.5">
-				{#if workingQuestions.length === 0}
-					<div class="rounded-lg border border-dashed border-[#e0e0e0] p-8 text-center">
-						<p class="m-0 text-[13px] text-[#aaa]">No questions yet. Add one below.</p>
-					</div>
-				{:else}
+			{#if workingQuestions.length === 0}
+				<div class="rounded-lg border border-dashed border-[#e0e0e0] p-8 text-center">
+					<p class="m-0 text-[13px] text-[#aaa]">No questions yet. Add one below.</p>
+				</div>
+			{:else}
+				<!-- `listEl.children` is what startDrag measures, so this element must
+				     hold exactly one child per visible row. -->
+				<div class="flex flex-col gap-1.5" bind:this={listEl}>
 					{#each filteredQuestions as q, i (q.id)}
 						<QuestionListItem
 							question={q}
 							index={i}
-							canMoveUp={i > 0}
-							canMoveDown={i < filteredQuestions.length - 1}
+							total={filteredQuestions.length}
+							dragging={drag?.id === q.id}
+							dragOffset={dragOffsetFor(i)}
+							dropEdge={drag && drag.toIndex === i && drag.toIndex !== drag.fromIndex
+								? drag.toIndex < drag.fromIndex
+									? 'above'
+									: 'below'
+								: null}
 							onEdit={() => openEdit(q)}
 							onDelete={() => deleteQuestion(q.id)}
-							onMoveUp={() => moveUp(i)}
-							onMoveDown={() => moveDown(i)}
+							onDragStart={(clientY) => startDrag(q.id, clientY)}
+							onDragMove={updateDrag}
+							onDragEnd={endDrag}
+							onKeyboardMove={(delta) => moveByKeyboard(q.id, delta)}
 						/>
 					{/each}
-				{/if}
-			</div>
+				</div>
+			{/if}
 
 			<!-- Add question form -->
 			<div class="mt-1 overflow-hidden rounded-[10px] border border-[#e0e0e0] bg-white">

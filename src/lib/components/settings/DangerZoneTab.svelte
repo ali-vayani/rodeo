@@ -22,7 +22,7 @@
 		showReleaseModal = true;
 		countLoading = true;
 		try {
-			const applicants = await trpc.admissions.list.query({});
+			const { applicants } = await trpc.admissions.list.query({});
 			pendingCount = applicants.filter((a) => a.pendingDecision !== null).length;
 		} catch {
 			pendingCount = null;

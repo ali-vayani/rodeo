@@ -1,4 +1,6 @@
 import { fail } from '@sveltejs/kit';
+import { TRPCError } from '@trpc/server';
+import { ZodError } from 'zod';
 import type { Actions, PageServerLoad } from './$types';
 import { createContext } from '$lib/server/trpc/context';
 import { appRouter } from '$lib/server/trpc/router';
@@ -11,13 +13,51 @@ type QuestionInput = {
 	order: number;
 	required: boolean;
 	targetRole: Role[];
-	placeholder?: string;
+	// Nullable columns: Prisma returns `null`, and the editor posts back what it
+	// loaded, so the wire shape has to admit it.
+	placeholder?: string | null;
 	options: string[];
-	min?: number;
-	max?: number;
-	regex?: string;
-	linkedField?: string;
+	min?: number | null;
+	max?: number | null;
+	regex?: string | null;
+	linkedField?: string | null;
 };
+
+/**
+ * Turn whatever `questions.change` threw into one sentence the organizer can act on.
+ *
+ * The old blanket "Please try again" hid the actual cause — a save could fail the
+ * same way forever and the toast would keep suggesting a retry. Only text we author
+ * (zod field paths, tRPC messages) reaches the client; the full error, stack
+ * included, stays in `console.error`.
+ */
+function describeSaveFailure(error: unknown): string {
+	const zodError =
+		error instanceof ZodError
+			? error
+			: error instanceof TRPCError && error.cause instanceof ZodError
+				? error.cause
+				: null;
+
+	if (zodError) {
+		const issues = zodError.issues.slice(0, 3).map((issue) => {
+			const path = issue.path.join('.');
+			return path ? `${path}: ${issue.message}` : issue.message;
+		});
+		const more = zodError.issues.length - issues.length;
+		return `some questions were rejected — ${issues.join('; ')}${more > 0 ? ` (and ${more} more)` : ''}`;
+	}
+
+	// A TRPCError message is text we wrote (permission denied, not found, …).
+	if (error instanceof TRPCError) return error.message;
+
+	// Anything else — Prisma, network — could carry query internals, so name the
+	// class of failure only.
+	if (error instanceof Error && error.name.startsWith('Prisma')) {
+		return 'the database rejected the change';
+	}
+	return 'an unexpected server error occurred';
+}
 
 export const load: PageServerLoad = async (event) => {
 	const ctx = await createContext(event);
@@ -62,7 +102,11 @@ export const actions: Actions = {
 			});
 		} catch (e) {
 			console.error('Failed to save question changes:', e);
-			return fail(500, { error: 'Failed to save changes. Please try again.' });
+			const isInvalidInput =
+				e instanceof ZodError || (e instanceof TRPCError && e.code === 'BAD_REQUEST');
+			return fail(isInvalidInput ? 400 : 500, {
+				error: `Failed to save changes: ${describeSaveFailure(e)}`
+			});
 		}
 
 		return { success: true };

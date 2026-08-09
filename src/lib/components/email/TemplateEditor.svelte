@@ -69,7 +69,7 @@
 			<button
 				type="button"
 				onclick={() => insertVariable(v.key)}
-				title="{v.label} — e.g. {v.sample}"
+				title={v.label}
 				class="cursor-pointer rounded-md border border-border bg-muted px-1.5 py-0.5 font-mono text-xs text-foreground hover:bg-neutral-100"
 			>
 				{'{{' + v.key + '}}'}

@@ -12,6 +12,7 @@
 	import { Modal, Button } from '$lib/components/ui';
 	import { createReviewSession, pickNextUnlocked } from '$lib/admissions/reviewSession.svelte';
 	import { PRESENCE_POLL_MS } from '$lib/admissions/lock';
+	import type { LinkedUserField } from '$lib/linkedFields';
 
 	let { data }: { data: PageData } = $props();
 
@@ -23,6 +24,23 @@
 	let selectedUid = $state<string | null>(null);
 	let roleTab = $state<Role | 'ALL'>('ALL');
 	let search = $state('');
+
+	/** Chosen values per linked application field, `NO_VALUE` included. */
+	let linkedSelected = $state<Partial<Record<LinkedUserField, string[]>>>({});
+
+	/** What the last list query did with the search term — drives the "did you mean" strip. */
+	let searchInfo = $state<typeof data.search>(untrack(() => data.search));
+
+	/**
+	 * Whether the current `name` selection came from a suggestion chip rather than the
+	 * filter panel.
+	 *
+	 * A chip sets a filter the organizer can't see without opening the panel, so typing
+	 * a fresh search term while one is active would silently intersect the new term with
+	 * the old name and return nothing. Panel selections are visible and are left alone.
+	 */
+	let nameFromSuggestion = $state(false);
+
 	let loading = $state(false);
 	let decisionLoading = $state(false);
 	let sidebarCollapsed = $state(false);
@@ -141,14 +159,38 @@
 		};
 	});
 
+	/**
+	 * The linked-field selection in the shape the server expects.
+	 *
+	 * An untouched — or cleared — field MUST send `undefined`, never `[]`. The predicate
+	 * reads an omitted key as "no filter" and an empty array as "match nobody" (the
+	 * engaged-but-empty rule `linkedFieldConditions` shares with the send path), so
+	 * forwarding the panel's `{ year: [] }` verbatim would empty the queue the moment
+	 * someone ticked a box and unticked it again.
+	 */
+	function linkedFilterArgs(selected: Partial<Record<LinkedUserField, string[]>>) {
+		const pick = (field: LinkedUserField) => {
+			const values = selected[field];
+			return values && values.length > 0 ? values : undefined;
+		};
+		return {
+			names: pick('name'),
+			universities: pick('university'),
+			years: pick('year')
+		};
+	}
+
 	async function loadApplicants() {
 		loading = true;
 		try {
-			applicants = await trpc.admissions.list.query({
+			const result = await trpc.admissions.list.query({
 				noDecision: true,
 				roles: roleTab !== 'ALL' ? [roleTab] : undefined,
-				search: search.trim() || undefined
+				search: search.trim() || undefined,
+				...linkedFilterArgs(linkedSelected)
 			});
+			applicants = result.applicants;
+			searchInfo = result.search;
 		} catch (e) {
 			showToast(errorMessage(e, 'Failed to load applicants'), 'error');
 		} finally {
@@ -164,8 +206,34 @@
 	let searchTimer: ReturnType<typeof setTimeout>;
 	function onSearchInput(value: string) {
 		search = value;
+		if (nameFromSuggestion) {
+			nameFromSuggestion = false;
+			linkedSelected = { ...linkedSelected, name: [] };
+		}
 		clearTimeout(searchTimer);
 		searchTimer = setTimeout(loadApplicants, 400);
+	}
+
+	// Ticking a checkbox or picking a combobox row is a discrete act, so it refetches
+	// immediately — the 400ms debounce exists for keystrokes, which these are not.
+	function onLinkedFiltersChange(next: Partial<Record<LinkedUserField, string[]>>) {
+		linkedSelected = next;
+		nameFromSuggestion = false;
+		loadApplicants();
+	}
+
+	/**
+	 * Narrow to one suggested name — or, clicking the active chip, back out of it.
+	 *
+	 * Sets the `names` filter rather than rewriting the search box: the typed term is
+	 * what produced the suggestions, so replacing it would delete the strip that offered
+	 * the alternatives and leave no way to try the next one.
+	 */
+	function onSuggestionSelect(name: string) {
+		const next = linkedSelected.name?.includes(name) ? [] : [name];
+		linkedSelected = { ...linkedSelected, name: next };
+		nameFromSuggestion = next.length > 0;
+		loadApplicants();
 	}
 
 	async function handleDecision(decision: DecisionStatus) {
@@ -262,6 +330,11 @@
 		{onRoleTabChange}
 		{search}
 		{onSearchInput}
+		facets={data.facets}
+		{linkedSelected}
+		{onLinkedFiltersChange}
+		{searchInfo}
+		{onSuggestionSelect}
 		{loading}
 		collapsed={sidebarCollapsed}
 		onToggleCollapse={() => (sidebarCollapsed = !sidebarCollapsed)}

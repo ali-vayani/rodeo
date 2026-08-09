@@ -149,6 +149,82 @@ describe('questions.delete', () => {
 	});
 });
 
+describe('nullable columns round-trip', () => {
+	// Regression: `placeholder`/`min`/`max`/`regex`/`linkedField` are nullable
+	// columns, so Prisma hands them back as `null`. The application editor loads a
+	// question, JSON-round-trips it untouched, and posts it back — but the input
+	// schema declared those fields `.optional()`, which in zod rejects `null`. Every
+	// save whose payload contained an added or modified question blew up with
+	// "expected string, received null" and surfaced as the generic
+	// "Failed to save changes. Please try again."
+	//
+	// `allRolesQuestion` already has exactly the shape Prisma returns.
+	const runInTransaction = () =>
+		db.$transaction.mockImplementation(((arg: unknown) =>
+			typeof arg === 'function'
+				? (arg as (tx: typeof db) => unknown)(db)
+				: Promise.resolve([])) as never);
+
+	it('questions.change accepts null on modified and added questions', async () => {
+		const caller = createTestCaller(db, adminUser);
+		runInTransaction();
+		db.question.findMany.mockResolvedValue([]);
+
+		const { id: _id, ...addedQuestion } = allRolesQuestion;
+
+		await expect(
+			caller.questions.change({
+				deleted: [],
+				modified: [allRolesQuestion],
+				added: [addedQuestion],
+				reordered: []
+			})
+		).resolves.toEqual({ success: true });
+
+		// Null has to survive all the way to Prisma — these columns are nullable and
+		// `null` is what clears them on both create and update.
+		expect(db.question.update).toHaveBeenCalledWith(
+			expect.objectContaining({
+				where: { id: 'q-all' },
+				data: expect.objectContaining({
+					placeholder: null,
+					min: null,
+					max: null,
+					regex: null,
+					linkedField: null
+				})
+			})
+		);
+		expect(db.question.create).toHaveBeenCalledWith(
+			expect.objectContaining({
+				data: expect.objectContaining({
+					placeholder: null,
+					min: null,
+					max: null,
+					regex: null,
+					linkedField: null
+				})
+			})
+		);
+	});
+
+	it('questions.create accepts null on the nullable fields', async () => {
+		const caller = createTestCaller(db, adminUser);
+		db.question.create.mockResolvedValue(allRolesQuestion);
+
+		const { id: _id, ...addedQuestion } = allRolesQuestion;
+		await expect(caller.questions.create(addedQuestion)).resolves.toEqual(allRolesQuestion);
+	});
+
+	it('questions.update accepts null on the nullable fields', async () => {
+		const caller = createTestCaller(db, adminUser);
+		db.question.findUniqueOrThrow.mockResolvedValue(allRolesQuestion);
+		db.question.update.mockResolvedValue(allRolesQuestion);
+
+		await expect(caller.questions.update(allRolesQuestion)).resolves.toEqual(allRolesQuestion);
+	});
+});
+
 describe('questions.reorder', () => {
 	it('updates order for multiple questions in a transaction', async () => {
 		const caller = createTestCaller(db, adminUser);

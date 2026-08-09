@@ -9,12 +9,14 @@
 		allChecked,
 		buildRecipientParams,
 		parseEmailList,
-		malformedEmails
+		malformedEmails,
+		type LinkedSelection
 	} from '$lib/admin/filters';
 	import RecipientFilter from '$lib/components/email/RecipientFilter.svelte';
 	import RecipientListModal from '$lib/components/email/RecipientListModal.svelte';
 	import TemplateEditor from '$lib/components/email/TemplateEditor.svelte';
-	import EmailPreview from '$lib/components/email/EmailPreview.svelte';
+	import EmailPreview, { type PreviewAs } from '$lib/components/email/EmailPreview.svelte';
+	import { EXTERNAL_NAME_FALLBACK, SAMPLE_VARS } from '$lib/email/variables';
 	import SendConfirmation, { CONFIRM_WORD } from '$lib/components/email/SendConfirmation.svelte';
 	import SendHistory from '$lib/components/email/SendHistory.svelte';
 	import { Button } from '$lib/components/ui';
@@ -48,11 +50,22 @@
 	let roleFilter = $state(allChecked(ALL_ROLES));
 	let statusFilter = $state(allChecked(ALL_STATUSES));
 	let decisionFilter = $state(allChecked(DECISION_OPTIONS));
+	// The linked application fields run the other way round: nothing selected is the
+	// "everyone" default, and `buildRecipientParams` omits an untouched field's key
+	// rather than sending `[]` — which the send path would read as "nobody".
+	let linked = $state<LinkedSelection>({});
 	let emailText = $state('');
+
+	// Off by default: with it on, an address that matches no account is mailed instead
+	// of flagged, which is the only way this page reaches outside the portal.
+	let allowExternal = $state(false);
 
 	let count = $state<number | null>(untrack(() => data.recipients.count));
 	let sample = $state(untrack(() => data.recipients.sample));
 	let unknownEmails = $state<string[]>([]);
+	let externalEmails = $state<string[]>([]);
+	/** Entries the server refused as addresses, merged with the ones caught client-side. */
+	let invalidEmails = $state<string[]>([]);
 	let countLoading = $state(false);
 	let countToken = 0;
 	let listOpen = $state(false);
@@ -74,10 +87,57 @@
 				// in the UI instead. An empty list stays an empty array, which the
 				// where-builder reads as "nobody" rather than "everybody".
 				{ emails: parsedEmails.filter((e) => !badEmails.includes(e)) }
-			: buildRecipientParams(roleFilter, statusFilter, decisionFilter)
+			: buildRecipientParams(roleFilter, statusFilter, decisionFilter, '', linked)
 	);
 	let composeReady = $derived(subject.trim().length > 0 && body.trim().length > 0);
 	let isDirty = $derived(subject.length > 0 || body.length > 0);
+
+	// The toggle only means anything for an explicit address list; in filter mode there
+	// are no unmatched addresses for it to admit. Sent explicitly rather than inferred.
+	let sendExternal = $derived(mode === 'emails' && allowExternal);
+	let badOrInvalid = $derived([...new Set([...badEmails, ...invalidEmails])]);
+
+	/**
+	 * Who the compose preview substitutes against: the sampled recipients, then the
+	 * external addresses. Externals carry the same fallback name the server will use.
+	 */
+	let previewTargets = $derived([
+		...sample.map((u) => ({ name: u.name, email: u.email, external: false })),
+		...(sendExternal
+			? externalEmails.map((email) => ({ name: EXTERNAL_NAME_FALLBACK, email, external: true }))
+			: [])
+	]);
+
+	let previewCursor = $state(0);
+	// Modulo rather than a clamp, so the cursor survives the list shrinking under it.
+	let previewTarget = $derived(
+		previewTargets.length > 0 ? previewTargets[previewCursor % previewTargets.length] : null
+	);
+
+	/**
+	 * Exactly what `sendCustom` will substitute for `previewTarget`.
+	 *
+	 * The dates come pre-rendered from the server: formatting them here would use the
+	 * browser's locale and timezone. `eventVars` is null when there is no Settings row,
+	 * and the send substitutes nothing at all in that case — so neither does this, and
+	 * the unknown-variable warning correctly says the placeholders go out as-is.
+	 */
+	let previewVars = $derived(
+		previewTarget === null
+			? SAMPLE_VARS
+			: data.eventVars === null
+				? {}
+				: { name: previewTarget.name, ...data.eventVars }
+	);
+
+	let previewAs = $derived<PreviewAs>({
+		name: previewTarget?.name ?? '',
+		email: previewTarget?.email ?? '',
+		external: previewTarget?.external ?? false,
+		index: previewTargets.length > 0 ? previewCursor % previewTargets.length : 0,
+		total: previewTargets.length,
+		onNext: () => (previewCursor += 1)
+	});
 
 	beforeNavigate((nav) => {
 		if (!isDirty || sending) return;
@@ -89,13 +149,17 @@
 		const token = ++countToken;
 		countLoading = true;
 		try {
-			const result = await trpc.email.previewRecipients.query(filters as never);
+			const result = await trpc.email.previewRecipients.query({
+				...filters,
+				allowExternal: sendExternal
+			} as never);
 			// Ignore a stale response that lost the race to a newer one.
 			if (token !== countToken) return;
 			count = result.count;
 			sample = result.sample;
-			// Malformed entries never reach the server, so fold them in here.
-			unknownEmails = [...badEmails, ...result.unknownEmails];
+			unknownEmails = result.unknownEmails;
+			externalEmails = result.externalEmails;
+			invalidEmails = result.invalidEmails;
 		} catch (e: unknown) {
 			if (token !== countToken) return;
 			count = null;
@@ -130,9 +194,15 @@
 				filters: filters as never,
 				// Bind the send to the number just shown in the confirm step; the server
 				// refuses if the set drifted, so a stale filter can't silently mail everyone.
-				expectedCount: count
+				// External recipients are inside that number, not alongside it.
+				expectedCount: count,
+				allowExternal: sendExternal
 			});
-			toast.success(`Sent to ${pluralize(result.sent, 'user')}`);
+			toast.success(
+				result.external > 0
+					? `Sent to ${pluralize(result.sent, 'recipient')}, ${result.external} external`
+					: `Sent to ${pluralize(result.sent, 'user')}`
+			);
 			const refreshed = await trpc.email.getLogs.query({ page: 1, pageSize: 10 });
 			logs = refreshed.logs;
 			subject = '';
@@ -174,10 +244,15 @@
 					bind:roleFilter
 					bind:statusFilter
 					bind:decisionFilter
+					bind:linked
+					facets={data.facets}
 					bind:emailText
+					bind:allowExternal
 					{count}
 					{sample}
 					{unknownEmails}
+					badEmails={badOrInvalid}
+					{externalEmails}
 					loading={countLoading}
 					onChange={onFiltersChanged}
 					onShowAll={() => (listOpen = true)}
@@ -190,12 +265,15 @@
 					</p>
 				</div>
 				<TemplateEditor label="Custom" bind:subject bind:body />
-				<EmailPreview {subject} {body} height="sm" />
+				<EmailPreview {subject} {body} vars={previewVars} {previewAs} height="sm" />
 			{:else}
 				<SendConfirmation
 					{subject}
 					{body}
 					{count}
+					externalCount={sendExternal ? externalEmails.length : 0}
+					vars={previewVars}
+					{previewAs}
 					loading={countLoading}
 					{sending}
 					bind:confirmText
@@ -249,5 +327,6 @@
 	open={listOpen}
 	{filters}
 	total={count ?? 0}
+	externalEmails={sendExternal ? externalEmails : []}
 	onClose={() => (listOpen = false)}
 />
