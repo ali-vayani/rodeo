@@ -4,6 +4,7 @@
 	import { fly } from 'svelte/transition';
 	import { createClient } from '$lib/trpc/client';
 	import type { PageData } from './$types';
+	import AccountTab from '$lib/components/settings/AccountTab.svelte';
 	import GeneralTab from '$lib/components/settings/GeneralTab.svelte';
 	import DatesTab from '$lib/components/settings/DatesTab.svelte';
 	import ScanGroupsTab from '$lib/components/settings/ScanGroupsTab.svelte';
@@ -24,10 +25,11 @@
 
 	// Sidebar scroll-spy
 	let scrollContainer = $state<HTMLElement | undefined>(undefined);
-	let activeSection = $state('general');
-	const sectionIds = ['general', 'dates', 'scan-groups', 'danger'];
+	let activeSection = $state('account');
+	const sectionIds = ['account', 'general', 'dates', 'scan-groups', 'danger'];
 
 	const sections = [
+		{ id: 'account', label: 'Account' },
 		{ id: 'general', label: 'General' },
 		{ id: 'dates', label: 'Dates' },
 		{ id: 'scan-groups', label: 'Scan Groups' },
@@ -136,6 +138,22 @@
 		onscroll={handleScroll}
 		class="min-w-0 flex-1 space-y-5 overflow-y-auto p-4 md:p-8"
 	>
+		<!-- Account section: who is signed in. First because it answers "am I
+		     looking at the right account" before anything below it is edited. -->
+		<div
+			id="section-account"
+			class="scroll-mt-topbar overflow-hidden rounded-md border border-border md:scroll-mt-0"
+		>
+			<div class="border-b border-border bg-muted px-4 py-[9px]">
+				<span class="text-[10px] font-bold tracking-widest text-muted-foreground uppercase">
+					Account
+				</span>
+			</div>
+			<div class="p-4 md:p-6">
+				<AccountTab me={data.me} />
+			</div>
+		</div>
+
 		<!-- General section (layout 2 bordered block) -->
 		<div
 			id="section-general"

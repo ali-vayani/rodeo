@@ -95,6 +95,25 @@ model User {
   claimer         User?               @relation("ApplicationClaims", fields: [claimedBy], references: [uid])
   claims          User[]              @relation("ApplicationClaims")
 
+  // Review score, 0–20, and the reviewer's notes.
+  //
+  // Scoring and deciding are two passes now, not one: reviewers score the whole
+  // queue first, and only then is the ranked list worked top-down. A scalar
+  // rather than a Review table because one score settles an applicant — the
+  // presence lock already hands each application to exactly one reviewer, so a
+  // second score would only ever be an edit of the first, not a second opinion
+  // to average in. Making that a table would buy an aggregate nobody computes.
+  //
+  // `notes` is deliberately readable by every admin: they exist to be read
+  // during the decision pass, which is a different sitting, usually by a
+  // different person, from the one that wrote them.
+  score           Int?
+  notes           String?
+  scoredBy        String?
+  scoredAt        DateTime?
+  scorer          User?               @relation("ApplicationScores", fields: [scoredBy], references: [uid])
+  scores          User[]              @relation("ApplicationScores")
+
   // Decision attribution: which admin last set this applicant's decision.
   // Written in the same UPDATE as the decision itself, never as a follow-up
   // statement — that is what makes per-admin stats impossible to drift. A
@@ -119,6 +138,8 @@ model User {
   // covering: it is written once per decision, not every 30s, and the stats
   // page filters on it by time window.
   @@index([decidedBy, decidedAt])
+  // The ranked list's ORDER BY, and the scoring queue's `score IS NULL` filter.
+  @@index([score])
 }
 
 model ApplicationResponse {

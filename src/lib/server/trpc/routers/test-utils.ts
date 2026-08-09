@@ -44,7 +44,11 @@ export const adminUser: User = {
 	claimedBy: null,
 	claimedAt: null,
 	decidedBy: null,
-	decidedAt: null
+	decidedAt: null,
+	score: null,
+	notes: null,
+	scoredBy: null,
+	scoredAt: null
 };
 
 /** A second admin, for exercising review-lock contention between two reviewers. */
@@ -71,7 +75,11 @@ export const organizerUser: User = {
 	claimedBy: null,
 	claimedAt: null,
 	decidedBy: null,
-	decidedAt: null
+	decidedAt: null,
+	score: null,
+	notes: null,
+	scoredBy: null,
+	scoredAt: null
 };
 
 export const hackerUser: User = {
@@ -90,7 +98,11 @@ export const hackerUser: User = {
 	claimedBy: null,
 	claimedAt: null,
 	decidedBy: null,
-	decidedAt: null
+	decidedAt: null,
+	score: null,
+	notes: null,
+	scoredBy: null,
+	scoredAt: null
 };
 
 /** An applicant currently locked by `adminUser2`. Override claimedAt per test. */
