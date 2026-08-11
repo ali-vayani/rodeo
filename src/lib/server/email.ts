@@ -4,17 +4,14 @@
  * Templates are authored as markdown at `/admin/email-templates` — organizers
  * write prose, not HTML — so every body is rendered to HTML on the way out.
  *
- * Three environments, three behaviours:
+ * **Production is the only environment that sends.** Development and preview both
+ * print the message and return.
  *
- *   - **development** — nothing leaves the machine; the message is printed.
- *   - **preview** — real transport, but only `@yopmail.com` addresses are
- *     accepted. A preview deploy runs a production build against the production
- *     database, and the one mistake that cannot be taken back is mailing four
- *     hundred applicants from a branch.
- *   - **production** — Resend if configured, SMTP otherwise.
- *
- * Anything outside production also carries a banner saying so, so a test message
- * that does reach a human inbox can't be mistaken for the real thing.
+ * Preview used to send for real, fenced to `@yopmail.com` recipients. That fence
+ * was one predicate standing between a branch deploy and four hundred applicants,
+ * on deploys that run a production build against the production database — and it
+ * only held as long as nobody widened it. Not sending at all is the same guarantee
+ * without the predicate, so it is not a capability worth keeping.
  *
  * Failures throw. Callers that send in bulk wrap each recipient in
  * `Promise.allSettled` and record the rejection count in the audit trail, which
@@ -22,11 +19,10 @@
  */
 
 import { Resend } from 'resend';
-import nodemailer, { type Transporter } from 'nodemailer';
 import { marked } from 'marked';
 import { env } from '$env/dynamic/private';
 import { substituteVariables } from '$lib/email/variables';
-import { deployEnv, emailFrom, emailTransport } from './env';
+import { deployEnv, emailFrom, resendConfigured, NO_EMAIL_MESSAGE } from './env';
 
 export interface EmailPayload {
 	to: string;
@@ -35,33 +31,7 @@ export interface EmailPayload {
 	body: string;
 }
 
-const PREVIEW_ALLOWED_DOMAIN = '@yopmail.com';
-
-const WARNING_BANNER =
-	'<p style="background:#fff4e5;border:1px solid #ffb020;padding:12px;' +
-	'border-radius:6px;font-family:sans-serif;font-size:14px;">' +
-	'<strong>This email came from a Rodeo test environment.</strong> ' +
-	'Do not trust its links or attachments — it is not guaranteed to be from Freetail Hackers.' +
-	'</p>';
-
-/**
- * Built once and reused. Nodemailer pools connections per transporter, so
- * constructing one per message would open a fresh SMTP handshake per recipient.
- */
-let transporter: Transporter | null = null;
-
-function smtpTransporter(): Transporter {
-	transporter ??= nodemailer.createTransport({
-		host: env.EMAIL_HOST,
-		port: Number(env.EMAIL_PORT ?? 465),
-		// Port 587 is STARTTLS, which begins in the clear and upgrades; 465 is TLS
-		// from the first byte. Deriving this from the port is what the field means.
-		secure: Number(env.EMAIL_PORT ?? 465) === 465,
-		auth: { user: env.EMAIL_USER, pass: env.EMAIL_PASS }
-	});
-	return transporter;
-}
-
+/** Built once and reused, rather than per message. */
 let resend: Resend | null = null;
 
 function resendClient(): Resend {
@@ -71,47 +41,32 @@ function resendClient(): Resend {
 
 export async function sendEmail(payload: EmailPayload): Promise<void> {
 	const where = deployEnv();
-	const html = await marked.parse(payload.body);
-
-	if (where === 'development') {
+	// Everything that is not production prints and returns. Not an error, and not
+	// conditional on configuration: a preview deploy with a key present must still
+	// send nothing, so this is the environment check and nothing else.
+	if (where !== 'production') {
+		console.log(`[email] not sent — ${where} does not deliver mail`);
 		console.log(`[email] To: ${payload.to}`);
 		console.log(`[email] Subject: ${payload.subject}`);
 		console.log(`[email] Body:\n${payload.body}`);
 		return;
 	}
 
-	if (where === 'preview' && !payload.to.toLowerCase().endsWith(PREVIEW_ALLOWED_DOMAIN)) {
-		// Not an error: a preview send to a real address is expected while testing
-		// against production data, and throwing would make every such batch look
-		// like a failure in the audit trail.
-		console.log(`[email] skipped ${payload.to} — preview only sends to ${PREVIEW_ALLOWED_DOMAIN}`);
-		return;
-	}
+	// Unreachable on a booted production deploy — `validateEnv` refuses to start
+	// without a key — but a missing transport must never read as a delivered send.
+	if (!resendConfigured()) throw new Error(NO_EMAIL_MESSAGE);
 
-	const message = {
+	const { error } = await resendClient().emails.send({
 		to: payload.to,
 		from: emailFrom(),
 		subject: payload.subject,
-		html: where === 'production' ? html : WARNING_BANNER + html
-	};
+		html: await marked.parse(payload.body)
+	});
 
-	switch (emailTransport()) {
-		case 'resend': {
-			const { error } = await resendClient().emails.send(message);
-			// The SDK reports delivery failures in the response rather than by
-			// throwing, so an unchecked call silently "succeeds" on a rejected send.
-			if (error) throw new Error(`Resend rejected the message: ${error.message}`);
-			return;
-		}
-		case 'smtp':
-			await smtpTransporter().sendMail(message);
-			return;
-		default:
-			throw new Error(
-				'No email transport configured. Set RESEND_API_KEY, or all of ' +
-					'EMAIL_HOST / EMAIL_USER / EMAIL_PASS for SMTP.'
-			);
-	}
+	// The SDK reports delivery failures in the response rather than by throwing, so
+	// an unchecked call silently "succeeds" on a rejected send — and the bulk
+	// callers would record that as delivered in the audit trail.
+	if (error) throw new Error(`Resend rejected the message: ${error.message}`);
 }
 
 /** Substitutes `vars` into both halves of a stored template and sends it. */

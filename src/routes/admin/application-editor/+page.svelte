@@ -42,6 +42,8 @@
 
 	let addTitle = $state('');
 	let addType = $state<QuestionType>('SHORT_TEXT');
+	/** What the Add Question form was carrying when it opened the editor. */
+	let addSeed = $state<{ title: string; type: QuestionType } | null>(null);
 
 	let toastMsg = $state('');
 	let toastKind = $state<'success' | 'error'>('success');
@@ -269,6 +271,7 @@
 			options: [...(q.options ?? [])],
 			targetRole: [...(q.targetRole ?? [])]
 		};
+		addSeed = null;
 		editorOpen = true;
 	}
 
@@ -290,9 +293,13 @@
 					...partial
 				} as Question
 			];
+			// Only now — a cancelled add should leave what was typed in place.
+			addTitle = '';
+			addType = 'SHORT_TEXT';
 		}
 		editorOpen = false;
 		editingQuestion = null;
+		addSeed = null;
 	}
 
 	function deleteQuestion(id: string | undefined) {
@@ -303,28 +310,22 @@
 		workingQuestions = workingQuestions.filter((q) => q.id !== id);
 	}
 
+	/**
+	 * Hand the typed title and type to the editor rather than adding straight to
+	 * the list.
+	 *
+	 * This form used to append the question itself, which meant a Dropdown arrived
+	 * with zero options and the only way to give it any was to add it, find the row,
+	 * and press Edit. The editor already reveals options, placeholder and linked
+	 * field the moment a type is chosen — it just wasn't on the path anyone took to
+	 * create a question. Routing through it also means new questions face the same
+	 * validation as edited ones, so "Dropdown with no options" stops being reachable.
+	 */
 	function handleQuickAdd() {
 		if (!addTitle.trim()) return;
-		const tempId = `temp-${Date.now()}`;
-		workingQuestions = [
-			...workingQuestions,
-			{
-				id: tempId,
-				title: addTitle.trim(),
-				type: addType,
-				order: workingQuestions.length,
-				required: false,
-				targetRole: [],
-				placeholder: null,
-				options: [],
-				min: null,
-				max: null,
-				regex: null,
-				linkedField: null
-			} as Question
-		];
-		addTitle = '';
-		addType = 'SHORT_TEXT';
+		addSeed = { title: addTitle.trim(), type: addType };
+		editingQuestion = null;
+		editorOpen = true;
 	}
 
 	function handleSaveClick() {
@@ -525,6 +526,7 @@
 <!-- Modals -->
 <QuestionEditor
 	question={editingQuestion}
+	seed={addSeed}
 	isOpen={editorOpen}
 	onSave={handleEditorSave}
 	onCancel={() => {

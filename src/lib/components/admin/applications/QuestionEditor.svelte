@@ -3,12 +3,21 @@
 
 	interface Props {
 		question: Question | null;
+		/**
+		 * Title and type the Add Question form was carrying when it opened this.
+		 *
+		 * Only consulted for a new question. It exists so picking "Dropdown" out
+		 * there lands you straight in the options editor: the type-dependent
+		 * sections below key off `type`, so seeding it is what makes them visible
+		 * before anything has been added, rather than after an add-then-edit trip.
+		 */
+		seed?: { title: string; type: QuestionType } | null;
 		isOpen: boolean;
 		onSave: (question: Partial<Question>) => void;
 		onCancel: () => void;
 	}
 
-	let { question, isOpen, onSave, onCancel }: Props = $props();
+	let { question, seed = null, isOpen, onSave, onCancel }: Props = $props();
 
 	const QUESTION_TYPES: { value: QuestionType; label: string }[] = [
 		{ value: 'SHORT_TEXT', label: 'Short Text' },
@@ -64,8 +73,8 @@
 				regex = question.regex ?? '';
 				linkedField = question.linkedField ?? '';
 			} else {
-				title = '';
-				type = 'SHORT_TEXT';
+				title = seed?.title ?? '';
+				type = seed?.type ?? 'SHORT_TEXT';
 				required = false;
 				targetRole = [];
 				placeholder = '';
