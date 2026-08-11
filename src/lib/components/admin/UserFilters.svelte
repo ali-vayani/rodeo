@@ -120,9 +120,9 @@
 	const panelId = (key: string) => `${uid}-${key}`;
 
 	/**
-	 * How many options a group has ticked. These groups read "all checked" as *no*
-	 * filter (see `buildRecipientParams`), so anything short of the full count is
-	 * narrowing the table — which is exactly what a folded group has to admit to.
+	 * How many options a group has ticked. These groups read "all checked" *and* "none
+	 * checked" as no filter (see `buildRecipientParams`), so only a partial, non-zero
+	 * count is narrowing the table — which is exactly what a folded group has to admit to.
 	 */
 	function checkedCount(options: readonly string[], state: Record<string, boolean>): number {
 		return options.filter((o) => state[o] ?? true).length;
@@ -190,11 +190,11 @@
 							{group.title}
 						</span>
 						<!--
-							Every box ticked means no filter here, so a partial count is the
-							group narrowing the table. Folded shut, this badge is the only
-							thing on screen that says so.
+							A partial count is the group narrowing the table; folded shut,
+							this badge is the only thing on screen that says so. All ticked
+							and none ticked both mean "no filter", so neither earns a badge.
 						-->
-						{#if checked < group.options.length}
+						{#if checked > 0 && checked < group.options.length}
 							<span
 								class="rounded-sm bg-primary px-1 font-mono text-2xs leading-normal text-primary-foreground tabular-nums"
 							>

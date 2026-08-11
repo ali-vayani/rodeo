@@ -117,16 +117,20 @@
 		loadPage(1);
 	}
 
+	// `clear` resets a group to its all-ticked "no filter" default. Resetting rather
+	// than unticking keeps the boxes truthful: none ticked also means "no filter"
+	// (see `buildRecipientParams`), so clearing to empty would show every row above a
+	// panel claiming nothing is selected.
 	function clearRole() {
-		roleFilter = Object.fromEntries(ALL_ROLES.map((r) => [r, false]));
+		roleFilter = allChecked(ALL_ROLES);
 		loadPage(1);
 	}
 	function clearStatus() {
-		statusFilter = Object.fromEntries(ALL_STATUSES.map((s) => [s, false]));
+		statusFilter = allChecked(ALL_STATUSES);
 		loadPage(1);
 	}
 	function clearDecision() {
-		decisionFilter = Object.fromEntries(DECISION_OPTIONS.map((d) => [d, false]));
+		decisionFilter = allChecked(DECISION_OPTIONS);
 		loadPage(1);
 	}
 
