@@ -14,7 +14,7 @@ Rodeo is Freetail Hackers' hackathon management platform. It has two portals:
 | API        | tRPC (`/api/trpc`)                                 |
 | Database   | Prisma ORM → PostgreSQL (local Docker or Supabase) |
 | Auth       | Supabase (Google OAuth) in deployed environments   |
-| Email      | Resend, with an SMTP fallback                      |
+| Email      | Resend                                             |
 | Validation | Zod                                                |
 | Tests      | Vitest                                             |
 | Hosting    | Vercel                                             |
@@ -205,11 +205,11 @@ Three environments, resolved from `VERCEL_ENV` (falling back to `NODE_ENV`) in
 `src/lib/server/env.ts`. `NODE_ENV` alone is not enough, because a Vercel preview deploy is a
 _production build_ pointed at the _production database_:
 
-| Environment     | Auth              | Email                                              |
-| --------------- | ----------------- | -------------------------------------------------- |
-| **development** | yopmail bypass    | printed to the console, never sent                 |
-| **preview**     | Supabase (Google) | real transport, but `@yopmail.com` recipients only |
-| **production**  | Supabase (Google) | Resend, or SMTP if no Resend key is set            |
+| Environment     | Auth              | Email                              |
+| --------------- | ----------------- | ---------------------------------- |
+| **development** | yopmail bypass    | printed to the console, never sent |
+| **preview**     | Supabase (Google) | printed to the console, never sent |
+| **production**  | Supabase (Google) | Resend                             |
 
 A production boot fails immediately if `SUPABASE_URL`, `SUPABASE_ANON_KEY`, or an email
 transport is missing, rather than on the first hacker who tries to sign in.
@@ -340,8 +340,8 @@ Enable the Google provider in the Supabase dashboard and register
 the app talks to Postgres directly through Prisma, so keep the `public` schema out of the
 Data API's exposed schemas — Prisma tables carry no RLS policies.
 
-Set `DATABASE_URL`, `DIRECT_URL`, `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `EMAIL_FROM`, and one
-email transport (`RESEND_API_KEY`, or all of `EMAIL_HOST`/`EMAIL_USER`/`EMAIL_PASS`). Never
+Set `DATABASE_URL`, `DIRECT_URL`, `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `EMAIL_FROM`, and
+`RESEND_API_KEY`. Never
 set `ALLOW_DEV_AUTH` on a deployed environment. `.env.example` documents each variable and
 why it exists.
 

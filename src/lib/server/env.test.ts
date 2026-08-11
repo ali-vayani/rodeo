@@ -18,7 +18,7 @@ const {
 	isProduction,
 	usesSupabaseAuth,
 	yopmailLoginEnabled,
-	emailTransport,
+	resendConfigured,
 	emailFrom,
 	validateEnv,
 	devSwitcherEnabled
@@ -94,27 +94,24 @@ describe('yopmailLoginEnabled', () => {
 	});
 });
 
-describe('emailTransport', () => {
-	it('is null when nothing is configured', () => {
-		expect(emailTransport()).toBeNull();
+describe('resendConfigured', () => {
+	it('is false when nothing is configured', () => {
+		expect(resendConfigured()).toBe(false);
 	});
 
-	it('is smtp only when the whole SMTP triple is present', () => {
-		env.EMAIL_HOST = 'smtp.example.com';
-		expect(emailTransport()).toBeNull();
-
-		env.EMAIL_USER = 'user';
-		env.EMAIL_PASS = 'pass';
-		expect(emailTransport()).toBe('smtp');
-	});
-
-	it('prefers resend', () => {
-		env.EMAIL_HOST = 'smtp.example.com';
-		env.EMAIL_USER = 'user';
-		env.EMAIL_PASS = 'pass';
+	it('needs only the key', () => {
 		env.RESEND_API_KEY = 'key';
+		expect(resendConfigured()).toBe(true);
+	});
 
-		expect(emailTransport()).toBe('resend');
+	it('is not satisfied by the leftover SMTP variables', () => {
+		// Stale Amazon SES credentials, still in Vercel Production. They are not a
+		// transport — SES rejects them — so they must not read as one.
+		env.EMAIL_HOST = 'email-smtp.us-east-1.amazonaws.com';
+		env.EMAIL_USER = 'AKIAEXAMPLE';
+		env.EMAIL_PASS = 'stale';
+
+		expect(resendConfigured()).toBe(false);
 	});
 });
 

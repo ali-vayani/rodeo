@@ -58,9 +58,9 @@ export function usesSupabaseAuth(): boolean {
  * Development (behind validateEnv's ALLOW_DEV_AUTH and local-database gates)
  * and preview deploys — never production. Preview is deliberate, mirroring the
  * previous Rodeo's staging: every preview runs against its own throwaway
- * per-branch database holding only seeded fixtures, outbound email there is
- * already restricted to @yopmail.com recipients, and reviewers need to walk
- * the admin portal without someone first granting their Google account roles.
+ * per-branch database holding only seeded fixtures, preview sends no outbound
+ * mail at all, and reviewers need to walk the admin portal without someone
+ * first granting their Google account roles.
  * The bypass still only ever signs into @yopmail.com accounts, so a real
  * person's Google-created account is never reachable through it.
  */
@@ -150,16 +150,25 @@ function databaseIsLocal(url: string | undefined): boolean {
 	}
 }
 
+/** What to say when mail is asked for and no provider is set up. */
+export const NO_EMAIL_MESSAGE =
+	'No email transport configured. Set RESEND_API_KEY (Resend dashboard > API Keys), ' +
+	'and verify the EMAIL_FROM domain in the same Resend account.';
+
 /**
- * Whether an email transport is configured, and which one.
+ * Whether Resend is configured.
  *
- * Resend wins when both are present — it is the provider the previous Rodeo
- * settled on, and SMTP stays as the escape hatch for a self-hosted deploy.
+ * Resend is the only transport. There used to be a nodemailer SMTP fallback
+ * behind it, carried over from the previous Rodeo, and it was never once
+ * reached: Resend wins whenever `RESEND_API_KEY` is set, and it is set in every
+ * deployed environment. The `EMAIL_HOST`/`EMAIL_USER`/`EMAIL_PASS` values that
+ * sat behind it were stale Amazon SES credentials left over from before the
+ * previous Rodeo moved to Resend — SES rejects them with `535 Authentication
+ * Credentials Invalid`. Keeping a fallback that cannot authenticate is worse
+ * than having none, so the branch is gone rather than merely deprioritised.
  */
-export function emailTransport(): 'resend' | 'smtp' | null {
-	if (env.RESEND_API_KEY) return 'resend';
-	if (env.EMAIL_HOST && env.EMAIL_USER && env.EMAIL_PASS) return 'smtp';
-	return null;
+export function resendConfigured(): boolean {
+	return Boolean(env.RESEND_API_KEY);
 }
 
 /** The From: address on everything the app sends. */
@@ -210,10 +219,7 @@ export function validateEnv(): void {
 	required('SUPABASE_URL');
 	required('SUPABASE_ANON_KEY');
 
-	if (!emailTransport()) {
-		throw new Error(
-			'No email transport configured. Set RESEND_API_KEY, or all of ' +
-				'EMAIL_HOST / EMAIL_USER / EMAIL_PASS for SMTP.'
-		);
+	if (!resendConfigured()) {
+		throw new Error(NO_EMAIL_MESSAGE);
 	}
 }
