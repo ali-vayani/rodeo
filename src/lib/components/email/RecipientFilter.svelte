@@ -49,8 +49,11 @@
 		return { ...group, [key]: !group[key] };
 	}
 
+	// Reset to the all-ticked "no filter" default rather than untick everything: none
+	// ticked is also "no filter" (see `buildRecipientParams`), and a count of everyone
+	// above a panel with nothing selected reads as a contradiction.
 	function clear(group: FilterState): FilterState {
-		return Object.fromEntries(Object.keys(group).map((k) => [k, false]));
+		return Object.fromEntries(Object.keys(group).map((k) => [k, true]));
 	}
 
 	function setMode(next: 'filters' | 'emails') {
@@ -140,9 +143,9 @@
 			}}
 		/>
 		<p class="-mt-3 text-xs text-foreground-secondary">
-			Every box checked means no filter — the email goes to everyone. Unchecking every box in a
-			group selects nobody. Under Application, selecting nothing means no filter; each value you
-			pick narrows the list.
+			Every box checked means no filter — the email goes to everyone. Each box you untick narrows
+			the list, and clear resets a group. Under Application, selecting nothing means no filter; each
+			value you pick narrows the list.
 		</p>
 	{:else}
 		<div class="flex flex-col gap-2 rounded-md border border-border bg-card p-5">

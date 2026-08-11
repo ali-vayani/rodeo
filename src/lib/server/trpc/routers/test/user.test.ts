@@ -68,6 +68,23 @@ describe('user.list', () => {
 		);
 	});
 
+	/**
+	 * What the Users page sends when only the role group narrows. The quiet groups
+	 * must contribute no clause at all — an emptied group that sent `[]` put
+	 * `uid: IMPOSSIBLE_NO_MATCH` into the AND and returned zero organizers.
+	 */
+	it('filters by role alone when the other groups are cleared', async () => {
+		const caller = createTestCaller(db, adminUser);
+		db.user.count.mockResolvedValue(1);
+		db.user.findMany.mockResolvedValue([adminUser]);
+
+		await caller.user.list({ roles: [Role.ORGANIZER] });
+
+		expect(db.user.findMany).toHaveBeenCalledWith(
+			expect.objectContaining({ where: { AND: [{ role: { in: [Role.ORGANIZER] } }] } })
+		);
+	});
+
 	it('throws FORBIDDEN for non-admin', async () => {
 		const caller = createTestCaller(db, hackerUser);
 		await expect(caller.user.list({})).rejects.toMatchObject({ code: 'FORBIDDEN' });
