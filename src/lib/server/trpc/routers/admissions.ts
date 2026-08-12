@@ -540,6 +540,38 @@ export const admissionsRouter = router({
 	}),
 
 	/**
+	 * Per-reviewer scoring activity — who scored how many applicants and when they
+	 * last did so. Used by the Stats tab to give admins visibility into review coverage.
+	 *
+	 * Grouped in the DB rather than loaded and counted in app code: the applicant
+	 * table can be large, and a groupBy is a single scan rather than N rows in memory.
+	 */
+	reviewerStats: adminProcedure.query(async ({ ctx }) => {
+		const groups = await ctx.prisma.user.groupBy({
+			by: ['scoredBy'],
+			where: { scoredBy: { not: null } },
+			_count: { _all: true },
+			_max: { scoredAt: true }
+		});
+
+		const adminUids = groups.map((g) => g.scoredBy!);
+		const admins = await ctx.prisma.user.findMany({
+			where: { uid: { in: adminUids } },
+			select: { uid: true, name: true }
+		});
+		const nameMap = Object.fromEntries(admins.map((a) => [a.uid, a.name]));
+
+		return groups
+			.map((g) => ({
+				uid: g.scoredBy!,
+				name: nameMap[g.scoredBy!] ?? 'Unknown',
+				scored: g._count._all,
+				lastScoredAt: g._max.scoredAt
+			}))
+			.sort((a, b) => b.scored - a.scored);
+	}),
+
+	/**
 	 * Release pending decisions to active decisions and notify by email.
 	 * @param uids - If non-empty, only those users are promoted and emailed (each must have a pending decision). Omitted or empty: all users with a pending decision.
 	 */

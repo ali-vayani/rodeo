@@ -9,6 +9,7 @@
 	import ApplicantDetail from '$lib/components/admissions/ApplicantDetail.svelte';
 	import IdleWarningModal from '$lib/components/admissions/IdleWarningModal.svelte';
 	import RankedList from '$lib/components/admissions/RankedList.svelte';
+	import ReviewerStats from '$lib/components/admissions/ReviewerStats.svelte';
 	import Toast from '$lib/components/legacy/Toast.svelte';
 	import { Modal, Button } from '$lib/components/ui';
 	import { Tabs } from '$lib/components/patterns';
@@ -29,7 +30,7 @@
 	 * and the counts above them, and because moving between them mid-pass — to check
 	 * where a borderline applicant landed — is normal, not a navigation.
 	 */
-	let tab = $state<'review' | 'decide'>('review');
+	let tab = $state<'review' | 'decide' | 'stats'>('review');
 
 	let applicants = $state<Applicant[]>(untrack(() => [...data.applicants]));
 	let selectedUid = $state<string | null>(null);
@@ -45,6 +46,10 @@
 	let ranked = $state<Applicant[]>([]);
 	let rankedLoading = $state(false);
 	let deciding = $state(false);
+
+	type Reviewer = Awaited<ReturnType<typeof trpc.admissions.reviewerStats.query>>[number];
+	let reviewers = $state<Reviewer[]>([]);
+	let reviewersLoading = $state(false);
 
 	/** Chosen values per linked application field, `NO_VALUE` included. */
 	let linkedSelected = $state<Partial<Record<LinkedUserField, string[]>>>({});
@@ -238,6 +243,17 @@
 		}
 	}
 
+	async function loadReviewerStats() {
+		reviewersLoading = true;
+		try {
+			reviewers = await trpc.admissions.reviewerStats.query();
+		} catch (e) {
+			showToast(errorMessage(e, 'Failed to load reviewer stats'), 'error');
+		} finally {
+			reviewersLoading = false;
+		}
+	}
+
 	/** Best-effort: the counts are a readout, and failing to refresh them is not
 	    worth an error toast on top of whatever the operator just did. */
 	async function refreshStats() {
@@ -249,11 +265,14 @@
 	}
 
 	function onTabChange(next: string) {
-		tab = next === 'decide' ? 'decide' : 'review';
+		tab = next === 'decide' ? 'decide' : next === 'stats' ? 'stats' : 'review';
 		if (tab === 'decide') {
 			// Refetched on every arrival, not just the first: whatever was scored
 			// since the last visit is exactly what the operator came back to see.
 			void loadRanked();
+			void refreshStats();
+		} else if (tab === 'stats') {
+			void loadReviewerStats();
 			void refreshStats();
 		}
 	}
@@ -466,7 +485,8 @@
 	<Tabs
 		tabs={[
 			{ value: 'review', label: 'Review', badge: stats.unscored },
-			{ value: 'decide', label: 'Decide', badge: stats.scored }
+			{ value: 'decide', label: 'Decide', badge: stats.scored },
+			{ value: 'stats', label: 'Stats' }
 		]}
 		active={tab}
 		onChange={onTabChange}
@@ -535,7 +555,7 @@
 				{/if}
 			</div>
 		</div>
-	{:else}
+	{:else if tab === 'decide'}
 		<!-- The ranked list scrolls inside the same remaining height, so the bulk
 		     toolbar stays put while the table moves under it. -->
 		<div class="md:min-h-0 md:flex-1 md:overflow-y-auto">
@@ -545,6 +565,15 @@
 				{deciding}
 				unscoredCount={stats.unscored}
 				onDecide={handleDecide}
+			/>
+		</div>
+	{:else}
+		<div class="md:min-h-0 md:flex-1 md:overflow-y-auto">
+			<ReviewerStats
+				{reviewers}
+				loading={reviewersLoading}
+				totalScored={stats.scored}
+				totalApplicants={stats.scored + stats.unscored}
 			/>
 		</div>
 	{/if}

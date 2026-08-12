@@ -107,6 +107,7 @@
 		{ key: 'select', header: '', width: 'w-10' },
 		{ key: 'rank', header: '#', width: 'w-12' },
 		{ key: 'name', header: 'Applicant' },
+		{ key: 'scorer', header: 'Scored by', width: 'w-32' },
 		{ key: 'score', header: 'Score', width: 'w-20', align: 'right' },
 		{ key: 'notes', header: 'Notes' },
 		{ key: 'decision', header: 'Decision', width: 'w-28' },
@@ -203,6 +204,12 @@
 				</span>
 				<span class="text-2xs text-foreground-tertiary">{row.email}</span>
 			</button>
+		{:else if column.key === 'scorer'}
+			{#if row.scorer}
+				<span class="text-xs text-foreground-secondary">{row.scorer.name}</span>
+			{:else}
+				<span class="text-2xs text-foreground-tertiary">—</span>
+			{/if}
 		{:else if column.key === 'score'}
 			<span class="font-mono text-base font-medium tabular-nums">{row.score}</span>
 		{:else if column.key === 'notes'}
