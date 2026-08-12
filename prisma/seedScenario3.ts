@@ -115,12 +115,54 @@ const STAFF_STATES: StatePlan[] = [
 const INTERNAL_STATES: StatePlan[] = [{ status: UserStatus.CREATED, weight: 1 }];
 
 const ROLE_PLANS: RolePlan[] = [
-	{ role: Role.HACKER, prefix: 'hacker', envKey: 'SEED_HACKERS', defaultCount: 120, states: HACKER_STATES, academic: true },
-	{ role: Role.ADMIN, prefix: 'admin', envKey: 'SEED_ADMINS', defaultCount: 5, states: INTERNAL_STATES, academic: false },
-	{ role: Role.ORGANIZER, prefix: 'organizer', envKey: 'SEED_ORGANIZERS', defaultCount: 8, states: INTERNAL_STATES, academic: false },
-	{ role: Role.JUDGE, prefix: 'judge', envKey: 'SEED_JUDGES', defaultCount: 10, states: STAFF_STATES, academic: false },
-	{ role: Role.MENTOR, prefix: 'mentor', envKey: 'SEED_MENTORS', defaultCount: 14, states: STAFF_STATES, academic: false },
-	{ role: Role.VOLUNTEER, prefix: 'volunteer', envKey: 'SEED_VOLUNTEERS', defaultCount: 14, states: STAFF_STATES, academic: false }
+	{
+		role: Role.HACKER,
+		prefix: 'hacker',
+		envKey: 'SEED_HACKERS',
+		defaultCount: 120,
+		states: HACKER_STATES,
+		academic: true
+	},
+	{
+		role: Role.ADMIN,
+		prefix: 'admin',
+		envKey: 'SEED_ADMINS',
+		defaultCount: 5,
+		states: INTERNAL_STATES,
+		academic: false
+	},
+	{
+		role: Role.ORGANIZER,
+		prefix: 'organizer',
+		envKey: 'SEED_ORGANIZERS',
+		defaultCount: 8,
+		states: INTERNAL_STATES,
+		academic: false
+	},
+	{
+		role: Role.JUDGE,
+		prefix: 'judge',
+		envKey: 'SEED_JUDGES',
+		defaultCount: 10,
+		states: STAFF_STATES,
+		academic: false
+	},
+	{
+		role: Role.MENTOR,
+		prefix: 'mentor',
+		envKey: 'SEED_MENTORS',
+		defaultCount: 14,
+		states: STAFF_STATES,
+		academic: false
+	},
+	{
+		role: Role.VOLUNTEER,
+		prefix: 'volunteer',
+		envKey: 'SEED_VOLUNTEERS',
+		defaultCount: 14,
+		states: STAFF_STATES,
+		academic: false
+	}
 ];
 
 // ---------------------------------------------------------------------------

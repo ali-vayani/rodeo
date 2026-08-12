@@ -3,7 +3,14 @@ import { createPrismaClient } from './seedShared';
 
 const prisma = createPrismaClient(process.env.DATABASE_URL!);
 
-async function check(scenario: string, allowedCheck: (h: { status: string; pendingDecision: string | null; activeDecision: string | null }) => boolean) {
+async function check(
+	scenario: string,
+	allowedCheck: (h: {
+		status: string;
+		pendingDecision: string | null;
+		activeDecision: string | null;
+	}) => boolean
+) {
 	const hackers = await prisma.user.findMany({
 		where: { email: { endsWith: '@yopmail.com', startsWith: 'hacker' } },
 		select: { email: true, status: true, pendingDecision: true, activeDecision: true },
@@ -34,23 +41,43 @@ async function main() {
 	const scenario = process.env.CHECK_SCENARIO ?? '1';
 
 	if (scenario === '1') {
-		await check('Scenario 1 (open)', (h) =>
-			(h.status === 'CREATED' && h.pendingDecision === null && h.activeDecision === null) ||
-			(h.status === 'APPLIED' && h.pendingDecision === 'PENDING' && h.activeDecision === null)
+		await check(
+			'Scenario 1 (open)',
+			(h) =>
+				(h.status === 'CREATED' && h.pendingDecision === null && h.activeDecision === null) ||
+				(h.status === 'APPLIED' && h.pendingDecision === 'PENDING' && h.activeDecision === null)
 		);
 	} else if (scenario === '2') {
-		await check('Scenario 2 (closed)', (h) =>
-			(h.status === 'CREATED' && h.pendingDecision === null && h.activeDecision === null) ||
-			(h.status === 'APPLIED' && ['ACCEPTED', 'REJECTED', 'WAITLISTED'].includes(h.pendingDecision ?? '') && h.activeDecision === null)
+		await check(
+			'Scenario 2 (closed)',
+			(h) =>
+				(h.status === 'CREATED' && h.pendingDecision === null && h.activeDecision === null) ||
+				(h.status === 'APPLIED' &&
+					['ACCEPTED', 'REJECTED', 'WAITLISTED'].includes(h.pendingDecision ?? '') &&
+					h.activeDecision === null)
 		);
 	} else if (scenario === '3') {
-		await check('Scenario 3 (event)', (h) =>
-			(h.status === 'CONFIRMED' && h.pendingDecision === 'ACCEPTED' && h.activeDecision === 'ACCEPTED') ||
-			(h.status === 'CHECKED_IN' && h.pendingDecision === 'ACCEPTED' && h.activeDecision === 'ACCEPTED') ||
-			(h.status === 'APPLIED' && h.pendingDecision === 'ACCEPTED' && h.activeDecision === 'ACCEPTED') ||
-			(h.status === 'DECLINED' && h.pendingDecision === 'ACCEPTED' && h.activeDecision === 'ACCEPTED') ||
-			(h.status === 'APPLIED' && h.pendingDecision === 'REJECTED' && h.activeDecision === 'REJECTED') ||
-			(h.status === 'APPLIED' && h.pendingDecision === 'WAITLISTED' && h.activeDecision === 'WAITLISTED')
+		await check(
+			'Scenario 3 (event)',
+			(h) =>
+				(h.status === 'CONFIRMED' &&
+					h.pendingDecision === 'ACCEPTED' &&
+					h.activeDecision === 'ACCEPTED') ||
+				(h.status === 'CHECKED_IN' &&
+					h.pendingDecision === 'ACCEPTED' &&
+					h.activeDecision === 'ACCEPTED') ||
+				(h.status === 'APPLIED' &&
+					h.pendingDecision === 'ACCEPTED' &&
+					h.activeDecision === 'ACCEPTED') ||
+				(h.status === 'DECLINED' &&
+					h.pendingDecision === 'ACCEPTED' &&
+					h.activeDecision === 'ACCEPTED') ||
+				(h.status === 'APPLIED' &&
+					h.pendingDecision === 'REJECTED' &&
+					h.activeDecision === 'REJECTED') ||
+				(h.status === 'APPLIED' &&
+					h.pendingDecision === 'WAITLISTED' &&
+					h.activeDecision === 'WAITLISTED')
 		);
 	}
 }
