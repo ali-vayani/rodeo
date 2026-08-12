@@ -96,6 +96,66 @@ Three properties worth knowing:
   (`SEED_PRUNE=1`) additionally deletes every `@yopmail.com` account the generator did not
   produce, when you want the database to hold exactly the generated set.
 
+### Scenario seeds
+
+Three additional seed scripts simulate specific points in the admission timeline.
+Each one is a drop-in replacement for `npm run db:seed` — it upserts the same
+questions and 171 accounts, just with a different state distribution. All the same
+overrides (`SEED_PRUNE=1`, `SEED_HACKERS=N`, …) work the same way.
+
+#### `npm run db:seed:open` — Applications Open
+
+Right after the portal goes live. No decisions have been made yet.
+
+| Who                           | State                                                                     |
+| ----------------------------- | ------------------------------------------------------------------------- |
+| ~30% of hackers               | `CREATED` — registered, haven't submitted yet                             |
+| ~70% of hackers               | `APPLIED` + `pendingDecision=PENDING` — submitted, untouched queue        |
+| Judges / mentors / volunteers | Mix of applied → accepted → confirmed (recruited before hacker apps open) |
+| Admins / organizers           | `CREATED` (internal, never applicants)                                    |
+
+Quick logins: `admin1@yopmail.com` (admin), `hacker1@yopmail.com` (CREATED),
+`hacker4@yopmail.com` (APPLIED + PENDING).
+
+#### `npm run db:seed:closed` — Applications Closed
+
+After the deadline. Every applicant has been reviewed and given a `pendingDecision`,
+but `activeDecision` is still null — nothing has been released to hackers yet.
+
+| Who             | State                                                 |
+| --------------- | ----------------------------------------------------- |
+| ~9% of hackers  | `CREATED` — registered but never applied              |
+| ~36% of hackers | `APPLIED` + `pendingDecision=ACCEPTED` (unreleased)   |
+| ~36% of hackers | `APPLIED` + `pendingDecision=REJECTED` (unreleased)   |
+| ~18% of hackers | `APPLIED` + `pendingDecision=WAITLISTED` (unreleased) |
+| All staff       | `CONFIRMED` — logistics locked in                     |
+
+Quick logins: `admin1@yopmail.com` (use the Admissions page to release decisions),
+`hacker2@yopmail.com` (unreleased ACCEPTED), `hacker6@yopmail.com` (unreleased REJECTED),
+`hacker10@yopmail.com` (unreleased WAITLISTED).
+
+#### `npm run db:seed:event` — Hackathon Start
+
+Morning of the event. Decisions are released, the RSVP window has closed, and
+attendees are arriving. The state cycle is ordered so the first accounts in each
+email range land in the most actionable states:
+
+| Logins                     | State                                                   |
+| -------------------------- | ------------------------------------------------------- |
+| `hacker1`–`hacker5`        | `CONFIRMED` — accepted, RSVPd, not yet scanned          |
+| `hacker6`–`hacker8`        | `CHECKED_IN` — already through the door                 |
+| `hacker9`–`hacker10`       | `APPLIED` + released `ACCEPTED` — accepted, never RSVPd |
+| `hacker11`                 | `DECLINED` — accepted but said no                       |
+| `hacker12`–`hacker13`      | `APPLIED` + released `REJECTED`                         |
+| `hacker14`                 | `APPLIED` + released `WAITLISTED`                       |
+| (pattern repeats every 14) |                                                         |
+| All staff                  | Mix of `CONFIRMED` and `CHECKED_IN`                     |
+
+Quick logins: `admin1@yopmail.com` (use the Scan page), `hacker1@yopmail.com`
+through `hacker5@yopmail.com` (CONFIRMED — ready to check in).
+
+---
+
 Counts are overridable per role:
 
 ```bash
@@ -270,22 +330,25 @@ a test that asserts nothing fails.
 
 ## Scripts
 
-| Script                  | Description                          |
-| ----------------------- | ------------------------------------ |
-| `npm run dev`           | Dev server                           |
-| `npm run build`         | Production build                     |
-| `npm run preview`       | Serve the production build locally   |
-| `npm run check`         | `svelte-check` (TypeScript + Svelte) |
-| `npm run lint`          | Prettier + ESLint + design tokens    |
-| `npm run lint:tokens`   | Design-system token rules            |
-| `npm run format`        | Write with Prettier                  |
-| `npm test`              | Vitest (run once)                    |
-| `npm run db:setup`      | Push schema, generate client, seed   |
-| `npm run db:push`       | Push schema without a migration      |
-| `npm run db:migrate`    | `prisma migrate dev`                 |
-| `npm run db:seed`       | Re-seed dev accounts                 |
-| `npm run db:seed:fresh` | Re-seed, pruning unmanaged accounts  |
-| `npm run db:studio`     | Prisma Studio                        |
+| Script                   | Description                          |
+| ------------------------ | ------------------------------------ |
+| `npm run dev`            | Dev server                           |
+| `npm run build`          | Production build                     |
+| `npm run preview`        | Serve the production build locally   |
+| `npm run check`          | `svelte-check` (TypeScript + Svelte) |
+| `npm run lint`           | Prettier + ESLint + design tokens    |
+| `npm run lint:tokens`    | Design-system token rules            |
+| `npm run format`         | Write with Prettier                  |
+| `npm test`               | Vitest (run once)                    |
+| `npm run db:setup`       | Push schema, generate client, seed   |
+| `npm run db:push`        | Push schema without a migration      |
+| `npm run db:migrate`     | `prisma migrate dev`                 |
+| `npm run db:seed`        | Re-seed dev accounts                 |
+| `npm run db:seed:fresh`  | Re-seed, pruning unmanaged accounts  |
+| `npm run db:seed:open`   | Scenario: applications open          |
+| `npm run db:seed:closed` | Scenario: applications closed        |
+| `npm run db:seed:event`  | Scenario: hackathon start            |
+| `npm run db:studio`      | Prisma Studio                        |
 
 ## Deploying
 
