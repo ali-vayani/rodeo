@@ -1,22 +1,16 @@
-/*
-  Warnings:
+-- Safe version: drop the old type/value representation only if it still exists.
+--
+-- This migration was originally written assuming the init migration had already
+-- created the Blacklist table with `type` (BlacklistType enum) and `value` columns.
+-- The init migration was subsequently edited after being applied to production, so
+-- production's Blacklist table may not have those columns. Using IF EXISTS makes
+-- this migration a no-op in that case.
+--
+-- The email/name/reason columns are not added here — the subsequent
+-- blacklist_split_name_and_email migration does that properly with a backfill
+-- that handles non-empty tables and splits the single name into firstName/lastName.
 
-  - You are about to drop the column `type` on the `Blacklist` table. All the data in the column will be lost.
-  - You are about to drop the column `value` on the `Blacklist` table. All the data in the column will be lost.
-  - A unique constraint covering the columns `[email]` on the table `Blacklist` will be added. If there are existing duplicate values, this will fail.
-  - Added the required column `email` to the `Blacklist` table without a default value. This is not possible if the table is not empty.
-  - Added the required column `name` to the `Blacklist` table without a default value. This is not possible if the table is not empty.
+ALTER TABLE "Blacklist" DROP COLUMN IF EXISTS "type";
+ALTER TABLE "Blacklist" DROP COLUMN IF EXISTS "value";
 
-*/
--- AlterTable
-ALTER TABLE "Blacklist" DROP COLUMN "type",
-DROP COLUMN "value",
-ADD COLUMN     "email" TEXT NOT NULL,
-ADD COLUMN     "name" TEXT NOT NULL,
-ADD COLUMN     "reason" TEXT;
-
--- DropEnum
-DROP TYPE "BlacklistType";
-
--- CreateIndex
-CREATE UNIQUE INDEX "Blacklist_email_key" ON "Blacklist"("email");
+DROP TYPE IF EXISTS "BlacklistType";
