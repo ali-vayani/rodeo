@@ -359,6 +359,55 @@ export const admissionsRouter = router({
 		}),
 
 	/**
+	 * Clear a pending decision, returning the applicant to the undecided queue.
+	 *
+	 * The inverse of `setDecision`. Only affects `pendingDecision` — a released
+	 * `activeDecision` is permanent and cannot be undone here.
+	 *
+	 * Uses the same claim CAS as `setDecision` so two admins can't race on the
+	 * same row. Attribution is cleared alongside the decision: there is no pending
+	 * decision to credit anyone with.
+	 */
+	clearDecision: adminProcedure
+		.input(z.object({ uid: z.string() }))
+		.mutation(async ({ ctx, input }) => {
+			try {
+				const applicant = await ctx.prisma.user.update({
+					where: claimableBy(input.uid, ctx.user.uid),
+					data: {
+						pendingDecision: null,
+						decidedBy: null,
+						decidedAt: null,
+						claimedBy: null,
+						claimedAt: null
+					}
+				});
+
+				await logAction(ctx, {
+					action: 'admissions.decision.clear',
+					summary: `Cleared ${applicant.name}'s pending decision`,
+					target: { id: applicant.uid, label: applicant.name }
+				});
+
+				return applicant;
+			} catch (e) {
+				if (!isRecordNotFound(e)) throw e;
+
+				const target = await ctx.prisma.user.findUnique({
+					where: { uid: input.uid },
+					select: { name: true, claimer: { select: { name: true } } }
+				});
+				if (!target) {
+					throw new TRPCError({ code: 'NOT_FOUND', message: 'Applicant not found.' });
+				}
+				throw new TRPCError({
+					code: 'CONFLICT',
+					message: `${target.claimer?.name ?? 'Another admin'} is reviewing this applicant. Your change was not saved.`
+				});
+			}
+		}),
+
+	/**
 	 * Score an applicant 0–20 and save the reviewer's notes.
 	 *
 	 * The first of the two passes. Scoring deliberately sets no decision: the whole
@@ -537,6 +586,95 @@ export const admissionsRouter = router({
 		// separately because the decision pass only ever sees the scored half, and
 		// the unscored count is the one number that says how much it can't see.
 		return { ...tally, scored, unscored };
+	}),
+
+	/**
+	 * Richer stats for the Stats tab: per-role decision breakdown and score
+	 * aggregates. Kept separate from `stats` so the header counts never pay for
+	 * this heavier query.
+	 */
+	decisionStats: adminProcedure.query(async ({ ctx }) => {
+		const [roleGroups, scoreAgg] = await Promise.all([
+			ctx.prisma.user.groupBy({
+				by: ['role', 'pendingDecision', 'activeDecision'],
+				where: { role: { in: APPLICANT_ROLES } },
+				_count: { _all: true }
+			}),
+			ctx.prisma.user.aggregate({
+				where: { role: { in: APPLICANT_ROLES }, score: { not: null } },
+				_avg: { score: true },
+				_min: { score: true },
+				_max: { score: true },
+				_count: { score: true }
+			})
+		]);
+
+		// Tally per-role decision counts from the groupBy rows.
+		const roleMap = new Map<
+			string,
+			{ total: number; accepted: number; waitlisted: number; rejected: number; undecided: number }
+		>();
+		for (const g of roleGroups) {
+			const role = g.role as string;
+			if (!roleMap.has(role)) {
+				roleMap.set(role, { total: 0, accepted: 0, waitlisted: 0, rejected: 0, undecided: 0 });
+			}
+			const tally = roleMap.get(role)!;
+			tally.total += g._count._all;
+			const effective = effectiveDecision(g);
+			if (effective === DecisionStatus.ACCEPTED) tally.accepted += g._count._all;
+			else if (effective === DecisionStatus.WAITLISTED) tally.waitlisted += g._count._all;
+			else if (effective === DecisionStatus.REJECTED) tally.rejected += g._count._all;
+			else tally.undecided += g._count._all;
+		}
+
+		const byRole = [...roleMap.entries()]
+			.map(([role, tally]) => ({ role, ...tally }))
+			.sort((a, b) => b.total - a.total);
+
+		return {
+			byRole,
+			scores: {
+				avg: scoreAgg._avg.score !== null ? Math.round(scoreAgg._avg.score * 10) / 10 : null,
+				min: scoreAgg._min.score,
+				max: scoreAgg._max.score,
+				count: scoreAgg._count.score
+			}
+		};
+	}),
+
+	/**
+	 * Applicants who already have a released decision and may need reconsidering.
+	 *
+	 * Sorted by actionability: waitlisted first (most likely to be promoted to
+	 * accepted), then rejected, then accepted last. Sort is done in application
+	 * code because Prisma has no enum-priority ORDER BY — the set is small enough
+	 * that a single in-memory sort is cheaper than a raw query.
+	 */
+	reconsidering: adminProcedure.query(async ({ ctx }) => {
+		const users = await ctx.prisma.user.findMany({
+			where: { role: { in: APPLICANT_ROLES }, activeDecision: { not: null } },
+			include: {
+				application: { include: { question: true } },
+				scorer: { select: { name: true } }
+			}
+		});
+
+		const blacklist = prepareBlacklist(
+			await ctx.prisma.blacklist.findMany({
+				select: { firstName: true, lastName: true, email: true }
+			})
+		);
+
+		const PRIORITY: Partial<Record<string, number>> = {
+			WAITLISTED: 0,
+			REJECTED: 1,
+			ACCEPTED: 2
+		};
+
+		return users
+			.map((user) => ({ ...user, blacklistMatch: matchApplicant(user, blacklist) }))
+			.sort((a, b) => (PRIORITY[a.activeDecision!] ?? 99) - (PRIORITY[b.activeDecision!] ?? 99));
 	}),
 
 	/**

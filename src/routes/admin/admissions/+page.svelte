@@ -9,6 +9,7 @@
 	import ApplicantDetail from '$lib/components/admissions/ApplicantDetail.svelte';
 	import IdleWarningModal from '$lib/components/admissions/IdleWarningModal.svelte';
 	import RankedList from '$lib/components/admissions/RankedList.svelte';
+	import ReconsiderList from '$lib/components/admissions/ReconsiderList.svelte';
 	import ReviewerStats from '$lib/components/admissions/ReviewerStats.svelte';
 	import Toast from '$lib/components/legacy/Toast.svelte';
 	import { Modal, Button } from '$lib/components/ui';
@@ -30,7 +31,7 @@
 	 * and the counts above them, and because moving between them mid-pass — to check
 	 * where a borderline applicant landed — is normal, not a navigation.
 	 */
-	let tab = $state<'review' | 'decide' | 'stats'>('review');
+	let tab = $state<'review' | 'decide' | 'stats' | 'reconsider'>('review');
 
 	let applicants = $state<Applicant[]>(untrack(() => [...data.applicants]));
 	let selectedUid = $state<string | null>(null);
@@ -46,10 +47,18 @@
 	let ranked = $state<Applicant[]>([]);
 	let rankedLoading = $state(false);
 	let deciding = $state(false);
+	let releasingOne = $state(false);
 
 	type Reviewer = Awaited<ReturnType<typeof trpc.admissions.reviewerStats.query>>[number];
 	let reviewers = $state<Reviewer[]>([]);
 	let reviewersLoading = $state(false);
+
+	type DecisionStats = Awaited<ReturnType<typeof trpc.admissions.decisionStats.query>>;
+	let decisionStats = $state<DecisionStats | null>(null);
+
+	type Reconsider = Awaited<ReturnType<typeof trpc.admissions.reconsidering.query>>[number];
+	let reconsider = $state<Reconsider[]>([]);
+	let reconsiderLoading = $state(false);
 
 	/** Chosen values per linked application field, `NO_VALUE` included. */
 	let linkedSelected = $state<Partial<Record<LinkedUserField, string[]>>>({});
@@ -79,6 +88,10 @@
 	let showReleaseModal = $state(false);
 	let releaseConfirmText = $state('');
 	let releasing = $state(false);
+	/** UIDs to release, collected when the modal is opened. */
+	let releaseUids = $state<string[]>([]);
+	/** Which list triggered the release — drives the optimistic update. */
+	let releaseScope = $state<'decide' | 'reconsider'>('decide');
 
 	// Toast
 	let toast = $state<{ message: string; type: 'success' | 'error' } | null>(null);
@@ -246,11 +259,25 @@
 	async function loadReviewerStats() {
 		reviewersLoading = true;
 		try {
-			reviewers = await trpc.admissions.reviewerStats.query();
+			[reviewers, decisionStats] = await Promise.all([
+				trpc.admissions.reviewerStats.query(),
+				trpc.admissions.decisionStats.query()
+			]);
 		} catch (e) {
 			showToast(errorMessage(e, 'Failed to load reviewer stats'), 'error');
 		} finally {
 			reviewersLoading = false;
+		}
+	}
+
+	async function loadReconsider() {
+		reconsiderLoading = true;
+		try {
+			reconsider = await trpc.admissions.reconsidering.query();
+		} catch (e) {
+			showToast(errorMessage(e, 'Failed to load reconsider list'), 'error');
+		} finally {
+			reconsiderLoading = false;
 		}
 	}
 
@@ -265,7 +292,11 @@
 	}
 
 	function onTabChange(next: string) {
-		tab = next === 'decide' ? 'decide' : next === 'stats' ? 'stats' : 'review';
+		if (next === 'decide') tab = 'decide';
+		else if (next === 'stats') tab = 'stats';
+		else if (next === 'reconsider') tab = 'reconsider';
+		else tab = 'review';
+
 		if (tab === 'decide') {
 			// Refetched on every arrival, not just the first: whatever was scored
 			// since the last visit is exactly what the operator came back to see.
@@ -273,6 +304,9 @@
 			void refreshStats();
 		} else if (tab === 'stats') {
 			void loadReviewerStats();
+			void refreshStats();
+		} else if (tab === 'reconsider') {
+			void loadReconsider();
 			void refreshStats();
 		}
 	}
@@ -419,15 +453,115 @@
 		}
 	}
 
+	async function handleClear(uid: string) {
+		deciding = true;
+		try {
+			await trpc.admissions.clearDecision.mutate({ uid });
+			ranked = ranked.map((a) => (a.uid === uid ? { ...a, pendingDecision: null } : a));
+			void refreshStats();
+			showToast('Decision cleared');
+		} catch (e) {
+			showToast(errorMessage(e, 'Failed to clear decision'), 'error');
+		} finally {
+			deciding = false;
+		}
+	}
+
+	async function handleReleaseOne(uid: string) {
+		releasingOne = true;
+		try {
+			const applicant = ranked.find((a) => a.uid === uid);
+			await trpc.admissions.release.mutate({ uids: [uid] });
+			ranked = ranked.map((a) =>
+				a.uid === uid
+					? { ...a, activeDecision: a.pendingDecision ?? a.activeDecision, pendingDecision: null }
+					: a
+			);
+			void refreshStats();
+			showToast(`Released decision for ${applicant?.name ?? 'applicant'}`);
+		} catch (e) {
+			showToast(errorMessage(e, 'Failed to release decision'), 'error');
+		} finally {
+			releasingOne = false;
+		}
+	}
+
+	/** Same shape as handleDecide but operates on the reconsider list. */
+	async function handleReconsiderDecide(uids: string[], decision: DecisionStatus) {
+		if (decision === 'PENDING' || uids.length === 0) return;
+		deciding = true;
+		try {
+			await trpc.admissions.setDecision.mutate({ uid: uids[0], decision });
+			reconsider = reconsider.map((a) =>
+				a.uid === uids[0] ? { ...a, pendingDecision: decision } : a
+			);
+			void refreshStats();
+			showToast(`Set to ${decision.toLowerCase()}`);
+		} catch (e) {
+			showToast(errorMessage(e, 'Failed to update decision'), 'error');
+		} finally {
+			deciding = false;
+		}
+	}
+
+	async function handleReconsiderClear(uid: string) {
+		deciding = true;
+		try {
+			await trpc.admissions.clearDecision.mutate({ uid });
+			reconsider = reconsider.map((a) => (a.uid === uid ? { ...a, pendingDecision: null } : a));
+			void refreshStats();
+			showToast('Decision cleared');
+		} catch (e) {
+			showToast(errorMessage(e, 'Failed to clear decision'), 'error');
+		} finally {
+			deciding = false;
+		}
+	}
+
+	async function handleReconsiderReleaseOne(uid: string) {
+		releasingOne = true;
+		try {
+			const applicant = reconsider.find((a) => a.uid === uid);
+			await trpc.admissions.release.mutate({ uids: [uid] });
+			// After release the new decision becomes active — update both fields.
+			reconsider = reconsider.map((a) =>
+				a.uid === uid
+					? { ...a, activeDecision: a.pendingDecision ?? a.activeDecision, pendingDecision: null }
+					: a
+			);
+			void refreshStats();
+			showToast(`Released decision for ${applicant?.name ?? 'applicant'}`);
+		} catch (e) {
+			showToast(errorMessage(e, 'Failed to release decision'), 'error');
+		} finally {
+			releasingOne = false;
+		}
+	}
+
+	function hasPendingDecision(a: { pendingDecision: string | null }) {
+		return a.pendingDecision !== null && a.pendingDecision !== 'PENDING';
+	}
+
+	let decidePending = $derived(ranked.filter(hasPendingDecision).length);
+	let reconsiderPending = $derived(reconsider.filter(hasPendingDecision).length);
+
 	async function handleRelease() {
 		releasing = true;
 		try {
-			const result = await trpc.admissions.release.mutate({});
-			ranked = ranked.map((a) => ({
-				...a,
-				activeDecision: a.pendingDecision ?? a.activeDecision,
-				pendingDecision: null
-			}));
+			const result = await trpc.admissions.release.mutate({ uids: releaseUids });
+			const released = new Set(releaseUids);
+			const apply = <
+				T extends { uid: string; pendingDecision: string | null; activeDecision: string | null }
+			>(
+				list: T[]
+			): T[] =>
+				list.map((a) =>
+					released.has(a.uid)
+						? { ...a, activeDecision: a.pendingDecision ?? a.activeDecision, pendingDecision: null }
+						: a
+				);
+			if (releaseScope === 'decide') ranked = apply(ranked);
+			else reconsider = apply(reconsider);
 			void refreshStats();
 			showReleaseModal = false;
 			releaseConfirmText = '';
@@ -441,7 +575,10 @@
 		}
 	}
 
-	function openReleaseModal() {
+	function openReleaseModal(scope: 'decide' | 'reconsider') {
+		const list = scope === 'decide' ? ranked : reconsider;
+		releaseUids = list.filter(hasPendingDecision).map((a) => a.uid);
+		releaseScope = scope;
 		releaseConfirmText = '';
 		showReleaseModal = true;
 	}
@@ -454,20 +591,12 @@
 </script>
 
 <!-- Page header -->
-<div class="mb-4 flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
-	<div>
-		<h1 class="text-[22px] font-bold text-primary">Admissions</h1>
-		<span class="mt-0.5 block text-[13px] text-muted-foreground">
-			{stats.unscored} left to score · {stats.accepted} accepted · {stats.rejected} rejected ·
-			{stats.waitlisted} waitlisted · {pendingCount} pending release
-		</span>
-	</div>
-	<button
-		onclick={openReleaseModal}
-		class="cursor-pointer rounded-md border-none bg-destructive px-[18px] py-[9px] text-[13px] font-semibold text-white"
-	>
-		Release Decisions
-	</button>
+<div class="mb-4">
+	<h1 class="text-[22px] font-bold text-primary">Admissions</h1>
+	<span class="mt-0.5 block text-[13px] text-muted-foreground">
+		{stats.unscored} left to score · {stats.accepted} accepted · {stats.rejected} rejected ·
+		{stats.waitlisted} waitlisted · {pendingCount} pending release
+	</span>
 </div>
 
 <!--
@@ -485,7 +614,8 @@
 	<Tabs
 		tabs={[
 			{ value: 'review', label: 'Review', badge: stats.unscored },
-			{ value: 'decide', label: 'Decide', badge: stats.scored },
+			{ value: 'decide', label: 'Pending Decisions', badge: stats.scored },
+			{ value: 'reconsider', label: 'Reconsider' },
 			{ value: 'stats', label: 'Stats' }
 		]}
 		active={tab}
@@ -559,22 +689,56 @@
 		<!-- The ranked list scrolls inside the same remaining height, so the bulk
 		     toolbar stays put while the table moves under it. -->
 		<div class="md:min-h-0 md:flex-1 md:overflow-y-auto">
+			<div class="mb-3 flex items-center justify-between">
+				<span class="text-xs text-foreground-secondary">
+					{decidePending} pending decision{decidePending === 1 ? '' : 's'}
+				</span>
+				<button
+					onclick={() => openReleaseModal('decide')}
+					disabled={decidePending === 0}
+					class="cursor-pointer rounded-md border-none bg-destructive px-[14px] py-[7px] text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40"
+				>
+					Release Decisions
+				</button>
+			</div>
 			<RankedList
-				applicants={ranked}
+				applicants={ranked.filter((a) => !a.activeDecision)}
 				loading={rankedLoading}
 				{deciding}
+				{releasingOne}
 				unscoredCount={stats.unscored}
 				onDecide={handleDecide}
+				onClear={handleClear}
+				onReleaseOne={handleReleaseOne}
+			/>
+		</div>
+	{:else if tab === 'reconsider'}
+		<div class="md:min-h-0 md:flex-1 md:overflow-y-auto">
+			<div class="mb-3 flex items-center justify-between">
+				<span class="text-xs text-foreground-secondary">
+					{reconsiderPending} pending decision{reconsiderPending === 1 ? '' : 's'}
+				</span>
+				<button
+					onclick={() => openReleaseModal('reconsider')}
+					disabled={reconsiderPending === 0}
+					class="cursor-pointer rounded-md border-none bg-destructive px-[14px] py-[7px] text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40"
+				>
+					Release Decisions
+				</button>
+			</div>
+			<ReconsiderList
+				applicants={reconsider}
+				loading={reconsiderLoading}
+				{deciding}
+				{releasingOne}
+				onDecide={handleReconsiderDecide}
+				onClear={handleReconsiderClear}
+				onReleaseOne={handleReconsiderReleaseOne}
 			/>
 		</div>
 	{:else}
 		<div class="md:min-h-0 md:flex-1 md:overflow-y-auto">
-			<ReviewerStats
-				{reviewers}
-				loading={reviewersLoading}
-				totalScored={stats.scored}
-				totalApplicants={stats.scored + stats.unscored}
-			/>
+			<ReviewerStats {reviewers} loading={reviewersLoading} {stats} {decisionStats} />
 		</div>
 	{/if}
 </div>
@@ -594,13 +758,13 @@
 <Modal
 	bind:open={showReleaseModal}
 	title="Release Decisions"
-	description="This will copy all pending decisions to active decisions and send notification emails."
+	description="This will email the pending decisions and mark them as active."
 	dismissible={!releasing}
 	onClose={() => (releaseConfirmText = '')}
 >
 	<div class="mb-5 rounded-md border border-danger-200 bg-danger-50 px-3.5 py-3">
 		<div class="mb-1 text-base font-semibold text-danger-700">
-			{pendingCount} user{pendingCount === 1 ? '' : 's'} will be affected
+			{releaseUids.length} user{releaseUids.length === 1 ? '' : 's'} will be affected
 		</div>
 		<div class="text-xs text-foreground-secondary">
 			Emails will be sent for all accepted, rejected, and waitlisted decisions. This action cannot
@@ -626,10 +790,10 @@
 		<Button
 			variant="danger"
 			loading={releasing}
-			disabled={releaseConfirmText !== 'RELEASE' || pendingCount === 0}
+			disabled={releaseConfirmText !== 'RELEASE' || releaseUids.length === 0}
 			onclick={handleRelease}
 		>
-			Release {pendingCount} Decision{pendingCount === 1 ? '' : 's'}
+			Release {releaseUids.length} Decision{releaseUids.length === 1 ? '' : 's'}
 		</Button>
 	{/snippet}
 </Modal>

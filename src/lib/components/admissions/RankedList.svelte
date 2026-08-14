@@ -30,16 +30,24 @@
 		applicants,
 		loading,
 		deciding,
+		releasingOne,
 		unscoredCount,
-		onDecide
+		onDecide,
+		onClear,
+		onReleaseOne
 	}: {
 		/** Already ranked by the server — this component never reorders. */
 		applicants: Applicant[];
 		loading: boolean;
 		deciding: boolean;
+		releasingOne: boolean;
 		/** Applicants with no score yet, which by definition can't appear here. */
 		unscoredCount: number;
 		onDecide: (uids: string[], decision: DecisionStatus) => void;
+		/** Clear the pending decision on a single applicant. */
+		onClear: (uid: string) => void;
+		/** Release one applicant's pending decision and email them immediately. */
+		onReleaseOne: (uid: string) => void;
 	} = $props();
 
 	let selected = new SvelteSet<string>();
@@ -49,6 +57,9 @@
 
 	/** The bulk action awaiting confirmation. */
 	let pending = $state<DecisionStatus | null>(null);
+
+	/** The applicant whose individual release is being confirmed. */
+	let releaseTarget = $state<(typeof rows)[number] | null>(null);
 
 	// Rank is assigned here rather than read off the row because it is a property
 	// of position in this list, not of the applicant — and the table has no index.
@@ -93,8 +104,23 @@
 		if (decision) onDecide([...selected], decision);
 	}
 
+	/**
+	 * Toggle a decision on a single row. Pressing a decision that's already the
+	 * pending one clears it; pressing a different one sets it.
+	 */
 	function decideOne(uid: string, decision: DecisionStatus) {
-		onDecide([uid], decision);
+		const row = rows.find((r) => r.uid === uid);
+		if (row?.pendingDecision === decision) {
+			onClear(uid);
+		} else {
+			onDecide([uid], decision);
+		}
+	}
+
+	function confirmReleaseOne() {
+		const uid = releaseTarget?.uid;
+		releaseTarget = null;
+		if (uid) onReleaseOne(uid);
 	}
 
 	const DECISION_TONE: Record<string, Tone> = {
@@ -111,7 +137,8 @@
 		{ key: 'score', header: 'Score', width: 'w-20', align: 'right' },
 		{ key: 'notes', header: 'Notes' },
 		{ key: 'decision', header: 'Decision', width: 'w-28' },
-		{ key: 'actions', header: '', width: 'w-56', align: 'right' }
+		{ key: 'actions', header: '', width: 'w-64', align: 'right' },
+		{ key: 'release', header: '', width: 'w-24', align: 'right' }
 	];
 </script>
 
@@ -232,27 +259,47 @@
 				<span class="text-2xs text-foreground-tertiary">—</span>
 			{/if}
 		{:else if column.key === 'actions'}
+			{@const isActive = (d: string) => row.pendingDecision === d}
 			<div class="flex justify-end gap-1.5">
 				<Button
 					size="sm"
-					variant="primary"
+					class="w-20"
+					variant={isActive('ACCEPTED') ? 'secondary' : 'primary'}
 					disabled={deciding}
 					onclick={() => decideOne(row.uid, 'ACCEPTED')}
 				>
-					Accept
-				</Button>
-				<Button size="sm" disabled={deciding} onclick={() => decideOne(row.uid, 'WAITLISTED')}>
-					Waitlist
+					{isActive('ACCEPTED') ? 'Undo' : 'Accept'}
 				</Button>
 				<Button
 					size="sm"
-					variant="danger"
+					class={isActive('WAITLISTED')
+						? 'w-20'
+						: 'w-20 border-transparent bg-warning-500 font-semibold text-white hover:bg-warning-700 active:bg-warning-700'}
+					disabled={deciding}
+					onclick={() => decideOne(row.uid, 'WAITLISTED')}
+				>
+					{isActive('WAITLISTED') ? 'Undo' : 'Waitlist'}
+				</Button>
+				<Button
+					size="sm"
+					class="w-20"
+					variant={isActive('REJECTED') ? 'secondary' : 'danger'}
 					disabled={deciding}
 					onclick={() => decideOne(row.uid, 'REJECTED')}
 				>
-					Reject
+					{isActive('REJECTED') ? 'Undo' : 'Reject'}
 				</Button>
 			</div>
+		{:else if column.key === 'release'}
+			{@const hasPending = row.pendingDecision !== null && row.pendingDecision !== 'PENDING'}
+			{@const isReleased = Boolean(row.activeDecision)}
+			<Button
+				size="sm"
+				disabled={isReleased || !hasPending || releasingOne || deciding}
+				onclick={() => (releaseTarget = row)}
+			>
+				{isReleased ? 'Released' : 'Release'}
+			</Button>
 		{/if}
 	{/snippet}
 </DataTable>
@@ -268,6 +315,20 @@
 	loading={deciding}
 	onConfirm={confirmBulk}
 	onCancel={() => (pending = null)}
+/>
+
+<!-- Per-row release confirmation. -->
+<ConfirmDialog
+	open={releaseTarget !== null}
+	title="Release decision for {releaseTarget?.name ?? ''}?"
+	description="This will immediately email {releaseTarget?.name} their {releaseTarget?.pendingDecision
+		? humanizeEnum(releaseTarget.pendingDecision)
+		: ''} decision. This cannot be undone."
+	confirmLabel="Release"
+	tone="primary"
+	loading={releasingOne}
+	onConfirm={confirmReleaseOne}
+	onCancel={() => (releaseTarget = null)}
 />
 
 <!-- Read-only application, opened from the applicant's name. The rows already
