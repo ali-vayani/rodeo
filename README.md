@@ -216,9 +216,10 @@ transport is missing, rather than on the first hacker who tries to sign in.
 
 ### Production auth
 
-Google OAuth is the only production sign-in path, and the first login **is** registration — the
-`User` row is created from the Google profile with the `HACKER` role. There is no sign-up form
-and no password reset to maintain. Elevating someone to organizer or admin is done from
+Production signs in through Supabase — Google OAuth or email/password — and the first login
+**is** registration: the `User` row is created from the Supabase identity with the `HACKER`
+role. The email/password sign-up form registers with Supabase only; the local row still comes
+from that first authenticated request. Elevating someone to organizer or admin is done from
 `/admin/users`.
 
 ### Email
