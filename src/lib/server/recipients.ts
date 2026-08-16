@@ -76,8 +76,16 @@ export type RecipientFilters = z.infer<typeof recipientFilterSchema>;
 // the browser, and everything under $lib/server is barred from client bundles.
 
 /**
- * Forces a match-nothing predicate. Used when the caller explicitly engaged the
- * decision filter but selected none of its options — "show nothing", not "show all".
+ * Forces a match-nothing predicate. Used when a caller engaged a filter but selected
+ * none of its options — "show nothing", not "show all".
+ *
+ * The keys that implement the rule are the explicit address list, the linked
+ * application fields, and the decision pair — the places where an empty selection is
+ * expressible as a deliberate act. `roles: []` and `statuses: []` never reach here:
+ * `recipientConditions` drops an empty clause for those two, so their `[]` matches
+ * everyone. The UI sends `[]` for none of the checkbox groups either way —
+ * `buildRecipientParams` omits a group's keys once it stops narrowing — so the
+ * distinction only faces direct API callers.
  */
 const MATCH_NOTHING = 'IMPOSSIBLE_NO_MATCH';
 

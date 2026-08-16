@@ -18,6 +18,10 @@ import {
 const everything = () =>
 	[allChecked(ALL_ROLES), allChecked(ALL_STATUSES), allChecked(DECISION_OPTIONS)] as const;
 
+/** Every box in the group unticked. The panels' `clear` resets to all ticked instead,
+ * but the state is still reachable by unticking boxes one at a time. */
+const cleared = (options: readonly string[]) => Object.fromEntries(options.map((o) => [o, false]));
+
 /** The three linked wire keys, so "omitted" can be asserted rather than assumed. */
 const LINKED_KEYS = ['names', 'universities', 'years'] as const;
 
@@ -136,17 +140,52 @@ describe('buildRecipientParams — checkbox groups', () => {
 	});
 
 	/**
-	 * The engaged-but-empty case, on the group where getting it backwards is worst: a
-	 * display reading "0 recipients" must not be a send to everybody.
+	 * A cleared group filters nothing. It must omit its keys rather than send `[]`,
+	 * which `$lib/server/recipients` reads as match-nobody — that is what made clicking
+	 * `clear` under Decision empty the Users table.
 	 */
-	it('sends an empty decision list, not an omitted one, when every box is unchecked', () => {
+	it('omits the decision keys when every box is unchecked', () => {
 		const [roles, statuses] = everything();
+		const params = buildRecipientParams(roles, statuses, cleared(DECISION_OPTIONS));
+		expect(params.decisions).toBeUndefined();
+		expect(params.includeNoDecision).toBeUndefined();
+	});
+
+	/**
+	 * The reported bug. Clearing all three groups and ticking one role returned zero
+	 * rows: the emptied decision group contributed `uid: IMPOSSIBLE_NO_MATCH`, which
+	 * ANDed with the role clause and matched nobody.
+	 */
+	it('selects a role after every group has been cleared', () => {
 		const params = buildRecipientParams(
-			roles,
-			statuses,
-			Object.fromEntries(DECISION_OPTIONS.map((d) => [d, false]))
+			{ ...cleared(ALL_ROLES), [Role.ORGANIZER]: true },
+			cleared(ALL_STATUSES),
+			cleared(DECISION_OPTIONS)
 		);
-		expect(params.decisions).toEqual([]);
+		expect(params).toEqual({
+			search: undefined,
+			roles: [Role.ORGANIZER],
+			statuses: undefined,
+			decisions: undefined,
+			includeNoDecision: undefined
+		});
+	});
+
+	it('omits the role and status keys when their groups are cleared', () => {
+		const [, , decisions] = everything();
+		const params = buildRecipientParams(cleared(ALL_ROLES), cleared(ALL_STATUSES), decisions);
+		expect(params.roles).toBeUndefined();
+		expect(params.statuses).toBeUndefined();
+	});
+
+	/** Still narrowing, so the keys still travel — including the `false` for `NONE`. */
+	it('sends a partial decision selection', () => {
+		const [roles, statuses] = everything();
+		const params = buildRecipientParams(roles, statuses, {
+			...cleared(DECISION_OPTIONS),
+			[DecisionStatus.ACCEPTED]: true
+		});
+		expect(params.decisions).toEqual([DecisionStatus.ACCEPTED]);
 		expect(params.includeNoDecision).toBe(false);
 	});
 

@@ -21,6 +21,7 @@ export const LOG_ACTIONS = [
 	{ key: 'admissions.decision.set', label: 'Decision set', group: 'Admissions' },
 	{ key: 'admissions.decision.bulk', label: 'Decisions set in bulk', group: 'Admissions' },
 	{ key: 'admissions.decision.blocked', label: 'Decision blocked by lock', group: 'Admissions' },
+	{ key: 'admissions.decision.clear', label: 'Decision cleared', group: 'Admissions' },
 	{ key: 'admissions.release', label: 'Decisions released', group: 'Admissions' },
 
 	// Users

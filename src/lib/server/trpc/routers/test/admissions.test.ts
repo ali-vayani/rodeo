@@ -1218,6 +1218,135 @@ describe('admissions.list — scoring filters', () => {
 	});
 });
 
+describe('admissions.reviewerStats', () => {
+	/**
+	 * Set up the two DB calls the query makes: groupBy for counts, then findMany to
+	 * resolve the admin names. The order is fixed — groupBy first, then the name lookup.
+	 */
+	function mockReviewerStats(
+		groups: Array<{ scoredBy: string; count: number; lastScoredAt: Date | null }>,
+		admins: Array<{ uid: string; name: string }>
+	) {
+		mockGroupBy(db.user.groupBy).mockResolvedValueOnce(
+			groups.map((g) => ({
+				scoredBy: g.scoredBy,
+				_count: { _all: g.count },
+				_max: { scoredAt: g.lastScoredAt }
+			})) as never
+		);
+		db.user.findMany.mockResolvedValueOnce(admins as never);
+	}
+
+	it('returns one row per reviewer, sorted by score count descending', async () => {
+		const caller = createTestCaller(db, adminUser);
+		mockReviewerStats(
+			[
+				{ scoredBy: adminUser.uid, count: 5, lastScoredAt: NOW },
+				{ scoredBy: adminUser2.uid, count: 12, lastScoredAt: NOW }
+			],
+			[
+				{ uid: adminUser.uid, name: adminUser.name },
+				{ uid: adminUser2.uid, name: adminUser2.name }
+			]
+		);
+
+		const result = await caller.admissions.reviewerStats();
+
+		expect(result).toHaveLength(2);
+		// Higher count comes first
+		expect(result[0]?.uid).toBe(adminUser2.uid);
+		expect(result[0]?.scored).toBe(12);
+		expect(result[1]?.uid).toBe(adminUser.uid);
+		expect(result[1]?.scored).toBe(5);
+	});
+
+	it('resolves admin names from the UID', async () => {
+		const caller = createTestCaller(db, adminUser);
+		mockReviewerStats(
+			[{ scoredBy: adminUser.uid, count: 3, lastScoredAt: NOW }],
+			[{ uid: adminUser.uid, name: adminUser.name }]
+		);
+
+		const result = await caller.admissions.reviewerStats();
+
+		expect(result[0]?.name).toBe('Admin User');
+	});
+
+	it('falls back to "Unknown" when the admin record is missing', async () => {
+		// Can happen if an admin account was deleted after they scored applications.
+		const caller = createTestCaller(db, adminUser);
+		mockReviewerStats([{ scoredBy: 'deleted-uid', count: 2, lastScoredAt: null }], []);
+
+		const result = await caller.admissions.reviewerStats();
+
+		expect(result[0]?.name).toBe('Unknown');
+	});
+
+	it('returns an empty array when nobody has scored yet', async () => {
+		const caller = createTestCaller(db, adminUser);
+		mockReviewerStats([], []);
+
+		const result = await caller.admissions.reviewerStats();
+
+		expect(result).toEqual([]);
+	});
+
+	it('queries only rows where scoredBy is not null', async () => {
+		const caller = createTestCaller(db, adminUser);
+		mockReviewerStats([], []);
+
+		await caller.admissions.reviewerStats();
+
+		expect(mockGroupBy(db.user.groupBy)).toHaveBeenCalledWith(
+			expect.objectContaining({
+				where: { scoredBy: { not: null } }
+			})
+		);
+	});
+
+	it('passes each reviewer uid to the name lookup', async () => {
+		const caller = createTestCaller(db, adminUser);
+		mockReviewerStats(
+			[
+				{ scoredBy: adminUser.uid, count: 1, lastScoredAt: null },
+				{ scoredBy: adminUser2.uid, count: 1, lastScoredAt: null }
+			],
+			[
+				{ uid: adminUser.uid, name: adminUser.name },
+				{ uid: adminUser2.uid, name: adminUser2.name }
+			]
+		);
+
+		await caller.admissions.reviewerStats();
+
+		expect(db.user.findMany).toHaveBeenCalledWith(
+			expect.objectContaining({
+				where: { uid: { in: expect.arrayContaining([adminUser.uid, adminUser2.uid]) } }
+			})
+		);
+	});
+
+	it('includes lastScoredAt from the groupBy max', async () => {
+		const caller = createTestCaller(db, adminUser);
+		const lastScored = new Date('2024-05-15T10:00:00Z');
+		mockReviewerStats(
+			[{ scoredBy: adminUser.uid, count: 7, lastScoredAt: lastScored }],
+			[{ uid: adminUser.uid, name: adminUser.name }]
+		);
+
+		const result = await caller.admissions.reviewerStats();
+
+		expect(result[0]?.lastScoredAt).toEqual(lastScored);
+	});
+
+	it('throws FORBIDDEN for non-admins', async () => {
+		const caller = createTestCaller(db, hackerUser);
+		await expect(caller.admissions.reviewerStats()).rejects.toMatchObject({
+			code: 'FORBIDDEN'
+		});
+	});
+});
+
 describe('admissions — a literal PENDING is not a decision', () => {
 	it('keeps PENDING applicants in the queue rather than filtering them out', async () => {
 		// The seed writes PENDING for "in the queue, untouched", and setDecision

@@ -112,14 +112,26 @@ export function malformedEmails(emails: string[]): string[] {
 /**
  * Translate checkbox state into tRPC filter params.
  *
- * Everything checked → the key is omitted, so the server skips that filter.
- * Nothing checked in the decision group → `decisions: []` plus
- * `includeNoDecision: false`, which `buildRecipientWhere` reads as "match nothing".
- * That asymmetry is deliberate and is what stops a "0 recipients" display from
- * turning into a send to the entire database.
+ * One rule for every group: a key is sent only while it is *narrowing*. Everything
+ * ticked → omitted, since that selects everyone anyway. Nothing ticked → omitted too:
+ * a group selecting none of its options has stopped filtering, not asked for nobody.
+ * The panels' `clear` buttons reset a group to all ticked, so all-unticked is only
+ * reachable by hand — but it must still not empty the table.
  *
- * The linked application fields come through `linkedParams`, which encodes the same
- * omitted-vs-empty convention from the other end — see its note.
+ * The second half was false for the decision group alone, which sent `decisions: []`
+ * plus `includeNoDecision: false` — and `$lib/server/recipients` reads an empty array
+ * as match-nobody. So clearing Decision emptied the Users table, and clearing the panel
+ * and then ticking a single role left it empty, since the poisoned decision clause
+ * ANDed with everything else. Role and status already behaved correctly; decision now
+ * agrees with them.
+ *
+ * That leaves engaged-but-empty to the two places whose controls start *empty* and so
+ * genuinely need it — the explicit address list and the linked application fields; see
+ * `linkedParams`, which omits an untouched key for the same reason from the other end.
+ *
+ * Mailing the whole database is prevented where it can actually be prevented:
+ * `email.sendCustom` binds a send to the `expectedCount` the admin previewed and
+ * refuses when the resolved set has moved.
  */
 export function buildRecipientParams(
 	roleFilter: FilterState,
@@ -134,12 +146,18 @@ export function buildRecipientParams(
 	const noneChecked = decisionFilter[NO_DECISION] ?? true;
 	const allDecisionsDefault = selDecisions.length === DECISION_VALUES.length && noneChecked;
 
+	// Narrowing means: some options ticked, but not all of them. The `NONE` pseudo-option
+	// counts as a decision selection, so unticking only it still narrows.
+	const rolesNarrow = selRoles.length > 0 && selRoles.length < ALL_ROLES.length;
+	const statusesNarrow = selStatuses.length > 0 && selStatuses.length < ALL_STATUSES.length;
+	const decisionsNarrow = (selDecisions.length > 0 || noneChecked) && !allDecisionsDefault;
+
 	return {
 		search: search.trim() || undefined,
-		roles: selRoles.length < ALL_ROLES.length ? selRoles : undefined,
-		statuses: selStatuses.length < ALL_STATUSES.length ? selStatuses : undefined,
-		decisions: allDecisionsDefault ? undefined : selDecisions,
-		includeNoDecision: allDecisionsDefault ? undefined : noneChecked,
+		roles: rolesNarrow ? selRoles : undefined,
+		statuses: statusesNarrow ? selStatuses : undefined,
+		decisions: decisionsNarrow ? selDecisions : undefined,
+		includeNoDecision: decisionsNarrow ? noneChecked : undefined,
 		...linkedParams(linked)
 	};
 }
