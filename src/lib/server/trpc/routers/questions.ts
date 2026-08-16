@@ -1,10 +1,10 @@
 import { z } from 'zod';
-import { Role, QuestionType } from '$lib/generated/prisma/client';
+import { Role, QuestionType, LinkedField, OptionPreset } from '$lib/generated/prisma/client';
 import { router, authedProcedure, adminProcedure } from '../init';
 import { APPLICANT_ROLES } from '$lib/admissions/roles';
 import { logAction } from '$lib/server/log';
 
-// `placeholder`, `min`, `max`, `regex` and `linkedField` are nullable columns, so
+// `placeholder`, `min`, `max`, `regex`, `linkedField` and `optionPreset` are nullable columns, so
 // Prisma hands them back as `null`. The application editor loads a question, round-
 // trips it through JSON untouched and posts it back — and zod's `.optional()` accepts
 // only `undefined`, so every save containing an added or modified question was
@@ -22,7 +22,11 @@ const questionInput = z.object({
 	min: z.number().nullish(),
 	max: z.number().nullish(),
 	regex: z.string().nullish(),
-	linkedField: z.string().nullish()
+	// Was `z.string()`, which accepted anything: the value is used as a computed key
+	// into a `User` update, so a typo produced a question that saved without complaint
+	// and wrote nowhere. The enum is the check that was missing.
+	linkedField: z.nativeEnum(LinkedField).nullish(),
+	optionPreset: z.nativeEnum(OptionPreset).nullish()
 });
 
 export const questionsRouter = router({
@@ -34,7 +38,12 @@ export const questionsRouter = router({
 	list: authedProcedure
 		.input(z.object({ role: z.nativeEnum(Role).optional() }))
 		.query(async ({ ctx, input }) => {
-			const audience = input.role ? [input.role] : APPLICANT_ROLES;
+			// `input.role` lets an applicant preview a specific applicant audience, but it
+			// arrives from the client and `z.nativeEnum(Role)` accepts staff roles too — so
+			// it is clamped to APPLICANT_ROLES. Without the clamp, `list({ role: 'ADMIN' })`
+			// returned the staff-only questions this procedure exists to withhold.
+			const audience =
+				input.role && APPLICANT_ROLES.includes(input.role) ? [input.role] : APPLICANT_ROLES;
 			return ctx.prisma.question.findMany({
 				where: {
 					OR: [{ targetRole: { isEmpty: true } }, { targetRole: { hasSome: audience } }]

@@ -1,5 +1,5 @@
 import { Role, UserStatus, DecisionStatus } from '$lib/generated/prisma/enums';
-import { LINKED_USER_FIELDS, type LinkedUserField } from '$lib/linkedFields';
+import { LINKED_FIELDS, type LinkedField } from '$lib/linkedFields';
 
 /**
  * Shared checkbox-filter vocabulary and the translation from checkbox state to
@@ -44,14 +44,20 @@ export type RecipientParams = {
 } & LinkedParams;
 
 /** What `LinkedFieldFilters` binds: chosen values per field, `NO_VALUE` included. */
-export type LinkedSelection = Partial<Record<LinkedUserField, string[]>>;
+export type LinkedSelection = Partial<Record<LinkedField, string[]>>;
 
-/** `User` column → the plural wire key `recipientFilterSchema` accepts for it. */
+/**
+ * Linked field → the plural wire key `recipientFilterSchema` accepts for it.
+ *
+ * These keys are also the query parameters in a shared filter link, so they stay as
+ * they are. Renaming them alongside the enum would have broken every link anyone had
+ * already sent, to buy nothing.
+ */
 const LINKED_PARAM_KEY = {
-	name: 'names',
-	university: 'universities',
-	year: 'years'
-} as const satisfies Record<LinkedUserField, keyof LinkedParams>;
+	NAME: 'names',
+	UNIVERSITY: 'universities',
+	YEAR: 'years'
+} as const satisfies Record<LinkedField, keyof LinkedParams>;
 
 /**
  * Translate a linked-field selection into tRPC filter params.
@@ -71,7 +77,7 @@ const LINKED_PARAM_KEY = {
  */
 export function linkedParams(selected: LinkedSelection = {}): LinkedParams {
 	const params: LinkedParams = {};
-	for (const field of LINKED_USER_FIELDS) {
+	for (const field of LINKED_FIELDS) {
 		const values = selected[field];
 		// Copied, not aliased: these params travel to a tRPC call while the caller's
 		// state keeps mutating under the filter panel.

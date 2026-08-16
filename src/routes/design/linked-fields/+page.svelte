@@ -3,7 +3,7 @@
 	import { Card, Eyebrow, MultiCombobox } from '$lib/components/ui';
 	import { PageHeader } from '$lib/components/patterns';
 	import LinkedFieldFilters from '$lib/components/admin/LinkedFieldFilters.svelte';
-	import { MAX_FACET_OPTIONS, type LinkedFacet, type LinkedUserField } from '$lib/linkedFields';
+	import { MAX_FACET_OPTIONS, type LinkedFacet, type LinkedField } from '$lib/linkedFields';
 
 	/**
 	 * Specimens for the linked-field filter controls, rendered from the real
@@ -24,7 +24,7 @@
 	];
 
 	const UNIVERSITY_FACET: LinkedFacet = {
-		field: 'university',
+		field: 'UNIVERSITY',
 		label: 'University',
 		control: 'combobox',
 		options: UNIVERSITIES,
@@ -33,7 +33,7 @@
 
 	/** Year as a dropdown question: an enumerated vocabulary, so a checkbox list. */
 	const YEAR_SELECT_FACET: LinkedFacet = {
-		field: 'year',
+		field: 'YEAR',
 		label: 'Year',
 		control: 'select',
 		options: [
@@ -55,7 +55,7 @@
 	const LAST = ['Chen', 'Webb', 'Raman', 'Okonkwo', 'Ortega', 'Silva', 'Novak', 'Haddad'];
 
 	const NAME_FACET: LinkedFacet = {
-		field: 'name',
+		field: 'NAME',
 		label: 'Full name',
 		control: 'combobox',
 		options: Array.from({ length: MAX_FACET_OPTIONS }, (_, i) => ({
@@ -89,11 +89,11 @@
 	let preselected = $state<string[]>(['Rice University']);
 	let disabledSelection = $state<string[]>(['Stanford University']);
 
-	let railSelection = $state<Partial<Record<LinkedUserField, string[]>>>({});
-	let inlineSelection = $state<Partial<Record<LinkedUserField, string[]>>>({});
-	let switchedSelection = $state<Partial<Record<LinkedUserField, string[]>>>({});
-	let emptySelection = $state<Partial<Record<LinkedUserField, string[]>>>({});
-	let truncatedSelection = $state<Partial<Record<LinkedUserField, string[]>>>({});
+	let railSelection = $state<Partial<Record<LinkedField, string[]>>>({});
+	let inlineSelection = $state<Partial<Record<LinkedField, string[]>>>({});
+	let switchedSelection = $state<Partial<Record<LinkedField, string[]>>>({});
+	let emptySelection = $state<Partial<Record<LinkedField, string[]>>>({});
+	let truncatedSelection = $state<Partial<Record<LinkedField, string[]>>>({});
 
 	let lastChange = $state('—');
 </script>

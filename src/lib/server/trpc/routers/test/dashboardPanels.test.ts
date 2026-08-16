@@ -235,8 +235,8 @@ describe('dashboard.demographics', () => {
 
 	beforeEach(() => {
 		db.question.findMany.mockResolvedValue([
-			{ title: 'University', options: [], linkedField: 'university' },
-			{ title: 'Year', options: ['Freshman', 'Sophomore', 'Junior'], linkedField: 'year' }
+			{ title: 'University', options: [], linkedField: 'UNIVERSITY' },
+			{ title: 'Year', options: ['Freshman', 'Sophomore', 'Junior'], linkedField: 'YEAR' }
 		] as never);
 	});
 
@@ -294,8 +294,8 @@ describe('dashboard.demographics', () => {
 	it('labels the cards the way the form asks', async () => {
 		const caller = createTestCaller(db, adminUser);
 		db.question.findMany.mockResolvedValue([
-			{ title: 'Where do you study?', options: [], linkedField: 'university' },
-			{ title: 'Class standing', options: [], linkedField: 'year' }
+			{ title: 'Where do you study?', options: [], linkedField: 'UNIVERSITY' },
+			{ title: 'Class standing', options: [], linkedField: 'YEAR' }
 		] as never);
 		mockGroupBy(db.user.groupBy)
 			.mockResolvedValueOnce([] as never)

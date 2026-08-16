@@ -5,7 +5,7 @@ import { APPLICANT_ROLES } from '$lib/admissions/roles';
 import { UserStatus, Role, DecisionStatus } from '$lib/generated/prisma/client';
 import { dayKey, nextDayKey } from '$lib/schedule/days';
 import { NOTABLE_ACTIONS } from '$lib/log/notable';
-import { FILTERABLE_LINKED_FIELDS, isLinkedUserField } from '$lib/linkedFields';
+import { FILTERABLE_LINKED_FIELDS, isLinkedField, type LinkedField } from '$lib/linkedFields';
 import type {
 	ActivityEntry,
 	Demographics,
@@ -180,7 +180,18 @@ export const dashboardRouter = router({
 			return ctx.prisma.user.findMany({
 				take: input.amount,
 				orderBy: { createdAt: 'desc' },
-				where: { status: { not: UserStatus.CREATED } }
+				where: { status: { not: UserStatus.CREATED } },
+				// Just what a name card renders. An unprojected row would ship `score`,
+				// `notes`, `pendingDecision` and the claim columns to the dashboard to
+				// draw a name — see $lib/server/trpc/selects for the embargo this respects.
+				select: {
+					uid: true,
+					name: true,
+					email: true,
+					role: true,
+					status: true,
+					createdAt: true
+				}
 			});
 		}),
 
@@ -538,9 +549,9 @@ export const dashboardRouter = router({
 
 			const universities = uni.counts.slice(0, input.top);
 			const rest = uni.counts.slice(input.top);
-			const labelFor = (field: string) =>
-				questions.find((q) => isLinkedUserField(q.linkedField) && q.linkedField === field);
-			const yearQuestion = labelFor('year');
+			const labelFor = (field: LinkedField) =>
+				questions.find((q) => isLinkedField(q.linkedField) && q.linkedField === field);
+			const yearQuestion = labelFor('YEAR');
 
 			// A declared option order beats popularity for an ordinal field: Freshman →
 			// Senior is the order the reader expects, and re-sorting it by headcount makes
@@ -568,7 +579,7 @@ export const dashboardRouter = router({
 				distinctUniversities: uni.counts.length,
 				years,
 				noUniversity: uni.none,
-				universityLabel: labelFor('university')?.title ?? 'University',
+				universityLabel: labelFor('UNIVERSITY')?.title ?? 'University',
 				yearLabel: yearQuestion?.title ?? 'Year'
 			};
 		})

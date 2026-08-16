@@ -5,7 +5,7 @@
 	import type { ScoreFilter } from '$lib/admissions/score';
 	import type { BlacklistMatch } from '$lib/blacklist/match';
 	import type { Role } from '$lib/generated/prisma/enums';
-	import type { LinkedFacet, LinkedUserField } from '$lib/linkedFields';
+	import type { LinkedFacet, LinkedField } from '$lib/linkedFields';
 
 	let {
 		applicants,
@@ -53,8 +53,8 @@
 		onScoreFilterChange: (value: ScoreFilter) => void;
 		/** One per application question that writes through to a `User` column. */
 		facets: LinkedFacet[];
-		linkedSelected: Partial<Record<LinkedUserField, string[]>>;
-		onLinkedFiltersChange: (selected: Partial<Record<LinkedUserField, string[]>>) => void;
+		linkedSelected: Partial<Record<LinkedField, string[]>>;
+		onLinkedFiltersChange: (selected: Partial<Record<LinkedField, string[]>>) => void;
 		/**
 		 * What the last query did with the search term. `names` is ranked most-relevant
 		 * first; the rows below are `createdAt desc` and are not, which is why the
@@ -271,7 +271,7 @@
 				-->
 				<div class="mt-1.5 flex max-h-40 flex-wrap gap-1 overflow-y-auto">
 					{#each searchInfo.names as name (name)}
-						{@const active = linkedSelected.name?.includes(name) ?? false}
+						{@const active = linkedSelected.NAME?.includes(name) ?? false}
 						<button
 							type="button"
 							aria-pressed={active}

@@ -56,17 +56,30 @@ const LAST_NAMES = [
 /** 15 × 10 = 150 distinct pairings before the generator has to reuse one. */
 const COMBOS = FIRST_NAMES.length * LAST_NAMES.length;
 
+/**
+ * Spelled as `src/lib/data/universities.json` spells them, which is not how anyone
+ * says them out loud — IPEDS files UT Austin under `The University of Texas…` and
+ * Texas A&M under `Texas A & M University-College Station`.
+ *
+ * They have to match, now that the seeded University question draws its choices from
+ * that preset. A name the preset doesn't contain is a write-in, so the form reopens
+ * as a text box and the filter facet fills with values no dropdown offers — which is
+ * the free-text mess this feature exists to end, reproduced in the demo data.
+ *
+ * The last entry is off-list on purpose: one applicant at a school the dataset missed,
+ * so the write-in path has a live example in every seeded database.
+ */
 const UNIVERSITIES = [
-	'University of Texas at Austin',
-	'Texas A&M University',
-	'UT Dallas',
+	'The University of Texas at Austin',
+	'Texas A & M University-College Station',
+	'The University of Texas at Dallas',
 	'Rice University',
 	'University of Houston',
 	'Texas State University',
-	'UT San Antonio',
+	'The University of Texas at San Antonio',
 	'Baylor University',
-	'Georgia Tech',
-	'University of Illinois Urbana-Champaign'
+	'Georgia Institute of Technology-Main Campus',
+	'Riverbend Institute of Technology'
 ];
 
 const YEARS = ['Freshman', 'Sophomore', 'Junior', 'Senior', 'Graduate', 'Alumni'];
@@ -385,10 +398,10 @@ function longAnswer(title: string, seq: number): string {
 
 function answerFor(q: Question, user: GeneratedUser, seq: number): string | null {
 	// Linked questions write through to the User row, so they must agree with it.
-	if (q.linkedField === 'name') return user.name;
-	if (q.linkedField === 'university')
+	if (q.linkedField === 'NAME') return user.name;
+	if (q.linkedField === 'UNIVERSITY')
 		return user.university ?? UNIVERSITIES[seq % UNIVERSITIES.length];
-	if (q.linkedField === 'year') return user.year ?? YEARS[seq % YEARS.length];
+	if (q.linkedField === 'YEAR') return user.year ?? YEARS[seq % YEARS.length];
 
 	switch (q.type) {
 		case QuestionType.DROPDOWN:

@@ -118,7 +118,14 @@ async function addMemberToTeam(
 					data: { status: InvitationStatus.DECLINED }
 				});
 
-				return tx.user.update({ where: { uid }, data: { teamId } });
+				// Projected, never the bare row: `joinByCode` returns this straight to the
+				// caller, and a full `User` would hand them their own embargoed
+				// `pendingDecision`, `score` and reviewer `notes`. See $lib/server/trpc/selects.
+				return tx.user.update({
+					where: { uid },
+					data: { teamId },
+					select: { uid: true, teamId: true }
+				});
 			},
 			{ isolationLevel: 'Serializable' }
 		);
@@ -224,7 +231,15 @@ export const teamRouter = router({
 					teamName: input.teamName,
 					members: { connect: { uid: ctx.user.uid } }
 				},
-				include: { members: true }
+				// Projected, never `include`: the sole member is the caller, and a full row
+				// would return their own embargoed `pendingDecision`, `score` and reviewer
+				// `notes`. `getMyTeam` uses the same whitelist. See $lib/server/trpc/selects.
+				select: {
+					id: true,
+					teamName: true,
+					inviteCode: true,
+					members: { select: TEAM_MEMBER_SELECT }
+				}
 			});
 		}),
 

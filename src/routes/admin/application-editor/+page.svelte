@@ -6,6 +6,7 @@
 	import QuestionEditor from '$lib/components/admin/applications/QuestionEditor.svelte';
 	import PreviewPane from '$lib/components/admin/applications/PreviewPane.svelte';
 	import ConfirmationModal from '$lib/components/admin/applications/ConfirmationModal.svelte';
+	import { Combobox } from '$lib/components/ui';
 
 	import type { QuestionType, Question, Role } from '$lib/generated/prisma/client';
 
@@ -387,15 +388,14 @@
 		<div class="flex items-center">
 			<div class="flex items-center gap-1.5">
 				<label for="role-select" class="text-xs font-medium text-[#888]">Role:</label>
-				<select
+				<Combobox
 					id="role-select"
-					bind:value={selectedRole}
-					class="cursor-pointer rounded-[5px] border border-[#e0e0e0] bg-[#f4f4f4] px-2 py-1 text-xs font-semibold text-[#191919] outline-none focus:border-[#191919]"
-				>
-					{#each ALL_ROLES as role (role)}
-						<option value={role}>{role}</option>
-					{/each}
-				</select>
+					options={ALL_ROLES.map((r) => ({ value: r, label: r }))}
+					value={selectedRole}
+					onChange={(next) => (selectedRole = next as Role)}
+					ariaLabel="Preview as role"
+					class="w-40"
+				/>
 			</div>
 		</div>
 	</div>
@@ -475,14 +475,13 @@
 						class="box-border w-full rounded-md border border-[#e0e0e0] bg-white px-2.5 py-2 text-[13px] text-[#191919] transition-[border-color,box-shadow] duration-[120ms] outline-none focus:border-[#191919] focus:shadow-[0_0_0_2px_rgba(25,25,25,0.07)]"
 					/>
 					<div class="flex gap-2">
-						<select
-							bind:value={addType}
-							class="flex-1 rounded-md border border-[#e0e0e0] bg-white px-2.5 py-2 text-[13px] text-[#191919] transition-[border-color] duration-[120ms] outline-none focus:border-[#191919]"
-						>
-							{#each QUESTION_TYPES as t (t.value)}
-								<option value={t.value}>{t.label}</option>
-							{/each}
-						</select>
+						<Combobox
+							options={QUESTION_TYPES}
+							value={addType}
+							onChange={(next) => (addType = next as QuestionType)}
+							ariaLabel="New question type"
+							class="flex-1"
+						/>
 						<button
 							class="cursor-pointer rounded-md border border-[#191919] bg-[#191919] px-5 py-2 text-[13px] font-semibold whitespace-nowrap text-white transition-colors duration-[120ms] hover:bg-[#333] disabled:cursor-not-allowed disabled:opacity-35"
 							onclick={handleQuickAdd}

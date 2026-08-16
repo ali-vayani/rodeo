@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { tick } from 'svelte';
 	import type { Question, QuestionType } from '$lib/generated/prisma/client';
+	import { LINKED_FIELD_LABEL } from '$lib/linkedFields';
 
 	interface Props {
 		question: Question;
@@ -157,7 +158,7 @@
 					</div>
 				{/if}
 				{#if question.linkedField}
-					<span class="linked">↔ {question.linkedField}</span>
+					<span class="linked">↔ {LINKED_FIELD_LABEL[question.linkedField]}</span>
 				{/if}
 			</div>
 		</div>

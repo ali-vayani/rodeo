@@ -5,12 +5,6 @@
  * script is awkward to import and easy to break.
  */
 
-export interface SelectOption {
-	value: string;
-	label: string;
-	disabled?: boolean;
-}
-
 /**
  * One option in a `MultiCombobox`.
  *
@@ -25,6 +19,19 @@ export interface MultiComboboxOption {
 	label?: string;
 	count?: number;
 	disabled?: boolean;
+	/** Extra search terms — matched, never shown. See `Rankable.keywords`. */
+	keywords?: readonly string[];
+}
+
+/**
+ * One option in a single-select `Combobox`. Same shape minus the count, which is a
+ * property of a filter facet rather than of a form field.
+ */
+export interface ComboboxOption {
+	value: string;
+	label?: string;
+	disabled?: boolean;
+	keywords?: readonly string[];
 }
 
 /** One tab in a `Tabs` rail. */

@@ -43,11 +43,40 @@ enum DecisionStatus {
 
 enum QuestionType {
   MULTIPLE_CHOICE
+  /// Always searchable. This was briefly two types — a plain one and a searchable one
+  /// — which made every organizer choose between them on every question, for a
+  /// difference that is really just "how long is the list". A type-ahead over six
+  /// options costs nothing and a plain `<select>` over 6,400 is unusable, so the
+  /// control adapts instead of the schema branching.
   DROPDOWN
   NUMBER
   CHECKBOX
   SHORT_TEXT
   LONG_TEXT
+}
+
+/// The `User` column a question's answer writes through to, on every autosave.
+///
+/// Was a bare `String?` carrying `"name" | "university" | "year"` in a comment. The
+/// value is used as a computed property key into a Prisma `update`, so the comment
+/// was the only thing standing between a typo and a question that silently writes
+/// nowhere — `questions.change` accepted any string, and the allowlist was not
+/// consulted until read time. An enum moves that check to the database and to Zod.
+enum LinkedField {
+  NAME
+  UNIVERSITY
+  YEAR
+}
+
+/// A bundled option list a question draws its choices from, instead of `options`.
+///
+/// Exists because the university vocabulary is 6,400 entries. Putting those in
+/// `Question.options` would mean 650 KB in the row, 6,400 editable rows in the
+/// options editor, and a data migration every time the dataset is refreshed. A
+/// preset names the list and leaves it in the bundle, where it can be regenerated
+/// by re-running a script.
+enum OptionPreset {
+  UNIVERSITIES_NA
 }
 
 enum ScheduleType {
@@ -218,7 +247,10 @@ model Question {
   min         Float?
   max         Float?
   regex       String?
-  linkedField String?             // user field to sync on save: "name" | "university" | "year"
+  linkedField LinkedField?
+  /// When set, the choices come from this bundled list and `options` is ignored.
+  /// Answers are then no longer restricted to the list — see `assertAnswerValid`.
+  optionPreset OptionPreset?
   responses   ApplicationResponse[]
 }
 

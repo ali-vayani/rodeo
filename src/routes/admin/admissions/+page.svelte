@@ -15,7 +15,7 @@
 	import { createReviewSession, pickNextUnlocked } from '$lib/admissions/reviewSession.svelte';
 	import { PRESENCE_POLL_MS } from '$lib/admissions/lock';
 	import { MAX_SCORE, type ScoreFilter } from '$lib/admissions/score';
-	import type { LinkedUserField } from '$lib/linkedFields';
+	import type { LinkedField } from '$lib/linkedFields';
 
 	let { data }: { data: PageData } = $props();
 
@@ -47,7 +47,7 @@
 	let deciding = $state(false);
 
 	/** Chosen values per linked application field, `NO_VALUE` included. */
-	let linkedSelected = $state<Partial<Record<LinkedUserField, string[]>>>({});
+	let linkedSelected = $state<Partial<Record<LinkedField, string[]>>>({});
 
 	/** What the last list query did with the search term — drives the "did you mean" strip. */
 	let searchInfo = $state<typeof data.search>(untrack(() => data.search));
@@ -193,15 +193,15 @@
 	 * forwarding the panel's `{ year: [] }` verbatim would empty the queue the moment
 	 * someone ticked a box and unticked it again.
 	 */
-	function linkedFilterArgs(selected: Partial<Record<LinkedUserField, string[]>>) {
-		const pick = (field: LinkedUserField) => {
+	function linkedFilterArgs(selected: Partial<Record<LinkedField, string[]>>) {
+		const pick = (field: LinkedField) => {
 			const values = selected[field];
 			return values && values.length > 0 ? values : undefined;
 		};
 		return {
-			names: pick('name'),
-			universities: pick('university'),
-			years: pick('year')
+			names: pick('NAME'),
+			universities: pick('UNIVERSITY'),
+			years: pick('YEAR')
 		};
 	}
 
@@ -268,7 +268,7 @@
 		search = value;
 		if (nameFromSuggestion) {
 			nameFromSuggestion = false;
-			linkedSelected = { ...linkedSelected, name: [] };
+			linkedSelected = { ...linkedSelected, NAME: [] };
 		}
 		clearTimeout(searchTimer);
 		searchTimer = setTimeout(loadApplicants, 400);
@@ -276,7 +276,7 @@
 
 	// Ticking a checkbox or picking a combobox row is a discrete act, so it refetches
 	// immediately — the 400ms debounce exists for keystrokes, which these are not.
-	function onLinkedFiltersChange(next: Partial<Record<LinkedUserField, string[]>>) {
+	function onLinkedFiltersChange(next: Partial<Record<LinkedField, string[]>>) {
 		linkedSelected = next;
 		nameFromSuggestion = false;
 		loadApplicants();
@@ -299,8 +299,8 @@
 	 * the alternatives and leave no way to try the next one.
 	 */
 	function onSuggestionSelect(name: string) {
-		const next = linkedSelected.name?.includes(name) ? [] : [name];
-		linkedSelected = { ...linkedSelected, name: next };
+		const next = linkedSelected.NAME?.includes(name) ? [] : [name];
+		linkedSelected = { ...linkedSelected, NAME: next };
 		nameFromSuggestion = next.length > 0;
 		loadApplicants();
 	}

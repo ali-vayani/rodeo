@@ -10,3 +10,7 @@ bun.lockb
 
 # Prisma generated client
 src/lib/generated/
+
+# Generated datasets — written by scripts/, never edited by hand. Pretty-printing
+# universities.json would quadruple a 650 KB file that ships to the browser.
+src/lib/data/*.json

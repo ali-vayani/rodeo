@@ -1,10 +1,12 @@
 import { z } from 'zod';
 import { TRPCError } from '@trpc/server';
+import type { LinkedField, OptionPreset } from '$lib/generated/prisma/client';
 import { UserStatus, DecisionStatus, QuestionType, Role } from '$lib/generated/prisma/client';
 import { router, authedProcedure } from '../init';
 import { APPLICANT_ROLES } from '$lib/admissions/roles';
 import { normalizeEmail } from '$lib/blacklist/match';
-import { isLinkedUserField } from '$lib/linkedFields';
+import { LINKED_FIELD_COLUMN, isLinkedField } from '$lib/linkedFields';
+import { acceptsWriteIn, isOptionsType } from '$lib/questions/options';
 import { sendTemplatedEmail } from '$lib/server/email';
 import { buildTemplateVars } from '$lib/email/variables';
 import { formatDateLong } from '$lib/format';
@@ -80,10 +82,11 @@ function assertBeforeRSVPDeadline(settings: ApplicationWindow | null) {
 
 /** The subset of a Question this router validates an answer against. */
 type AnswerableQuestion = {
-	linkedField: string | null;
+	linkedField: LinkedField | null;
 	targetRole: Role[];
 	type: QuestionType;
 	options: string[];
+	optionPreset: OptionPreset | null;
 	min: number | null;
 	max: number | null;
 	regex: string | null;
@@ -112,9 +115,11 @@ function assertAnswerValid(question: AnswerableQuestion, value: string) {
 		}
 	}
 
-	// Single-select answers must be one of the offered options.
+	// Single-select answers must be one of the offered options — unless the choices came
+	// from a preset, which is a vocabulary rather than a constraint. See `acceptsWriteIn`.
 	if (
-		(question.type === QuestionType.MULTIPLE_CHOICE || question.type === QuestionType.DROPDOWN) &&
+		isOptionsType(question.type) &&
+		!acceptsWriteIn(question) &&
 		question.options.length > 0 &&
 		!question.options.includes(value)
 	) {
@@ -200,6 +205,7 @@ export const applicationRouter = router({
 					targetRole: true,
 					type: true,
 					options: true,
+					optionPreset: true,
 					min: true,
 					max: true,
 					regex: true
@@ -227,10 +233,10 @@ export const applicationRouter = router({
 			// `$lib/linkedFields` because the admin filter panels derive their vocabulary
 			// from the same three columns — an inline copy here is what stopped anything
 			// else from reusing it.
-			if (isLinkedUserField(question.linkedField)) {
+			if (isLinkedField(question.linkedField)) {
 				await ctx.prisma.user.update({
 					where: { uid: ctx.user.uid },
-					data: { [question.linkedField]: input.value }
+					data: { [LINKED_FIELD_COLUMN[question.linkedField]]: input.value }
 				});
 			}
 

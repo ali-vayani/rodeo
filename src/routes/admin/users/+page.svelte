@@ -7,7 +7,7 @@
 	import UserFilters from '$lib/components/admin/UserFilters.svelte';
 	import UserProfile, { type ProfileData } from '$lib/components/admin/UserProfile.svelte';
 	import Toast from '$lib/components/legacy/Toast.svelte';
-	import { Button, Modal } from '$lib/components/ui';
+	import { Button, Combobox, Modal } from '$lib/components/ui';
 	import {
 		ALL_ROLES,
 		ALL_STATUSES,
@@ -90,7 +90,7 @@
 	);
 
 	/** The name a did-you-mean chip currently pins the list to, if any. */
-	let pinnedName = $derived(linked.name?.length === 1 ? linked.name[0] : null);
+	let pinnedName = $derived(linked.NAME?.length === 1 ? linked.NAME[0] : null);
 
 	/**
 	 * Narrow to one suggested person — an exact `name` filter, so the result is that
@@ -99,7 +99,7 @@
 	 * click away from the next candidate.
 	 */
 	function pickSuggestion(name: string) {
-		linked = { ...linked, name: pinnedName === name ? [] : [name] };
+		linked = { ...linked, NAME: pinnedName === name ? [] : [name] };
 		loadPage(1);
 	}
 
@@ -660,31 +660,30 @@
 				<div class="mb-1.5 text-2xs font-bold tracking-eyebrow text-muted-foreground uppercase">
 					Status
 				</div>
-				<select
+				<Combobox
 					bind:value={editStatus}
-					class="w-full cursor-pointer rounded-md border border-border bg-card px-2 py-1.5 text-base text-foreground outline-none"
-				>
-					{#each ALL_STATUSES as s (s)}
-						<option value={s}>{s.charAt(0) + s.slice(1).toLowerCase().replace(/_/g, ' ')}</option>
-					{/each}
-				</select>
+					options={ALL_STATUSES.map((s) => ({
+						value: s,
+						label: s.charAt(0) + s.slice(1).toLowerCase().replace(/_/g, ' ')
+					}))}
+					ariaLabel="Status"
+				/>
 			</div>
 			<div>
 				<div class="mb-1.5 text-2xs font-bold tracking-eyebrow text-muted-foreground uppercase">
 					Pending Decision
 				</div>
-				<select
+				<Combobox
 					bind:value={editPending}
 					disabled={released}
-					class="w-full rounded-md border border-border px-2 py-1.5 text-base outline-none {released
-						? 'cursor-not-allowed bg-muted text-muted-foreground'
-						: 'cursor-pointer bg-card text-foreground'}"
-				>
-					<option value="">None</option>
-					{#each DECISION_VALUES as d (d)}
-						<option value={d}>{d.charAt(0) + d.slice(1).toLowerCase()}</option>
-					{/each}
-				</select>
+					placeholder="None"
+					clearable
+					options={DECISION_VALUES.map((d) => ({
+						value: d,
+						label: d.charAt(0) + d.slice(1).toLowerCase()
+					}))}
+					ariaLabel="Pending decision"
+				/>
 				{#if released}
 					<div class="mt-1 text-2xs text-muted-foreground">Released</div>
 				{/if}

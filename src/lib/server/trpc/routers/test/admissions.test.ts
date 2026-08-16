@@ -53,6 +53,7 @@ afterEach(() => {
 function claimableWhere(uid: string, adminUid: string) {
 	return {
 		uid,
+		role: { in: APPLICANT_ROLES },
 		OR: [
 			{ claimedBy: null },
 			{ claimedBy: adminUid },

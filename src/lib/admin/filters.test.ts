@@ -36,17 +36,17 @@ describe('linkedParams — the omitted-vs-empty convention', () => {
 	it('omits a field that was selected and then cleared back to []', () => {
 		// What `LinkedFieldFilters`'s Clear button leaves behind: the key exists on the
 		// selection object with an empty array. It must still not reach the wire.
-		const params = linkedParams({ university: [], year: [], name: [] });
+		const params = linkedParams({ UNIVERSITY: [], YEAR: [], NAME: [] });
 		for (const key of LINKED_KEYS) expect(params).not.toHaveProperty(key);
 	});
 
 	it('sends only the fields that have a selection', () => {
-		expect(linkedParams({ year: ['Senior'], university: [] })).toEqual({ years: ['Senior'] });
+		expect(linkedParams({ YEAR: ['Senior'], UNIVERSITY: [] })).toEqual({ years: ['Senior'] });
 	});
 
-	it('maps each User column to its plural wire key', () => {
+	it('maps each linked field to its plural wire key', () => {
 		expect(
-			linkedParams({ name: ['Ada Lovelace'], university: ['Rice University'], year: ['Senior'] })
+			linkedParams({ NAME: ['Ada Lovelace'], UNIVERSITY: ['Rice University'], YEAR: ['Senior'] })
 		).toEqual({
 			names: ['Ada Lovelace'],
 			universities: ['Rice University'],
@@ -56,13 +56,13 @@ describe('linkedParams — the omitted-vs-empty convention', () => {
 
 	it('passes the no-value sentinel through untouched', () => {
 		// The sentinel is a selection like any other — splitting it out is the server's job.
-		expect(linkedParams({ university: [NO_VALUE] })).toEqual({ universities: [NO_VALUE] });
+		expect(linkedParams({ UNIVERSITY: [NO_VALUE] })).toEqual({ universities: [NO_VALUE] });
 	});
 
 	it('copies the arrays instead of aliasing the caller state', () => {
-		const selection: LinkedSelection = { year: ['Senior'] };
+		const selection: LinkedSelection = { YEAR: ['Senior'] };
 		const params = linkedParams(selection);
-		selection.year?.push('Junior');
+		selection.YEAR?.push('Junior');
 		expect(params.years).toEqual(['Senior']);
 	});
 
@@ -79,7 +79,7 @@ describe('buildRecipientParams — linked fields', () => {
 	});
 
 	it('carries a linked selection onto the wire keys', () => {
-		const params = buildRecipientParams(...everything(), '', { year: ['Senior'] });
+		const params = buildRecipientParams(...everything(), '', { YEAR: ['Senior'] });
 		expect(params.years).toEqual(['Senior']);
 	});
 
@@ -92,14 +92,14 @@ describe('buildRecipientParams — linked fields', () => {
 			statuses,
 			decisions,
 			'',
-			{ year: ['Senior'] }
+			{ YEAR: ['Senior'] }
 		);
 		expect(params.roles).toEqual([Role.HACKER]);
 		expect(params.years).toEqual(['Senior']);
 	});
 
 	it('leaves the checkbox groups omitted when every box is checked', () => {
-		const params = buildRecipientParams(...everything(), '', { university: ['Rice University'] });
+		const params = buildRecipientParams(...everything(), '', { UNIVERSITY: ['Rice University'] });
 		expect(params.roles).toBeUndefined();
 		expect(params.statuses).toBeUndefined();
 		expect(params.decisions).toBeUndefined();

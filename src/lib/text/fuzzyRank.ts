@@ -25,6 +25,17 @@ export interface Rankable {
 	value: string;
 	/** Display text, when it differs from the stored value. Matched on as well. */
 	label?: string;
+	/**
+	 * Other strings that should find this option — an institution's known aliases.
+	 *
+	 * The university dataset stores `The University of Texas at Austin`, which nobody
+	 * types; `UT Austin` is the whole of what a UT student will enter, and it is not a
+	 * prefix, a substring, or within fuzzy reach of the stored name. Without these the
+	 * dropdown looks broken to the people most likely to use it.
+	 *
+	 * Never displayed, only matched.
+	 */
+	keywords?: readonly string[];
 }
 
 /**
@@ -118,13 +129,12 @@ export function rankOptions<T extends Rankable>(options: readonly T[], query: st
 	const scored: { option: T; tier: number; score: number; index: number }[] = [];
 
 	options.forEach((option, index) => {
-		// Both the stored value and the display label are searchable: the "no value"
-		// row is stored as a sentinel nobody would ever type, and is only findable by
-		// its label.
-		const haystacks =
-			option.label === undefined
-				? [normalizeName(option.value)]
-				: [normalizeName(option.label), normalizeName(option.value)];
+		// The stored value, the display label and any aliases are all searchable: the
+		// "no value" row is stored as a sentinel nobody would ever type and is only
+		// findable by its label, and a university is mostly findable by its alias.
+		const haystacks = [normalizeName(option.value)];
+		if (option.label !== undefined) haystacks.unshift(normalizeName(option.label));
+		for (const keyword of option.keywords ?? []) haystacks.push(normalizeName(keyword));
 
 		const [tier, score] = scoreOption(normalizedQuery, haystacks);
 		if (tier === TIER_NONE) return;

@@ -122,7 +122,8 @@ describe('application.save', () => {
 			options: [],
 			min: null,
 			max: null,
-			regex: null
+			regex: null,
+			optionPreset: null
 		} as never);
 		db.applicationResponse.upsert.mockResolvedValue(response as never);
 
@@ -150,7 +151,8 @@ describe('application.save', () => {
 			options: [],
 			min: null,
 			max: null,
-			regex: null
+			regex: null,
+			optionPreset: null
 		} as never);
 		db.applicationResponse.upsert.mockResolvedValue(response as never);
 
@@ -183,7 +185,8 @@ describe('application.save', () => {
 			options: [],
 			min: null,
 			max: null,
-			regex: null
+			regex: null,
+			optionPreset: null
 		} as never);
 
 		await expect(caller.application.save({ questionId: 'q-1', value: 'x' })).rejects.toMatchObject({
@@ -203,7 +206,8 @@ describe('application.save', () => {
 			options: [],
 			min: null,
 			max: null,
-			regex: null
+			regex: null,
+			optionPreset: null
 		} as never);
 
 		await expect(
@@ -223,7 +227,8 @@ describe('application.save', () => {
 			options: ['A', 'B'],
 			min: null,
 			max: null,
-			regex: null
+			regex: null,
+			optionPreset: null
 		} as never);
 
 		await expect(caller.application.save({ questionId: 'q-1', value: 'C' })).rejects.toMatchObject({
@@ -237,13 +242,14 @@ describe('application.save', () => {
 		db.user.findUniqueOrThrow.mockResolvedValue(hackerUser as never);
 		db.settings.findFirst.mockResolvedValue(openWindow);
 		db.question.findUnique.mockResolvedValue({
-			linkedField: 'name',
+			linkedField: 'NAME',
 			targetRole: [],
 			type: QuestionType.SHORT_TEXT,
 			options: [],
 			min: null,
 			max: null,
-			regex: null
+			regex: null,
+			optionPreset: null
 		} as never);
 		db.user.update.mockResolvedValue(hackerUser as never);
 		db.applicationResponse.upsert.mockResolvedValue(response as never);
@@ -728,6 +734,83 @@ describe('application.submit', () => {
 			hackerUser.email,
 			{ subject: mockSettings.submitSubject, body: mockSettings.submitTemplate },
 			expect.objectContaining({ name: hackerUser.name })
+		);
+	});
+});
+
+describe('application.save — preset-backed questions', () => {
+	/**
+	 * A preset is a vocabulary, not a constraint.
+	 *
+	 * The university preset is 6,447 institutions, which is not every institution. An
+	 * applicant at one it missed picks "Not listed" in the combobox and types their own;
+	 * rejecting that here would hard-block them from applying over a gap in a
+	 * third-party dataset. Hand-authored options stay strict, because an organizer who
+	 * typed four choices meant exactly those four — so these two cases have to be
+	 * distinguishable, and `acceptsWriteIn` is where the line sits.
+	 */
+	const presetQuestion = {
+		linkedField: 'UNIVERSITY',
+		targetRole: [],
+		type: QuestionType.DROPDOWN,
+		options: [],
+		optionPreset: 'UNIVERSITIES_NA',
+		min: null,
+		max: null,
+		regex: null
+	};
+
+	function openApplication() {
+		db.user.findUniqueOrThrow.mockResolvedValue(hackerUser as never);
+		db.settings.findFirst.mockResolvedValue(openWindow);
+		db.user.update.mockResolvedValue(hackerUser as never);
+		db.applicationResponse.upsert.mockResolvedValue(response as never);
+	}
+
+	it('accepts a school that is not in the preset, and writes it through', async () => {
+		const caller = createTestCaller(db, hackerUser);
+		openApplication();
+		db.question.findUnique.mockResolvedValue(presetQuestion as never);
+
+		await caller.application.save({
+			questionId: 'q-1',
+			value: 'Riverbend Institute of Technology'
+		});
+
+		expect(db.user.update).toHaveBeenCalledWith(
+			expect.objectContaining({ data: { university: 'Riverbend Institute of Technology' } })
+		);
+		expect(db.applicationResponse.upsert).toHaveBeenCalled();
+	});
+
+	it('still rejects an off-list answer to a hand-authored searchable dropdown', async () => {
+		const caller = createTestCaller(db, hackerUser);
+		openApplication();
+		db.question.findUnique.mockResolvedValue({
+			...presetQuestion,
+			linkedField: null,
+			options: ['Rust', 'Go'],
+			optionPreset: null
+		} as never);
+
+		await expect(
+			caller.application.save({ questionId: 'q-1', value: 'COBOL' })
+		).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+		expect(db.applicationResponse.upsert).not.toHaveBeenCalled();
+	});
+
+	it('writes a linked answer to the column the enum names, not to the enum member', async () => {
+		// `LINKED_FIELD_COLUMN` is the whole reason `linkedField` could become an enum
+		// without renaming a `User` column. A regression here writes to `User.UNIVERSITY`,
+		// which does not exist.
+		const caller = createTestCaller(db, hackerUser);
+		openApplication();
+		db.question.findUnique.mockResolvedValue(presetQuestion as never);
+
+		await caller.application.save({ questionId: 'q-1', value: 'Rice University' });
+
+		expect(db.user.update).toHaveBeenCalledWith(
+			expect.objectContaining({ data: { university: 'Rice University' } })
 		);
 	});
 });

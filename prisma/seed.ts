@@ -1,7 +1,16 @@
 import 'dotenv/config';
 import { PrismaPg } from '@prisma/adapter-pg';
-import { PrismaClient, Role, QuestionType } from '../src/lib/generated/prisma/client';
+import {
+	PrismaClient,
+	Role,
+	QuestionType,
+	LinkedField,
+	OptionPreset
+} from '../src/lib/generated/prisma/client';
 import { generateUsers, pruneUnmanagedUsers, seedUsers, summarize } from './seedUsers';
+// The editor applies these when a field is linked; seeding the same values is what
+// makes the seeded form an example of the feature rather than a contradiction of it.
+import { YEAR_OPTIONS } from '../src/lib/questions/linkedFieldDefaults';
 
 const connectionString = process.env.DATABASE_URL;
 if (!connectionString) {
@@ -104,8 +113,6 @@ function assertSafeToSeed(url: string | undefined): void {
 // Order 0–9 reserved for linked/identity questions; general questions start at 10.
 // ---------------------------------------------------------------------------
 
-const YEAR_OPTIONS = ['Freshman', 'Sophomore', 'Junior', 'Senior', 'Graduate', 'Alumni'];
-
 const questions = [
 	// --- Identity (linked to User fields) ---
 	{
@@ -114,16 +121,20 @@ const questions = [
 		required: true,
 		targetRole: [] as Role[], // all roles
 		placeholder: 'Your full name',
-		linkedField: 'name',
+		linkedField: LinkedField.NAME,
 		order: 0
 	},
 	{
 		title: 'University',
-		type: QuestionType.SHORT_TEXT,
+		// Was SHORT_TEXT, which is what put the same school in the filter under four
+		// spellings. The preset supplies the list; an applicant whose school is missing
+		// still types their own.
+		type: QuestionType.DROPDOWN,
+		optionPreset: OptionPreset.UNIVERSITIES_NA,
 		required: true,
 		targetRole: [Role.HACKER],
-		placeholder: 'e.g. University of Texas at Austin',
-		linkedField: 'university',
+		placeholder: 'Search for your school',
+		linkedField: LinkedField.UNIVERSITY,
 		order: 1
 	},
 	{
@@ -132,8 +143,8 @@ const questions = [
 		required: true,
 		targetRole: [Role.HACKER],
 		placeholder: 'Select your year',
-		options: YEAR_OPTIONS,
-		linkedField: 'year',
+		options: [...YEAR_OPTIONS],
+		linkedField: LinkedField.YEAR,
 		order: 2
 	},
 

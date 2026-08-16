@@ -225,14 +225,16 @@ function demoName(i: number): string {
 	return cycle === 0 ? base : `${base} ${cycle + 1}`;
 }
 
+// Spelled as `src/lib/data/universities.json` spells them — see the note on the same
+// list in seedUsers.ts for why that matters.
 const UNIVERSITIES = [
-	'University of Texas at Austin',
-	'Texas A&M University',
+	'The University of Texas at Austin',
+	'Texas A & M University-College Station',
 	'University of Houston',
 	'Texas State University',
 	'Rice University',
-	'UT Dallas',
-	'UT San Antonio'
+	'The University of Texas at Dallas',
+	'The University of Texas at San Antonio'
 ] as const;
 const YEARS = ['Freshman', 'Sophomore', 'Junior', 'Senior', 'Graduate'] as const;
 

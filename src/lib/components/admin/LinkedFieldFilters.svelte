@@ -8,7 +8,7 @@
 		NO_VALUE,
 		splitNoValue,
 		type LinkedFacet,
-		type LinkedUserField
+		type LinkedField
 	} from '$lib/linkedFields';
 	import type { MultiComboboxOption } from '$lib/components/ui/types';
 
@@ -28,9 +28,9 @@
 		 */
 		facets: LinkedFacet[];
 		/** Chosen values per field, `NO_VALUE` included. Bindable. */
-		selected?: Partial<Record<LinkedUserField, string[]>>;
+		selected?: Partial<Record<LinkedField, string[]>>;
 		/** Fires only on user interaction — see the note on `MultiCombobox.onChange`. */
-		onChange?: (selected: Partial<Record<LinkedUserField, string[]>>) => void;
+		onChange?: (selected: Partial<Record<LinkedField, string[]>>) => void;
 		class?: string;
 		/** Lay the facets out side by side instead of stacked, for an inline panel. */
 		columns?: boolean;
@@ -52,21 +52,21 @@
 	 * This nests inside `collapsible` above rather than competing with it: that one
 	 * folds the whole section on phones, this one folds a single facet anywhere.
 	 */
-	let openFacets = $state<Partial<Record<LinkedUserField, boolean>>>({});
+	let openFacets = $state<Partial<Record<LinkedField, boolean>>>({});
 
 	const uid = $props.id();
-	const panelId = (field: LinkedUserField) => `${uid}-${field}`;
+	const panelId = (field: LinkedField) => `${uid}-${field}`;
 
-	function valuesFor(field: LinkedUserField): string[] {
+	function valuesFor(field: LinkedField): string[] {
 		return selected[field] ?? [];
 	}
 
-	function set(field: LinkedUserField, values: string[]) {
+	function set(field: LinkedField, values: string[]) {
 		selected = { ...selected, [field]: values };
 		onChange?.(selected);
 	}
 
-	function toggle(field: LinkedUserField, value: string) {
+	function toggle(field: LinkedField, value: string) {
 		const current = valuesFor(field);
 		set(
 			field,

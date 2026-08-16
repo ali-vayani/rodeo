@@ -412,7 +412,8 @@ describe('team.acceptInvite', () => {
 		});
 		expect(db.user.update).toHaveBeenCalledWith({
 			where: { uid: hackerUser.uid },
-			data: { teamId: 'team-1' }
+			data: { teamId: 'team-1' },
+			select: { uid: true, teamId: true }
 		});
 	});
 

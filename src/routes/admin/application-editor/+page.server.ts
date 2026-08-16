@@ -4,6 +4,7 @@ import { ZodError } from 'zod';
 import type { Actions, PageServerLoad } from './$types';
 import { createContext } from '$lib/server/trpc/context';
 import { appRouter } from '$lib/server/trpc/router';
+import type { LinkedField, OptionPreset } from '$lib/generated/prisma/client';
 import { Role, QuestionType } from '$lib/generated/prisma/client';
 
 type QuestionInput = {
@@ -20,7 +21,8 @@ type QuestionInput = {
 	min?: number | null;
 	max?: number | null;
 	regex?: string | null;
-	linkedField?: string | null;
+	linkedField?: LinkedField | null;
+	optionPreset?: OptionPreset | null;
 };
 
 /**

@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import type { Prisma, PrismaClient } from '$lib/generated/prisma/client';
 import { Role, UserStatus, DecisionStatus } from '$lib/generated/prisma/client';
-import { splitNoValue, type LinkedUserField } from '$lib/linkedFields';
+import { LINKED_FIELD_COLUMN, splitNoValue, type LinkedField } from '$lib/linkedFields';
 import { tokenMatch, normalizeName } from '$lib/text/similarity';
 
 /**
@@ -24,11 +24,15 @@ export const linkedFieldFilterSchema = z.object({
 
 export type LinkedFieldFilters = z.infer<typeof linkedFieldFilterSchema>;
 
-/** Filter key ↔ `User` column. The plural is the wire name; the singular is the column. */
-const LINKED_FILTER_KEYS: Record<keyof LinkedFieldFilters, LinkedUserField> = {
-	names: 'name',
-	universities: 'university',
-	years: 'year'
+/**
+ * Filter key ↔ linked field. The plural is the wire name, which is also the query
+ * parameter in a shared filter link — so it stays lowercase and plural even though
+ * the field it names is now an enum member.
+ */
+const LINKED_FILTER_KEYS: Record<keyof LinkedFieldFilters, LinkedField> = {
+	names: 'NAME',
+	universities: 'UNIVERSITY',
+	years: 'YEAR'
 };
 
 /**
@@ -40,7 +44,7 @@ const LINKED_FILTER_KEYS: Record<keyof LinkedFieldFilters, LinkedUserField> = {
  * empty-only for `name` — which is exactly right anyway, since a NULL name cannot
  * exist for the facet count to have found one.
  */
-const NULLABLE_LINKED_FIELDS = new Set<LinkedUserField>(['university', 'year']);
+const NULLABLE_LINKED_FIELDS = new Set<LinkedField>(['UNIVERSITY', 'YEAR']);
 
 /**
  * The one definition of "which users does this filter select".
@@ -369,7 +373,7 @@ export function linkedFieldConditions(filters: LinkedFieldFilters): Prisma.UserW
 
 	for (const [key, field] of Object.entries(LINKED_FILTER_KEYS) as [
 		keyof LinkedFieldFilters,
-		LinkedUserField
+		LinkedField
 	][]) {
 		const selected = filters[key];
 		if (selected === undefined) continue;
@@ -381,16 +385,17 @@ export function linkedFieldConditions(filters: LinkedFieldFilters): Prisma.UserW
 		const { values, includeNone } = splitNoValue(selected);
 		const or: Prisma.UserWhereInput[] = [];
 		// Computed keys over a closed set of column names — the cast is what a dynamic
-		// key costs; `LINKED_USER_FIELDS` is what keeps the set closed.
-		if (values.length) or.push({ [field]: { in: values } } as Prisma.UserWhereInput);
+		// key costs; `LINKED_FIELD_COLUMN` is what keeps the set closed.
+		const column = LINKED_FIELD_COLUMN[field];
+		if (values.length) or.push({ [column]: { in: values } } as Prisma.UserWhereInput);
 		if (includeNone) {
 			// The write-through does not trim, so a blank answer stores '' rather than
 			// leaving the column NULL. Both spellings of "absent" have to be selected or
 			// the "No value" option silently misses everyone who submitted a blank.
 			if (NULLABLE_LINKED_FIELDS.has(field)) {
-				or.push({ [field]: null } as Prisma.UserWhereInput);
+				or.push({ [column]: null } as Prisma.UserWhereInput);
 			}
-			or.push({ [field]: '' } as Prisma.UserWhereInput);
+			or.push({ [column]: '' } as Prisma.UserWhereInput);
 		}
 
 		conditions.push(or.length === 1 ? or[0] : { OR: or });

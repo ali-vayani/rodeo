@@ -10,25 +10,56 @@
  *
  * Deliberately isomorphic — imported by the filter UI (browser) and by the routers
  * that build the Prisma predicate (server). Keep it free of Prisma, node builtins
- * and `$env`.
+ * and `$env`. The Prisma imports below are `import type`, which erases at build.
  */
+
+import type { LinkedField, User } from '$lib/generated/prisma/client';
 
 /**
- * The `User` columns a question may write through to.
+ * Every linked field there is.
  *
- * This was an inline `const` in `application.save`, which is why nothing else could
- * reuse it. It is the allowlist for a computed property assignment into a Prisma
- * `update`, so it must stay a closed set — widening it to `string` would let a
- * question's `linkedField` name any column on the model.
+ * Restated here rather than derived from the generated Prisma enum object, because
+ * that would be a value import and this module is loaded in the browser. The
+ * `satisfies` against the type-only import is what keeps the two in step: the import
+ * erases at build, but adding a member to the Prisma enum without adding it here is
+ * a compile error.
+ *
+ * This was `['name', 'university', 'year']`, doing double duty as both the set of
+ * fields and the `User` column names — which is why it could not become an enum
+ * without also renaming a database column. `LINKED_FIELD_COLUMN` splits the two.
  */
-export const LINKED_USER_FIELDS = ['name', 'university', 'year'] as const;
+export const LINKED_FIELDS = [
+	'NAME',
+	'UNIVERSITY',
+	'YEAR'
+] as const satisfies readonly LinkedField[];
 
-export type LinkedUserField = (typeof LINKED_USER_FIELDS)[number];
+export type { LinkedField };
+
+/**
+ * The `User` column each linked field writes through to.
+ *
+ * The allowlist for a computed property assignment into a Prisma `update`, so it
+ * must stay a closed set — a `Record<LinkedField, string>` typed loosely enough to
+ * accept any column name would let a question write to `role`.
+ */
+export const LINKED_FIELD_COLUMN = {
+	NAME: 'name',
+	UNIVERSITY: 'university',
+	YEAR: 'year'
+} as const satisfies Record<LinkedField, keyof Pick<User, 'name' | 'university' | 'year'>>;
+
+/** How a linked field is written where a person reads it. */
+export const LINKED_FIELD_LABEL = {
+	NAME: 'Name',
+	UNIVERSITY: 'University',
+	YEAR: 'Year'
+} as const satisfies Record<LinkedField, string>;
 
 /**
  * The linked fields that get a filter control, which is not all of them.
  *
- * `name` is deliberately absent. It is a linked field like the others — the predicate
+ * `NAME` is deliberately absent. It is a linked field like the others — the predicate
  * accepts `names`, and the search box's suggestion chips set it — but it has one
  * distinct value per person, so a list of them is a directory rather than a
  * vocabulary. Picking a hackathon's applicants out of ~1,900 names by scrolling is not
@@ -38,12 +69,12 @@ export type LinkedUserField = (typeof LINKED_USER_FIELDS)[number];
  * accepts — `names` stays fully functional, and removing the control does not remove
  * the filter.
  */
-export const FILTERABLE_LINKED_FIELDS = ['university', 'year'] as const satisfies readonly [
-	...LinkedUserField[]
+export const FILTERABLE_LINKED_FIELDS = ['UNIVERSITY', 'YEAR'] as const satisfies readonly [
+	...LinkedField[]
 ];
 
-export function isLinkedUserField(value: string | null | undefined): value is LinkedUserField {
-	return value != null && (LINKED_USER_FIELDS as readonly string[]).includes(value);
+export function isLinkedField(value: string | null | undefined): value is LinkedField {
+	return value != null && (LINKED_FIELDS as readonly string[]).includes(value);
 }
 
 /**
@@ -67,7 +98,7 @@ export interface LinkedFacetOption {
 }
 
 export interface LinkedFacet {
-	field: LinkedUserField;
+	field: LinkedField;
 	/** The question's title, so the filter is labelled the way the form is. */
 	label: string;
 	control: LinkedFacetControl;

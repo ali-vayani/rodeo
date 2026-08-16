@@ -101,3 +101,64 @@ describe('rankOptions', () => {
 		expect(values(rankOptions(UNIVERSITIES, 'RiCe'))).toEqual(['Rice University']);
 	});
 });
+
+describe('rankOptions — aliases', () => {
+	// The university preset stores `The University of Texas at Austin`, which is not
+	// what anyone types. `UT Austin` is not a prefix of it, not a substring of it, and
+	// scores nowhere near FUZZY_THRESHOLD against it — so without keywords the
+	// dropdown returns nothing for the query its own users are most likely to enter.
+	const SCHOOLS = [
+		{ value: 'The University of Texas at Austin', keywords: ['UT Austin'] },
+		{ value: 'Texas A & M University-College Station', keywords: ['Texas A&M University'] },
+		{ value: 'Rice University' }
+	];
+
+	it('finds an option by an alias that resembles nothing in its name', () => {
+		expect(values(rankOptions(SCHOOLS, 'ut austin'))).toEqual([
+			'The University of Texas at Austin'
+		]);
+	});
+
+	it('ranks an alias prefix above a name that merely contains the query', () => {
+		// `texas a&m` is a prefix of the alias and a substring of neither name, so the
+		// alias match has to outrank the College Station row's own word order.
+		expect(values(rankOptions(SCHOOLS, 'texas a&m'))[0]).toBe(
+			'Texas A & M University-College Station'
+		);
+	});
+
+	it('leaves an option with no aliases exactly as it was', () => {
+		expect(values(rankOptions(SCHOOLS, 'rice'))).toEqual(['Rice University']);
+	});
+
+	it('never returns the alias itself — it is matched, not displayed', () => {
+		const [match] = rankOptions(SCHOOLS, 'ut austin');
+		expect(match.value).toBe('The University of Texas at Austin');
+	});
+});
+
+describe('rankOptions — the order the keyboard walks', () => {
+	// `Combobox` navigates its own `selectable` list, which is exactly this output, so
+	// this ordering is what ArrowDown steps through and what Enter commits. It was
+	// previously bits-ui's list that the arrows walked and this one that was drawn as
+	// active — on the query below they disagreed, and one ArrowDown from the top landed
+	// on `Freshman` rather than `Senior`.
+	const YEARS = [
+		{ value: 'Freshman' },
+		{ value: 'Sophomore' },
+		{ value: 'Junior' },
+		{ value: 'Senior' },
+		{ value: 'Graduate' },
+		{ value: 'Alumni' }
+	];
+
+	it('puts the prefix matches first and the incidental one last', () => {
+		// `Freshman` earns its place — it contains an "s" — but it is not what someone
+		// typing "s" is reaching for, and it must not be what one keypress selects.
+		expect(values(rankOptions(YEARS, 's'))).toEqual(['Sophomore', 'Senior', 'Freshman']);
+	});
+
+	it('narrows to one as the query grows', () => {
+		expect(values(rankOptions(YEARS, 'se'))).toEqual(['Senior']);
+	});
+});

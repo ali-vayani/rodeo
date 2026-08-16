@@ -2,9 +2,9 @@
 	import type { PageData } from './$types';
 	import { untrack } from 'svelte';
 	import { createClient } from '$lib/trpc/client';
-	import { Badge, Button, Input, Modal, Select } from '$lib/components/ui';
+	import { Badge, Button, Combobox, Input, Modal } from '$lib/components/ui';
 	import { DataTable, PageHeader, Pagination } from '$lib/components/patterns';
-	import type { Column, SelectOption } from '$lib/components/ui/types';
+	import type { Column, ComboboxOption } from '$lib/components/ui/types';
 	import { LOG_ACTION_GROUPS, actionLabel } from '$lib/log/actions';
 	import { actionTone } from '$lib/log/notable';
 	import { formatDateTime, pluralize, EM_DASH } from '$lib/format';
@@ -32,15 +32,17 @@
 
 	const hasFilters = $derived(Boolean(search.trim() || actorId || action || from || to));
 
-	const actorOptions: SelectOption[] = $derived([
+	// The leading blank row is the "no filter" choice, so these lists do not want
+	// `clearable` — that prop is for a control whose options do not include one.
+	const actorOptions: ComboboxOption[] = $derived([
 		{ value: '', label: 'All admins' },
 		...data.actors.map((a) => ({ value: a.actorId, label: `${a.name} (${a.count})` }))
 	]);
 
-	// Flattened with a group heading as a disabled row: the Select primitive takes
+	// Flattened with a group heading as a disabled row: the Combobox primitive takes
 	// a single option list, and the alternative — a second dropdown for the group —
 	// is two controls to find one action.
-	const actionOptions: SelectOption[] = [
+	const actionOptions: ComboboxOption[] = [
 		{ value: '', label: 'All actions' },
 		...LOG_ACTION_GROUPS.flatMap((group) => [
 			{ value: `__${group.group}`, label: group.group.toUpperCase(), disabled: true },
@@ -152,20 +154,20 @@
 			aria-label="Search the activity log"
 			class="col-span-2 lg:col-span-1"
 		/>
-		<Select
+		<Combobox
 			bind:value={actorId}
 			options={actorOptions}
 			placeholder="All admins"
 			ariaLabel="Filter by admin"
-			onValueChange={() => fetchPage(1)}
+			onChange={() => fetchPage(1)}
 			class="col-span-2 lg:col-span-1"
 		/>
-		<Select
+		<Combobox
 			bind:value={action}
 			options={actionOptions}
 			placeholder="All actions"
 			ariaLabel="Filter by action"
-			onValueChange={() => fetchPage(1)}
+			onChange={() => fetchPage(1)}
 			class="col-span-2 lg:col-span-1"
 		/>
 		<Input

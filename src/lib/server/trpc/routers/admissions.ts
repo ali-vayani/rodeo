@@ -33,6 +33,11 @@ import {
 function claimableBy(uid: string, adminUid: string) {
 	return {
 		uid,
+		// Never a staff account: an ADMIN/ORGANIZER has no application, so a claim, score
+		// or decision on one is meaningless — and the uid can arrive from a hand-edited
+		// request. Bounded here rather than trusting the caller, the same guard
+		// `setDecisions` spells out inline. Shared by claim/setDecision/setScore.
+		role: { in: APPLICANT_ROLES },
 		OR: [
 			{ claimedBy: null },
 			{ claimedBy: adminUid },
@@ -555,6 +560,9 @@ export const admissionsRouter = router({
 			const users = await ctx.prisma.user.findMany({
 				where: {
 					pendingDecision: { not: null },
+					// Applicants only, mirroring `setDecisions`: a stale or hand-edited uid
+					// list must not promote and email a decision onto a staff account.
+					role: { in: APPLICANT_ROLES },
 					...(restrictToUids && { uid: { in: input.uids } })
 				}
 			});

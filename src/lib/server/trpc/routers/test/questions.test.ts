@@ -27,7 +27,8 @@ const allRolesQuestion = {
 	min: null,
 	max: null,
 	regex: null,
-	linkedField: null
+	linkedField: null,
+	optionPreset: null
 };
 
 const hackerQuestion = {
@@ -237,5 +238,61 @@ describe('questions.reorder', () => {
 		expect(db.$transaction).toHaveBeenCalled();
 		// Verify update was called for each item
 		expect(db.question.update).toHaveBeenCalledTimes(2);
+	});
+});
+
+describe('linkedField is an enum, not free text', () => {
+	// It was `z.string().nullish()`, so anything parsed. The value is used as a computed
+	// key into a `User` update via `LINKED_FIELD_COLUMN`, and the allowlist was not
+	// consulted until read time — so `linkedField: 'univeristy'` saved without complaint
+	// and produced a question that wrote nowhere, with nothing anywhere saying so.
+	it('accepts a real linked field', async () => {
+		const caller = createTestCaller(db, adminUser);
+		db.question.create.mockResolvedValue(hackerQuestion);
+		await caller.questions.create({ ...questionInput, linkedField: 'UNIVERSITY' });
+		expect(db.question.create).toHaveBeenCalledWith(
+			expect.objectContaining({ data: expect.objectContaining({ linkedField: 'UNIVERSITY' }) })
+		);
+	});
+
+	it('rejects a misspelled one instead of storing it', async () => {
+		const caller = createTestCaller(db, adminUser);
+		await expect(
+			caller.questions.create({ ...questionInput, linkedField: 'univeristy' } as never)
+		).rejects.toThrow();
+		expect(db.question.create).not.toHaveBeenCalled();
+	});
+
+	it('rejects the old lowercase spelling, which no longer names anything', async () => {
+		const caller = createTestCaller(db, adminUser);
+		await expect(
+			caller.questions.create({ ...questionInput, linkedField: 'university' } as never)
+		).rejects.toThrow();
+	});
+
+	it('still accepts null, which is how a question is unlinked', async () => {
+		const caller = createTestCaller(db, adminUser);
+		db.question.create.mockResolvedValue(hackerQuestion);
+		await caller.questions.create({ ...questionInput, linkedField: null });
+		expect(db.question.create).toHaveBeenCalled();
+	});
+
+	it('accepts an option preset and rejects one that does not exist', async () => {
+		const caller = createTestCaller(db, adminUser);
+		db.question.create.mockResolvedValue(hackerQuestion);
+		await caller.questions.create({
+			...questionInput,
+			type: QuestionType.DROPDOWN,
+			optionPreset: 'UNIVERSITIES_NA'
+		});
+		expect(db.question.create).toHaveBeenCalledWith(
+			expect.objectContaining({
+				data: expect.objectContaining({ optionPreset: 'UNIVERSITIES_NA' })
+			})
+		);
+
+		await expect(
+			caller.questions.create({ ...questionInput, optionPreset: 'HIGH_SCHOOLS' } as never)
+		).rejects.toThrow();
 	});
 });

@@ -19,14 +19,16 @@ const yearQuestion = {
 	title: 'Year',
 	type: QuestionType.DROPDOWN,
 	options: ['Freshman', 'Sophomore', 'Junior', 'Senior', 'Graduate', 'Alumni'],
-	linkedField: 'year'
+	linkedField: 'YEAR',
+	optionPreset: null
 };
 
 const universityQuestion = {
 	title: 'University',
 	type: QuestionType.SHORT_TEXT,
 	options: [],
-	linkedField: 'university'
+	linkedField: 'UNIVERSITY',
+	optionPreset: null
 };
 
 /** One `groupBy` result row, keyed by the column being grouped. */
@@ -42,7 +44,7 @@ describe('filters.linkedFacets — which facets exist', () => {
 		mockGroupBy(db.user.groupBy).mockResolvedValue([row('year', 'Senior', 3)]);
 
 		const facets = await createTestCaller(db, adminUser).filters.linkedFacets();
-		expect(facets.map((f) => f.field)).toEqual(['year']);
+		expect(facets.map((f) => f.field)).toEqual(['YEAR']);
 	});
 
 	it('returns nothing at all when no question is linked', async () => {
@@ -57,7 +59,7 @@ describe('filters.linkedFacets — which facets exist', () => {
 		mockGroupBy(db.user.groupBy).mockResolvedValue([]);
 
 		const facets = await createTestCaller(db, adminUser).filters.linkedFacets();
-		expect(facets.map((f) => f.field)).toEqual(['university', 'year']);
+		expect(facets.map((f) => f.field)).toEqual(['UNIVERSITY', 'YEAR']);
 	});
 
 	it('keeps the first question when two claim the same field', async () => {
@@ -273,5 +275,50 @@ describe('filters.linkedFacets — the combobox option cap', () => {
 		const [facet] = await createTestCaller(db, adminUser).filters.linkedFacets();
 		expect(facet.truncated).toBe(false);
 		expect(facet.options.length).toBeGreaterThan(MAX_FACET_OPTIONS);
+	});
+});
+
+describe('filters.linkedFacets — a preset-backed question', () => {
+	const presetUniversity = {
+		title: 'University',
+		type: QuestionType.DROPDOWN,
+		options: [],
+		optionPreset: 'UNIVERSITIES_NA',
+		linkedField: 'UNIVERSITY'
+	};
+
+	it('renders as a combobox, not a select, despite enumerating its answers', async () => {
+		// Two independent reasons, either sufficient. The preset is 6,447 entries against
+		// a MAX_FACET_OPTIONS of 500 — a select is never truncated, so it would ship the
+		// lot. And answers to a preset question are not confined to the list, so the
+		// declared options are not the vocabulary in the first place.
+		db.question.findMany.mockResolvedValue([presetUniversity] as never);
+		mockGroupBy(db.user.groupBy).mockResolvedValue([row('university', 'Rice University', 4)]);
+
+		const [facet] = await createTestCaller(db, adminUser).filters.linkedFacets();
+		expect(facet.control).toBe('combobox');
+	});
+
+	it('lists what applicants actually hold, so write-ins are filterable', async () => {
+		// The whole point of the escape hatch: a school that is not in the preset has to
+		// be selectable in the filter, or the organizer cannot find the applicant who
+		// typed it.
+		db.question.findMany.mockResolvedValue([presetUniversity] as never);
+		mockGroupBy(db.user.groupBy).mockResolvedValue([
+			row('university', 'Rice University', 4),
+			row('university', 'Riverbend Institute of Technology', 1)
+		]);
+
+		const [facet] = await createTestCaller(db, adminUser).filters.linkedFacets();
+		expect(facet.options.map((o) => o.value)).toContain('Riverbend Institute of Technology');
+	});
+
+	it('groups by the User column, not by the enum member naming it', async () => {
+		// `by: ['UNIVERSITY']` is not a column and Prisma would reject it at runtime.
+		db.question.findMany.mockResolvedValue([presetUniversity] as never);
+		const groupBy = mockGroupBy(db.user.groupBy).mockResolvedValue([]);
+
+		await createTestCaller(db, adminUser).filters.linkedFacets();
+		expect(groupBy).toHaveBeenCalledWith(expect.objectContaining({ by: ['university'] }));
 	});
 });

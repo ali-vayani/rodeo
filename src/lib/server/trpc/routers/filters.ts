@@ -1,15 +1,17 @@
-import type { PrismaClient } from '$lib/generated/prisma/client';
+import type { PrismaClient, Question } from '$lib/generated/prisma/client';
 import { QuestionType } from '$lib/generated/prisma/client';
 import { router, adminProcedure } from '../init';
 import {
 	FILTERABLE_LINKED_FIELDS,
+	LINKED_FIELD_COLUMN,
 	MAX_FACET_OPTIONS,
-	isLinkedUserField,
+	isLinkedField,
 	type LinkedFacet,
 	type LinkedFacetControl,
 	type LinkedFacetOption,
-	type LinkedUserField
+	type LinkedField
 } from '$lib/linkedFields';
+import { hasPresetOptions } from '$lib/questions/options';
 
 /**
  * The filter vocabulary for the linked application fields.
@@ -25,9 +27,19 @@ import {
  * nothing here has a reason to opt out of it.
  */
 
-/** `Question.type`s that enumerate their own answers; everything else is free text. */
-function controlFor(type: QuestionType): LinkedFacetControl {
-	return type === QuestionType.DROPDOWN || type === QuestionType.MULTIPLE_CHOICE
+/**
+ * `Question.type`s that enumerate their own answers; everything else is free text.
+ *
+ * A preset-backed question is deliberately *not* a `select`, even though it does
+ * enumerate its answers. Two reasons, either of which is enough: the university
+ * preset is 6,400 entries against a `MAX_FACET_OPTIONS` of 500, and answers to a
+ * preset question are not confined to the list — an applicant whose school isn't
+ * there types their own. Observed values are therefore the only complete vocabulary,
+ * and a combobox is the only control that copes with the length.
+ */
+function controlFor(question: Pick<Question, 'type' | 'optionPreset'>): LinkedFacetControl {
+	if (hasPresetOptions(question)) return 'combobox';
+	return question.type === QuestionType.DROPDOWN || question.type === QuestionType.MULTIPLE_CHOICE
 		? 'select'
 		: 'combobox';
 }
@@ -35,20 +47,21 @@ function controlFor(type: QuestionType): LinkedFacetControl {
 /** How many users hold each distinct value of a linked column, plus the absent count. */
 async function observedValues(
 	prisma: Pick<PrismaClient, 'user'>,
-	field: LinkedUserField
+	field: LinkedField
 ): Promise<{ counts: Map<string, number>; noneCount: number }> {
 	// `groupBy`'s return type is derived from the `by` tuple, which a runtime-chosen
-	// column name cannot produce. The set of names is closed by `LINKED_USER_FIELDS`,
+	// column name cannot produce. The set of names is closed by `LINKED_FIELD_COLUMN`,
 	// so the cast erases a type that can't be spelled rather than a check that matters.
+	const column = LINKED_FIELD_COLUMN[field];
 	const rows = (await (prisma.user.groupBy as unknown as (args: unknown) => Promise<unknown[]>)({
-		by: [field],
+		by: [column],
 		_count: { _all: true }
 	})) as ({ _count: { _all: number } } & Record<string, string | null>)[];
 
 	const counts = new Map<string, number>();
 	let noneCount = 0;
 	for (const row of rows) {
-		const value = row[field];
+		const value = row[column];
 		const count = row._count._all;
 		// `''` is absent everywhere: the write-through in `application.save` does not
 		// trim, so a blank answer stores an empty string rather than leaving the column
@@ -122,15 +135,15 @@ export const filtersRouter = router({
 	linkedFacets: adminProcedure.query(async ({ ctx }): Promise<LinkedFacet[]> => {
 		const questions = await ctx.prisma.question.findMany({
 			where: { linkedField: { in: [...FILTERABLE_LINKED_FIELDS] } },
-			select: { title: true, type: true, options: true, linkedField: true },
+			select: { title: true, type: true, options: true, optionPreset: true, linkedField: true },
 			// Two questions may name the same column; the first one on the form wins, so
 			// the label matches what an applicant was actually asked.
 			orderBy: { order: 'asc' }
 		});
 
-		const byField = new Map<LinkedUserField, (typeof questions)[number]>();
+		const byField = new Map<LinkedField, (typeof questions)[number]>();
 		for (const question of questions) {
-			if (!isLinkedUserField(question.linkedField)) continue;
+			if (!isLinkedField(question.linkedField)) continue;
 			if (!byField.has(question.linkedField)) byField.set(question.linkedField, question);
 		}
 
@@ -142,7 +155,7 @@ export const filtersRouter = router({
 			const question = byField.get(field);
 			if (!question) continue;
 
-			const control = controlFor(question.type);
+			const control = controlFor(question);
 			const { counts, noneCount } = await observedValues(ctx.prisma, field);
 
 			// A select's list is bounded by the question, so it is never truncated.
