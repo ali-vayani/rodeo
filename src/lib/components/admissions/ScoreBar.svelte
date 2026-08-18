@@ -11,7 +11,9 @@
 		scorerName,
 		scoredAt,
 		onSave,
+		onSaveNotes,
 		saving,
+		savingNotes,
 		hasPrev,
 		hasNext,
 		onPrev,
@@ -27,7 +29,9 @@
 		scorerName: string | null;
 		scoredAt: Date | string | null;
 		onSave: (score: number, notes: string) => void;
+		onSaveNotes: (notes: string) => void;
 		saving: boolean;
+		savingNotes: boolean;
 		hasPrev: boolean;
 		hasNext: boolean;
 		onPrev: () => void;
@@ -54,12 +58,14 @@
 
 	let empty = $derived(scoreDraft === undefined || Number.isNaN(scoreDraft));
 	let valid = $derived(!empty && isValidScore(scoreDraft as number));
+	let notesDirty = $derived(notesDraft !== (notes ?? ''));
 
 	// While the claim is in flight the controls stay put but dimmed, matching how
 	// the queue behaved before: flashing a read-only strip on every applicant
 	// switch trains reviewers to click through it.
 	let showControls = $derived(lockState === 'owned' || lockState === 'acquiring');
 	let busy = $derived(saving || lockState === 'acquiring');
+	let notesBusy = $derived(busy || savingNotes);
 
 	const STATUS_LABEL: Record<string, string> = {
 		expired: 'Session expired',
@@ -92,6 +98,15 @@
 	function save() {
 		if (!valid || busy) return;
 		onSave(scoreDraft as number, notesDraft);
+	}
+
+	/**
+	 * Saves the note alone, so it isn't lost when the reviewer isn't ready to
+	 * score yet — `save()` above refuses to write anything without a valid score.
+	 */
+	function saveNotes() {
+		if (!notesDirty || notesBusy) return;
+		onSaveNotes(notesDraft);
 	}
 
 	/**
@@ -132,16 +147,17 @@
 		<Textarea
 			bind:value={notesDraft}
 			rows={2}
-			disabled={busy}
+			disabled={notesBusy}
 			placeholder="Notes (optional) — every admin sees these during the decision pass"
 			aria-label="Reviewer notes"
 			class="text-touch sm:text-base"
+			onblur={saveNotes}
 		/>
 
 		<div class="mt-2.5 flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
 			<div class="flex gap-1.5">
-				<Button size="sm" onclick={onPrev} disabled={!hasPrev || busy}>← Prev</Button>
-				<Button size="sm" onclick={onNext} disabled={!hasNext || busy}>Next →</Button>
+				<Button size="sm" onclick={onPrev} disabled={!hasPrev || notesBusy}>← Prev</Button>
+				<Button size="sm" onclick={onNext} disabled={!hasNext || notesBusy}>Next →</Button>
 			</div>
 
 			<div class="flex items-center gap-2.5 max-md:w-full">
@@ -162,7 +178,7 @@
 					step="1"
 					bind:value={scoreDraft}
 					onkeydown={onScoreKeydown}
-					disabled={busy}
+					disabled={notesBusy}
 					aria-invalid={!empty && !valid}
 					class="w-18 rounded-md border bg-card px-2.5 py-1.5 text-center font-mono text-touch
 					       tabular-nums outline-none focus-visible:shadow-ring sm:text-base
@@ -173,7 +189,7 @@
 					variant="primary"
 					size="sm"
 					loading={saving}
-					disabled={!valid || busy}
+					disabled={!valid || notesBusy}
 					onclick={save}
 					class="max-md:flex-1"
 				>

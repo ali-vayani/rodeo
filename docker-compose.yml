@@ -4,8 +4,9 @@ services:
     restart: unless-stopped
     ports:
       # Bound to loopback so the dev database (which may hold a copy of applicant PII)
-      # isn't reachable from other machines on the network.
-      - '127.0.0.1:5432:5432'
+      # isn't reachable from other machines on the network. Override the host port with
+      # DB_PORT in .env if 5432 is already taken locally (e.g. a native Postgres install).
+      - '127.0.0.1:${DB_PORT:-5432}:5432'
     environment:
       POSTGRES_USER: rodeo
       POSTGRES_PASSWORD: rodeo

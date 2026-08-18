@@ -1023,6 +1023,81 @@ describe('admissions.setScore', () => {
 	});
 });
 
+describe('admissions.updateNotes', () => {
+	it('saves the note without touching score or the claim', async () => {
+		const caller = createTestCaller(db, adminUser);
+		db.user.update.mockResolvedValue({ ...hackerUser, notes: 'Strong project history' } as never);
+		db.log.create.mockResolvedValue({} as never);
+
+		const result = await caller.admissions.updateNotes({
+			uid: hackerUser.uid,
+			notes: 'Strong project history'
+		});
+
+		expect(result.notes).toBe('Strong project history');
+		expect(db.user.update).toHaveBeenCalledWith({
+			where: claimableWhere(hackerUser.uid, adminUser.uid),
+			data: { notes: 'Strong project history' }
+		});
+	});
+
+	it('stores blank notes as null so a note can be deleted', async () => {
+		const caller = createTestCaller(db, adminUser);
+		db.user.update.mockResolvedValue(hackerUser as never);
+		db.log.create.mockResolvedValue({} as never);
+
+		await caller.admissions.updateNotes({ uid: hackerUser.uid, notes: '   ' });
+
+		const callArg = db.user.update.mock.calls[0]?.[0];
+		expect((callArg?.data as { notes: unknown }).notes).toBeNull();
+	});
+
+	it('logs an audit entry', async () => {
+		const caller = createTestCaller(db, adminUser);
+		db.user.update.mockResolvedValue(hackerUser as never);
+		db.log.create.mockResolvedValue({} as never);
+
+		await caller.admissions.updateNotes({ uid: hackerUser.uid, notes: 'Some notes' });
+
+		expect(db.log.create).toHaveBeenCalledWith(
+			expect.objectContaining({
+				data: expect.objectContaining({
+					action: 'admissions.notes.set',
+					actorId: adminUser.uid,
+					targetId: hackerUser.uid,
+					metadata: expect.objectContaining({ hasNotes: true })
+				})
+			})
+		);
+	});
+
+	it('throws CONFLICT naming the holder when another admin has it locked', async () => {
+		const caller = createTestCaller(db, adminUser);
+		db.user.update.mockRejectedValue(recordNotFound());
+		db.user.findUnique.mockResolvedValue({
+			name: claimedHacker.name,
+			claimer: { name: adminUser2.name }
+		} as never);
+
+		await expect(
+			caller.admissions.updateNotes({ uid: claimedHacker.uid, notes: 'Late note' })
+		).rejects.toMatchObject({
+			code: 'CONFLICT',
+			message: expect.stringContaining('Second Admin')
+		});
+	});
+
+	it('throws NOT_FOUND when the applicant does not exist', async () => {
+		const caller = createTestCaller(db, adminUser);
+		db.user.update.mockRejectedValue(recordNotFound());
+		db.user.findUnique.mockResolvedValue(null as never);
+
+		await expect(
+			caller.admissions.updateNotes({ uid: 'ghost-uid', notes: 'Some notes' })
+		).rejects.toMatchObject({ code: 'NOT_FOUND' });
+	});
+});
+
 describe('admissions.setDecisions', () => {
 	it('applies one decision to many, guarded by claim and role', async () => {
 		const caller = createTestCaller(db, adminUser);

@@ -78,6 +78,11 @@
 
 	let loading = $state(false);
 	let scoreLoading = $state(false);
+	// Keyed by uid, not a plain boolean: the notes save fires on blur, which lands
+	// right as the reviewer clicks a different applicant. A shared flag would leave
+	// the newly selected applicant's controls disabled for the tail of the previous
+	// applicant's request — this only marks busy the row it actually belongs to.
+	let notesSavingUid = $state<string | null>(null);
 	let sidebarCollapsed = $state(false);
 
 	// Presence: uid → claimerName, other admins only (the poll filters out our own uid)
@@ -411,6 +416,34 @@
 	}
 
 	/**
+	 * Saves the note alone, without a score — unlike `handleSaveScore`, this
+	 * doesn't release the claim or advance to the next applicant, since jotting a
+	 * note isn't a decision that the reviewer is done with this row.
+	 */
+	async function handleSaveNotes(notes: string) {
+		if (!selectedUid || !session.canDecide) return;
+		const uid = selectedUid;
+
+		session.noteActivity();
+		notesSavingUid = uid;
+		try {
+			const saved = await trpc.admissions.updateNotes.mutate({ uid, notes });
+
+			// Navigated away mid-flight; don't clobber the new selection
+			if (selectedUid !== uid) return;
+
+			applicants = applicants.map((a) => (a.uid === uid ? { ...a, notes: saved.notes } : a));
+		} catch (e) {
+			if (isTRPCErrorCode(e, 'CONFLICT')) {
+				session.reclaim();
+			}
+			showToast(errorMessage(e, 'Failed to save note'), 'error');
+		} finally {
+			if (notesSavingUid === uid) notesSavingUid = null;
+		}
+	}
+
+	/**
 	 * Apply a pending decision from the ranked list, one row or a selection.
 	 *
 	 * A single applicant goes through `setDecision` rather than the bulk path even
@@ -661,7 +694,9 @@
 					<ApplicantDetail
 						applicant={selected}
 						onSaveScore={handleSaveScore}
+						onSaveNotes={handleSaveNotes}
 						{scoreLoading}
+						notesLoading={notesSavingUid === selected.uid}
 						{hasPrev}
 						{hasNext}
 						onPrev={selectPrev}

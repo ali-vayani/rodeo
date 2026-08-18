@@ -10,7 +10,9 @@
 	let {
 		applicant,
 		onSaveScore,
+		onSaveNotes,
 		scoreLoading,
+		notesLoading,
 		hasPrev,
 		hasNext,
 		onPrev,
@@ -38,7 +40,9 @@
 			application: Array<{ value: string; question: { title: string; order: number } }>;
 		};
 		onSaveScore: (score: number, notes: string) => void;
+		onSaveNotes: (notes: string) => void;
 		scoreLoading: boolean;
+		notesLoading: boolean;
 		hasPrev: boolean;
 		hasNext: boolean;
 		onPrev: () => void;
@@ -211,7 +215,9 @@
 			scorerName={applicant.scorer?.name ?? null}
 			scoredAt={applicant.scoredAt}
 			onSave={onSaveScore}
+			onSaveNotes={onSaveNotes}
 			saving={scoreLoading}
+			savingNotes={notesLoading}
 			{hasPrev}
 			{hasNext}
 			{onPrev}

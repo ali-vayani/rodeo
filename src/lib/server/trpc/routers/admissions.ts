@@ -488,6 +488,59 @@ export const admissionsRouter = router({
 		}),
 
 	/**
+	 * Save the reviewer's notes on their own, independent of scoring.
+	 *
+	 * `setScore` requires a valid score before it will write anything, so a reviewer
+	 * who wants to leave a note without scoring yet; or revise one afterwards had
+	 * no way to persist it. This is that path: same claim guard as `setScore`, but it
+	 * only ever touches "notes" and never clears the claim, since jotting a note isn't
+	 * "done with this applicant" the way scoring is.
+	 *
+	 * @param uid - the applicant
+	 * @param notes - free text shown to every admin during the decision pass; blank clears
+	 */
+	updateNotes: adminProcedure
+		.input(
+			z.object({
+				uid: z.string(),
+				notes: z.string().max(5000).optional()
+			})
+		)
+		.mutation(async ({ ctx, input }) => {
+			const notes = input.notes?.trim() || null;
+			try {
+				const applicant = await ctx.prisma.user.update({
+					where: claimableBy(input.uid, ctx.user.uid),
+					data: { notes }
+				});
+
+				await logAction(ctx, {
+					action: 'admissions.notes.set',
+					summary: `Updated notes for ${applicant.name}`,
+					target: { id: applicant.uid, label: applicant.name },
+					metadata: { hasNotes: notes !== null }
+				});
+
+				return applicant;
+			} catch (e) {
+				if (!isRecordNotFound(e)) throw e;
+
+				const target = await ctx.prisma.user.findUnique({
+					where: { uid: input.uid },
+					select: { name: true, claimer: { select: { name: true } } }
+				});
+				if (!target) {
+					throw new TRPCError({ code: 'NOT_FOUND', message: 'Applicant not found.' });
+				}
+
+				throw new TRPCError({
+					code: 'CONFLICT',
+					message: `${target.claimer?.name ?? 'Another admin'} is reviewing this applicant. Your note was not saved.`
+				});
+			}
+		}),
+
+	/**
 	 * Set the same pending decision on many applicants at once — the decision pass
 	 * working down the ranked list, or taking everyone above a score cutoff.
 	 *
