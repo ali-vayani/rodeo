@@ -119,6 +119,22 @@ describe('emailFrom', () => {
 	it('defaults to the Freetail address', () => {
 		expect(emailFrom()).toBe('hello@freetailhackers.com');
 	});
+
+	it('honours a configured address', () => {
+		env.EMAIL_FROM = 'rodeo@freetailhackers.com';
+		expect(emailFrom()).toBe('rodeo@freetailhackers.com');
+	});
+
+	it('falls back when EMAIL_FROM is set but blank', () => {
+		// A variable created in Vercel and left empty arrives as ''. Under `??` that was
+		// passed through as the envelope sender and Resend rejected every message with
+		// "The domain is invalid" — confirmed against the live API, not hypothesised.
+		env.EMAIL_FROM = '';
+		expect(emailFrom()).toBe('hello@freetailhackers.com');
+
+		env.EMAIL_FROM = '   ';
+		expect(emailFrom()).toBe('hello@freetailhackers.com');
+	});
 });
 
 describe('validateEnv', () => {

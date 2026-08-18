@@ -16,7 +16,7 @@
 	import RecipientListModal from '$lib/components/email/RecipientListModal.svelte';
 	import TemplateEditor from '$lib/components/email/TemplateEditor.svelte';
 	import EmailPreview, { type PreviewAs } from '$lib/components/email/EmailPreview.svelte';
-	import { EXTERNAL_NAME_FALLBACK, SAMPLE_VARS } from '$lib/email/variables';
+	import { NAME_FALLBACK, SAMPLE_VARS } from '$lib/email/variables';
 	import SendConfirmation, { CONFIRM_WORD } from '$lib/components/email/SendConfirmation.svelte';
 	import SendHistory from '$lib/components/email/SendHistory.svelte';
 	import { Button } from '$lib/components/ui';
@@ -104,7 +104,7 @@
 	let previewTargets = $derived([
 		...sample.map((u) => ({ name: u.name, email: u.email, external: false })),
 		...(sendExternal
-			? externalEmails.map((email) => ({ name: EXTERNAL_NAME_FALLBACK, email, external: true }))
+			? externalEmails.map((email) => ({ name: NAME_FALLBACK, email, external: true }))
 			: [])
 	]);
 
@@ -118,16 +118,14 @@
 	 * Exactly what `sendCustom` will substitute for `previewTarget`.
 	 *
 	 * The dates come pre-rendered from the server: formatting them here would use the
-	 * browser's locale and timezone. `eventVars` is null when there is no Settings row,
-	 * and the send substitutes nothing at all in that case — so neither does this, and
-	 * the unknown-variable warning correctly says the placeholders go out as-is.
+	 * browser's locale and timezone. `eventVars` falls back to the defaults rather than
+	 * arriving null, matching the send — and the blank-name fallback is applied here for
+	 * the same reason, so a nameless recipient previews as the salutation they get.
 	 */
 	let previewVars = $derived(
 		previewTarget === null
 			? SAMPLE_VARS
-			: data.eventVars === null
-				? {}
-				: { name: previewTarget.name, ...data.eventVars }
+			: { name: previewTarget.name?.trim() || NAME_FALLBACK, ...data.eventVars }
 	);
 
 	let previewAs = $derived<PreviewAs>({

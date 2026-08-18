@@ -8,8 +8,24 @@ import { normalizeEmail } from '$lib/blacklist/match';
 import { LINKED_FIELD_COLUMN, isLinkedField } from '$lib/linkedFields';
 import { acceptsWriteIn, isOptionsType } from '$lib/questions/options';
 import { sendTemplatedEmail } from '$lib/server/email';
+import { emailSettings } from '$lib/server/settings';
 import { buildTemplateVars } from '$lib/email/variables';
 import { formatDateLong } from '$lib/format';
+
+/**
+ * Report a lifecycle send that failed, without failing the mutation behind it.
+ *
+ * These sends must not throw into the caller: an RSVP that reports failure because
+ * Resend was briefly down would tell a hacker their spot wasn't held when the row
+ * had already committed. But the rejection was previously dropped on the floor
+ * entirely, which is how every lifecycle email could stop for two real applicants
+ * with no error, no log, and nothing in the Resend dashboard to find.
+ */
+function reportSendFailure(kind: string, to: string) {
+	return (error: unknown) => {
+		console.error(`[email] ${kind} notification to ${to} failed to send:`, error);
+	};
+}
 
 /**
  * The three columns that gate everything in this router.
@@ -300,14 +316,15 @@ export const applicationRouter = router({
 			data: { status: UserStatus.CONFIRMED }
 		});
 
-		if (settings?.confirmTemplate) {
+		// Defaults when no row exists — an unconfigured install still confirms an RSVP.
+		// A template an admin has deliberately blanked still opts out.
+		const mail = emailSettings(settings);
+		if (mail.confirmTemplate) {
 			await sendTemplatedEmail(
 				user.email,
-				{ subject: settings.confirmSubject, body: settings.confirmTemplate },
-				buildTemplateVars(user, settings)
-			).catch(() => {
-				/* fire-and-forget */
-			});
+				{ subject: mail.confirmSubject, body: mail.confirmTemplate },
+				buildTemplateVars(user, mail)
+			).catch(reportSendFailure('RSVP confirmation', user.email));
 		}
 
 		return updated;
@@ -350,15 +367,13 @@ export const applicationRouter = router({
 			data: { status: UserStatus.DECLINED }
 		});
 
-		const settings = await ctx.prisma.settings.findFirst();
-		if (settings?.declineTemplate) {
+		const mail = emailSettings(await ctx.prisma.settings.findFirst());
+		if (mail.declineTemplate) {
 			await sendTemplatedEmail(
 				user.email,
-				{ subject: settings.declineSubject, body: settings.declineTemplate },
-				buildTemplateVars(user, settings)
-			).catch(() => {
-				/* fire-and-forget */
-			});
+				{ subject: mail.declineSubject, body: mail.declineTemplate },
+				buildTemplateVars(user, mail)
+			).catch(reportSendFailure('RSVP decline', user.email));
 		}
 
 		return updated;
@@ -464,15 +479,16 @@ export const applicationRouter = router({
 				where: { uid: ctx.user.uid }
 			});
 
-			// Send confirmation email
-			if (settings?.submitTemplate) {
+			// Send confirmation email. Defaults when no Settings row exists — the window
+			// guards above deliberately read that as "unconfigured, allow through", and
+			// an application that is allowed through still gets acknowledged.
+			const mail = emailSettings(settings);
+			if (mail.submitTemplate) {
 				await sendTemplatedEmail(
 					user.email,
-					{ subject: settings.submitSubject, body: settings.submitTemplate },
-					buildTemplateVars(updatedUser, settings)
-				).catch(() => {
-					/* fire-and-forget */
-				});
+					{ subject: mail.submitSubject, body: mail.submitTemplate },
+					buildTemplateVars(updatedUser, mail)
+				).catch(reportSendFailure('application submitted', user.email));
 			}
 
 			return updatedUser;

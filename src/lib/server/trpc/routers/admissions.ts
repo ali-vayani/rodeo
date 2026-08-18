@@ -5,6 +5,7 @@ import { Role, DecisionStatus } from '$lib/generated/prisma/client';
 import { router, adminProcedure } from '../init';
 import { logAction } from '$lib/server/log';
 import { sendTemplatedEmail } from '$lib/server/email';
+import { emailSettings } from '$lib/server/settings';
 import { buildTemplateVars } from '$lib/email/variables';
 import { CLAIM_TTL_MS } from '$lib/admissions/lock';
 import { effectiveDecision } from '$lib/admissions/decision';
@@ -778,43 +779,38 @@ export const admissionsRouter = router({
 			// Only users whose swap actually took are released — and get mailed.
 			const releasedUsers = users.filter((_, i) => swaps[i].count === 1);
 
-			// Send emails per decision type (fire-and-forget in dev)
-			let emailsAttempted = 0;
-			let emailsFailed = 0;
+			// Send emails per decision type. Defaults when no Settings row exists: gating
+			// this on the row meant a release on an unconfigured install decided every
+			// applicant's fate and told none of them, reporting 0 attempted as if that
+			// were the correct count rather than the symptom.
+			const mail = emailSettings(settings);
+			const templateMap: Record<string, { subject: string; body: string }> = {
+				[DecisionStatus.ACCEPTED]: {
+					subject: mail.acceptSubject,
+					body: mail.acceptTemplate
+				},
+				[DecisionStatus.REJECTED]: {
+					subject: mail.rejectSubject,
+					body: mail.rejectTemplate
+				},
+				[DecisionStatus.WAITLISTED]: {
+					subject: mail.waitlistSubject,
+					body: mail.waitlistTemplate
+				},
+				[DecisionStatus.PENDING]: { subject: '', body: '' }
+			};
 
-			if (settings) {
-				const templateMap: Record<string, { subject: string; body: string }> = {
-					[DecisionStatus.ACCEPTED]: {
-						subject: settings.acceptSubject,
-						body: settings.acceptTemplate
-					},
-					[DecisionStatus.REJECTED]: {
-						subject: settings.rejectSubject,
-						body: settings.rejectTemplate
-					},
-					[DecisionStatus.WAITLISTED]: {
-						subject: settings.waitlistSubject,
-						body: settings.waitlistTemplate
-					},
-					[DecisionStatus.PENDING]: { subject: '', body: '' }
-				};
+			const recipients = releasedUsers.filter(
+				(u) => u.pendingDecision && templateMap[u.pendingDecision].body
+			);
+			const emailsAttempted = recipients.length;
 
-				const recipients = releasedUsers.filter(
-					(u) => u.pendingDecision && templateMap[u.pendingDecision].body
-				);
-				emailsAttempted = recipients.length;
-
-				const results = await Promise.allSettled(
-					recipients.map((u) =>
-						sendTemplatedEmail(
-							u.email,
-							templateMap[u.pendingDecision!],
-							buildTemplateVars(u, settings)
-						)
-					)
-				);
-				emailsFailed = results.filter((r) => r.status === 'rejected').length;
-			}
+			const results = await Promise.allSettled(
+				recipients.map((u) =>
+					sendTemplatedEmail(u.email, templateMap[u.pendingDecision!], buildTemplateVars(u, mail))
+				)
+			);
+			const emailsFailed = results.filter((r) => r.status === 'rejected').length;
 
 			// Release is the one irreversible batch action in the app, so its entry
 			// carries the full breakdown: who was affected, what each decision was,

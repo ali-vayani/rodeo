@@ -171,9 +171,16 @@ export function resendConfigured(): boolean {
 	return Boolean(env.RESEND_API_KEY);
 }
 
-/** The From: address on everything the app sends. */
+/**
+ * The From: address on everything the app sends.
+ *
+ * `||`, not `??`: a variable created in Vercel and left blank arrives as `''`, which
+ * `??` passes straight through as the envelope sender. Resend rejects that with "The
+ * domain is invalid" — on every message, with the lifecycle callers logging the
+ * failure and carrying on, so a blank value reads as a mail outage with no cause.
+ */
 export function emailFrom(): string {
-	return env.EMAIL_FROM ?? 'hello@freetailhackers.com';
+	return env.EMAIL_FROM?.trim() || 'hello@freetailhackers.com';
 }
 
 /**

@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { TRPCError } from '@trpc/server';
 import { router, adminProcedure } from '../init';
 import { sendEmail } from '$lib/server/email';
+import { emailSettings } from '$lib/server/settings';
 import {
 	resolveRecipientWhere,
 	recipientFilterSchema,
@@ -96,12 +97,11 @@ export const emailRouter = router({
 	 *
 	 * The compose preview needs these; it must not format the dates itself, because
 	 * `toLocaleDateString()` in the browser uses the viewer's locale and timezone
-	 * rather than the server's. Null when there is no Settings row — `sendCustom`
-	 * substitutes nothing at all in that case, and the preview has to show the same.
+	 * rather than the server's. Never null: `sendCustom` falls back to
+	 * `DEFAULT_SETTINGS` when no row exists, so the preview shows the same.
 	 */
 	eventVars: adminProcedure.query(async ({ ctx }) => {
-		const settings = await ctx.prisma.settings.findFirst();
-		return settings ? buildEventVars(settings) : null;
+		return buildEventVars(emailSettings(await ctx.prisma.settings.findFirst()));
 	}),
 
 	/**
@@ -167,11 +167,14 @@ export const emailRouter = router({
 			// Personalise per recipient, so {{name}} in a custom blast behaves the same
 			// way it does in the lifecycle templates. External recipients have no User row
 			// to read a name off and get the documented fallback instead.
-			const settings = await ctx.prisma.settings.findFirst();
-			const externalVars = settings ? buildExternalTemplateVars(settings) : {};
+			// Defaults when no Settings row exists. Passing `{}` meant `substituteVariables`
+			// found no value for `name` and left the literal `{{name}}` in the body — which
+			// is exactly what landed in real inboxes before the fallback existed.
+			const settings = emailSettings(await ctx.prisma.settings.findFirst());
+			const externalVars = buildExternalTemplateVars(settings);
 			const results = await Promise.allSettled([
 				...users.map((u) => {
-					const vars = settings ? buildTemplateVars(u, settings) : {};
+					const vars = buildTemplateVars(u, settings);
 					return sendEmail({
 						to: u.email,
 						subject: substituteVariables(subject, vars),

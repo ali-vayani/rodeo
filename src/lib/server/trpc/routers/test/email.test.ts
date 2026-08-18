@@ -10,7 +10,8 @@ import {
 	mockSettings
 } from '../test-utils';
 import { EXTERNAL_RECIPIENT_PREFIX, EXACT_MATCH_FLOOR } from '$lib/server/recipients';
-import { EXTERNAL_NAME_FALLBACK, SAMPLE_VARS } from '$lib/email/variables';
+import { NAME_FALLBACK, SAMPLE_VARS } from '$lib/email/variables';
+import { DEFAULT_SETTINGS } from '$lib/server/settings';
 
 vi.mock('$lib/server/db', async () => {
 	const { mockDeep } = await import('vitest-mock-extended');
@@ -60,6 +61,46 @@ describe('email.sendCustom', () => {
 				data: expect.objectContaining({ subject: emailInput.subject, body: emailInput.body })
 			})
 		);
+	});
+
+	it('substitutes {{name}} even when no settings row exists', async () => {
+		// What organizers actually received: with no Settings row this passed an empty
+		// var map, `substituteVariables` found no value for `name`, and the literal
+		// `{{name}}` went out in the subject and body of a real send.
+		const caller = createTestCaller(db, adminUser);
+		db.user.findMany.mockResolvedValue([hackerUser] as never);
+		db.settings.findFirst.mockResolvedValue(null);
+		db.emailLog.create.mockResolvedValue(emailLog as never);
+
+		await caller.email.sendCustom({
+			subject: 'Hi {{name}}',
+			body: 'Hello {{name}}, see you soon.',
+			filters: {},
+			expectedCount: 1
+		});
+
+		const sent = vi.mocked(sendEmail).mock.calls[0][0];
+		expect(sent.subject).toBe(`Hi ${hackerUser.name}`);
+		expect(sent.body).toBe(`Hello ${hackerUser.name}, see you soon.`);
+		expect(sent.subject).not.toContain('{{');
+		expect(sent.body).not.toContain('{{');
+	});
+
+	it('falls back to the filler salutation for a user with a blank name', async () => {
+		const caller = createTestCaller(db, adminUser);
+		db.user.findMany.mockResolvedValue([{ ...hackerUser, name: '' }] as never);
+		db.emailLog.create.mockResolvedValue(emailLog as never);
+
+		await caller.email.sendCustom({
+			subject: 'Hi {{name}}',
+			body: 'Hi {{name}},',
+			filters: {},
+			expectedCount: 1
+		});
+
+		const sent = vi.mocked(sendEmail).mock.calls[0][0];
+		expect(sent.subject).toBe(`Hi ${NAME_FALLBACK}`);
+		expect(sent.body).toBe(`Hi ${NAME_FALLBACK},`);
 	});
 
 	it('filters users by role', async () => {
@@ -229,8 +270,8 @@ describe('email.sendCustom — external recipients', () => {
 		// The nameless fallback, identical to what the compose preview shows.
 		expect(sendEmail).toHaveBeenCalledWith({
 			to: GHOST,
-			subject: `Hi ${EXTERNAL_NAME_FALLBACK}`,
-			body: `Body ${EXTERNAL_NAME_FALLBACK}`
+			subject: `Hi ${NAME_FALLBACK}`,
+			body: `Body ${NAME_FALLBACK}`
 		});
 	});
 
@@ -489,13 +530,17 @@ describe('email.eventVars', () => {
 		});
 	});
 
-	it('returns null with no Settings row, matching what sendCustom substitutes', async () => {
-		// sendCustom falls back to an empty map there, leaving every {{var}} literal.
-		// The preview has to show the same rather than inventing dates.
+	it('falls back to the defaults with no Settings row, matching what sendCustom substitutes', async () => {
+		// This used to return null, because sendCustom substituted an empty map there and
+		// the preview had to show the same. That agreement was honest and both halves were
+		// wrong: `{{name}}` reached real inboxes literal. Both sides use the defaults now.
 		const caller = createTestCaller(db, adminUser);
 		db.settings.findFirst.mockResolvedValue(null);
 
-		await expect(caller.email.eventVars()).resolves.toBeNull();
+		await expect(caller.email.eventVars()).resolves.toEqual({
+			hackathon_start: DEFAULT_SETTINGS.hackathonStartDate.toLocaleDateString(),
+			rsvp_deadline: DEFAULT_SETTINGS.RSVPDeadline.toLocaleDateString()
+		});
 	});
 });
 

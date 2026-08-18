@@ -10,6 +10,7 @@ import {
 	confirmedHacker,
 	mockSettings
 } from '../test-utils';
+import { DEFAULT_SETTINGS } from '$lib/server/settings';
 
 vi.mock('$lib/server/db', async () => {
 	const { mockDeep } = await import('vitest-mock-extended');
@@ -466,7 +467,11 @@ describe('application.rsvpDecline', () => {
 		expect(result.status).toBe(UserStatus.DECLINED);
 	});
 
-	it('sends nothing when no settings row exists', async () => {
+	it('still sends, from the defaults, when no settings row exists', async () => {
+		// Production ran with no Settings row for weeks: `settings.get` served
+		// DEFAULT_SETTINGS so the editor looked configured, while every sender read the
+		// row directly, found null, and skipped silently. Both sides resolve the same
+		// values now — an unconfigured install mails the default copy rather than nothing.
 		const caller = createTestCaller(db, acceptedHacker);
 		db.user.findUniqueOrThrow.mockResolvedValue(acceptedHacker as never);
 		db.user.update.mockResolvedValue({
@@ -477,7 +482,11 @@ describe('application.rsvpDecline', () => {
 
 		await caller.application.rsvpDecline();
 
-		expect(sendTemplatedEmail).not.toHaveBeenCalled();
+		expect(sendTemplatedEmail).toHaveBeenCalledOnce();
+		const [to, template] = vi.mocked(sendTemplatedEmail).mock.calls[0];
+		expect(to).toBe(acceptedHacker.email);
+		expect(template.subject).toBe(DEFAULT_SETTINGS.declineSubject);
+		expect(template.body).toBe(DEFAULT_SETTINGS.declineTemplate);
 	});
 
 	it('refuses to decline a checked-in attendee', async () => {
@@ -733,6 +742,31 @@ describe('application.submit', () => {
 		expect(sendTemplatedEmail).toHaveBeenCalledWith(
 			hackerUser.email,
 			{ subject: mockSettings.submitSubject, body: mockSettings.submitTemplate },
+			expect.objectContaining({ name: hackerUser.name })
+		);
+	});
+
+	it('still acknowledges the application when no settings row exists', async () => {
+		// The production outage this exists to prevent: two applicants submitted against a
+		// database with no Settings row, `settings?.submitTemplate` was falsy, and the send
+		// was skipped with no error and nothing in the Resend dashboard to find. The window
+		// guards deliberately let a submission through in that state, so the acknowledgement
+		// has to go out with it.
+		const caller = createTestCaller(db, hackerUser);
+		db.user.findUniqueOrThrow
+			.mockResolvedValueOnce(hackerUser as never)
+			.mockResolvedValue({ ...hackerUser, status: UserStatus.APPLIED } as never);
+		db.question.findMany.mockResolvedValue([] as never);
+		db.applicationResponse.findMany.mockResolvedValue([] as never);
+		db.blacklist.findUnique.mockResolvedValue(null as never);
+		db.user.updateMany.mockResolvedValue({ count: 1 } as never);
+		db.settings.findFirst.mockResolvedValue(null);
+
+		await caller.application.submit();
+
+		expect(sendTemplatedEmail).toHaveBeenCalledWith(
+			hackerUser.email,
+			{ subject: DEFAULT_SETTINGS.submitSubject, body: DEFAULT_SETTINGS.submitTemplate },
 			expect.objectContaining({ name: hackerUser.name })
 		);
 	});
