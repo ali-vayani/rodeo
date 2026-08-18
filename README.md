@@ -8,16 +8,16 @@ Rodeo is Freetail Hackers' hackathon management platform. It has two portals:
 
 ## Stack
 
-| Layer      | Technology                                         |
-| ---------- | -------------------------------------------------- |
-| Frontend   | SvelteKit (Svelte 5, runes), Tailwind CSS v4       |
-| API        | tRPC (`/api/trpc`)                                 |
-| Database   | Prisma ORM → PostgreSQL (local Docker or Supabase) |
-| Auth       | Supabase (Google OAuth) in deployed environments   |
-| Email      | Resend                                             |
-| Validation | Zod                                                |
-| Tests      | Vitest                                             |
-| Hosting    | Vercel                                             |
+| Layer      | Technology                                                         |
+| ---------- | ------------------------------------------------------------------ |
+| Frontend   | SvelteKit (Svelte 5, runes), Tailwind CSS v4                       |
+| API        | tRPC (`/api/trpc`)                                                 |
+| Database   | Prisma ORM → PostgreSQL (local Docker or Supabase)                 |
+| Auth       | Supabase (Google OAuth or email/password) in deployed environments |
+| Email      | Resend                                                             |
+| Validation | Zod                                                                |
+| Tests      | Vitest                                                             |
+| Hosting    | Vercel                                                             |
 
 ## Prerequisites
 
@@ -133,8 +133,9 @@ never reaches them.
 src/
   routes/
     +page.svelte             landing / redirect
-    login/                   dev email form + Google OAuth button
-    auth/callback/           Supabase OAuth handshake
+    login/                   dev email form, Google OAuth, email/password
+    auth/callback/           Supabase code exchange (OAuth, confirm, recovery)
+    reset-password/          set a new password from a recovery link
     hacker/                  application, account, team invites
     admin/                   dashboard, admissions, users, scan, schedule,
                              email-templates, custom-email, application-editor,
@@ -219,8 +220,9 @@ transport is missing, rather than on the first hacker who tries to sign in.
 Production signs in through Supabase — Google OAuth or email/password — and the first login
 **is** registration: the `User` row is created from the Supabase identity with the `HACKER`
 role. The email/password sign-up form registers with Supabase only; the local row still comes
-from that first authenticated request. Elevating someone to organizer or admin is done from
-`/admin/users`.
+from that first authenticated request. Password resets ride Supabase's recovery mail: the
+link signs the user in through `/auth/callback` and lands on `/reset-password`. Elevating
+someone to organizer or admin is done from `/admin/users`.
 
 ### Email
 

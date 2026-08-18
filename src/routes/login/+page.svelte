@@ -6,14 +6,26 @@
 
 	let signingIn = $state(false);
 
-	// A failed sign-up posts back and re-renders the page, so the mode has to be
-	// recovered from the action result or the error would render under a
-	// sign-in form that doesn't match it. Reading only the initial `form` is
-	// deliberate: these forms post without use:enhance, so every action response
-	// arrives via a full page load that remounts this component.
+	// A failed post re-renders the page, so the mode has to be recovered from
+	// the action result or the error would render under a form that doesn't
+	// match it. Reading only the initial `form` is deliberate: these forms post
+	// without use:enhance, so every action response arrives via a full page
+	// load that remounts this component.
 	// svelte-ignore state_referenced_locally
-	let mode: 'signin' | 'signup' = $state(
-		form?.signupError || form?.signupPending ? 'signup' : 'signin'
+	let mode: 'signin' | 'signup' | 'forgot' = $state(
+		form?.signupError || form?.signupPending
+			? 'signup'
+			: form?.forgotError || form?.resetSent
+				? 'forgot'
+				: 'signin'
+	);
+
+	const formError = $derived(
+		mode === 'signup'
+			? form?.signupError
+			: mode === 'forgot'
+				? form?.forgotError
+				: form?.passwordError
 	);
 
 	async function signInWithGoogle() {
@@ -53,7 +65,11 @@
 		</div>
 
 		{#if data.oauthError}
-			<p class="mb-4 text-sm text-destructive">Sign-in failed. Please try again.</p>
+			<p class="mb-4 text-sm text-destructive">
+				{data.oauthError === 'reset_expired'
+					? 'That password reset link is invalid or has expired. Request a new one below.'
+					: 'Sign-in failed. Please try again.'}
+			</p>
 		{/if}
 
 		{#if data.supabaseAuth}
@@ -106,9 +122,15 @@
 				</p>
 			{/if}
 
+			{#if form?.resetSent}
+				<p class="mb-3 text-sm text-muted-foreground">
+					Check your email for a password reset link.
+				</p>
+			{/if}
+
 			<form
 				method="POST"
-				action={mode === 'signup' ? '?/signup' : '?/password'}
+				action={mode === 'signup' ? '?/signup' : mode === 'forgot' ? '?/forgot' : '?/password'}
 				class="flex flex-col gap-3"
 			>
 				{#if data.redirectTo}
@@ -135,35 +157,49 @@
 					class="w-full rounded border border-border px-3 py-2 text-sm outline-none focus:border-primary"
 				/>
 
-				<input
-					type="password"
-					name="password"
-					placeholder="Password"
-					required
-					autocomplete={mode === 'signup' ? 'new-password' : 'current-password'}
-					class="w-full rounded border border-border px-3 py-2 text-sm outline-none focus:border-primary"
-				/>
+				{#if mode !== 'forgot'}
+					<input
+						type="password"
+						name="password"
+						placeholder="Password"
+						required
+						autocomplete={mode === 'signup' ? 'new-password' : 'current-password'}
+						class="w-full rounded border border-border px-3 py-2 text-sm outline-none focus:border-primary"
+					/>
+				{/if}
 
-				{#if mode === 'signup' ? form?.signupError : form?.passwordError}
-					<p class="text-sm text-destructive">
-						{mode === 'signup' ? form?.signupError : form?.passwordError}
-					</p>
+				{#if formError}
+					<p class="text-sm text-destructive">{formError}</p>
 				{/if}
 
 				<button
 					type="submit"
 					class="w-full rounded bg-primary px-4 py-2 text-sm font-medium text-white transition-opacity hover:opacity-85"
 				>
-					{mode === 'signup' ? 'Create account' : 'Sign in'} →
+					{mode === 'signup' ? 'Create account' : mode === 'forgot' ? 'Send reset link' : 'Sign in'} →
 				</button>
 			</form>
 
+			{#if mode === 'signin'}
+				<button
+					type="button"
+					onclick={() => (mode = 'forgot')}
+					class="mt-3 w-full text-center text-sm text-muted-foreground hover:text-primary"
+				>
+					Forgot password?
+				</button>
+			{/if}
+
 			<button
 				type="button"
-				onclick={() => (mode = mode === 'signup' ? 'signin' : 'signup')}
+				onclick={() => (mode = mode === 'signin' ? 'signup' : 'signin')}
 				class="mt-3 w-full text-center text-sm text-muted-foreground hover:text-primary"
 			>
-				{mode === 'signup' ? 'Already have an account? Sign in' : 'New here? Create an account'}
+				{mode === 'signin'
+					? 'New here? Create an account'
+					: mode === 'signup'
+						? 'Already have an account? Sign in'
+						: 'Back to sign in'}
 			</button>
 		{/if}
 

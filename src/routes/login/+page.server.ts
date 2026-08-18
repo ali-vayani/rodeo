@@ -175,5 +175,32 @@ export const actions: Actions = {
 		}
 
 		return { signupPending: true };
+	},
+
+	/**
+	 * Sends the Supabase password-recovery email. The link in the mail signs
+	 * the user in through /auth/callback (a recovery session is a full session)
+	 * and lands on /reset-password, where updateUser sets the new password.
+	 */
+	forgot: async (event) => {
+		if (!usesSupabaseAuth()) {
+			return fail(400, { forgotError: 'Password reset is not available here.' });
+		}
+
+		const data = await event.request.formData();
+		const email = (data.get('email') as string)?.trim().toLowerCase();
+
+		if (!email) return fail(400, { forgotError: 'Email is required.' });
+
+		const supabase = createSupabaseServerClient(event);
+		const { error } = await supabase.auth.resetPasswordForEmail(email, {
+			redirectTo: new URL('/auth/callback?next=/reset-password', event.url.origin).toString()
+		});
+
+		// Only operational failures land here (rate limit, transport) — an
+		// unknown address reports success, so this form can't enumerate accounts.
+		if (error) return fail(400, { forgotError: error.message });
+
+		return { resetSent: true };
 	}
 };
