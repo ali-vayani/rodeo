@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { router, authedProcedure, adminProcedure } from '../init';
 import { TEMPLATE_KEYS, type TemplateKey } from '$lib/email/templates';
 import { isAdmin } from '$lib/auth/permissions';
+import { DEFAULT_SETTINGS } from '$lib/server/settings';
 import { logAction, listOrNone } from '$lib/server/log';
 
 // Same bounds `updateTemplates` enforces — a subject is 1–200 chars, a body ≤20k. This
@@ -43,27 +44,10 @@ const settingsInput = z
 		path: ['RSVPDeadline']
 	});
 
-export const DEFAULT_SETTINGS = {
-	applicationOpen: new Date(),
-	applicationDeadline: new Date(),
-	RSVPDeadline: new Date(),
-	admissionsSend: null,
-	hackathonStartDate: new Date(),
-	scanActions: ['Check-In'],
-	submitTemplate: 'Hi {{name}}, your application has been submitted!',
-	submitSubject: 'We received your application',
-	acceptTemplate: 'Hi {{name}}, you have been accepted!',
-	acceptSubject: "You've been accepted!",
-	confirmTemplate: 'Hi {{name}}, your RSVP has been confirmed!',
-	confirmSubject: 'Your RSVP is confirmed',
-	declineTemplate: 'Hi {{name}}, your spot has been declined.',
-	declineSubject: 'Your RSVP has been declined',
-	rejectTemplate: 'Hi {{name}}, we regret to inform you that your application was not accepted.',
-	rejectSubject: 'An update on your application',
-	waitlistTemplate: 'Hi {{name}}, you have been added to the waitlist.',
-	waitlistSubject: "You're on the waitlist",
-	timezone: 'America/Chicago'
-};
+// Lives in `$lib/server/settings` so the senders resolve the same values this router
+// serves the editor — the two disagreeing is what silenced every lifecycle email.
+// Re-exported because this was its home, and callers still import it from here.
+export { DEFAULT_SETTINGS };
 
 type TemplateColumns = Record<`${TemplateKey}Template` | `${TemplateKey}Subject`, string>;
 

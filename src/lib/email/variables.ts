@@ -45,15 +45,19 @@ export const SAMPLE_VARS: Record<string, string> = Object.fromEntries(
 );
 
 /**
- * What `{{name}}` becomes for a recipient with no account.
+ * What `{{name}}` becomes when there is no name to substitute.
  *
- * A custom email can be sent to an arbitrary address — a sponsor, a judge — and there
- * is no User row to read a name off. "Hi {{name}}," has to still read as a sentence,
- * so the substitution is a salutation filler rather than a name. Exported because the
- * compose preview substitutes the same value: a preview that showed anything else
- * would be lying about what lands in that inbox.
+ * Two cases reach it. A custom email can go to an arbitrary address — a sponsor, a
+ * judge — with no User row to read a name off. And a User row can carry a blank name:
+ * `name` is populated by a linked application question, so anyone who has not answered
+ * it yet has `''`, which would render "Hi ," in a real inbox.
+ *
+ * "Hi {{name}}," has to still read as a sentence, so the substitution is a salutation
+ * filler rather than a name. Exported because the compose preview substitutes the same
+ * value: a preview that showed anything else would be lying about what lands in that
+ * inbox.
  */
-export const EXTERNAL_NAME_FALLBACK = 'there';
+export const NAME_FALLBACK = 'hacker';
 
 const VARIABLE_PATTERN = /\{\{(\w+)\}\}/g;
 
@@ -160,7 +164,9 @@ export function buildTemplateVars(
 	user: { name: string },
 	settings: { hackathonStartDate: Date; RSVPDeadline: Date }
 ): Record<string, string> {
-	return { name: user.name, ...buildEventVars(settings) };
+	// `name` comes from a linked application question, so an account that has not
+	// answered it holds `''` — and "Hi ," is worse than a filler salutation.
+	return { name: user.name?.trim() || NAME_FALLBACK, ...buildEventVars(settings) };
 }
 
 /**
@@ -173,5 +179,5 @@ export function buildExternalTemplateVars(settings: {
 	hackathonStartDate: Date;
 	RSVPDeadline: Date;
 }): Record<string, string> {
-	return buildTemplateVars({ name: EXTERNAL_NAME_FALLBACK }, settings);
+	return buildTemplateVars({ name: NAME_FALLBACK }, settings);
 }

@@ -8,7 +8,7 @@ import {
 	buildTemplateVars,
 	buildEventVars,
 	buildExternalTemplateVars,
-	EXTERNAL_NAME_FALLBACK,
+	NAME_FALLBACK,
 	type TemplateSegment
 } from './variables';
 
@@ -145,14 +145,29 @@ describe('buildEventVars / buildExternalTemplateVars', () => {
 	});
 
 	it('substitutes the nameless fallback for a recipient with no account', () => {
-		expect(buildExternalTemplateVars(settings).name).toBe(EXTERNAL_NAME_FALLBACK);
+		expect(buildExternalTemplateVars(settings).name).toBe(NAME_FALLBACK);
 	});
 
 	it('reads as a sentence in the salutation it has to survive', () => {
-		// "Hi there," is the whole reason the fallback is a filler and not a name.
+		// "Hi hacker," is the whole reason the fallback is a filler and not a name.
 		expect(substituteVariables('Hi {{name}},', buildExternalTemplateVars(settings))).toBe(
-			'Hi there,'
+			'Hi hacker,'
 		);
+	});
+
+	it('substitutes the fallback for a user whose name is blank', () => {
+		// `name` is populated by a linked application question, so an account that has
+		// not answered it holds ''. "Hi ," is what used to go out.
+		expect(substituteVariables('Hi {{name}},', buildTemplateVars({ name: '' }, settings))).toBe(
+			'Hi hacker,'
+		);
+		expect(substituteVariables('Hi {{name}},', buildTemplateVars({ name: '   ' }, settings))).toBe(
+			'Hi hacker,'
+		);
+	});
+
+	it('leaves a real name alone', () => {
+		expect(buildTemplateVars({ name: 'Sarah Chen' }, settings).name).toBe('Sarah Chen');
 	});
 
 	it('gives an external recipient the same dates as a user', () => {
