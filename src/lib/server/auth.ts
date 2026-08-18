@@ -45,9 +45,10 @@ async function getProdSession(event: RequestEvent) {
 
 	if (!sbUser?.email) return null;
 
-	// Find or create the local User record from the Supabase identity. Google is
-	// the only sign-in path in production, so first login *is* registration —
-	// there is no separate sign-up step that could have created this row.
+	// Find or create the local User record from the Supabase identity (Google
+	// OAuth or email/password). Either way first login *is* registration — the
+	// sign-up form registers with Supabase only, so no earlier step could have
+	// created this row.
 	const email = sbUser.email.toLowerCase();
 	const name = sbUser.user_metadata?.full_name ?? sbUser.user_metadata?.name ?? email.split('@')[0];
 

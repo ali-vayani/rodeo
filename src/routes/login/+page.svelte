@@ -6,6 +6,28 @@
 
 	let signingIn = $state(false);
 
+	// A failed post re-renders the page, so the mode has to be recovered from
+	// the action result or the error would render under a form that doesn't
+	// match it. Reading only the initial `form` is deliberate: these forms post
+	// without use:enhance, so every action response arrives via a full page
+	// load that remounts this component.
+	// svelte-ignore state_referenced_locally
+	let mode: 'signin' | 'signup' | 'forgot' = $state(
+		form?.signupError || form?.signupPending
+			? 'signup'
+			: form?.forgotError || form?.resetSent
+				? 'forgot'
+				: 'signin'
+	);
+
+	const formError = $derived(
+		mode === 'signup'
+			? form?.signupError
+			: mode === 'forgot'
+				? form?.forgotError
+				: form?.passwordError
+	);
+
 	async function signInWithGoogle() {
 		if (!data.supabaseUrl || !data.supabaseAnonKey) return;
 
@@ -43,15 +65,20 @@
 		</div>
 
 		{#if data.oauthError}
-			<p class="mb-4 text-sm text-destructive">Sign-in failed. Please try again.</p>
+			<p class="mb-4 text-sm text-destructive">
+				{data.oauthError === 'reset_expired'
+					? 'That password reset link is invalid or has expired. Request a new one below.'
+					: 'Sign-in failed. Please try again.'}
+			</p>
 		{/if}
 
 		{#if data.supabaseAuth}
 			<!--
-				Google is the sign-in path in deployed environments — there is no
-				password form and no separate sign-up: the first Google login creates
-				the account. Preview deploys additionally render the yopmail form
-				below, for the seeded test accounts.
+				Deployed environments sign in through Supabase: Google, or email and
+				password. Either way the first login creates the account — sign-up
+				registers with Supabase, and the local User row is provisioned on the
+				first authenticated request. Preview deploys additionally render the
+				yopmail form below, for the seeded test accounts.
 			-->
 			<button
 				onclick={signInWithGoogle}
@@ -82,6 +109,98 @@
 			{#if form?.error && !data.yopmailLogin}
 				<p class="mt-3 text-sm text-destructive">{form.error}</p>
 			{/if}
+
+			<div class="my-6 flex items-center gap-3">
+				<div class="h-px flex-1 bg-border"></div>
+				<span class="font-mono text-xs text-muted-foreground uppercase">or</span>
+				<div class="h-px flex-1 bg-border"></div>
+			</div>
+
+			{#if form?.signupPending}
+				<p class="mb-3 text-sm text-muted-foreground">
+					Check your email for a confirmation link, then sign in.
+				</p>
+			{/if}
+
+			{#if form?.resetSent}
+				<p class="mb-3 text-sm text-muted-foreground">
+					Check your email for a password reset link.
+				</p>
+			{/if}
+
+			<form
+				method="POST"
+				action={mode === 'signup' ? '?/signup' : mode === 'forgot' ? '?/forgot' : '?/password'}
+				class="flex flex-col gap-3"
+			>
+				{#if data.redirectTo}
+					<input type="hidden" name="redirectTo" value={data.redirectTo} />
+				{/if}
+
+				{#if mode === 'signup'}
+					<input
+						type="text"
+						name="name"
+						placeholder="Full name"
+						required
+						autocomplete="name"
+						class="w-full rounded border border-border px-3 py-2 text-sm outline-none focus:border-primary"
+					/>
+				{/if}
+
+				<input
+					type="email"
+					name="email"
+					placeholder="you@example.com"
+					required
+					autocomplete="email"
+					class="w-full rounded border border-border px-3 py-2 text-sm outline-none focus:border-primary"
+				/>
+
+				{#if mode !== 'forgot'}
+					<input
+						type="password"
+						name="password"
+						placeholder="Password"
+						required
+						autocomplete={mode === 'signup' ? 'new-password' : 'current-password'}
+						class="w-full rounded border border-border px-3 py-2 text-sm outline-none focus:border-primary"
+					/>
+				{/if}
+
+				{#if formError}
+					<p class="text-sm text-destructive">{formError}</p>
+				{/if}
+
+				<button
+					type="submit"
+					class="w-full rounded bg-primary px-4 py-2 text-sm font-medium text-white transition-opacity hover:opacity-85"
+				>
+					{mode === 'signup' ? 'Create account' : mode === 'forgot' ? 'Send reset link' : 'Sign in'} →
+				</button>
+			</form>
+
+			{#if mode === 'signin'}
+				<button
+					type="button"
+					onclick={() => (mode = 'forgot')}
+					class="mt-3 w-full text-center text-sm text-muted-foreground hover:text-primary"
+				>
+					Forgot password?
+				</button>
+			{/if}
+
+			<button
+				type="button"
+				onclick={() => (mode = mode === 'signin' ? 'signup' : 'signin')}
+				class="mt-3 w-full text-center text-sm text-muted-foreground hover:text-primary"
+			>
+				{mode === 'signin'
+					? 'New here? Create an account'
+					: mode === 'signup'
+						? 'Already have an account? Sign in'
+						: 'Back to sign in'}
+			</button>
 		{/if}
 
 		{#if data.supabaseAuth && data.yopmailLogin}
@@ -93,7 +212,10 @@
 		{/if}
 
 		{#if data.yopmailLogin}
-			<form method="POST" class="flex flex-col gap-3">
+			<form method="POST" action="?/yopmail" class="flex flex-col gap-3">
+				{#if data.redirectTo}
+					<input type="hidden" name="redirectTo" value={data.redirectTo} />
+				{/if}
 				<input
 					type="email"
 					name="email"

@@ -7,14 +7,14 @@ Freetail Hackers' hackathon management platform. Two portals:
 
 ## Stack
 
-| Layer    | Technology                                         |
-| -------- | -------------------------------------------------- |
-| Frontend | SvelteKit (Svelte 5, runes), Tailwind CSS v4       |
-| API      | tRPC (`/api/trpc`)                                 |
-| Database | Prisma ORM → PostgreSQL (local Docker or Supabase) |
-| Auth     | Supabase (Google OAuth) in deployed environments   |
-| Email    | Resend                                             |
-| Hosting  | Vercel                                             |
+| Layer    | Technology                                                         |
+| -------- | ------------------------------------------------------------------ |
+| Frontend | SvelteKit (Svelte 5, runes), Tailwind CSS v4                       |
+| API      | tRPC (`/api/trpc`)                                                 |
+| Database | Prisma ORM → PostgreSQL (local Docker or Supabase)                 |
+| Auth     | Supabase (Google OAuth or email/password) in deployed environments |
+| Email    | Resend                                                             |
+| Hosting  | Vercel                                                             |
 
 ## Quick start
 
@@ -89,8 +89,9 @@ Role counts are overridable: `SEED_HACKERS=10 SEED_JUDGES=0 npm run db:seed`.
 ```
 src/
   routes/
-    login/                   dev email form + Google OAuth button
-    auth/callback/           Supabase OAuth handshake
+    login/                   dev email form, Google OAuth, email/password
+    auth/callback/           Supabase code exchange (OAuth, confirm, recovery)
+    reset-password/          set a new password from a recovery link
     hacker/                  application, account, team invites
     admin/                   dashboard, admissions, users, scan, schedule,
                              email-templates, custom-email, application-editor,
@@ -143,7 +144,7 @@ Resolved from `VERCEL_ENV` (falling back to `NODE_ENV`) in `src/lib/server/env.t
 
 ### Production auth
 
-Google OAuth is the only sign-in path. First login **is** registration — the `User` row is created from the Google profile with the `HACKER` role. Elevating someone to organizer or admin is done from `/admin/users`.
+Production signs in through Supabase — Google OAuth or email/password — and first login **is** registration: the `User` row is created from the Supabase identity with the `HACKER` role. The email/password sign-up form registers with Supabase only; the local row still comes from that first authenticated request. Password resets ride Supabase's recovery mail: the link signs the user in through `/auth/callback` and lands on `/reset-password`. Elevating someone to organizer or admin is done from `/admin/users`.
 
 #### Testing Google OAuth locally
 
