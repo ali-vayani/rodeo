@@ -57,7 +57,7 @@ describe('organizer is denied everything holding user data', () => {
 		'blacklist.list': (c) => c.blacklist.list(),
 		// Aggregate counts, but of a named applicant pool — at a count of one they are
 		// per-person data, and no organizer-reachable page uses them.
-		'filters.linkedFacets': (c) => c.filters.linkedFacets(),
+		'filters.facets': (c) => c.filters.facets(),
 		'blacklist.add': (c) =>
 			c.blacklist.add({ firstName: 'A', lastName: 'B', email: 'a@b.com' } as never),
 		'email.sendCustom': (c) => c.email.sendCustom({ subject: 's', body: 'b' } as never),

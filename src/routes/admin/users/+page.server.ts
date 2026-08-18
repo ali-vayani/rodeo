@@ -10,9 +10,9 @@ const createCaller = createCallerFactory(appRouter);
 const PAGE_SIZE = 50;
 
 /**
- * The linked-field facets are loaded here rather than queried from the browser.
+ * The filter facets are loaded here rather than queried from the browser.
  *
- * They are a *vocabulary*, not a result: `filters.linkedFacets` returns global counts
+ * They are a *vocabulary*, not a result: `filters.facets` returns global counts
  * that don't depend on anything the page is currently filtering on, so it is fetched
  * exactly once per visit either way. Loading it here makes that one fetch share the
  * round trip the row list already makes through the in-process caller, so the filter
@@ -27,7 +27,7 @@ export const load: PageServerLoad = async (event) => {
 	const caller = createCaller(createContext(event));
 	const [list, facets] = await Promise.all([
 		caller.user.list({ page: 1, pageSize: PAGE_SIZE }),
-		caller.filters.linkedFacets()
+		caller.filters.facets()
 	]);
 	// `search` comes back so the did-you-mean strip reads its shape from the procedure
 	// rather than the page re-declaring an empty expansion of its own.

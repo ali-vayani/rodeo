@@ -14,9 +14,9 @@
 		DECISION_VALUES,
 		DECISION_OPTIONS,
 		allChecked,
-		buildRecipientParams,
-		type LinkedSelection
+		buildRecipientParams
 	} from '$lib/admin/filters';
+	import { linkedFacetKey, type FacetState } from '$lib/facets';
 	import { Role, UserStatus, DecisionStatus } from '$lib/generated/prisma/enums';
 	import { STAFF_ROLES } from '$lib/auth/permissions';
 
@@ -58,18 +58,25 @@
 	let search = $state('');
 
 	/**
-	 * The linked application fields. Empty means "no filter" — the inverse of the three
+	 * The application-answer facets. Empty means "no filter" — the inverse of the three
 	 * checkbox groups, which start fully checked. `buildRecipientParams` omits an empty
-	 * field's key entirely rather than sending `[]`, which the server would read as
-	 * "match nobody"; see `linkedParams`.
+	 * facet's key entirely rather than sending `[]`, which the server would read as
+	 * "match nobody"; see `facetParams`.
 	 */
-	let linked = $state<LinkedSelection>({});
+	let facetSelection = $state<FacetState>({});
+
+	/**
+	 * The Name facet has no control of its own — it is one distinct value per person, so
+	 * a list of them is a directory — but the did-you-mean chips below the search box
+	 * drive it directly, which is why the key is spelled out here.
+	 */
+	const NAME_FACET = linkedFacetKey('NAME');
 
 	function buildListParams(p: number) {
 		return {
 			page: p,
 			pageSize: PAGE_SIZE,
-			...buildRecipientParams(roleFilter, statusFilter, decisionFilter, search, linked)
+			...buildRecipientParams(roleFilter, statusFilter, decisionFilter, search, facetSelection)
 		};
 	}
 
@@ -90,7 +97,9 @@
 	);
 
 	/** The name a did-you-mean chip currently pins the list to, if any. */
-	let pinnedName = $derived(linked.NAME?.length === 1 ? linked.NAME[0] : null);
+	let pinnedName = $derived(
+		facetSelection[NAME_FACET]?.values?.length === 1 ? facetSelection[NAME_FACET].values[0] : null
+	);
 
 	/**
 	 * Narrow to one suggested person — an exact `name` filter, so the result is that
@@ -99,7 +108,10 @@
 	 * click away from the next candidate.
 	 */
 	function pickSuggestion(name: string) {
-		linked = { ...linked, NAME: pinnedName === name ? [] : [name] };
+		facetSelection = {
+			...facetSelection,
+			[NAME_FACET]: { values: pinnedName === name ? [] : [name] }
+		};
 		loadPage(1);
 	}
 
@@ -349,8 +361,8 @@
 		onToggleDecision={toggleDecision}
 		onClearDecision={clearDecision}
 		facets={data.facets}
-		bind:linked
-		onLinkedChange={() => loadPage(1)}
+		bind:selection={facetSelection}
+		onSelectionChange={() => loadPage(1)}
 	/>
 
 	<!-- Table area -->

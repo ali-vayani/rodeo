@@ -9,6 +9,7 @@ import {
 	resolveRecipientWhere,
 	linkedFieldConditions,
 	recipientConditions,
+	resolveAnswerConditions,
 	whereFromConditions,
 	searchCondition,
 	MAX_FUZZY_NAMES,
@@ -16,7 +17,7 @@ import {
 	NO_EXPANSION,
 	SEARCH_SIMILARITY_THRESHOLD
 } from './recipients';
-import { NO_VALUE } from '$lib/linkedFields';
+import { NO_VALUE } from '$lib/facets';
 import { parseEmailList, malformedEmails } from '$lib/admin/filters';
 
 /** The AND conditions, or [] when the predicate is match-everyone. */
@@ -317,9 +318,15 @@ function fakePrisma(names: string[], exactMatches: number) {
 			findMany: async () => {
 				calls.findMany++;
 				return names.map((name) => ({ name }));
-			}
-		}
-	} as unknown as Pick<PrismaClient, 'user'>;
+			},
+			// Only the state facet groups users, and none of these cases engage it.
+			groupBy: async () => []
+		},
+		// `resolveRecipientWhere` resolves the answer filters too. Present so the type
+		// matches; unreached, because none of these cases carries an `answers` key.
+		applicationResponse: { groupBy: async () => [] },
+		settings: { findFirst: async () => null }
+	} as unknown as Pick<PrismaClient, 'user' | 'applicationResponse' | 'settings'>;
 	return { prisma, calls };
 }
 
@@ -426,6 +433,199 @@ describe('searchCondition', () => {
 				{ name: { in: ['Sarah Chen'] } }
 			]
 		});
+	});
+});
+
+/**
+ * A prisma stand-in for the answer filters: distinct answers per question, plus the
+ * Settings row the state filter reads its home state from.
+ */
+function answerPrisma(values: string[] = [], homeState: string | null = null) {
+	const calls = { groupBy: 0, settings: 0 };
+	return {
+		calls,
+		prisma: {
+			applicationResponse: {
+				groupBy: async () => {
+					calls.groupBy++;
+					return values.map((value) => ({ value }));
+				}
+			},
+			settings: {
+				findFirst: async () => {
+					calls.settings++;
+					return { homeState };
+				}
+			},
+			user: { groupBy: async () => [] }
+		} as unknown as Pick<PrismaClient, 'user' | 'applicationResponse' | 'settings'>
+	};
+}
+
+const QUESTION = 'q-hackathons';
+
+describe('resolveAnswerConditions — values', () => {
+	it('adds no condition at all for an absent key', async () => {
+		expect(await resolveAnswerConditions(answerPrisma().prisma, {})).toEqual([]);
+	});
+
+	it('skips an entry whose controls are all untouched', async () => {
+		// A facet the panel is holding open, not a selection anyone made. Treating it as
+		// engaged-but-empty would empty the table for merely expanding a filter.
+		expect(
+			await resolveAnswerConditions(answerPrisma().prisma, { answers: [{ questionId: QUESTION }] })
+		).toEqual([]);
+	});
+
+	it('matches nobody for an engaged-but-empty value list', async () => {
+		// The rule the linked fields and the decision pair already follow. Getting it
+		// backwards on the send path is how a UI reading "0 recipients" mails everyone.
+		expect(
+			await resolveAnswerConditions(answerPrisma().prisma, {
+				answers: [{ questionId: QUESTION, values: [] }]
+			})
+		).toEqual([{ uid: 'IMPOSSIBLE_NO_MATCH' }]);
+	});
+
+	it('selects the users holding one of the chosen answers', async () => {
+		expect(
+			await resolveAnswerConditions(answerPrisma().prisma, {
+				answers: [{ questionId: QUESTION, values: ['Yes', 'Maybe'] }]
+			})
+		).toEqual([
+			{ application: { some: { questionId: QUESTION, value: { in: ['Yes', 'Maybe'] } } } }
+		]);
+	});
+
+	it('reads the no-value sentinel as both spellings of unanswered', async () => {
+		// A question added after someone applied leaves no row; a field opened and
+		// cleared leaves one holding ''. Counting only the first misses half of them.
+		const [condition] = await resolveAnswerConditions(answerPrisma().prisma, {
+			answers: [{ questionId: QUESTION, values: [NO_VALUE] }]
+		});
+		expect(condition).toEqual({
+			OR: [
+				{ application: { none: { questionId: QUESTION } } },
+				{ application: { some: { questionId: QUESTION, value: '' } } }
+			]
+		});
+	});
+
+	it('ORs the sentinel alongside real values', async () => {
+		const [condition] = await resolveAnswerConditions(answerPrisma().prisma, {
+			answers: [{ questionId: QUESTION, values: ['Yes', NO_VALUE] }]
+		});
+		expect(condition).toEqual({
+			OR: [
+				{ application: { some: { questionId: QUESTION, value: { in: ['Yes'] } } } },
+				{ application: { none: { questionId: QUESTION } } },
+				{ application: { some: { questionId: QUESTION, value: '' } } }
+			]
+		});
+	});
+
+	it('ANDs one condition per engaged question, so they stack', async () => {
+		const conds = await resolveAnswerConditions(answerPrisma().prisma, {
+			answers: [
+				{ questionId: 'q-a', values: ['Yes'] },
+				{ questionId: 'q-b', values: ['No'] }
+			]
+		});
+		expect(conds).toHaveLength(2);
+	});
+});
+
+describe('resolveAnswerConditions — substring', () => {
+	it('matches case-insensitively on the answer', async () => {
+		expect(
+			await resolveAnswerConditions(answerPrisma().prisma, {
+				answers: [{ questionId: QUESTION, contains: 'discord' }]
+			})
+		).toEqual([
+			{
+				application: {
+					some: { questionId: QUESTION, value: { contains: 'discord', mode: 'insensitive' } }
+				}
+			}
+		]);
+	});
+
+	it('ignores a term that is only whitespace', async () => {
+		// `contains: ''` matches every answered row, which is the opposite of what an
+		// admin who typed a space and deleted it is asking for.
+		expect(
+			await resolveAnswerConditions(answerPrisma().prisma, {
+				answers: [{ questionId: QUESTION, contains: '   ' }]
+			})
+		).toEqual([]);
+	});
+});
+
+describe('resolveAnswerConditions — numeric range', () => {
+	it('resolves the range to the explicit answers that satisfy it', async () => {
+		// Answers are text, so `value >= 18` would compare "9" against "18" as strings.
+		// The range is folded to exact values before it reaches the predicate — the same
+		// move `expandSearch` makes, and what keeps preview and send identical.
+		const { prisma } = answerPrisma(['0', '2', '5', '12']);
+		expect(
+			await resolveAnswerConditions(prisma, { answers: [{ questionId: QUESTION, min: 2, max: 5 }] })
+		).toEqual([{ application: { some: { questionId: QUESTION, value: { in: ['2', '5'] } } } }]);
+	});
+
+	it('treats either end as unbounded when it is omitted', async () => {
+		const { prisma } = answerPrisma(['0', '2', '5', '12']);
+		const [atLeast] = await resolveAnswerConditions(prisma, {
+			answers: [{ questionId: QUESTION, min: 5 }]
+		});
+		expect(atLeast).toEqual({
+			application: { some: { questionId: QUESTION, value: { in: ['5', '12'] } } }
+		});
+	});
+
+	it('honours a bound of zero rather than reading it as absent', async () => {
+		const { prisma } = answerPrisma(['0', '2']);
+		const [exactlyZero] = await resolveAnswerConditions(prisma, {
+			answers: [{ questionId: QUESTION, min: 0, max: 0 }]
+		});
+		expect(exactlyZero).toEqual({
+			application: { some: { questionId: QUESTION, value: { in: ['0'] } } }
+		});
+	});
+
+	it('drops answers that are not numbers at all', async () => {
+		// A question that was short text before an organizer changed its type.
+		const { prisma } = answerPrisma(['twenty', '', '3']);
+		const [condition] = await resolveAnswerConditions(prisma, {
+			answers: [{ questionId: QUESTION, min: 0, max: 100 }]
+		});
+		expect(condition).toEqual({
+			application: { some: { questionId: QUESTION, value: { in: ['3'] } } }
+		});
+	});
+
+	it('matches nobody when no answer falls in the range', async () => {
+		// Still a narrowing selection, so it must not drop out and match everybody.
+		const { prisma } = answerPrisma(['1', '2']);
+		expect(
+			await resolveAnswerConditions(prisma, { answers: [{ questionId: QUESTION, min: 90 }] })
+		).toEqual([{ uid: 'IMPOSSIBLE_NO_MATCH' }]);
+	});
+});
+
+describe('resolveAnswerConditions — states', () => {
+	it('adds nothing, and reads no settings, when the filter is absent', async () => {
+		const { prisma, calls } = answerPrisma();
+		expect(await resolveAnswerConditions(prisma, {})).toEqual([]);
+		expect(calls.settings).toBe(0);
+	});
+
+	it('matches nobody for an engaged-but-empty state selection', async () => {
+		const { prisma, calls } = answerPrisma();
+		expect(await resolveAnswerConditions(prisma, { states: [] })).toEqual([
+			{ uid: 'IMPOSSIBLE_NO_MATCH' }
+		]);
+		// And still costs no Settings lookup — there is no home state to resolve.
+		expect(calls.settings).toBe(0);
 	});
 });
 

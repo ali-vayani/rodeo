@@ -3,7 +3,7 @@ import { mockReset, type DeepMockProxy } from 'vitest-mock-extended';
 import type { PrismaClient } from '$lib/generated/prisma/client';
 import { Role, UserStatus, DecisionStatus } from '$lib/generated/prisma/client';
 import { createTestCaller, adminUser, hackerUser, appliedHacker } from '../test-utils';
-import { NO_VALUE } from '$lib/linkedFields';
+import { NO_VALUE } from '$lib/facets';
 import { EXACT_MATCH_FLOOR } from '$lib/server/recipients';
 
 vi.mock('$lib/server/db', async () => {

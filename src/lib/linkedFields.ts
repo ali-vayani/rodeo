@@ -1,6 +1,8 @@
 /**
- * The application questions that write through to a `User` column, and the filter
- * vocabulary derived from them.
+ * The application questions that write through to a `User` column.
+ *
+ * The facet contract these feed — and which every other question feeds alongside them
+ * — lives in `$lib/facets`. This module is only the `User`-column half.
  *
  * A question carrying a `linkedField` is the single definition of both the data and
  * the control that filters it: `application.save` writes the answer into the named
@@ -75,89 +77,4 @@ export const FILTERABLE_LINKED_FIELDS = ['UNIVERSITY', 'YEAR'] as const satisfie
 
 export function isLinkedField(value: string | null | undefined): value is LinkedField {
 	return value != null && (LINKED_FIELDS as readonly string[]).includes(value);
-}
-
-/**
- * Which control a facet renders as, derived from the question's `type`.
- *
- * `select` — the question already enumerates its answers (`DROPDOWN`,
- * `MULTIPLE_CHOICE`), so `Question.options` is authoritative and the filter is a
- * plain multi-select.
- *
- * `combobox` — free text, so there is no authoritative list and the vocabulary is
- * whatever users have actually typed. Needs type-ahead and typo tolerance to be
- * usable at all.
- */
-export type LinkedFacetControl = 'select' | 'combobox';
-
-export interface LinkedFacetOption {
-	/** Verbatim stored `User` column value. Never the empty string — see `noneCount`. */
-	value: string;
-	/** How many users currently hold it. Shown in the UI so near-duplicate values are visible. */
-	count: number;
-}
-
-export interface LinkedFacet {
-	field: LinkedField;
-	/** The question's title, so the filter is labelled the way the form is. */
-	label: string;
-	control: LinkedFacetControl;
-	options: LinkedFacetOption[];
-	/** Users with NULL or empty in this column, selectable via `NO_VALUE`. */
-	noneCount: number;
-	/**
-	 * The option list was cut at `MAX_FACET_OPTIONS`; rarer values are missing.
-	 *
-	 * Only ever set on a `combobox`, whose vocabulary is unbounded by construction —
-	 * on the dev database the Full Name facet alone has 1,852 distinct values and is
-	 * 74 KB of the 78 KB payload. Absent or false means the list is complete.
-	 *
-	 * The UI should say so rather than implying a value doesn't exist: the exact
-	 * predicate still accepts any value, and the search box (which is typo-tolerant
-	 * and hits the database) is how someone finds a name that isn't listed.
-	 */
-	truncated?: boolean;
-}
-
-/**
- * Most options a facet returns.
- *
- * Applies to `combobox` facets only — a `select`'s list is bounded by the question
- * that declares it. Kept most-held-first, so what survives the cut is the part of the
- * vocabulary a filter is actually used on.
- */
-export const MAX_FACET_OPTIONS = 500;
-
-/**
- * Selects users whose value for a linked field is absent.
- *
- * Roughly a third of seeded users have no university and no year, and "who hasn't
- * filled this in" is a question organizers actually ask. A sentinel rather than a
- * per-field boolean keeps the wire format one array per field, so the
- * engaged-but-empty rule below applies uniformly.
- *
- * Printable and URL-safe on purpose. This was briefly a NUL byte, on the reasoning
- * that no real answer could contain one — true, but it also cannot survive the places
- * a filter selection legitimately travels: Postgres `text` rejects NUL outright, and
- * `%00` in a query string is refused by some proxies and by Node's URL parsing, which
- * would have broken a shareable filtered link the first time anyone made one.
- *
- * Collision with a real answer is therefore possible in principle rather than
- * impossible by construction — but it would take a user whose university is literally
- * `__NO_VALUE__`, and the cost of that is one misfiled row in a filter, against a
- * hazard that would have broken shareable links outright.
- */
-export const NO_VALUE = '__NO_VALUE__';
-
-/**
- * Split a selection into concrete values plus whether "no value" was chosen.
- *
- * Shared by the predicate builder and the UI so both read the sentinel the same way.
- */
-export function splitNoValue(selected: readonly string[]): {
-	values: string[];
-	includeNone: boolean;
-} {
-	const values = selected.filter((v) => v !== NO_VALUE);
-	return { values, includeNone: selected.includes(NO_VALUE) };
 }

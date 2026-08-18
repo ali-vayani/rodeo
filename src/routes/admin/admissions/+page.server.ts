@@ -20,7 +20,7 @@ export const load: PageServerLoad = async (event) => {
 	// on arrival anyway — scores move while the decision pass is open.
 	const [queue, facets, stats] = await Promise.all([
 		caller.admissions.list({ noDecision: true, scored: false }),
-		caller.filters.linkedFacets(),
+		caller.filters.facets(),
 		caller.admissions.stats()
 	]);
 

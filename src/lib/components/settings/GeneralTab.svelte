@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
 	import { Combobox } from '$lib/components/ui';
+	import { US_STATES } from '$lib/data/states';
 
 	const TIMEZONES = [
 		{ value: 'America/New_York', label: 'Eastern Time (ET)' },
@@ -20,17 +21,25 @@
 		{ value: 'Australia/Sydney', label: 'Australian Eastern Time (AET)' }
 	];
 
+	const STATES = Object.entries(US_STATES).map(([value, label]) => ({ value, label }));
+
 	let {
 		timezone,
+		homeState,
 		saving,
 		onSave
 	}: {
 		timezone: string;
+		/** US postal code, or null for an event that hasn't said. */
+		homeState: string | null;
 		saving: boolean;
-		onSave: (updates: { timezone: string }) => void;
+		onSave: (updates: { timezone: string; homeState: string | null }) => void;
 	} = $props();
 
 	let localTimezone = $state(untrack(() => timezone));
+	// '' is the Combobox's own "cleared", which maps back to NULL on save — the column
+	// is nullable and an empty string there would be a state code of zero length.
+	let localHomeState = $state(untrack(() => homeState ?? ''));
 </script>
 
 <div class="max-w-[560px]">
@@ -59,8 +68,28 @@
 		/>
 	</div>
 
+	<div class="mb-5">
+		<div class="mb-1.5 text-[10px] font-bold tracking-widest text-muted-foreground uppercase">
+			Home State
+		</div>
+		<div class="mb-2 text-xs text-muted-foreground">
+			The state the event is held in. The applicant filters use it to offer
+			<em>in-state</em> and <em>out-of-state</em> as one click each, worked out from each applicant's
+			university — nothing is added to the application form. Leave it unset and there is no State filter
+			at all, since without a home state there is no "outside" either.
+		</div>
+		<Combobox
+			bind:value={localHomeState}
+			options={STATES}
+			ariaLabel="Home state"
+			placeholder="No home state"
+			emptyMessage="No matching state"
+			clearable
+		/>
+	</div>
+
 	<button
-		onclick={() => onSave({ timezone: localTimezone })}
+		onclick={() => onSave({ timezone: localTimezone, homeState: localHomeState || null })}
 		disabled={saving}
 		class="cursor-pointer rounded-md border-none bg-primary px-[18px] py-[9px] text-[13px] font-semibold text-white disabled:opacity-50"
 	>

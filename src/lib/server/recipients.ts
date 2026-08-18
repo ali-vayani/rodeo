@@ -1,7 +1,9 @@
 import { z } from 'zod';
 import type { Prisma, PrismaClient } from '$lib/generated/prisma/client';
 import { Role, UserStatus, DecisionStatus } from '$lib/generated/prisma/client';
-import { LINKED_FIELD_COLUMN, splitNoValue, type LinkedField } from '$lib/linkedFields';
+import { LINKED_FIELD_COLUMN, type LinkedField } from '$lib/linkedFields';
+import { splitNoValue } from '$lib/facets';
+import { stateCondition } from '$lib/server/homeState';
 import { tokenMatch, normalizeName } from '$lib/text/similarity';
 
 /**
@@ -23,6 +25,40 @@ export const linkedFieldFilterSchema = z.object({
 });
 
 export type LinkedFieldFilters = z.infer<typeof linkedFieldFilterSchema>;
+
+/**
+ * Filters over answers that live in `ApplicationResponse` rather than in a `User`
+ * column — which is every question the organizer did not link, i.e. almost all of them.
+ *
+ * One entry per engaged facet. The keys are mutually exclusive in practice because the
+ * control decides which one it sets: a checkbox list sets `values`, a short-text box
+ * sets `contains`, a number range sets `min`/`max`. They are separate keys rather than
+ * a discriminated union because the *question* can change type under a saved filter,
+ * and a filter that merely stops applying is better than one that fails to parse.
+ *
+ * `states` is here rather than beside the linked fields because it is derived from
+ * `User.university` through a dataset lookup, so it cannot be a plain column `IN` —
+ * see `$lib/server/homeState`.
+ */
+const answerFilter = z.object({
+	questionId: z.string().min(1),
+	/** Exact membership. `[]` selects nobody — the engaged-but-empty rule. */
+	values: z.array(z.string()).optional(),
+	/** Case-insensitive substring, for a short-text question with no useful vocabulary. */
+	contains: z.string().optional(),
+	/** Inclusive numeric bounds, for a NUMBER question. Either end may be omitted. */
+	min: z.number().optional(),
+	max: z.number().optional()
+});
+
+export const answerFilterSchema = z.object({
+	// Bounded because each entry is a separate correlated subquery, and a form has
+	// perhaps twenty questions — fifty is already far past anything a panel can send.
+	answers: z.array(answerFilter).max(50).optional(),
+	states: z.array(z.string()).max(80).optional()
+});
+
+export type AnswerFilters = z.infer<typeof answerFilterSchema>;
 
 /**
  * Filter key ↔ linked field. The plural is the wire name, which is also the query
@@ -67,7 +103,8 @@ export const recipientFilterSchema = z.object({
 	 * rule the decision filter uses.
 	 */
 	emails: z.array(z.string()).optional(),
-	...linkedFieldFilterSchema.shape
+	...linkedFieldFilterSchema.shape,
+	...answerFilterSchema.shape
 });
 
 export type RecipientFilters = z.infer<typeof recipientFilterSchema>;
@@ -413,6 +450,135 @@ export function linkedFieldConditions(filters: LinkedFieldFilters): Prisma.UserW
 }
 
 /**
+ * Selects users who did not answer a question — no response row at all, or one holding
+ * a blank.
+ *
+ * Both spellings, because both occur: a question added after someone applied leaves no
+ * row, while a field they opened and cleared leaves an empty one. Counting only the
+ * first would make "No answer" silently miss half the people it names — the same
+ * NULL-or-empty asymmetry the linked columns have.
+ */
+function unansweredConditions(questionId: string): Prisma.UserWhereInput[] {
+	return [
+		{ application: { none: { questionId } } },
+		{ application: { some: { questionId, value: '' } } }
+	];
+}
+
+/** Users holding one of `values` for `questionId`. */
+function answeredWith(questionId: string, values: string[]): Prisma.UserWhereInput {
+	return { application: { some: { questionId, value: { in: values } } } };
+}
+
+/**
+ * The distinct answers to a NUMBER question that fall inside a range.
+ *
+ * Answers are stored as text — `ApplicationResponse.value` is one column serving every
+ * question type — so `value >= 18` is a string comparison in which "9" beats "18". A
+ * numeric comparison would need a cast Prisma cannot express, so instead the range is
+ * resolved to the explicit values that satisfy it *before* it reaches the predicate.
+ *
+ * The same move `expandSearch` makes for fuzzy names, and it pays the same way: the
+ * predicate stays an exact `IN (...)`, so preview and send select identically. It is
+ * affordable because the list is distinct *answers*, not rows — a "how many hackathons"
+ * question has perhaps twenty, an age question ten.
+ *
+ * Non-numeric answers simply fail the range, which is the honest outcome: a question
+ * that was short text before someone changed it to NUMBER can hold "twenty".
+ */
+async function numericMatches(
+	prisma: Pick<PrismaClient, 'applicationResponse'>,
+	questionId: string,
+	min: number | undefined,
+	max: number | undefined
+): Promise<string[]> {
+	const rows = await prisma.applicationResponse.groupBy({
+		by: ['value'],
+		where: { questionId }
+	});
+
+	const matches: string[] = [];
+	for (const { value } of rows) {
+		const n = Number(value);
+		if (value === '' || !Number.isFinite(n)) continue;
+		if (min !== undefined && n < min) continue;
+		if (max !== undefined && n > max) continue;
+		matches.push(value);
+	}
+	return matches;
+}
+
+/**
+ * One AND condition per engaged answer filter, plus the state filter.
+ *
+ * Async because two of the four controls cannot be expressed as a predicate directly
+ * and are resolved to explicit values first — numeric ranges (see `numericMatches`) and
+ * states (see `$lib/server/homeState`). Everything else is built in memory.
+ *
+ * The rules are the linked fields' rules, unchanged:
+ *
+ *   - absent          → no condition at all
+ *   - `[]`            → match nothing. Engaging a filter and selecting none of its
+ *                       options means "show nobody", never "show everybody".
+ *   - `[NO_VALUE, …]` → the sentinel ORs in the unanswered case alongside real values.
+ *
+ * An entry with none of `values`/`contains`/`min`/`max` set is skipped rather than
+ * treated as empty: it is a facet the panel is holding open but has not been used, not
+ * a selection anyone made.
+ */
+export async function resolveAnswerConditions(
+	prisma: Pick<PrismaClient, 'user' | 'applicationResponse' | 'settings'>,
+	filters: AnswerFilters
+): Promise<Prisma.UserWhereInput[]> {
+	const conditions: Prisma.UserWhereInput[] = [];
+
+	for (const entry of filters.answers ?? []) {
+		const { questionId, values, contains, min, max } = entry;
+
+		if (values !== undefined) {
+			if (values.length === 0) {
+				conditions.push({ uid: MATCH_NOTHING });
+			} else {
+				const { values: real, includeNone } = splitNoValue(values);
+				const or: Prisma.UserWhereInput[] = [];
+				if (real.length) or.push(answeredWith(questionId, real));
+				if (includeNone) or.push(...unansweredConditions(questionId));
+				conditions.push(or.length === 1 ? or[0] : { OR: or });
+			}
+		}
+
+		const term = contains?.trim();
+		if (term) {
+			conditions.push({
+				application: { some: { questionId, value: { contains: term, mode: 'insensitive' } } }
+			});
+		}
+
+		if (min !== undefined || max !== undefined) {
+			const matches = await numericMatches(prisma, questionId, min, max);
+			// No answer satisfies the range. Still a narrowing selection, so it matches
+			// nobody rather than dropping out and matching everybody.
+			conditions.push(matches.length ? answeredWith(questionId, matches) : { uid: MATCH_NOTHING });
+		}
+	}
+
+	if (filters.states !== undefined) {
+		if (filters.states.length === 0) {
+			conditions.push({ uid: MATCH_NOTHING });
+		} else {
+			// Read only when the filter is actually engaged: the home state is needed for
+			// the "outside <state>" bucket alone, and every other request should not pay a
+			// Settings lookup for it.
+			const settings = await prisma.settings.findFirst({ select: { homeState: true } });
+			const condition = await stateCondition(prisma, filters.states, settings?.homeState ?? null);
+			if (condition) conditions.push(condition);
+		}
+	}
+
+	return conditions;
+}
+
+/**
  * One AND condition list from a set of conditions, or match-everyone when there are none.
  *
  * The "no filter keys supplied at all" case is the dangerous one — it matches the whole
@@ -480,6 +646,12 @@ export function recipientConditions(filters: RecipientFilters): Prisma.UserWhere
  *
  * No filter keys supplied at all → match everyone. This is the "email the whole
  * database" case, so callers that send must gate on the resulting count.
+ *
+ * **Covers only the keys expressible without a query.** `answers` and `states` need one
+ * — a numeric range and a state both resolve to explicit values first — so they are
+ * built by `resolveAnswerConditions` and are absent from this predicate. No procedure
+ * calls this directly; `resolveRecipientWhere` is the entry point, and it covers both
+ * halves. This one exists for the synchronous unit tests over the checkbox groups.
  */
 export function buildRecipientWhere(
 	filters: RecipientFilters,
@@ -505,10 +677,17 @@ export function buildRecipientWhere(
  * make impossible.
  */
 export async function resolveRecipientWhere(
-	prisma: Pick<PrismaClient, 'user'>,
+	prisma: Pick<PrismaClient, 'user' | 'applicationResponse' | 'settings'>,
 	filters: RecipientFilters
 ): Promise<{ where: Prisma.UserWhereInput; expansion: SearchExpansion }> {
-	const conditions = recipientConditions(filters);
+	// The answer conditions are part of the scope the search probe counts inside, not an
+	// afterthought appended to the finished predicate — otherwise `expandSearch` would
+	// measure "is this term productive" against a population the caller is not showing,
+	// which is the exact bug a global probe count caused on the Admissions queue.
+	const conditions = [
+		...recipientConditions(filters),
+		...(await resolveAnswerConditions(prisma, filters))
+	];
 	const expansion = await expandSearch(prisma, filters.search, conditions);
 	const searchClause = searchCondition(filters.search, expansion);
 	return {

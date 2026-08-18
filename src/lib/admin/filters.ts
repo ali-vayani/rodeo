@@ -1,5 +1,6 @@
 import { Role, UserStatus, DecisionStatus } from '$lib/generated/prisma/enums';
-import { LINKED_FIELDS, type LinkedField } from '$lib/linkedFields';
+import type { LinkedField } from '$lib/linkedFields';
+import { isEngaged, parseFacetKey, type FacetState } from '$lib/facets';
 
 /**
  * Shared checkbox-filter vocabulary and the translation from checkbox state to
@@ -34,6 +35,23 @@ export type LinkedParams = {
 	years?: string[];
 };
 
+/**
+ * One entry of the `answers` wire key — a filter over an answer that lives in
+ * `ApplicationResponse` rather than in a `User` column. Mirrors `answerFilterSchema`.
+ */
+export type AnswerParam = {
+	questionId: string;
+	values?: string[];
+	contains?: string;
+	min?: number;
+	max?: number;
+};
+
+export type AnswerParams = {
+	answers?: AnswerParam[];
+	states?: string[];
+};
+
 export type RecipientParams = {
 	search?: string;
 	roles?: Role[];
@@ -41,10 +59,8 @@ export type RecipientParams = {
 	decisions?: DecisionStatus[];
 	includeNoDecision?: boolean;
 	emails?: string[];
-} & LinkedParams;
-
-/** What `LinkedFieldFilters` binds: chosen values per field, `NO_VALUE` included. */
-export type LinkedSelection = Partial<Record<LinkedField, string[]>>;
+} & LinkedParams &
+	AnswerParams;
 
 /**
  * Linked field → the plural wire key `recipientFilterSchema` accepts for it.
@@ -60,9 +76,9 @@ const LINKED_PARAM_KEY = {
 } as const satisfies Record<LinkedField, keyof LinkedParams>;
 
 /**
- * Translate a linked-field selection into tRPC filter params.
+ * Translate the filter panel's state into tRPC filter params.
  *
- * **A field with nothing selected must be omitted, never sent as `[]`.** The two are
+ * **A facet with nothing selected must be omitted, never sent as `[]`.** The two are
  * opposite instructions to the shared predicate: `$lib/server/recipients` reads an
  * absent key as "no filter" and an empty array as "match nobody", because a checkbox
  * group the admin engaged and then emptied means "show nobody". Every one of these
@@ -74,15 +90,42 @@ const LINKED_PARAM_KEY = {
  * controls, not an inconsistency: those default to *all* checked, so "no filter" is a
  * full selection, while these default to *none* checked, so "no filter" is an empty
  * one. Both end up as an omitted key, which is the only thing the server sees.
+ *
+ * A facet whose key doesn't parse is dropped rather than forwarded. That is a filter
+ * for a question that has since been deleted, and the honest response to "narrow by
+ * something that no longer exists" is to stop narrowing by it, not to empty the table.
  */
-export function linkedParams(selected: LinkedSelection = {}): LinkedParams {
-	const params: LinkedParams = {};
-	for (const field of LINKED_FIELDS) {
-		const values = selected[field];
-		// Copied, not aliased: these params travel to a tRPC call while the caller's
-		// state keeps mutating under the filter panel.
-		if (values && values.length > 0) params[LINKED_PARAM_KEY[field]] = [...values];
+export function facetParams(selection: FacetState = {}): LinkedParams & AnswerParams {
+	const params: LinkedParams & AnswerParams = {};
+	const answers: AnswerParam[] = [];
+
+	for (const [key, chosen] of Object.entries(selection)) {
+		if (!chosen || !isEngaged(chosen)) continue;
+		const parsed = parseFacetKey(key);
+		if (!parsed) continue;
+
+		if (parsed.kind === 'linked') {
+			// Copied, not aliased: these params travel to a tRPC call while the caller's
+			// state keeps mutating under the filter panel.
+			if (chosen.values?.length) params[LINKED_PARAM_KEY[parsed.field]] = [...chosen.values];
+			continue;
+		}
+
+		if (parsed.kind === 'state') {
+			if (chosen.values?.length) params.states = [...chosen.values];
+			continue;
+		}
+
+		const entry: AnswerParam = { questionId: parsed.questionId };
+		if (chosen.values?.length) entry.values = [...chosen.values];
+		const term = chosen.contains?.trim();
+		if (term) entry.contains = term;
+		if (chosen.min !== undefined) entry.min = chosen.min;
+		if (chosen.max !== undefined) entry.max = chosen.max;
+		answers.push(entry);
 	}
+
+	if (answers.length) params.answers = answers;
 	return params;
 }
 
@@ -126,8 +169,8 @@ export function malformedEmails(emails: string[]): string[] {
  * agrees with them.
  *
  * That leaves engaged-but-empty to the two places whose controls start *empty* and so
- * genuinely need it — the explicit address list and the linked application fields; see
- * `linkedParams`, which omits an untouched key for the same reason from the other end.
+ * genuinely need it — the explicit address list and the application-answer facets; see
+ * `facetParams`, which omits an untouched key for the same reason from the other end.
  *
  * Mailing the whole database is prevented where it can actually be prevented:
  * `email.sendCustom` binds a send to the `expectedCount` the admin previewed and
@@ -138,7 +181,7 @@ export function buildRecipientParams(
 	statusFilter: FilterState,
 	decisionFilter: FilterState,
 	search = '',
-	linked: LinkedSelection = {}
+	facets: FacetState = {}
 ): RecipientParams {
 	const selRoles = ALL_ROLES.filter((r) => roleFilter[r]);
 	const selStatuses = ALL_STATUSES.filter((s) => statusFilter[s]);
@@ -158,6 +201,6 @@ export function buildRecipientParams(
 		statuses: statusesNarrow ? selStatuses : undefined,
 		decisions: decisionsNarrow ? selDecisions : undefined,
 		includeNoDecision: decisionsNarrow ? noneChecked : undefined,
-		...linkedParams(linked)
+		...facetParams(facets)
 	};
 }

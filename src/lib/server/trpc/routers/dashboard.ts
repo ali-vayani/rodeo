@@ -502,12 +502,12 @@ export const dashboardRouter = router({
 	/**
 	 * Where applicants come from and how far along they are.
 	 *
-	 * `adminProcedure` for the same reason as `filters.linkedFacets`: a list of every
+	 * `adminProcedure` for the same reason as `filters.facets`: a list of every
 	 * university with exact headcounts is per-person data in aggregate clothing — at a
 	 * count of one it is literally per-person.
 	 *
 	 * Reads the two linked columns directly rather than going through
-	 * `filters.linkedFacets`, which ships up to 500 options per facet because it is
+	 * `filters.facets`, which ships up to 500 options per facet because it is
 	 * building a filter vocabulary. A dashboard card wants the top handful and the size
 	 * of the tail.
 	 */

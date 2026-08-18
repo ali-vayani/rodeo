@@ -1,11 +1,11 @@
 <script lang="ts">
 	import { MediaQuery } from 'svelte/reactivity';
 	import BlacklistBadge from './BlacklistBadge.svelte';
-	import LinkedFieldFilters from '$lib/components/admin/LinkedFieldFilters.svelte';
+	import FacetFilters from '$lib/components/admin/FacetFilters.svelte';
 	import type { ScoreFilter } from '$lib/admissions/score';
 	import type { BlacklistMatch } from '$lib/blacklist/match';
 	import type { Role } from '$lib/generated/prisma/enums';
-	import type { LinkedFacet, LinkedField } from '$lib/linkedFields';
+	import { isEngaged, linkedFacetKey, type Facet, type FacetState } from '$lib/facets';
 
 	let {
 		applicants,
@@ -18,8 +18,8 @@
 		scoreFilter,
 		onScoreFilterChange,
 		facets,
-		linkedSelected,
-		onLinkedFiltersChange,
+		facetSelection,
+		onFacetsChange,
 		searchInfo,
 		onSuggestionSelect,
 		loading,
@@ -52,9 +52,9 @@
 		scoreFilter: ScoreFilter;
 		onScoreFilterChange: (value: ScoreFilter) => void;
 		/** One per application question that writes through to a `User` column. */
-		facets: LinkedFacet[];
-		linkedSelected: Partial<Record<LinkedField, string[]>>;
-		onLinkedFiltersChange: (selected: Partial<Record<LinkedField, string[]>>) => void;
+		facets: Facet[];
+		facetSelection: FacetState;
+		onFacetsChange: (selected: FacetState) => void;
 		/**
 		 * What the last query did with the search term. `names` is ranked most-relevant
 		 * first; the rows below are `createdAt desc` and are not, which is why the
@@ -80,14 +80,14 @@
 	/**
 	 * The filter panel is a disclosure at every width, not just on phones.
 	 *
-	 * `LinkedFieldFilters` has a `collapsible` of its own, but it only folds below md —
+	 * `FacetFilters` has a `collapsible` of its own, but it only folds below md —
 	 * right for a full-width page, wrong here. This column is 300px wide and already
 	 * spends its first two rows on tabs and a search box; three facets open underneath
 	 * them (two comboboxes and a six-row checkbox list) push the queue itself off a
 	 * laptop screen. So the disclosure is owned here and applies at all breakpoints,
 	 * and the panel is capped and scrolls rather than growing without bound.
 	 *
-	 * `LinkedFieldFilters` now folds each facet individually as well. The two are one
+	 * `FacetFilters` now folds each facet individually as well. The two are one
 	 * mechanism at two scales, not two competing ones: this toggle decides whether the
 	 * panel is on screen at all, and only once it is do the per-facet folds inside it
 	 * mean anything. `collapsible` is still not forwarded — a third, breakpoint-gated
@@ -98,9 +98,14 @@
 	 */
 	let filtersOpen = $state(false);
 
-	/** How many values are selected across every facet — the badge on a shut panel. */
+	/**
+	 * How many facets are narrowing the queue — the badge on a shut panel.
+	 *
+	 * Facets rather than values, because not every control has a value count to give: a
+	 * substring box and a numeric range are each one filter however they are filled in.
+	 */
 	let activeFilterCount = $derived(
-		Object.values(linkedSelected).reduce((total, values) => total + (values?.length ?? 0), 0)
+		Object.values(facetSelection).filter((selection) => isEngaged(selection)).length
 	);
 
 	/**
@@ -138,8 +143,8 @@
 			: suggestionsPrefix
 	);
 
-	function clearLinkedFilters() {
-		onLinkedFiltersChange({});
+	function clearFacetFilters() {
+		onFacetsChange({});
 	}
 
 	const uid = $props.id();
@@ -271,7 +276,8 @@
 				-->
 				<div class="mt-1.5 flex max-h-40 flex-wrap gap-1 overflow-y-auto">
 					{#each searchInfo.names as name (name)}
-						{@const active = linkedSelected.NAME?.includes(name) ?? false}
+						{@const active =
+							facetSelection[linkedFacetKey('NAME')]?.values?.includes(name) ?? false}
 						<button
 							type="button"
 							aria-pressed={active}
@@ -288,7 +294,7 @@
 			</div>
 		{/if}
 
-		<!-- Linked application fields, behind a disclosure so the queue stays in view -->
+		<!-- Application answers, behind a disclosure so the queue stays in view -->
 		{#if facets.length > 0}
 			<div class="shrink-0 border-b border-border">
 				<div class="flex items-stretch">
@@ -327,7 +333,7 @@
 					{#if activeFilterCount > 0}
 						<button
 							type="button"
-							onclick={clearLinkedFilters}
+							onclick={clearFacetFilters}
 							class="shrink-0 cursor-pointer border-none bg-transparent px-3 text-2xs
 							       text-foreground-tertiary underline transition-colors hover:text-foreground
 							       focus-visible:shadow-ring"
@@ -342,11 +348,7 @@
 						id={filtersPanelId}
 						class="max-h-64 overflow-y-auto border-t border-border-subtle px-3 py-3"
 					>
-						<LinkedFieldFilters
-							{facets}
-							selected={linkedSelected}
-							onChange={onLinkedFiltersChange}
-						/>
+						<FacetFilters {facets} selected={facetSelection} onChange={onFacetsChange} />
 					</div>
 				{/if}
 			</div>

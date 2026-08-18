@@ -165,5 +165,6 @@ export const mockSettings = {
 	rejectSubject: 'Application update',
 	waitlistTemplate: 'Hi {{name}}, waitlisted.',
 	waitlistSubject: "You're on the waitlist",
-	timezone: 'America/Chicago'
+	timezone: 'America/Chicago',
+	homeState: 'TX'
 };

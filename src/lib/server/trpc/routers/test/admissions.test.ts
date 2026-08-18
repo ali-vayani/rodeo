@@ -4,7 +4,7 @@ import type { PrismaClient } from '$lib/generated/prisma/client';
 import { Role, DecisionStatus } from '$lib/generated/prisma/client';
 import { CLAIM_TTL_MS } from '$lib/admissions/lock';
 import { APPLICANT_ROLES } from '$lib/admissions/roles';
-import { NO_VALUE } from '$lib/linkedFields';
+import { NO_VALUE } from '$lib/facets';
 import { EXACT_MATCH_FLOOR, MAX_FUZZY_NAMES, NO_EXPANSION } from '$lib/server/recipients';
 import {
 	createTestCaller,

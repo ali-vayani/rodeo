@@ -17,7 +17,8 @@
 	import { createReviewSession, pickNextUnlocked } from '$lib/admissions/reviewSession.svelte';
 	import { PRESENCE_POLL_MS } from '$lib/admissions/lock';
 	import { MAX_SCORE, type ScoreFilter } from '$lib/admissions/score';
-	import type { LinkedField } from '$lib/linkedFields';
+	import { facetParams } from '$lib/admin/filters';
+	import { linkedFacetKey, type FacetState } from '$lib/facets';
 
 	let { data }: { data: PageData } = $props();
 
@@ -60,8 +61,11 @@
 	let reconsider = $state<Reconsider[]>([]);
 	let reconsiderLoading = $state(false);
 
-	/** Chosen values per linked application field, `NO_VALUE` included. */
-	let linkedSelected = $state<Partial<Record<LinkedField, string[]>>>({});
+	/** What each application-answer facet's controls hold, keyed by `Facet.key`. */
+	let facetSelection = $state<FacetState>({});
+
+	/** The Name facet, which the did-you-mean chips drive directly. See `onSuggestionSelect`. */
+	const NAME_FACET = linkedFacetKey('NAME');
 
 	/** What the last list query did with the search term — drives the "did you mean" strip. */
 	let searchInfo = $state<typeof data.search>(untrack(() => data.search));
@@ -202,27 +206,6 @@
 		};
 	});
 
-	/**
-	 * The linked-field selection in the shape the server expects.
-	 *
-	 * An untouched — or cleared — field MUST send `undefined`, never `[]`. The predicate
-	 * reads an omitted key as "no filter" and an empty array as "match nobody" (the
-	 * engaged-but-empty rule `linkedFieldConditions` shares with the send path), so
-	 * forwarding the panel's `{ year: [] }` verbatim would empty the queue the moment
-	 * someone ticked a box and unticked it again.
-	 */
-	function linkedFilterArgs(selected: Partial<Record<LinkedField, string[]>>) {
-		const pick = (field: LinkedField) => {
-			const values = selected[field];
-			return values && values.length > 0 ? values : undefined;
-		};
-		return {
-			names: pick('NAME'),
-			universities: pick('UNIVERSITY'),
-			years: pick('YEAR')
-		};
-	}
-
 	async function loadApplicants() {
 		loading = true;
 		try {
@@ -233,7 +216,13 @@
 				scored: scoreFilter === 'all' ? undefined : scoreFilter === 'scored',
 				roles: roleTab !== 'ALL' ? [roleTab] : undefined,
 				search: search.trim() || undefined,
-				...linkedFilterArgs(linkedSelected)
+				// `facetParams` omits an untouched — or cleared — facet's key entirely rather
+				// than sending `[]`. The predicate reads an omitted key as "no filter" and an
+				// empty array as "match nobody" (the engaged-but-empty rule
+				// `linkedFieldConditions` shares with the send path), so forwarding the panel's
+				// `{ values: [] }` verbatim would empty the queue the moment someone ticked a
+				// box and unticked it again.
+				...facetParams(facetSelection)
 			});
 			applicants = result.applicants;
 			searchInfo = result.search;
@@ -321,7 +310,7 @@
 		search = value;
 		if (nameFromSuggestion) {
 			nameFromSuggestion = false;
-			linkedSelected = { ...linkedSelected, NAME: [] };
+			facetSelection = { ...facetSelection, [NAME_FACET]: { values: [] } };
 		}
 		clearTimeout(searchTimer);
 		searchTimer = setTimeout(loadApplicants, 400);
@@ -329,8 +318,8 @@
 
 	// Ticking a checkbox or picking a combobox row is a discrete act, so it refetches
 	// immediately — the 400ms debounce exists for keystrokes, which these are not.
-	function onLinkedFiltersChange(next: Partial<Record<LinkedField, string[]>>) {
-		linkedSelected = next;
+	function onFacetsChange(next: FacetState) {
+		facetSelection = next;
 		nameFromSuggestion = false;
 		loadApplicants();
 	}
@@ -352,8 +341,8 @@
 	 * the alternatives and leave no way to try the next one.
 	 */
 	function onSuggestionSelect(name: string) {
-		const next = linkedSelected.NAME?.includes(name) ? [] : [name];
-		linkedSelected = { ...linkedSelected, NAME: next };
+		const next = facetSelection[NAME_FACET]?.values?.includes(name) ? [] : [name];
+		facetSelection = { ...facetSelection, [NAME_FACET]: { values: next } };
 		nameFromSuggestion = next.length > 0;
 		loadApplicants();
 	}
@@ -639,8 +628,8 @@
 				{scoreFilter}
 				{onScoreFilterChange}
 				facets={data.facets}
-				{linkedSelected}
-				{onLinkedFiltersChange}
+				{facetSelection}
+				{onFacetsChange}
 				{searchInfo}
 				{onSuggestionSelect}
 				{loading}

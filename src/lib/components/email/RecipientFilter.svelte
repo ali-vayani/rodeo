@@ -1,8 +1,8 @@
 <script lang="ts">
 	import UserFilters from '$lib/components/admin/UserFilters.svelte';
 	import { Checkbox } from '$lib/components/ui';
-	import type { FilterState, LinkedSelection } from '$lib/admin/filters';
-	import type { LinkedFacet } from '$lib/linkedFields';
+	import type { FilterState } from '$lib/admin/filters';
+	import type { Facet, FacetState } from '$lib/facets';
 
 	type Sample = { uid: string; name: string; email: string };
 
@@ -11,8 +11,8 @@
 		roleFilter = $bindable(),
 		statusFilter = $bindable(),
 		decisionFilter = $bindable(),
-		/** Linked application fields. Empty means no filter — see `linkedParams`. */
-		linked = $bindable({}),
+		/** Application-answer facets. Empty means no filter — see `facetParams`. */
+		selection = $bindable({}),
 		facets = [],
 		emailText = $bindable(),
 		/** Mail addresses that match no account instead of flagging them. */
@@ -31,8 +31,8 @@
 		roleFilter: FilterState;
 		statusFilter: FilterState;
 		decisionFilter: FilterState;
-		linked?: LinkedSelection;
-		facets?: LinkedFacet[];
+		selection?: FacetState;
+		facets?: Facet[];
 		emailText: string;
 		allowExternal: boolean;
 		count: number | null;
@@ -115,8 +115,8 @@
 			{statusFilter}
 			{decisionFilter}
 			{facets}
-			bind:linked
-			onLinkedChange={onChange}
+			bind:selection
+			onSelectionChange={onChange}
 			onToggleRole={(r) => {
 				roleFilter = toggle(roleFilter, r);
 				onChange();

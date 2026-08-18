@@ -1,6 +1,13 @@
 import { describe, it, expect } from 'vitest';
 import { Role, UserStatus, DecisionStatus } from '$lib/generated/prisma/enums';
-import { NO_VALUE } from '$lib/linkedFields';
+import {
+	NO_VALUE,
+	OUT_OF_STATE,
+	STATE_FACET_KEY,
+	linkedFacetKey,
+	questionFacetKey,
+	type FacetState
+} from '$lib/facets';
 import {
 	ALL_ROLES,
 	ALL_STATUSES,
@@ -9,11 +16,14 @@ import {
 	NO_DECISION,
 	allChecked,
 	buildRecipientParams,
-	linkedParams,
+	facetParams,
 	malformedEmails,
-	parseEmailList,
-	type LinkedSelection
+	parseEmailList
 } from './filters';
+
+const NAME = linkedFacetKey('NAME');
+const UNIVERSITY = linkedFacetKey('UNIVERSITY');
+const YEAR = linkedFacetKey('YEAR');
 
 const everything = () =>
 	[allChecked(ALL_ROLES), allChecked(ALL_STATUSES), allChecked(DECISION_OPTIONS)] as const;
@@ -25,32 +35,44 @@ const cleared = (options: readonly string[]) => Object.fromEntries(options.map((
 /** The three linked wire keys, so "omitted" can be asserted rather than assumed. */
 const LINKED_KEYS = ['names', 'universities', 'years'] as const;
 
-describe('linkedParams — the omitted-vs-empty convention', () => {
+describe('facetParams — the omitted-vs-empty convention', () => {
 	/**
 	 * The regression this whole file exists for. `$lib/server/recipients` reads an
-	 * absent key as "no filter" and `[]` as "match nobody"; every linked control
+	 * absent key as "no filter" and `[]` as "match nobody"; every facet control
 	 * starts empty, so sending `[]` for an untouched one would take the Users page to
 	 * zero rows and the custom-email count to zero recipients.
 	 */
-	it('omits a field with nothing selected rather than sending an empty array', () => {
-		const params = linkedParams({});
+	it('omits a facet with nothing selected rather than sending an empty array', () => {
+		const params = facetParams({});
 		for (const key of LINKED_KEYS) expect(params).not.toHaveProperty(key);
 	});
 
-	it('omits a field that was selected and then cleared back to []', () => {
-		// What `LinkedFieldFilters`'s Clear button leaves behind: the key exists on the
+	it('omits a facet that was selected and then cleared back to []', () => {
+		// What `FacetFilters`'s Clear button leaves behind: the key exists on the
 		// selection object with an empty array. It must still not reach the wire.
-		const params = linkedParams({ UNIVERSITY: [], YEAR: [], NAME: [] });
+		const params = facetParams({
+			[UNIVERSITY]: { values: [] },
+			[YEAR]: { values: [] },
+			[NAME]: { values: [] }
+		});
 		for (const key of LINKED_KEYS) expect(params).not.toHaveProperty(key);
+		expect(params).not.toHaveProperty('answers');
+		expect(params).not.toHaveProperty('states');
 	});
 
-	it('sends only the fields that have a selection', () => {
-		expect(linkedParams({ YEAR: ['Senior'], UNIVERSITY: [] })).toEqual({ years: ['Senior'] });
+	it('sends only the facets that have a selection', () => {
+		expect(facetParams({ [YEAR]: { values: ['Senior'] }, [UNIVERSITY]: { values: [] } })).toEqual({
+			years: ['Senior']
+		});
 	});
 
 	it('maps each linked field to its plural wire key', () => {
 		expect(
-			linkedParams({ NAME: ['Ada Lovelace'], UNIVERSITY: ['Rice University'], YEAR: ['Senior'] })
+			facetParams({
+				[NAME]: { values: ['Ada Lovelace'] },
+				[UNIVERSITY]: { values: ['Rice University'] },
+				[YEAR]: { values: ['Senior'] }
+			})
 		).toEqual({
 			names: ['Ada Lovelace'],
 			universities: ['Rice University'],
@@ -60,34 +82,95 @@ describe('linkedParams — the omitted-vs-empty convention', () => {
 
 	it('passes the no-value sentinel through untouched', () => {
 		// The sentinel is a selection like any other — splitting it out is the server's job.
-		expect(linkedParams({ UNIVERSITY: [NO_VALUE] })).toEqual({ universities: [NO_VALUE] });
+		expect(facetParams({ [UNIVERSITY]: { values: [NO_VALUE] } })).toEqual({
+			universities: [NO_VALUE]
+		});
 	});
 
 	it('copies the arrays instead of aliasing the caller state', () => {
-		const selection: LinkedSelection = { YEAR: ['Senior'] };
-		const params = linkedParams(selection);
-		selection.YEAR?.push('Junior');
+		const selection: FacetState = { [YEAR]: { values: ['Senior'] } };
+		const params = facetParams(selection);
+		selection[YEAR].values?.push('Junior');
 		expect(params.years).toEqual(['Senior']);
 	});
 
 	it('defaults to no filters at all when called with nothing', () => {
-		expect(linkedParams()).toEqual({});
+		expect(facetParams()).toEqual({});
+	});
+
+	it('drops a facet whose key no longer parses', () => {
+		// A filter for a question that has since been deleted. Not narrowing by
+		// something that no longer exists beats emptying the table over it.
+		expect(facetParams({ 'not-a-facet-key': { values: ['x'] } })).toEqual({});
 	});
 });
 
-describe('buildRecipientParams — linked fields', () => {
-	it('sends no linked keys when the filters are untouched', () => {
+describe('facetParams — questions and the state facet', () => {
+	const REFERRAL = questionFacetKey('q-referral');
+	const HACKATHONS = questionFacetKey('q-hackathons');
+
+	it('sends a question value selection as one answers entry', () => {
+		expect(facetParams({ [REFERRAL]: { values: ['A friend'] } })).toEqual({
+			answers: [{ questionId: 'q-referral', values: ['A friend'] }]
+		});
+	});
+
+	it('sends a substring box as contains, trimmed', () => {
+		expect(facetParams({ [REFERRAL]: { contains: '  discord ' } })).toEqual({
+			answers: [{ questionId: 'q-referral', contains: 'discord' }]
+		});
+	});
+
+	it('omits a substring box holding only whitespace', () => {
+		// Not a narrowing selection, and `contains: ''` would match every answered row
+		// while reading on screen as an engaged filter.
+		expect(facetParams({ [REFERRAL]: { contains: '   ' } })).toEqual({});
+	});
+
+	it('sends either end of a range on its own', () => {
+		expect(facetParams({ [HACKATHONS]: { min: 3 } })).toEqual({
+			answers: [{ questionId: 'q-hackathons', min: 3 }]
+		});
+		expect(facetParams({ [HACKATHONS]: { max: 3 } })).toEqual({
+			answers: [{ questionId: 'q-hackathons', max: 3 }]
+		});
+	});
+
+	it('keeps a zero bound, which is a bound like any other', () => {
+		// `if (min)` would drop it; the check has to be against undefined.
+		expect(facetParams({ [HACKATHONS]: { min: 0, max: 0 } })).toEqual({
+			answers: [{ questionId: 'q-hackathons', min: 0, max: 0 }]
+		});
+	});
+
+	it('collects every engaged question into one answers array', () => {
+		const params = facetParams({
+			[REFERRAL]: { contains: 'discord' },
+			[HACKATHONS]: { min: 1 }
+		});
+		expect(params.answers).toHaveLength(2);
+	});
+
+	it('sends the state facet as its own key, sentinels included', () => {
+		expect(facetParams({ [STATE_FACET_KEY]: { values: ['TX', OUT_OF_STATE] } })).toEqual({
+			states: ['TX', OUT_OF_STATE]
+		});
+	});
+});
+
+describe('buildRecipientParams — application facets', () => {
+	it('sends no facet keys when the filters are untouched', () => {
 		// The empty-vs-omitted regression, at the level the pages actually call.
 		const params = buildRecipientParams(...everything());
 		for (const key of LINKED_KEYS) expect(params).not.toHaveProperty(key);
 	});
 
-	it('carries a linked selection onto the wire keys', () => {
-		const params = buildRecipientParams(...everything(), '', { YEAR: ['Senior'] });
+	it('carries a facet selection onto the wire keys', () => {
+		const params = buildRecipientParams(...everything(), '', { [YEAR]: { values: ['Senior'] } });
 		expect(params.years).toEqual(['Senior']);
 	});
 
-	it('ANDs a linked filter with an engaged checkbox group', () => {
+	it('ANDs a facet filter with an engaged checkbox group', () => {
 		// Two independent filters in one params object: the server ANDs them, so both
 		// have to survive the translation.
 		const [, statuses, decisions] = everything();
@@ -96,14 +179,16 @@ describe('buildRecipientParams — linked fields', () => {
 			statuses,
 			decisions,
 			'',
-			{ YEAR: ['Senior'] }
+			{ [YEAR]: { values: ['Senior'] } }
 		);
 		expect(params.roles).toEqual([Role.HACKER]);
 		expect(params.years).toEqual(['Senior']);
 	});
 
 	it('leaves the checkbox groups omitted when every box is checked', () => {
-		const params = buildRecipientParams(...everything(), '', { UNIVERSITY: ['Rice University'] });
+		const params = buildRecipientParams(...everything(), '', {
+			[UNIVERSITY]: { values: ['Rice University'] }
+		});
 		expect(params.roles).toBeUndefined();
 		expect(params.statuses).toBeUndefined();
 		expect(params.decisions).toBeUndefined();

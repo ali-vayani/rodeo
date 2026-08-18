@@ -15,8 +15,10 @@ import { prepareBlacklist, matchApplicant } from '$lib/blacklist/match';
 import {
 	NO_EXPANSION,
 	expandSearch,
+	answerFilterSchema,
 	linkedFieldConditions,
 	linkedFieldFilterSchema,
+	resolveAnswerConditions,
 	searchCondition
 } from '$lib/server/recipients';
 
@@ -102,6 +104,7 @@ export const admissionsRouter = router({
 	 * @param scored - true: only applicants a reviewer has scored; false: only unscored
 	 * @param sort - `score` ranks highest-first for the decision pass; `recent` is the queue's own order
 	 * @param names/universities/years - linked application fields; `[]` matches nobody
+	 * @param answers/states - other application answers, and the state derived from a university
 	 */
 	list: adminProcedure
 		.input(
@@ -112,7 +115,8 @@ export const admissionsRouter = router({
 				scored: z.boolean().optional(),
 				sort: z.enum(['recent', 'score']).default('recent'),
 				search: z.string().optional(),
-				...linkedFieldFilterSchema.shape
+				...linkedFieldFilterSchema.shape,
+				...answerFilterSchema.shape
 			})
 		)
 		.query(async ({ ctx, input }) => {
@@ -137,6 +141,11 @@ export const admissionsRouter = router({
 				conditions.push({ OR: [{ pendingDecision: decision }, { activeDecision: decision }] });
 			}
 			conditions.push(...linkedFieldConditions(input));
+			// Answers that live in `ApplicationResponse`, plus the derived state filter. Async
+			// because a numeric range and a state both resolve to explicit values first — see
+			// `resolveAnswerConditions`. Pushed before the search probe below, like every other
+			// condition here, so the probe counts inside the queue the reviewer is looking at.
+			conditions.push(...(await resolveAnswerConditions(ctx.prisma, input)));
 
 			// Every condition above is in place before the probe runs, and that ordering is
 			// the point: `expandSearch` counts exact hits *inside this queue* rather than

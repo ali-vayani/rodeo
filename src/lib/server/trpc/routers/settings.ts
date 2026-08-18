@@ -3,6 +3,7 @@ import { router, authedProcedure, adminProcedure } from '../init';
 import { TEMPLATE_KEYS, type TemplateKey } from '$lib/email/templates';
 import { isAdmin } from '$lib/auth/permissions';
 import { DEFAULT_SETTINGS } from '$lib/server/settings';
+import { US_STATES } from '$lib/data/states';
 import { logAction, listOrNone } from '$lib/server/log';
 
 // Same bounds `updateTemplates` enforces — a subject is 1–200 chars, a body ≤20k. This
@@ -31,7 +32,14 @@ const settingsInput = z
 		rejectSubject: subject,
 		waitlistTemplate: templateBody,
 		waitlistSubject: subject,
-		timezone: z.string().min(1)
+		timezone: z.string().min(1),
+		// A US postal code or nothing. Validated against the list rather than as "two
+		// letters" so a typo can't quietly become a state that filters to zero rows.
+		homeState: z
+			.string()
+			.refine((code) => code in US_STATES, { message: 'Not a US state.' })
+			.nullable()
+			.optional()
 	})
 	// Applications must open before they close, and RSVP can't fall before the deadline —
 	// otherwise the window guards lock every applicant out with a nonsensical message.

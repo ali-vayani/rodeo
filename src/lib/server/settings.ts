@@ -39,7 +39,8 @@ export const DEFAULT_SETTINGS = {
 	rejectSubject: 'An update on your application',
 	waitlistTemplate: 'Hi {{name}}, you have been added to the waitlist.',
 	waitlistSubject: "You're on the waitlist",
-	timezone: 'America/Chicago'
+	timezone: 'America/Chicago',
+	homeState: null as string | null
 };
 
 /**

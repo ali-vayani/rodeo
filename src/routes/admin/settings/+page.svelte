@@ -100,7 +100,8 @@
 				rejectSubject: merged.rejectSubject,
 				waitlistTemplate: merged.waitlistTemplate,
 				waitlistSubject: merged.waitlistSubject,
-				timezone: merged.timezone
+				timezone: merged.timezone,
+				homeState: merged.homeState
 			});
 			settings = { ...settings, ...updates } as SettingsRow;
 			showToast('Settings saved');
@@ -167,7 +168,12 @@
 				</span>
 			</div>
 			<div class="p-4 md:p-6">
-				<GeneralTab timezone={settings.timezone} {saving} onSave={(u) => save(u)} />
+				<GeneralTab
+					timezone={settings.timezone}
+					homeState={settings.homeState}
+					{saving}
+					onSave={(u) => save(u)}
+				/>
 			</div>
 		</div>
 

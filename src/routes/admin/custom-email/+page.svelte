@@ -9,9 +9,9 @@
 		allChecked,
 		buildRecipientParams,
 		parseEmailList,
-		malformedEmails,
-		type LinkedSelection
+		malformedEmails
 	} from '$lib/admin/filters';
+	import type { FacetState } from '$lib/facets';
 	import RecipientFilter from '$lib/components/email/RecipientFilter.svelte';
 	import RecipientListModal from '$lib/components/email/RecipientListModal.svelte';
 	import TemplateEditor from '$lib/components/email/TemplateEditor.svelte';
@@ -51,10 +51,10 @@
 	let roleFilter = $state(allChecked(ALL_ROLES));
 	let statusFilter = $state(allChecked(ALL_STATUSES));
 	let decisionFilter = $state(allChecked(DECISION_OPTIONS));
-	// The linked application fields run the other way round: nothing selected is the
-	// "everyone" default, and `buildRecipientParams` omits an untouched field's key
+	// The application-answer facets run the other way round: nothing selected is the
+	// "everyone" default, and `buildRecipientParams` omits an untouched facet's key
 	// rather than sending `[]` — which the send path would read as "nobody".
-	let linked = $state<LinkedSelection>({});
+	let facetSelection = $state<FacetState>({});
 	let emailText = $state('');
 
 	// Off by default: with it on, an address that matches no account is mailed instead
@@ -88,7 +88,7 @@
 				// in the UI instead. An empty list stays an empty array, which the
 				// where-builder reads as "nobody" rather than "everybody".
 				{ emails: parsedEmails.filter((e) => !badEmails.includes(e)) }
-			: buildRecipientParams(roleFilter, statusFilter, decisionFilter, '', linked)
+			: buildRecipientParams(roleFilter, statusFilter, decisionFilter, '', facetSelection)
 	);
 	let composeReady = $derived(subject.trim().length > 0 && body.trim().length > 0);
 	let isDirty = $derived(subject.length > 0 || body.length > 0);
@@ -261,7 +261,7 @@
 					bind:roleFilter
 					bind:statusFilter
 					bind:decisionFilter
-					bind:linked
+					bind:selection={facetSelection}
 					facets={data.facets}
 					bind:emailText
 					bind:allowExternal

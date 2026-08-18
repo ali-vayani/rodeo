@@ -209,6 +209,15 @@ model Settings {
   waitlistSubject     String   @default("You're on the waitlist")
 
   timezone            String // IANA identifier, e.g. "America/Chicago"
+
+  /// The state the event is held in, as a US postal code — "TX".
+  ///
+  /// Drives one thing: the State filter's "Texas" and "Outside Texas" rows, which are
+  /// derived from each applicant's university rather than asked on the form. Nullable
+  /// because an event that doesn't care, or isn't in the US, should not be made to
+  /// answer — the facet still lists every state observed, just without a home to
+  /// sort to the top. See `$lib/server/homeState`.
+  homeState           String?
 }
 
 /// An entry carries two independent signals, and they are deliberately not equal in weight:

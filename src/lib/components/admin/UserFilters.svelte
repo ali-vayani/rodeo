@@ -1,8 +1,7 @@
 <script lang="ts">
 	import { ALL_ROLES, ALL_STATUSES, DECISION_OPTIONS } from '$lib/admin/filters';
-	import type { LinkedSelection } from '$lib/admin/filters';
-	import LinkedFieldFilters from '$lib/components/admin/LinkedFieldFilters.svelte';
-	import type { LinkedFacet } from '$lib/linkedFields';
+	import FacetFilters from '$lib/components/admin/FacetFilters.svelte';
+	import type { Facet, FacetState } from '$lib/facets';
 
 	let {
 		roleFilter,
@@ -18,7 +17,7 @@
 		// below md, a fixed left rail from md up. The custom-email wizard overrides
 		// this to render the same controls inline.
 		//
-		// 240px rather than the original 200px because the linked-field comboboxes
+		// 240px rather than the original 200px because the facet comboboxes
 		// live here now: their popover is anchored to the control's own width, and a
 		// university list rendered at 168px truncates every row to "The Universit…".
 		class:
@@ -27,8 +26,8 @@
 		showHeading = true,
 		collapsible = false,
 		facets = [],
-		linked = $bindable({}),
-		onLinkedChange = undefined
+		selection = $bindable({}),
+		onSelectionChange = undefined
 	}: {
 		roleFilter: Record<string, boolean>;
 		onToggleRole: (r: string) => void;
@@ -46,18 +45,18 @@
 		/** Below md, collapse the groups behind a Filters toggle. No effect from md up. */
 		collapsible?: boolean;
 		/**
-		 * Filters over the application questions that write through to a `User` column.
-		 * Empty (the default) renders nothing, so a caller that doesn't fetch them —
-		 * or a form with no linked questions left — is simply the three groups again.
+		 * Filters over the application answers. Empty (the default) renders nothing, so a
+		 * caller that doesn't fetch them — or a form with nothing filterable left on it —
+		 * is simply the three groups again.
 		 */
-		facets?: LinkedFacet[];
+		facets?: Facet[];
 		/**
-		 * Chosen linked values per field. Empty means "no filter" here, the opposite of
+		 * What each facet's controls hold. Empty means "no filter" here, the opposite of
 		 * the checkbox groups above, because these controls start with nothing ticked —
-		 * `linkedParams` in `$lib/admin/filters` is what reconciles the two for the wire.
+		 * `facetParams` in `$lib/admin/filters` is what reconciles the two for the wire.
 		 */
-		linked?: LinkedSelection;
-		onLinkedChange?: (selected: LinkedSelection) => void;
+		selection?: FacetState;
+		onSelectionChange?: (selected: FacetState) => void;
 	} = $props();
 
 	// Collapsed by default on phones so the list doesn't push the results below
@@ -167,7 +166,7 @@
 		{#each groups as group, index (group.key)}
 			{@const open = openGroups[group.key] ?? true}
 			{@const checked = checkedCount(group.options, group.state)}
-			<!-- The last group carries no bottom margin: the linked facets below bring
+			<!-- The last group carries no bottom margin: the answer facets below bring
 			     their own top border and padding. -->
 			<div class={index === groups.length - 1 ? (columns ? groupClass : '') : groupClass}>
 				<div class="mb-2 flex items-center justify-between gap-2">
@@ -227,20 +226,20 @@
 		{/each}
 
 		<!--
-			Filters over the linked application questions. Rendered from `facets`, so the
-			controls are whatever the form currently links — this component knows the three
-			account-level groups above are Role, Status and Decision, and knows nothing at
-			all about what is below.
+			Filters over the application answers. Rendered from `facets`, so the controls are
+			whatever the form currently asks — this component knows the three account-level
+			groups above are Role, Status and Decision, and knows nothing at all about what
+			is below.
 
 			`collapsible` is deliberately not forwarded: the wrapper this sits inside is
 			already hidden by the Filters toggle above, and a second Show/Hide would collapse
 			a section that is already collapsed. `basis-full` puts it on its own row in
 			columns mode rather than as a fourth narrow column.
 		-->
-		<LinkedFieldFilters
+		<FacetFilters
 			{facets}
-			bind:selected={linked}
-			onChange={onLinkedChange}
+			bind:selected={selection}
+			onChange={onSelectionChange}
 			{columns}
 			heading="Application"
 			class={columns

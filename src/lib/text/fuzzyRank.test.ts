@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { rankOptions } from './fuzzyRank';
-import { NO_VALUE } from '$lib/linkedFields';
+import { NO_VALUE } from '$lib/facets';
 
 /**
  * Shaped like the real university vocabulary: server-sorted by count descending,
