@@ -1,5 +1,5 @@
 /**
- * The check-in block that `{{check_in_pass}}` expands to.
+ * The check-in block that `{{hacker_qr_code}}` expands to.
  *
  * One insert in the email editor produces the hacker's QR code, the printed
  * `RC-` code beneath it, and — when they are eligible — an Add to Apple Wallet
@@ -53,7 +53,7 @@ export type CheckInPassSubject = {
 };
 
 export type CheckInPassBlock = {
-	/** Substituted into the body for `{{check_in_pass}}`. Empty when there is nothing to show. */
+	/** Substituted into the body for `{{hacker_qr_code}}`. Empty when there is nothing to show. */
 	html: string;
 	/** The QR image, or nothing when no block was produced. */
 	attachments: EmailAttachment[];
@@ -157,7 +157,7 @@ export async function buildCheckInPassBlock(
  * Everything one recipient's message needs: their variable values and any
  * attachment those values reference.
  *
- * A single call so the two cannot drift — `{{check_in_pass}}` expands to markup
+ * A single call so the two cannot drift — `{{hacker_qr_code}}` expands to markup
  * containing `cid:…`, and a caller that took the vars without the attachment
  * would mail a broken image. Every send path goes through here.
  *

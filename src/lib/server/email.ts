@@ -117,7 +117,7 @@ export async function sendTemplatedEmail(
 	await sendEmail({
 		to,
 		// `dropRawValues` because a subject is plain text and the editor's chips can
-		// insert into it — `{{check_in_pass}}` up here would otherwise mail out a
+		// insert into it — `{{hacker_qr_code}}` up here would otherwise mail out a
 		// subject line of raw `<table>` markup.
 		subject: substituteVariables(template.subject, vars, { dropRawValues: true }),
 		// Body becomes HTML via `marked` — escape user-controlled variable values.

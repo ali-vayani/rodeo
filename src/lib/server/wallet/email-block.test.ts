@@ -156,9 +156,9 @@ describe('buildEmailPersonalization', () => {
 		const { vars, attachments } = await buildEmailPersonalization(hacker, settings, AFTER);
 
 		expect(vars.name).toBe('Ada Lovelace');
-		expect(vars.check_in_pass).toContain('cid:');
+		expect(vars.hacker_qr_code).toContain('cid:');
 		expect(attachments).toHaveLength(1);
-		expect(vars.check_in_pass).toContain(attachments[0].contentId);
+		expect(vars.hacker_qr_code).toContain(attachments[0].contentId);
 	});
 
 	it('gives an unconfirmed recipient an empty block and no attachment', async () => {
@@ -168,7 +168,7 @@ describe('buildEmailPersonalization', () => {
 			AFTER
 		);
 
-		expect(vars.check_in_pass).toBe('');
+		expect(vars.hacker_qr_code).toBe('');
 		expect(attachments).toEqual([]);
 		// The other variables still work — the email itself is unaffected.
 		expect(vars.name).toBe('Ada Lovelace');

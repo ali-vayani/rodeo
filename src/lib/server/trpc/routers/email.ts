@@ -55,7 +55,10 @@ export const emailRouter = router({
 					where,
 					take: sampleSize,
 					orderBy: { createdAt: 'desc' },
-					select: { uid: true, name: true, email: true }
+					// `status` so the compose preview can show the QR block only to sampled
+					// recipients who would actually receive one — see previewVars in
+					// /admin/custom-email.
+					select: { uid: true, name: true, email: true, status: true }
 				})
 			]);
 
@@ -271,7 +274,7 @@ export const emailRouter = router({
 			//
 			// The status override is the one deliberate lie in this procedure. Most
 			// admins are not confirmed hackers, so a truthful render would drop
-			// `{{check_in_pass}}` to nothing and leave the organizer unable to
+			// `{{hacker_qr_code}}` to nothing and leave the organizer unable to
 			// proofread the block they just inserted — which is the entire purpose of
 			// a test send. The QR encodes the admin's own uid and the wallet links
 			// still refuse them at the endpoint, so nothing is granted by pretending.

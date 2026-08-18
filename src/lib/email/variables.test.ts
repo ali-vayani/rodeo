@@ -131,7 +131,7 @@ describe('buildTemplateVars', () => {
 			// Empty unless a caller supplies the block: this module cannot build it
 			// (Prisma, a QR encoder, and an attachment are all out of bounds here), and
 			// empty is also the right value for a recipient with no pass to show.
-			check_in_pass: ''
+			hacker_qr_code: ''
 		});
 	});
 
@@ -141,24 +141,24 @@ describe('buildTemplateVars', () => {
 			{ hackathonStartDate: new Date(2026, 3, 15), RSVPDeadline: new Date(2026, 3, 1) },
 			'<table>qr</table>'
 		);
-		expect(vars.check_in_pass).toBe('<table>qr</table>');
+		expect(vars.hacker_qr_code).toBe('<table>qr</table>');
 	});
 });
 
 describe('raw block variables', () => {
-	const vars = { name: '<b>Sarah</b>', check_in_pass: '<table>qr</table>' };
+	const vars = { name: '<b>Sarah</b>', hacker_qr_code: '<table>qr</table>' };
 
 	it('is not escaped in a body, unlike every other value', () => {
 		// Escaping it would mail the hacker the HTML source of their own QR code,
 		// while `name` still has to be escaped because an applicant sets it.
-		const out = substituteVariables('{{name}} {{check_in_pass}}', vars, { escapeValues: true });
+		const out = substituteVariables('{{name}} {{hacker_qr_code}}', vars, { escapeValues: true });
 		expect(out).toBe('&lt;b&gt;Sarah&lt;/b&gt; <table>qr</table>');
 	});
 
 	it('is dropped from a subject', () => {
 		// The editor's chips can insert into the subject field, and a subject is
 		// plain text — raw markup there would mail out a subject full of `<table>`.
-		const out = substituteVariables('Welcome {{name}}{{check_in_pass}}', vars, {
+		const out = substituteVariables('Welcome {{name}}{{hacker_qr_code}}', vars, {
 			dropRawValues: true
 		});
 		expect(out).toBe('Welcome <b>Sarah</b>');
@@ -177,11 +177,11 @@ describe('buildEventVars / buildExternalTemplateVars', () => {
 
 	it('carries everything except the recipient-dependent variables', () => {
 		// This is what the server hands the compose preview, so the browser never
-		// re-formats a date in its own locale. `name` and `check_in_pass` are both
+		// re-formats a date in its own locale. `name` and `hacker_qr_code` are both
 		// per-recipient, so neither belongs in the event half.
 		const vars = buildEventVars(settings);
 		expect(Object.keys(vars).sort()).toEqual(
-			[...VARIABLE_KEYS].filter((k) => k !== 'name' && k !== 'check_in_pass').sort()
+			[...VARIABLE_KEYS].filter((k) => k !== 'name' && k !== 'hacker_qr_code').sort()
 		);
 	});
 

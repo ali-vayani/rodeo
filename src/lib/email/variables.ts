@@ -30,8 +30,8 @@ export const TEMPLATE_VARIABLES = [
 	// as an end date would be the same lie in a shorter form.
 	{ key: 'rsvp_deadline', label: 'RSVP deadline', placeholder: '[RSVP deadline]' },
 	{
-		key: 'check_in_pass',
-		label: 'Check-in pass',
+		key: 'hacker_qr_code',
+		label: 'Hacker QR code',
 		placeholder: '[QR code + wallet buttons]',
 		hint:
 			"Inserts the recipient's QR code, their RC- code, and Add to Apple/Google " +
@@ -219,7 +219,7 @@ export function buildTemplateVars(
 	return {
 		name: user.name?.trim() || NAME_FALLBACK,
 		...buildEventVars(settings),
-		check_in_pass: checkInPass
+		hacker_qr_code: checkInPass
 	};
 }
 
