@@ -1,0 +1,53 @@
+/**
+ * Self-signed certificates used only by pem.test.ts.
+ *
+ * Generated once with OpenSSL and checked in rather than built at test time,
+ * because Node has no X.509 *issuer* — `generateKeyPairSync` makes keys, not
+ * certificates — and the alternatives were shelling out to `openssl` (absent on
+ * some CI images) or pulling node-forge in as a devDependency to test five lines.
+ *
+ * The long-lived one expires in 2100 so this file does not become a time bomb.
+ * Both have throwaway keys that were never written to disk.
+ */
+
+export const EXPIRED_CERT_PEM = `-----BEGIN CERTIFICATE-----
+MIIDGzCCAgOgAwIBAgIUVTwLT6DNlMO9IgIKOUPpigx7s70wDQYJKoZIhvcNAQEL
+BQAwHTEbMBkGA1UEAwwSUm9kZW8gVGVzdCBFeHBpcmVkMB4XDTIwMDEwMTAwMDAw
+MFoXDTIxMDEwMTAwMDAwMFowHTEbMBkGA1UEAwwSUm9kZW8gVGVzdCBFeHBpcmVk
+MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAsICY9bHMpjZK9fE4AfTT
+Kd/FdqtFbJJlfY+G4E+izGFruye162cZzqTYxsCxELimqc3m73agD/+q9DT6tSHs
+MelHLCVJA025F5qNbh6FMRq3VNuMOXkGWlVXIV51u0u1Ou9FTkPO8Ccx1+ScvQp7
+/kNEF5pLvNsIlsUn2rN5PojcGPR7Oochs9CQP3z1AaPbkL2JgcJ7glHyGXmHaDN5
+dGoEwjoVFkv5tLARTPHyTy6kmUnGkZhBhrSjHPUagS4BLJxFGiqfg+Mzlk9MMSGw
+890Z1JDalRZnMW3Q7yQwR8oAUThTq9JwGtoz038V5Ry3fVmQavaE0MMXu+9dzKvJ
+2wIDAQABo1MwUTAdBgNVHQ4EFgQU6xJaM/XqbdNdmSUpSAEzhrFB7gMwHwYDVR0j
+BBgwFoAU6xJaM/XqbdNdmSUpSAEzhrFB7gMwDwYDVR0TAQH/BAUwAwEB/zANBgkq
+hkiG9w0BAQsFAAOCAQEAdQCePFDb14jVh3w+UoY24QNopIOkHZiI45xptTAOqE5C
+jLR993Jat9hpPNcjS8vncunrMuGKLlBwO4GDx8KPsHbnlr2VfAYdjfVtLBLgteJ7
+6U0KzDbK5XnBDuLWXpCO6fuhg+tigjRc/0TZFlpRfcWk1LlSr44oeYLUf5LbPckq
+TZFyJo8nmKwDnRpsVJdPsSWxpD0Hiqh4SC2ufqNg0+ApmQAG41F3eHZY1YgoixLS
+S4wvLWXnEenCeZxIhxPMxhtwuQoBdyWtEzvL1IMfSWJ3MQ7zYjEdRjFqlmvT9G0h
+P4wxY6wikEW6YN4RpdfHi+NW4kih37lqou0G/HpxuA==
+-----END CERTIFICATE-----
+`;
+
+export const LONG_LIVED_CERT_PEM = `-----BEGIN CERTIFICATE-----
+MIIDIzCCAgugAwIBAgIUH+ErjdpYHi5dO9doiXkTEf2zvgQwDQYJKoZIhvcNAQEL
+BQAwIDEeMBwGA1UEAwwVUm9kZW8gVGVzdCBMb25nIExpdmVkMCAXDTIwMDEwMTAw
+MDAwMFoYDzIxMDAwMTAxMDAwMDAwWjAgMR4wHAYDVQQDDBVSb2RlbyBUZXN0IExv
+bmcgTGl2ZWQwggEiMA0GCSqGSIb3DQEBAQUAA4IBDwAwggEKAoIBAQDnRYJX0L+9
+FEuOYGmf4Hs9P7yQXktBCYLkPDLwx6xfd7UgkD+COkZem7d/ZtNXep/bO2qxxg0/
+q1DTS0bxdEhjJJ9TJsAM+5dtGhVwF1TwqsFEa2LWv2SomiuIYYw/j53ZMxnTt92h
+7WeFHtIewGvh5tasl4ubvrh6fRJLkxfyFJzcs1dvBKw0+oeHglwO7cDVmyeRk/tg
+Bw4gi0Uk/tVeo5j4NMEeVOTDHgrBTvjGirLDC373bBuqBz9J2L6Cqsm0IxefSlZQ
+jcUvF9AX9yhoVcyrTxfr8Vm6WBLuKuDi/jIVdLmf1WvBiWlRaBV3mUqDmonXhhpW
+mKBTLp8tF8+JAgMBAAGjUzBRMB0GA1UdDgQWBBSopYtYGkL2UeQhrL2eEFt9U/Ag
+2DAfBgNVHSMEGDAWgBSopYtYGkL2UeQhrL2eEFt9U/Ag2DAPBgNVHRMBAf8EBTAD
+AQH/MA0GCSqGSIb3DQEBCwUAA4IBAQDNqbMJpdWxe33LCkXdr1r1MNThd49BrBcr
+/kNMGkLay09d7Pd5q4zB28VJ2im2deJV9v5PXqo2pLFFaCyUpNHGu0VQybwtvo8i
+UXHxNq3KzT9OflqFDPiEnhGpRPL2DjS3/z1dtH6KL5EyYS50dBXY1rfPw3c/pqPx
+Xw3cypYJkVR7EivLg6LgnBZm2vzXHJmnS7tJJ9+wJM/QPB+G6mD6gHIYRt39LXy4
+uTS50vhsoF5pLU5HiMZA48QGfh6w3cwOemTsJweKeh+MqKUyWAqL/bSmTZ7b6VdO
+9IqFwxd81VEYDXwcVEZYdWOZEB3natc1VORn8LMC6eDbN6wwgg3T
+-----END CERTIFICATE-----
+`;

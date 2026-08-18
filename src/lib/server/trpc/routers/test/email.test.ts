@@ -173,15 +173,18 @@ describe('email.sendCustom', () => {
 		});
 
 		const start = mockSettings.hackathonStartDate.toLocaleDateString();
+		// Neither fixture has confirmed, so no check-in block and no attachment.
 		expect(sendEmail).toHaveBeenCalledWith({
 			to: hackerUser.email,
 			subject: `Hi ${hackerUser.name}`,
-			body: `We start ${start}, ${hackerUser.name}.`
+			body: `We start ${start}, ${hackerUser.name}.`,
+			attachments: []
 		});
 		expect(sendEmail).toHaveBeenCalledWith({
 			to: appliedHacker.email,
 			subject: `Hi ${appliedHacker.name}`,
-			body: `We start ${start}, ${appliedHacker.name}.`
+			body: `We start ${start}, ${appliedHacker.name}.`,
+			attachments: []
 		});
 	});
 
@@ -265,7 +268,8 @@ describe('email.sendCustom — external recipients', () => {
 		expect(sendEmail).toHaveBeenCalledWith({
 			to: hackerUser.email,
 			subject: `Hi ${hackerUser.name}`,
-			body: `Body ${hackerUser.name}`
+			body: `Body ${hackerUser.name}`,
+			attachments: []
 		});
 		// The nameless fallback, identical to what the compose preview shows.
 		expect(sendEmail).toHaveBeenCalledWith({
@@ -567,10 +571,13 @@ describe('email.sendTest', () => {
 
 		await caller.email.sendTest(testInput);
 
+		// sendTest renders the admin as CONFIRMED so a block variable is proofreadable,
+		// which means this send always carries the QR image.
 		expect(sendEmail).toHaveBeenCalledWith({
 			to: adminUser.email,
 			subject: `Hi ${adminUser.name} — you are in`,
-			body: `Hi ${adminUser.name}, we start ${mockSettings.hackathonStartDate.toLocaleDateString()}.`
+			body: `Hi ${adminUser.name}, we start ${mockSettings.hackathonStartDate.toLocaleDateString()}.`,
+			attachments: [expect.objectContaining({ contentType: 'image/png', inline: true })]
 		});
 	});
 

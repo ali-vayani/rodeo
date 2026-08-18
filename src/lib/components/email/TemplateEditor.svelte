@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { TEMPLATE_VARIABLES } from '$lib/email/variables';
+	import { TEMPLATE_VARIABLES, RAW_VARIABLE_KEYS } from '$lib/email/variables';
 
 	let {
 		label,
@@ -18,14 +18,18 @@
 
 	function insertVariable(key: string) {
 		const token = `{{${key}}}`;
-		const el = lastFocused === 'subject' ? subjectEl : bodyEl;
+		// A block variable expands to markup, which `substituteVariables` strips from
+		// subjects — so putting one there produces a silently empty gap. Send it to
+		// the body regardless of which field was last focused.
+		const target = RAW_VARIABLE_KEYS.has(key) ? 'body' : lastFocused;
+		const el = target === 'subject' ? subjectEl : bodyEl;
 		if (!el) return;
 
 		const start = el.selectionStart ?? el.value.length;
 		const end = el.selectionEnd ?? start;
 		const next = el.value.slice(0, start) + token + el.value.slice(end);
 
-		if (lastFocused === 'subject') {
+		if (target === 'subject') {
 			subject = next;
 		} else {
 			body = next;
@@ -69,7 +73,7 @@
 			<button
 				type="button"
 				onclick={() => insertVariable(v.key)}
-				title={v.label}
+				title={'hint' in v ? `${v.label} — ${v.hint}` : v.label}
 				class="cursor-pointer rounded-md border border-border bg-muted px-1.5 py-0.5 font-mono text-xs text-foreground hover:bg-neutral-100"
 			>
 				{'{{' + v.key + '}}'}

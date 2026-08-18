@@ -17,6 +17,7 @@
 	import TemplateEditor from '$lib/components/email/TemplateEditor.svelte';
 	import EmailPreview, { type PreviewAs } from '$lib/components/email/EmailPreview.svelte';
 	import { NAME_FALLBACK, SAMPLE_VARS } from '$lib/email/variables';
+	import { UserStatus } from '$lib/generated/prisma/enums';
 	import SendConfirmation, { CONFIRM_WORD } from '$lib/components/email/SendConfirmation.svelte';
 	import SendHistory from '$lib/components/email/SendHistory.svelte';
 	import { Button } from '$lib/components/ui';
@@ -102,9 +103,14 @@
 	 * external addresses. Externals carry the same fallback name the server will use.
 	 */
 	let previewTargets = $derived([
-		...sample.map((u) => ({ name: u.name, email: u.email, external: false })),
+		...sample.map((u) => ({ name: u.name, email: u.email, status: u.status, external: false })),
 		...(sendExternal
-			? externalEmails.map((email) => ({ name: NAME_FALLBACK, email, external: true }))
+			? externalEmails.map((email) => ({
+					name: NAME_FALLBACK,
+					email,
+					status: null,
+					external: true
+				}))
 			: [])
 	]);
 
@@ -125,7 +131,20 @@
 	let previewVars = $derived(
 		previewTarget === null
 			? SAMPLE_VARS
-			: { name: previewTarget.name?.trim() || NAME_FALLBACK, ...data.eventVars }
+			: {
+					name: previewTarget.name?.trim() || NAME_FALLBACK,
+					...data.eventVars,
+					// The QR block is per-recipient, so the send substitutes it server-side.
+					// Mirror its gate here: confirmed/checked-in recipients preview the
+					// placeholder, everyone else previews the nothing they will receive —
+					// never the literal {{hacker_qr_code}}, which would (wrongly) read as
+					// a variable about to send as-is.
+					hacker_qr_code:
+						previewTarget.status === UserStatus.CONFIRMED ||
+						previewTarget.status === UserStatus.CHECKED_IN
+							? SAMPLE_VARS.hacker_qr_code
+							: ''
+				}
 	);
 
 	let previewAs = $derived<PreviewAs>({

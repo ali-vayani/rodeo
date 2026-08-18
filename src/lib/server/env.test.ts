@@ -20,6 +20,7 @@ const {
 	yopmailLoginEnabled,
 	resendConfigured,
 	emailFrom,
+	appOrigin,
 	validateEnv,
 	devSwitcherEnabled
 } = await import('./env');
@@ -134,6 +135,39 @@ describe('emailFrom', () => {
 
 		env.EMAIL_FROM = '   ';
 		expect(emailFrom()).toBe('hello@freetailhackers.com');
+	});
+});
+
+describe('appOrigin', () => {
+	it('prefers the explicit setting', () => {
+		env.APP_ORIGIN = 'https://rodeo.freetailhackers.com';
+		env.VERCEL_URL = 'rodeo-abc123.vercel.app';
+		expect(appOrigin()).toBe('https://rodeo.freetailhackers.com');
+	});
+
+	it('strips a trailing slash so callers can concatenate a path', () => {
+		env.APP_ORIGIN = 'https://rodeo.freetailhackers.com/';
+		expect(appOrigin()).toBe('https://rodeo.freetailhackers.com');
+	});
+
+	it('falls back to the stable production hostname on Vercel', () => {
+		// Not the per-deployment URL: production email must not link at a build that
+		// will later be superseded.
+		env.VERCEL_ENV = 'production';
+		env.VERCEL_PROJECT_PRODUCTION_URL = 'rodeo.vercel.app';
+		env.VERCEL_URL = 'rodeo-abc123.vercel.app';
+		expect(appOrigin()).toBe('https://rodeo.vercel.app');
+	});
+
+	it('uses the per-deployment hostname on a preview', () => {
+		env.VERCEL_ENV = 'preview';
+		env.VERCEL_PROJECT_PRODUCTION_URL = 'rodeo.vercel.app';
+		env.VERCEL_URL = 'rodeo-abc123.vercel.app';
+		expect(appOrigin()).toBe('https://rodeo-abc123.vercel.app');
+	});
+
+	it('falls back to localhost in development', () => {
+		expect(appOrigin()).toBe('http://localhost:5173');
 	});
 });
 
