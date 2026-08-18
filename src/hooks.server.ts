@@ -3,6 +3,7 @@ import type { Handle } from '@sveltejs/kit';
 import { getSession } from '$lib/server/auth';
 import { validateEnv } from '$lib/server/env';
 import { warnIncompleteWalletConfig } from '$lib/server/wallet/config';
+import { warnIncompleteS3Config } from '$lib/server/s3';
 import {
 	canAccess,
 	canAccessHackerPortal,
@@ -18,6 +19,11 @@ validateEnv();
 // are the one feature here that is allowed to be absent, so a missing certificate
 // must not take the application form down with it.
 warnIncompleteWalletConfig();
+
+// Same contract, same reason — see the header comment on `server/s3`. A bucket
+// that is absent is switched off on purpose; one missing a single variable is a
+// typo whose only other symptom would be an upload control that never appears.
+warnIncompleteS3Config();
 
 /**
  * The path SvelteKit will actually route on.
