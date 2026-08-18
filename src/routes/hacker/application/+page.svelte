@@ -29,10 +29,11 @@
 	// --- Form state ---
 	const ROLES_FOR_APPLICATION: Role[] = [Role.HACKER, Role.JUDGE, Role.MENTOR, Role.VOLUNTEER];
 
-	// Pick initial role: first application-relevant role from user, or HACKER
+	// The account's own role when it is one you can apply as, else HACKER. An
+	// UNDECLARED account — the state a self-registered user can land in — has no
+	// application-relevant role yet, so the form opens on the common case.
 	function initialRole(): Role {
-		const existing = user.roles.find((r) => ROLES_FOR_APPLICATION.includes(r));
-		return existing ?? Role.HACKER;
+		return ROLES_FOR_APPLICATION.includes(user.role) ? user.role : Role.HACKER;
 	}
 
 	let selectedRole = $state<Role>(initialRole());
@@ -217,7 +218,9 @@
 			{/if}
 
 			<!-- Footer row -->
-			<div class="mt-8 flex items-center justify-between border-t border-border pt-5">
+			<div
+				class="mt-8 flex flex-col gap-3 border-t border-border pt-5 sm:flex-row sm:items-center sm:justify-between"
+			>
 				<!-- Progress + save status -->
 				<div class="flex flex-col gap-0.5">
 					{#if requiredQuestions.length > 0}
@@ -237,13 +240,13 @@
 				</div>
 
 				<!-- Submit button -->
-				<div class="flex flex-col items-end gap-1">
+				<div class="flex flex-col gap-1 sm:items-end">
 					<button
 						type="button"
 						onclick={handleSubmit}
 						disabled={submitting || !canSubmit || !windowOpen}
 						title={windowOpen ? undefined : `Applications closed on ${closesOn}.`}
-						class="rounded bg-primary px-5 py-2 text-sm font-medium text-white transition-opacity disabled:cursor-not-allowed disabled:opacity-40"
+						class="w-full rounded bg-primary px-5 py-2 text-sm font-medium text-white transition-opacity disabled:cursor-not-allowed disabled:opacity-40 sm:w-auto"
 					>
 						{submitting ? 'Submitting…' : 'Submit Application'}
 					</button>

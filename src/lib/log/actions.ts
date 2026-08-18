@@ -17,12 +17,18 @@
  */
 export const LOG_ACTIONS = [
 	// Admissions
+	{ key: 'admissions.score.set', label: 'Application scored', group: 'Admissions' },
 	{ key: 'admissions.decision.set', label: 'Decision set', group: 'Admissions' },
+	{ key: 'admissions.decision.bulk', label: 'Decisions set in bulk', group: 'Admissions' },
 	{ key: 'admissions.decision.blocked', label: 'Decision blocked by lock', group: 'Admissions' },
+	{ key: 'admissions.decision.clear', label: 'Decision cleared', group: 'Admissions' },
 	{ key: 'admissions.release', label: 'Decisions released', group: 'Admissions' },
 
 	// Users
-	{ key: 'user.roles.update', label: 'Roles changed', group: 'Users' },
+	// Slug stays plural though a user now holds one role: it is what existing Log rows
+	// were written with, and renaming it would orphan every historical entry from the
+	// logs-page filter. Only the label follows the schema.
+	{ key: 'user.roles.update', label: 'Role changed', group: 'Users' },
 	{ key: 'user.status.update', label: 'Status changed', group: 'Users' },
 	{ key: 'user.decision.override', label: 'Decision overridden', group: 'Users' },
 	{ key: 'user.export', label: 'User list exported', group: 'Users' },
@@ -33,6 +39,10 @@ export const LOG_ACTIONS = [
 	{ key: 'question.delete', label: 'Question deleted', group: 'Application' },
 	{ key: 'question.reorder', label: 'Questions reordered', group: 'Application' },
 	{ key: 'question.batch', label: 'Application form saved', group: 'Application' },
+
+	// Data
+	{ key: 'data.export', label: 'Full database exported', group: 'Settings' },
+	{ key: 'data.wipe', label: 'Database wiped', group: 'Settings' },
 
 	// Settings
 	{ key: 'settings.update', label: 'Settings updated', group: 'Settings' },

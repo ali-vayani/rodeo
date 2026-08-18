@@ -22,11 +22,6 @@
 		return name.slice(0, 2).toUpperCase();
 	}
 
-	const APPLICATION_ROLES: Role[] = ['HACKER', 'JUDGE', 'MENTOR', 'VOLUNTEER'];
-
-	const primaryRole =
-		user.roles.find((r) => APPLICATION_ROLES.includes(r as Role)) ?? user.roles[0];
-
 	const decisionLabel = $derived(getApplicationStateLabel(user));
 
 	const showRsvp = $derived(
@@ -71,30 +66,32 @@
 					>
 						{initials(user.name)}
 					</div>
-					<div>
-						<p class="text-base leading-tight font-bold text-primary">{user.name}</p>
-						<p class="mb-2 text-xs text-muted-foreground">{user.email}</p>
-						{#if primaryRole}
-							<span
-								class="rounded border border-primary px-2 py-0.5 font-mono text-xs font-medium tracking-wide text-primary uppercase"
-							>
-								{primaryRole}
-							</span>
-						{/if}
+					<div class="min-w-0">
+						<p class="text-base leading-tight font-bold break-words text-primary">{user.name}</p>
+						<p class="mb-2 text-xs break-words text-muted-foreground">{user.email}</p>
+						<span
+							class="rounded border border-primary px-2 py-0.5 font-mono text-xs font-medium tracking-wide text-primary uppercase"
+						>
+							{user.role}
+						</span>
 					</div>
 				</div>
 
 				<div class="border-t border-border">
 					{#if user.university}
-						<div class="flex justify-between border-b border-border py-2.5 text-sm">
-							<span class="text-muted-foreground">School</span>
-							<span class="font-medium text-primary">{user.university}</span>
+						<div class="flex justify-between gap-3 border-b border-border py-2.5 text-sm">
+							<span class="shrink-0 text-muted-foreground">School</span>
+							<span class="min-w-0 text-right font-medium break-words text-primary"
+								>{user.university}</span
+							>
 						</div>
 					{/if}
 					{#if user.year}
-						<div class="flex justify-between border-b border-border py-2.5 text-sm">
-							<span class="text-muted-foreground">Grad Year</span>
-							<span class="font-medium text-primary">{user.year}</span>
+						<div class="flex justify-between gap-3 border-b border-border py-2.5 text-sm">
+							<span class="shrink-0 text-muted-foreground">Grad Year</span>
+							<span class="min-w-0 text-right font-medium break-words text-primary"
+								>{user.year}</span
+							>
 						</div>
 					{/if}
 					{#if decisionLabel}
@@ -129,7 +126,7 @@
 				ondecline={handleDecline}
 				{declining}
 			/>
-		{:else if showEventContent && primaryRole == Role.HACKER}
+		{:else if showEventContent && user.role === Role.HACKER}
 			<TeamPanel
 				uid={user.uid}
 				initialTeam={user.team}

@@ -5,10 +5,33 @@
  * script is awkward to import and easy to break.
  */
 
-export interface SelectOption {
+/**
+ * One option in a `MultiCombobox`.
+ *
+ * `label` is optional because the common case is a vocabulary of raw stored values
+ * that are already their own display text; `count` is optional because not every
+ * caller has one, but when it exists it is load-bearing — it is the only thing that
+ * tells an organizer that two near-identical universities are two real populations
+ * and not a rendering glitch.
+ */
+export interface MultiComboboxOption {
 	value: string;
-	label: string;
+	label?: string;
+	count?: number;
 	disabled?: boolean;
+	/** Extra search terms — matched, never shown. See `Rankable.keywords`. */
+	keywords?: readonly string[];
+}
+
+/**
+ * One option in a single-select `Combobox`. Same shape minus the count, which is a
+ * property of a filter facet rather than of a form field.
+ */
+export interface ComboboxOption {
+	value: string;
+	label?: string;
+	disabled?: boolean;
+	keywords?: readonly string[];
 }
 
 /** One tab in a `Tabs` rail. */

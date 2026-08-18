@@ -1,14 +1,34 @@
 <script lang="ts">
-	import type { Question, QuestionType, Role } from '$lib/generated/prisma/client';
+	import type {
+		LinkedField,
+		OptionPreset,
+		Question,
+		QuestionType,
+		Role
+	} from '$lib/generated/prisma/client';
+	import { LINKED_FIELDS, LINKED_FIELD_LABEL } from '$lib/linkedFields';
+	import { OPTION_PRESET_LABEL } from '$lib/questions/options';
+	import { defaultsFor } from '$lib/questions/linkedFieldDefaults';
+	import { suggestLinkedField } from '$lib/questions/suggestLinkedField';
+	import { Combobox } from '$lib/components/ui';
 
 	interface Props {
 		question: Question | null;
+		/**
+		 * Title and type the Add Question form was carrying when it opened this.
+		 *
+		 * Only consulted for a new question. It exists so picking "Dropdown" out
+		 * there lands you straight in the options editor: the type-dependent
+		 * sections below key off `type`, so seeding it is what makes them visible
+		 * before anything has been added, rather than after an add-then-edit trip.
+		 */
+		seed?: { title: string; type: QuestionType } | null;
 		isOpen: boolean;
 		onSave: (question: Partial<Question>) => void;
 		onCancel: () => void;
 	}
 
-	let { question, isOpen, onSave, onCancel }: Props = $props();
+	let { question, seed = null, isOpen, onSave, onCancel }: Props = $props();
 
 	const QUESTION_TYPES: { value: QuestionType; label: string }[] = [
 		{ value: 'SHORT_TEXT', label: 'Short Text' },
@@ -29,11 +49,11 @@
 		'UNDECLARED'
 	];
 
-	const LINKED_FIELDS = [
+	// `''` is the "None" row: the control binds a string, and the enum has no member
+	// for "not linked". Converted back to null on save.
+	const LINKED_FIELD_CHOICES = [
 		{ value: '', label: 'None' },
-		{ value: 'name', label: 'Name' },
-		{ value: 'university', label: 'University' },
-		{ value: 'year', label: 'Year' }
+		...LINKED_FIELDS.map((field) => ({ value: field, label: LINKED_FIELD_LABEL[field] }))
 	];
 
 	// Form state
@@ -46,9 +66,22 @@
 	let min = $state<string>('');
 	let max = $state<string>('');
 	let regex = $state('');
-	let linkedField = $state('');
+	let linkedField = $state<LinkedField | ''>('');
+	let optionPreset = $state<OptionPreset | null>(null);
 	let errors = $state<Record<string, string>>({});
 	let newOptionInput = $state('');
+
+	/**
+	 * The suggestion the organizer has waved away, so it stays away.
+	 *
+	 * Keyed by field rather than a bare boolean: dismissing the University chip on one
+	 * title should not suppress the Year chip when they rewrite the question, and it
+	 * resets with the modal anyway.
+	 */
+	let dismissed = $state<LinkedField | null>(null);
+
+	/** Set when defaults were just applied, so the note explains where the type came from. */
+	let appliedDefaults = $state(false);
 
 	$effect(() => {
 		if (isOpen) {
@@ -63,9 +96,10 @@
 				max = question.max != null ? String(question.max) : '';
 				regex = question.regex ?? '';
 				linkedField = question.linkedField ?? '';
+				optionPreset = question.optionPreset;
 			} else {
-				title = '';
-				type = 'SHORT_TEXT';
+				title = seed?.title ?? '';
+				type = seed?.type ?? 'SHORT_TEXT';
 				required = false;
 				targetRole = [];
 				placeholder = '';
@@ -74,15 +108,58 @@
 				max = '';
 				regex = '';
 				linkedField = '';
+				optionPreset = null;
 			}
 			errors = {};
 			newOptionInput = '';
+			dismissed = null;
+			appliedDefaults = false;
 		}
 	});
 
-	const showOptions = $derived(type === 'MULTIPLE_CHOICE' || type === 'DROPDOWN');
+	const isOptions = $derived(type === 'MULTIPLE_CHOICE' || type === 'DROPDOWN');
+	// A preset supplies the list, so there is nothing to hand-author. The rows are hidden
+	// rather than disabled: an editor showing 6,447 read-only text inputs is not a form.
+	const showOptions = $derived(isOptions && optionPreset === null);
+	const showPreset = $derived(isOptions && optionPreset !== null);
 	const showMinMax = $derived(type === 'NUMBER');
 	const showPlaceholder = $derived(type !== 'CHECKBOX' && type !== 'MULTIPLE_CHOICE');
+
+	/**
+	 * The linked field this title looks like it is asking for, when it isn't linked yet.
+	 *
+	 * Suppressed once a field is attached — the chip's whole job is done — and once the
+	 * organizer dismisses it. Purely advisory: `suggestLinkedField` decides nothing, and
+	 * every field remains reachable from the select below whatever this proposes.
+	 */
+	const suggestion = $derived(linkedField === '' ? (suggestLinkedField(title) ?? null) : null);
+	const showSuggestion = $derived(suggestion !== null && suggestion !== dismissed);
+
+	/**
+	 * Attach a linked field and take the question shape it implies.
+	 *
+	 * Applied on every change, including back to None, so switching University → Year
+	 * does not leave the university preset behind on a six-option dropdown. Defaults,
+	 * not constraints: nothing below is disabled afterwards, and the organizer can edit
+	 * the type, the options, or drop the preset.
+	 */
+	function setLinkedField(field: LinkedField | '') {
+		linkedField = field;
+		if (field === '') {
+			optionPreset = null;
+			appliedDefaults = false;
+			return;
+		}
+		const defaults = defaultsFor(field);
+		type = defaults.type;
+		optionPreset = defaults.optionPreset;
+		options = defaults.options.length ? defaults.options : [''];
+		appliedDefaults = true;
+	}
+
+	function acceptSuggestion() {
+		if (suggestion) setLinkedField(suggestion);
+	}
 
 	function toggleRole(role: Role) {
 		if (targetRole.includes(role)) {
@@ -131,6 +208,7 @@
 	function validate(): boolean {
 		const errs: Record<string, string> = {};
 		if (!title.trim()) errs.title = 'Title is required';
+		// A preset already has thousands of options; only a hand-authored list can be short.
 		if (showOptions) {
 			const filled = options.filter((o) => o.trim());
 			if (filled.length < 2) errs.options = 'At least 2 options required';
@@ -157,7 +235,10 @@
 			min: showMinMax && min !== '' ? Number(min) : null,
 			max: showMinMax && max !== '' ? Number(max) : null,
 			regex: regex.trim() || undefined,
-			linkedField: linkedField || null
+			linkedField: linkedField || null,
+			// Cleared when the type no longer offers choices, so a preset left behind by
+			// switching to Short Text cannot come back if the type is switched again.
+			optionPreset: isOptions ? optionPreset : null
 		};
 
 		onSave(data);
@@ -211,17 +292,46 @@
 						placeholder="e.g. What is your major?"
 					/>
 					{#if errors.title}<p class="error-msg">{errors.title}</p>{/if}
+
+					<!--
+						Offered from the title, because the two things an organizer would have to
+						already know — that linked fields exist, and that this question is one —
+						are nowhere else on this form. Dismissible, and it decides nothing: the
+						select below still offers every field regardless of what this proposes.
+					-->
+					{#if showSuggestion && suggestion}
+						<div class="suggestion">
+							<span class="suggestion-text">
+								This looks like a {LINKED_FIELD_LABEL[suggestion]} question.
+							</span>
+							<button type="button" class="suggestion-accept" onclick={acceptSuggestion}>
+								Link to {LINKED_FIELD_LABEL[suggestion]}
+							</button>
+							<button
+								type="button"
+								class="suggestion-dismiss"
+								onclick={() => (dismissed = suggestion)}
+							>
+								Dismiss
+							</button>
+						</div>
+					{/if}
 				</div>
 
 				<!-- Type + Required row -->
 				<div class="row-2">
 					<div class="field">
 						<label for="q-type">Type <span class="req">*</span></label>
-						<select id="q-type" bind:value={type}>
-							{#each QUESTION_TYPES as t (t.value)}
-								<option value={t.value}>{t.label}</option>
-							{/each}
-						</select>
+						<Combobox
+							id="q-type"
+							options={QUESTION_TYPES}
+							value={type}
+							onChange={(next) => (type = next as QuestionType)}
+							ariaLabel="Question type"
+						/>
+						{#if appliedDefaults}
+							<p class="field-note">Set by the linked field. You can change it.</p>
+						{/if}
 					</div>
 					<div class="field field-inline">
 						<label>
@@ -264,6 +374,23 @@
 							bind:value={placeholder}
 							placeholder="e.g. Enter your answer..."
 						/>
+					</div>
+				{/if}
+
+				<!-- Conditional: Preset option list -->
+				{#if showPreset && optionPreset}
+					<div class="field">
+						<span class="field-label">Options</span>
+						<div class="preset-row">
+							<span class="preset-name">{OPTION_PRESET_LABEL[optionPreset]}</span>
+							<button type="button" class="preset-clear" onclick={() => (optionPreset = null)}>
+								Use my own options
+							</button>
+						</div>
+						<p class="field-note">
+							A bundled list, kept up to date in the codebase. Applicants whose answer isn't in it
+							can still enter their own.
+						</p>
 					</div>
 				{/if}
 
@@ -338,11 +465,18 @@
 				<div class="row-2">
 					<div class="field">
 						<label for="q-linked">Linked Field</label>
-						<select id="q-linked" bind:value={linkedField}>
-							{#each LINKED_FIELDS as lf (lf.value)}
-								<option value={lf.value}>{lf.label}</option>
-							{/each}
-						</select>
+						<!--
+							`onChange` rather than `bind:value`, because attaching a field also applies
+							the question shape it implies — see `setLinkedField`. A binding would set
+							the state and skip that.
+						-->
+						<Combobox
+							id="q-linked"
+							options={LINKED_FIELD_CHOICES}
+							value={linkedField}
+							onChange={(next) => setLinkedField(next as LinkedField | '')}
+							ariaLabel="Linked field"
+						/>
 					</div>
 					<div class="field">
 						<label for="q-regex">Validation Regex</label>
@@ -487,8 +621,7 @@
 	}
 
 	input[type='text'],
-	input[type='number'],
-	select {
+	input[type='number'] {
 		padding: 8px 10px;
 		border: 1px solid #e0e0e0;
 		border-radius: 6px;
@@ -503,8 +636,7 @@
 		box-sizing: border-box;
 	}
 
-	input:focus,
-	select:focus {
+	input:focus {
 		border-color: #191919;
 		box-shadow: 0 0 0 2px rgba(25, 25, 25, 0.08);
 	}
@@ -618,6 +750,108 @@
 		background: #191919;
 		border-color: #191919;
 		color: #fff;
+	}
+
+	/*
+	 * The suggestion strip and the preset row.
+	 *
+	 * Written in this modal's own scoped-CSS idiom rather than in design tokens: the
+	 * file predates the design system (see docs/component-library-plan.md) and porting
+	 * it is a separate job. The chip shape still follows the one the admissions and
+	 * users pages use — small radius, 1px border, colour-only hover, dark fill when
+	 * active — so the three read as the same affordance.
+	 */
+	.suggestion {
+		display: flex;
+		align-items: center;
+		flex-wrap: wrap;
+		gap: 8px;
+		margin-top: 2px;
+		padding: 7px 10px;
+		border: 1px solid #e0e0e0;
+		border-radius: 6px;
+		background: #f4f4f4;
+	}
+
+	.suggestion-text {
+		flex: 1;
+		min-width: 0;
+		font-size: 12px;
+		color: #444;
+	}
+
+	.suggestion-accept,
+	.suggestion-dismiss {
+		font-size: 11px;
+		font-weight: 600;
+		padding: 3px 9px;
+		border-radius: 5px;
+		cursor: pointer;
+		transition: all 0.12s;
+		white-space: nowrap;
+	}
+
+	.suggestion-accept {
+		border: 1px solid #191919;
+		background: #191919;
+		color: #fff;
+	}
+
+	.suggestion-accept:hover {
+		background: #333;
+		border-color: #333;
+	}
+
+	.suggestion-dismiss {
+		border: 1px solid #e0e0e0;
+		background: #fff;
+		color: #666;
+	}
+
+	.suggestion-dismiss:hover {
+		border-color: #aaa;
+		color: #191919;
+	}
+
+	.preset-row {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		padding: 8px 10px;
+		border: 1px solid #e0e0e0;
+		border-radius: 6px;
+		background: #f4f4f4;
+	}
+
+	.preset-name {
+		flex: 1;
+		min-width: 0;
+		font-size: 13px;
+		color: #191919;
+	}
+
+	.preset-clear {
+		font-size: 11px;
+		font-weight: 600;
+		padding: 3px 9px;
+		border: 1px solid #e0e0e0;
+		border-radius: 5px;
+		background: #fff;
+		color: #666;
+		cursor: pointer;
+		transition: all 0.12s;
+		white-space: nowrap;
+	}
+
+	.preset-clear:hover {
+		border-color: #aaa;
+		color: #191919;
+	}
+
+	.field-note {
+		font-size: 11px;
+		color: #888;
+		margin: 0;
 	}
 
 	.field-error input {

@@ -55,8 +55,13 @@
 	aria-orientation={orientation}
 	class={cn(
 		orientation === 'horizontal'
-			? 'flex gap-0.5 border-b border-border'
-			: 'flex w-40 shrink-0 flex-col border-r border-border',
+			? 'flex gap-0.5 overflow-x-auto border-b border-border'
+			: cn(
+					'flex w-40 shrink-0 flex-col border-r border-border',
+					// Below md a left rail has no room to live beside its panel, so
+					// the vertical variant flattens into a scrollable strip on top.
+					'max-md:w-full max-md:flex-row max-md:overflow-x-auto max-md:border-r-0 max-md:border-b'
+				),
 		className
 	)}
 >
@@ -75,8 +80,11 @@
 				'transition-colors duration-150 focus-visible:shadow-ring',
 				'disabled:pointer-events-none disabled:opacity-40',
 				orientation === 'horizontal'
-					? 'border-b-2 border-solid px-3.5 py-2'
-					: 'border-b border-solid border-b-border px-3.5 py-2.5 text-left',
+					? 'shrink-0 border-b-2 border-solid px-3.5 py-2 whitespace-nowrap'
+					: cn(
+							'border-b border-solid border-b-border px-3.5 py-2.5 text-left',
+							'max-md:shrink-0 max-md:border-b-0 max-md:whitespace-nowrap'
+						),
 				selected
 					? orientation === 'horizontal'
 						? 'border-b-primary font-semibold text-foreground'

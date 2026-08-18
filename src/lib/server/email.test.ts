@@ -15,17 +15,11 @@ vi.mock('resend', () => ({
 	}
 }));
 
-const sendMail = vi.fn();
-vi.mock('nodemailer', () => ({
-	default: { createTransport: () => ({ sendMail }) }
-}));
-
 const { sendEmail, sendTemplatedEmail } = await import('./email');
 
 beforeEach(() => {
 	for (const key of Object.keys(env)) delete env[key];
 	resendSend.mockReset().mockResolvedValue({ data: { id: 'sent' }, error: null });
-	sendMail.mockReset().mockResolvedValue({});
 	vi.stubEnv('NODE_ENV', 'production');
 });
 
@@ -33,55 +27,68 @@ afterEach(() => vi.unstubAllEnvs());
 
 const message = { to: 'hacker@example.com', subject: 'Hello', body: '# Hi there' };
 
+/** The transport production runs. */
+function configureResend() {
+	env.RESEND_API_KEY = 'key';
+}
+
 describe('development', () => {
 	it('sends nothing at all', async () => {
 		vi.stubEnv('NODE_ENV', 'development');
-		env.RESEND_API_KEY = 'key';
+		configureResend();
 		const log = vi.spyOn(console, 'log').mockImplementation(() => {});
 
 		await sendEmail(message);
 
 		expect(resendSend).not.toHaveBeenCalled();
-		expect(sendMail).not.toHaveBeenCalled();
 		expect(log).toHaveBeenCalled();
 		log.mockRestore();
 	});
 });
 
 describe('preview', () => {
+	let log: ReturnType<typeof vi.spyOn>;
+
 	beforeEach(() => {
 		env.VERCEL_ENV = 'preview';
-		env.RESEND_API_KEY = 'key';
+		log = vi.spyOn(console, 'log').mockImplementation(() => {});
 	});
 
-	it('refuses to mail a real address', async () => {
-		const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+	afterEach(() => log.mockRestore());
 
-		await sendEmail(message);
+	it('sends nothing, even with a key configured', async () => {
+		// The point of the change: a preview deploy runs a production build against
+		// the production database, so its ability to send is the risk — not its
+		// configuration. A key present must not re-enable delivery.
+		configureResend();
 
-		// The one mistake that can't be taken back: a branch deploy mailing real
-		// applicants off the production database.
+		await expect(sendEmail(message)).resolves.toBeUndefined();
+
 		expect(resendSend).not.toHaveBeenCalled();
-		log.mockRestore();
 	});
 
-	it('sends to yopmail addresses, with a warning banner', async () => {
+	it('sends nothing to a yopmail address either', async () => {
+		// Preview used to deliver to @yopmail.com. It no longer does — that fence was
+		// one predicate away from mailing real applicants.
+		configureResend();
+
 		await sendEmail({ ...message, to: 'tester@yopmail.com' });
 
-		expect(resendSend).toHaveBeenCalledTimes(1);
-		expect(resendSend.mock.calls[0][0].html).toContain('test environment');
+		expect(resendSend).not.toHaveBeenCalled();
 	});
 
-	it('matches the allowed domain case-insensitively', async () => {
-		await sendEmail({ ...message, to: 'Tester@YOPmail.com' });
+	it('resolves rather than throwing when no key is set', async () => {
+		delete env.RESEND_API_KEY;
 
-		expect(resendSend).toHaveBeenCalledTimes(1);
+		await expect(sendEmail(message)).resolves.toBeUndefined();
+
+		expect(resendSend).not.toHaveBeenCalled();
 	});
 });
 
 describe('production', () => {
 	it('renders the markdown body to HTML and omits the warning', async () => {
-		env.RESEND_API_KEY = 'key';
+		configureResend();
 
 		await sendEmail(message);
 
@@ -92,7 +99,7 @@ describe('production', () => {
 	});
 
 	it('honours EMAIL_FROM when set', async () => {
-		env.RESEND_API_KEY = 'key';
+		configureResend();
 		env.EMAIL_FROM = 'rodeo@freetailhackers.com';
 
 		await sendEmail(message);
@@ -101,45 +108,40 @@ describe('production', () => {
 	});
 
 	it('throws when Resend reports a rejection instead of throwing one', async () => {
-		env.RESEND_API_KEY = 'key';
+		configureResend();
 		resendSend.mockResolvedValue({ data: null, error: { message: 'domain not verified' } });
 
 		// The SDK returns delivery failures in the response body. An unchecked call
-		// would count this as a success and the audit trail would say so too.
+		// counts this as a success, and the bulk callers write that straight into the
+		// audit trail — which is the whole reason a failure has to be distinguishable.
 		await expect(sendEmail(message)).rejects.toThrow('domain not verified');
 	});
 
-	it('falls back to SMTP when no Resend key is configured', async () => {
-		env.EMAIL_HOST = 'smtp.example.com';
-		env.EMAIL_USER = 'user';
-		env.EMAIL_PASS = 'pass';
+	it('propagates a thrown transport failure too', async () => {
+		configureResend();
+		resendSend.mockRejectedValue(new Error('fetch failed'));
 
-		await sendEmail(message);
-
-		expect(sendMail).toHaveBeenCalledTimes(1);
-		expect(resendSend).not.toHaveBeenCalled();
+		await expect(sendEmail(message)).rejects.toThrow('fetch failed');
 	});
 
-	it('prefers Resend when both transports are configured', async () => {
-		env.RESEND_API_KEY = 'key';
-		env.EMAIL_HOST = 'smtp.example.com';
-		env.EMAIL_USER = 'user';
-		env.EMAIL_PASS = 'pass';
+	it('ignores leftover SMTP variables', async () => {
+		// Stale Amazon SES credentials are still sitting in Vercel Production. They
+		// authenticate against nothing, and nothing may fall back to them.
+		env.EMAIL_HOST = 'email-smtp.us-east-1.amazonaws.com';
+		env.EMAIL_USER = 'AKIAEXAMPLE';
+		env.EMAIL_PASS = 'stale';
 
-		await sendEmail(message);
-
-		expect(resendSend).toHaveBeenCalledTimes(1);
-		expect(sendMail).not.toHaveBeenCalled();
+		await expect(sendEmail(message)).rejects.toThrow('No email transport configured');
 	});
 
-	it('throws when no transport is configured at all', async () => {
+	it('throws when no transport is configured', async () => {
 		await expect(sendEmail(message)).rejects.toThrow('No email transport configured');
 	});
 });
 
 describe('sendTemplatedEmail', () => {
 	it('substitutes variables into both the subject and the body', async () => {
-		env.RESEND_API_KEY = 'key';
+		configureResend();
 
 		await sendTemplatedEmail(
 			'sarah@example.com',

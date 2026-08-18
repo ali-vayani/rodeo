@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
+	import { Combobox } from '$lib/components/ui';
 
 	const TIMEZONES = [
 		{ value: 'America/New_York', label: 'Eastern Time (ET)' },
@@ -40,17 +41,22 @@
 		<div class="mb-2 text-xs text-muted-foreground">
 			Used to display and interpret all dates and schedule times across the platform.
 		</div>
-		<select
+		<!--
+			An IANA identifier the organizer already knows the name of, in a list long
+			enough that scrolling it was the slow part. A stored value outside the list
+			is appended so it stays selectable rather than silently vanishing.
+		-->
+		<Combobox
 			bind:value={localTimezone}
-			class="w-full cursor-pointer rounded border border-border bg-white px-3 py-[7px] text-[13px] text-primary outline-none"
-		>
-			{#each TIMEZONES as tz (tz)}
-				<option value={tz.value}>{tz.label} — {tz.value}</option>
-			{/each}
-			{#if !TIMEZONES.find((t) => t.value === localTimezone)}
-				<option value={localTimezone}>{localTimezone}</option>
-			{/if}
-		</select>
+			options={[
+				...TIMEZONES.map((tz) => ({ value: tz.value, label: `${tz.label} — ${tz.value}` })),
+				...(TIMEZONES.find((t) => t.value === localTimezone)
+					? []
+					: [{ value: localTimezone, label: localTimezone }])
+			]}
+			ariaLabel="Timezone"
+			placeholder="Search timezones…"
+		/>
 	</div>
 
 	<button

@@ -19,8 +19,7 @@
  *   - A `cid:` attachment travels inside the message. Nothing is hosted, no
  *     endpoint exists to be found, and no proxy caches it.
  *
- * The third, therefore. Both transports support it — nodemailer through `cid`,
- * Resend through `content_id`.
+ * The third, therefore — Resend carries it as `content_id`.
  *
  * ## The wallet buttons are ordinary authenticated links
  *
@@ -42,6 +41,7 @@ import QRCode from 'qrcode';
 import { UserStatus } from '$lib/generated/prisma/enums';
 import { isRsvpClosed } from '$lib/application/window';
 import { appOrigin } from '$lib/server/env';
+import { emailSettings } from '$lib/server/settings';
 import { buildTemplateVars } from '$lib/email/variables';
 import { appleWalletConfigured, googleWalletConfigured } from './config';
 import type { EmailAttachment } from '$lib/server/email';
@@ -160,15 +160,22 @@ export async function buildCheckInPassBlock(
  * A single call so the two cannot drift — `{{check_in_pass}}` expands to markup
  * containing `cid:…`, and a caller that took the vars without the attachment
  * would mail a broken image. Every send path goes through here.
+ *
+ * Takes the raw Settings row, nullable, and splits it deliberately: the template
+ * dates go through `emailSettings`, whose defaults keep an unconfigured install
+ * sending, while wallet gating reads the row as-is — `DEFAULT_SETTINGS.RSVPDeadline`
+ * is process boot time, which reads as "deadline passed" and would put wallet
+ * buttons in every confirmed hacker's inbox. Same rule `$lib/server/settings`
+ * documents: email copy has a safe default; a deadline does not.
  */
 export async function buildEmailPersonalization(
 	user: CheckInPassSubject,
-	settings: { hackathonStartDate: Date; RSVPDeadline: Date },
+	settings: { hackathonStartDate: Date; RSVPDeadline: Date } | null,
 	now: Date = new Date()
 ): Promise<{ vars: Record<string, string>; attachments: EmailAttachment[] }> {
 	const block = await buildCheckInPassBlock(user, settings, now);
 	return {
-		vars: buildTemplateVars(user, settings, block.html),
+		vars: buildTemplateVars(user, emailSettings(settings), block.html),
 		attachments: block.attachments
 	};
 }

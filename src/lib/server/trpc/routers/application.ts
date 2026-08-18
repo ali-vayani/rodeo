@@ -1,12 +1,31 @@
 import { z } from 'zod';
 import { TRPCError } from '@trpc/server';
+import type { LinkedField, OptionPreset } from '$lib/generated/prisma/client';
 import { UserStatus, DecisionStatus, QuestionType, Role } from '$lib/generated/prisma/client';
 import { router, authedProcedure } from '../init';
 import { APPLICANT_ROLES } from '$lib/admissions/roles';
 import { normalizeEmail } from '$lib/blacklist/match';
+import { LINKED_FIELD_COLUMN, isLinkedField } from '$lib/linkedFields';
+import { acceptsWriteIn, isOptionsType } from '$lib/questions/options';
 import { sendTemplatedEmail } from '$lib/server/email';
 import { buildEmailPersonalization } from '$lib/server/wallet/email-block';
+import { emailSettings } from '$lib/server/settings';
 import { formatDateLong } from '$lib/format';
+
+/**
+ * Report a lifecycle send that failed, without failing the mutation behind it.
+ *
+ * These sends must not throw into the caller: an RSVP that reports failure because
+ * Resend was briefly down would tell a hacker their spot wasn't held when the row
+ * had already committed. But the rejection was previously dropped on the floor
+ * entirely, which is how every lifecycle email could stop for two real applicants
+ * with no error, no log, and nothing in the Resend dashboard to find.
+ */
+function reportSendFailure(kind: string, to: string) {
+	return (error: unknown) => {
+		console.error(`[email] ${kind} notification to ${to} failed to send:`, error);
+	};
+}
 
 /**
  * The three columns that gate everything in this router.
@@ -79,10 +98,11 @@ function assertBeforeRSVPDeadline(settings: ApplicationWindow | null) {
 
 /** The subset of a Question this router validates an answer against. */
 type AnswerableQuestion = {
-	linkedField: string | null;
+	linkedField: LinkedField | null;
 	targetRole: Role[];
 	type: QuestionType;
 	options: string[];
+	optionPreset: OptionPreset | null;
 	min: number | null;
 	max: number | null;
 	regex: string | null;
@@ -111,9 +131,11 @@ function assertAnswerValid(question: AnswerableQuestion, value: string) {
 		}
 	}
 
-	// Single-select answers must be one of the offered options.
+	// Single-select answers must be one of the offered options — unless the choices came
+	// from a preset, which is a vocabulary rather than a constraint. See `acceptsWriteIn`.
 	if (
-		(question.type === QuestionType.MULTIPLE_CHOICE || question.type === QuestionType.DROPDOWN) &&
+		isOptionsType(question.type) &&
+		!acceptsWriteIn(question) &&
 		question.options.length > 0 &&
 		!question.options.includes(value)
 	) {
@@ -177,7 +199,7 @@ export const applicationRouter = router({
 			const [user, settings] = await Promise.all([
 				ctx.prisma.user.findUniqueOrThrow({
 					where: { uid: ctx.user.uid },
-					select: { status: true, roles: true }
+					select: { status: true, role: true }
 				}),
 				ctx.prisma.settings.findFirst()
 			]);
@@ -199,6 +221,7 @@ export const applicationRouter = router({
 					targetRole: true,
 					type: true,
 					options: true,
+					optionPreset: true,
 					min: true,
 					max: true,
 					regex: true
@@ -213,10 +236,7 @@ export const applicationRouter = router({
 
 			// Don't let an applicant answer a question aimed at a different audience: those
 			// answers would show up in their admissions detail as if they'd been asked.
-			if (
-				question.targetRole.length > 0 &&
-				!question.targetRole.some((r) => user.roles.includes(r))
-			) {
+			if (question.targetRole.length > 0 && !question.targetRole.includes(user.role)) {
 				throw new TRPCError({ code: 'FORBIDDEN', message: 'This question was not asked of you.' });
 			}
 
@@ -225,15 +245,14 @@ export const applicationRouter = router({
 				assertAnswerValid(question, input.value);
 			}
 
-			// Write through to the user record for linked fields
-			const LINKED_USER_FIELDS = ['name', 'university', 'year'] as const;
-			if (
-				question.linkedField &&
-				(LINKED_USER_FIELDS as readonly string[]).includes(question.linkedField)
-			) {
+			// Write through to the user record for linked fields. The allowlist lives in
+			// `$lib/linkedFields` because the admin filter panels derive their vocabulary
+			// from the same three columns — an inline copy here is what stopped anything
+			// else from reusing it.
+			if (isLinkedField(question.linkedField)) {
 				await ctx.prisma.user.update({
 					where: { uid: ctx.user.uid },
-					data: { [question.linkedField]: input.value }
+					data: { [LINKED_FIELD_COLUMN[question.linkedField]]: input.value }
 				});
 			}
 
@@ -297,18 +316,20 @@ export const applicationRouter = router({
 			data: { status: UserStatus.CONFIRMED }
 		});
 
-		if (settings?.confirmTemplate) {
-			// The RSVP-confirmation email is exactly where a hacker wants their pass,
-			// so this send carries the check-in block if the template asks for it.
+		// Defaults when no row exists — an unconfigured install still confirms an RSVP.
+		// A template an admin has deliberately blanked still opts out.
+		const mail = emailSettings(settings);
+		if (mail.confirmTemplate) {
+			// The RSVP-confirmation email is exactly where a hacker wants their pass, so
+			// this send carries the check-in block. Personalization takes the raw row —
+			// the wallet gate must fail closed on an unconfigured install.
 			const { vars, attachments } = await buildEmailPersonalization(updated, settings);
 			await sendTemplatedEmail(
 				user.email,
-				{ subject: settings.confirmSubject, body: settings.confirmTemplate },
+				{ subject: mail.confirmSubject, body: mail.confirmTemplate },
 				vars,
 				attachments
-			).catch(() => {
-				/* fire-and-forget */
-			});
+			).catch(reportSendFailure('RSVP confirmation', user.email));
 		}
 
 		return updated;
@@ -352,14 +373,15 @@ export const applicationRouter = router({
 		});
 
 		const settings = await ctx.prisma.settings.findFirst();
-		if (settings?.declineTemplate) {
+		const mail = emailSettings(settings);
+		if (mail.declineTemplate) {
 			await sendTemplatedEmail(
 				user.email,
-				{ subject: settings.declineSubject, body: settings.declineTemplate },
+				{ subject: mail.declineSubject, body: mail.declineTemplate },
+				// Vars only: a declined account has no check-in block, so there is no
+				// attachment to carry.
 				(await buildEmailPersonalization(user, settings)).vars
-			).catch(() => {
-				/* fire-and-forget */
-			});
+			).catch(reportSendFailure('RSVP decline', user.email));
 		}
 
 		return updated;
@@ -377,7 +399,10 @@ export const applicationRouter = router({
 		.input(z.object({ role: z.nativeEnum(Role).optional() }).optional())
 		.mutation(async ({ ctx, input }) => {
 			// Only an applicant role may be submitted as — never staff. A bad or staff role
-			// is ignored rather than rejected, falling back to the user's stored roles.
+			// is ignored rather than rejected, falling back to the user's stored role.
+			// This is the one place an account's role changes without an admin, which is
+			// why the staff roles are unreachable through it: submitting `role: "ADMIN"`
+			// must not be a privilege escalation.
 			const submittedRole =
 				input?.role && APPLICANT_ROLES.includes(input.role) ? input.role : undefined;
 
@@ -396,18 +421,15 @@ export const applicationRouter = router({
 			assertWithinApplicationWindow(settings);
 
 			// The role the applicant is submitting as decides which required questions apply
-			// and is written onto the user below. Falls back to their stored roles when the
+			// and is written onto the user below. Falls back to their stored role when the
 			// client sends nothing, so older callers keep working.
-			const applicationRoles = submittedRole ? [submittedRole] : user.roles;
+			const applicationRole = submittedRole ?? user.role;
 
 			// Validate all required questions are answered
 			const questions = await ctx.prisma.question.findMany({
 				where: {
 					required: true,
-					OR: [
-						{ targetRole: { isEmpty: true } },
-						...(applicationRoles.length ? [{ targetRole: { hasSome: applicationRoles } }] : [])
-					]
+					OR: [{ targetRole: { isEmpty: true } }, { targetRole: { has: applicationRole } }]
 				}
 			});
 
@@ -449,7 +471,7 @@ export const applicationRouter = router({
 				where: { uid: ctx.user.uid, status: UserStatus.CREATED },
 				data: {
 					status: UserStatus.APPLIED,
-					roles: applicationRoles,
+					role: applicationRole,
 					...(blacklistedEmail && { pendingDecision: DecisionStatus.REJECTED })
 				}
 			});
@@ -465,17 +487,18 @@ export const applicationRouter = router({
 				where: { uid: ctx.user.uid }
 			});
 
-			// Send confirmation email
-			if (settings?.submitTemplate) {
+			// Send confirmation email. Defaults when no Settings row exists — the window
+			// guards above deliberately read that as "unconfigured, allow through", and
+			// an application that is allowed through still gets acknowledged.
+			const mail = emailSettings(settings);
+			if (mail.submitTemplate) {
 				const { vars, attachments } = await buildEmailPersonalization(updatedUser, settings);
 				await sendTemplatedEmail(
 					user.email,
-					{ subject: settings.submitSubject, body: settings.submitTemplate },
+					{ subject: mail.submitSubject, body: mail.submitTemplate },
 					vars,
 					attachments
-				).catch(() => {
-					/* fire-and-forget */
-				});
+				).catch(reportSendFailure('application submitted', user.email));
 			}
 
 			return updatedUser;

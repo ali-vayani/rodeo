@@ -362,8 +362,12 @@ export function createReviewSession(options: ReviewSessionOptions) {
 			void acquire(uid, ++generation);
 		},
 
-		/** setDecision already cleared the claim server-side — skip the teardown release. */
-		markDecided(uid: string) {
+		/**
+		 * The server already cleared the claim as part of the write — `setScore` and
+		 * `setDecision` both do — so skip the teardown release that would otherwise
+		 * fire when the selection moves on.
+		 */
+		markClaimCleared(uid: string) {
 			if (heldUid === uid) heldUid = null;
 		}
 	};

@@ -18,7 +18,7 @@ export const TEAM_MEMBER_SELECT = {
 	uid: true,
 	name: true,
 	email: true,
-	roles: true
+	role: true
 } as const;
 
 /**
@@ -33,7 +33,7 @@ export const SELF_USER_SELECT = {
 	email: true,
 	university: true,
 	year: true,
-	roles: true,
+	role: true,
 	status: true,
 	activeDecision: true,
 	teamId: true,

@@ -10,6 +10,7 @@ import {
 	confirmedHacker,
 	mockSettings
 } from '../test-utils';
+import { DEFAULT_SETTINGS } from '$lib/server/settings';
 
 vi.mock('$lib/server/db', async () => {
 	const { mockDeep } = await import('vitest-mock-extended');
@@ -122,7 +123,8 @@ describe('application.save', () => {
 			options: [],
 			min: null,
 			max: null,
-			regex: null
+			regex: null,
+			optionPreset: null
 		} as never);
 		db.applicationResponse.upsert.mockResolvedValue(response as never);
 
@@ -150,7 +152,8 @@ describe('application.save', () => {
 			options: [],
 			min: null,
 			max: null,
-			regex: null
+			regex: null,
+			optionPreset: null
 		} as never);
 		db.applicationResponse.upsert.mockResolvedValue(response as never);
 
@@ -183,7 +186,8 @@ describe('application.save', () => {
 			options: [],
 			min: null,
 			max: null,
-			regex: null
+			regex: null,
+			optionPreset: null
 		} as never);
 
 		await expect(caller.application.save({ questionId: 'q-1', value: 'x' })).rejects.toMatchObject({
@@ -203,7 +207,8 @@ describe('application.save', () => {
 			options: [],
 			min: null,
 			max: null,
-			regex: null
+			regex: null,
+			optionPreset: null
 		} as never);
 
 		await expect(
@@ -223,7 +228,8 @@ describe('application.save', () => {
 			options: ['A', 'B'],
 			min: null,
 			max: null,
-			regex: null
+			regex: null,
+			optionPreset: null
 		} as never);
 
 		await expect(caller.application.save({ questionId: 'q-1', value: 'C' })).rejects.toMatchObject({
@@ -237,13 +243,14 @@ describe('application.save', () => {
 		db.user.findUniqueOrThrow.mockResolvedValue(hackerUser as never);
 		db.settings.findFirst.mockResolvedValue(openWindow);
 		db.question.findUnique.mockResolvedValue({
-			linkedField: 'name',
+			linkedField: 'NAME',
 			targetRole: [],
 			type: QuestionType.SHORT_TEXT,
 			options: [],
 			min: null,
 			max: null,
-			regex: null
+			regex: null,
+			optionPreset: null
 		} as never);
 		db.user.update.mockResolvedValue(hackerUser as never);
 		db.applicationResponse.upsert.mockResolvedValue(response as never);
@@ -463,7 +470,11 @@ describe('application.rsvpDecline', () => {
 		expect(result.status).toBe(UserStatus.DECLINED);
 	});
 
-	it('sends nothing when no settings row exists', async () => {
+	it('still sends, from the defaults, when no settings row exists', async () => {
+		// Production ran with no Settings row for weeks: `settings.get` served
+		// DEFAULT_SETTINGS so the editor looked configured, while every sender read the
+		// row directly, found null, and skipped silently. Both sides resolve the same
+		// values now — an unconfigured install mails the default copy rather than nothing.
 		const caller = createTestCaller(db, acceptedHacker);
 		db.user.findUniqueOrThrow.mockResolvedValue(acceptedHacker as never);
 		db.user.update.mockResolvedValue({
@@ -474,7 +485,11 @@ describe('application.rsvpDecline', () => {
 
 		await caller.application.rsvpDecline();
 
-		expect(sendTemplatedEmail).not.toHaveBeenCalled();
+		expect(sendTemplatedEmail).toHaveBeenCalledOnce();
+		const [to, template] = vi.mocked(sendTemplatedEmail).mock.calls[0];
+		expect(to).toBe(acceptedHacker.email);
+		expect(template.subject).toBe(DEFAULT_SETTINGS.declineSubject);
+		expect(template.body).toBe(DEFAULT_SETTINGS.declineTemplate);
 	});
 
 	it('refuses to decline a checked-in attendee', async () => {
@@ -515,7 +530,7 @@ describe('application.submit', () => {
 				where: { uid: hackerUser.uid, status: UserStatus.CREATED },
 				data: expect.objectContaining({
 					status: UserStatus.APPLIED,
-					roles: hackerUser.roles
+					role: hackerUser.role
 				})
 			})
 		);
@@ -734,6 +749,110 @@ describe('application.submit', () => {
 			// No attachment: submitting an application does not make you a confirmed
 			// attendee, so there is no check-in block and nothing to attach.
 			[]
+		);
+	});
+
+	it('still acknowledges the application when no settings row exists', async () => {
+		// The production outage this exists to prevent: two applicants submitted against a
+		// database with no Settings row, `settings?.submitTemplate` was falsy, and the send
+		// was skipped with no error and nothing in the Resend dashboard to find. The window
+		// guards deliberately let a submission through in that state, so the acknowledgement
+		// has to go out with it.
+		const caller = createTestCaller(db, hackerUser);
+		db.user.findUniqueOrThrow
+			.mockResolvedValueOnce(hackerUser as never)
+			.mockResolvedValue({ ...hackerUser, status: UserStatus.APPLIED } as never);
+		db.question.findMany.mockResolvedValue([] as never);
+		db.applicationResponse.findMany.mockResolvedValue([] as never);
+		db.blacklist.findUnique.mockResolvedValue(null as never);
+		db.user.updateMany.mockResolvedValue({ count: 1 } as never);
+		db.settings.findFirst.mockResolvedValue(null);
+
+		await caller.application.submit();
+
+		expect(sendTemplatedEmail).toHaveBeenCalledWith(
+			hackerUser.email,
+			{ subject: DEFAULT_SETTINGS.submitSubject, body: DEFAULT_SETTINGS.submitTemplate },
+			expect.objectContaining({ name: hackerUser.name }),
+			// No settings row means no check-in block, so nothing to attach.
+			[]
+		);
+	});
+});
+
+describe('application.save — preset-backed questions', () => {
+	/**
+	 * A preset is a vocabulary, not a constraint.
+	 *
+	 * The university preset is 6,447 institutions, which is not every institution. An
+	 * applicant at one it missed picks "Not listed" in the combobox and types their own;
+	 * rejecting that here would hard-block them from applying over a gap in a
+	 * third-party dataset. Hand-authored options stay strict, because an organizer who
+	 * typed four choices meant exactly those four — so these two cases have to be
+	 * distinguishable, and `acceptsWriteIn` is where the line sits.
+	 */
+	const presetQuestion = {
+		linkedField: 'UNIVERSITY',
+		targetRole: [],
+		type: QuestionType.DROPDOWN,
+		options: [],
+		optionPreset: 'UNIVERSITIES_NA',
+		min: null,
+		max: null,
+		regex: null
+	};
+
+	function openApplication() {
+		db.user.findUniqueOrThrow.mockResolvedValue(hackerUser as never);
+		db.settings.findFirst.mockResolvedValue(openWindow);
+		db.user.update.mockResolvedValue(hackerUser as never);
+		db.applicationResponse.upsert.mockResolvedValue(response as never);
+	}
+
+	it('accepts a school that is not in the preset, and writes it through', async () => {
+		const caller = createTestCaller(db, hackerUser);
+		openApplication();
+		db.question.findUnique.mockResolvedValue(presetQuestion as never);
+
+		await caller.application.save({
+			questionId: 'q-1',
+			value: 'Riverbend Institute of Technology'
+		});
+
+		expect(db.user.update).toHaveBeenCalledWith(
+			expect.objectContaining({ data: { university: 'Riverbend Institute of Technology' } })
+		);
+		expect(db.applicationResponse.upsert).toHaveBeenCalled();
+	});
+
+	it('still rejects an off-list answer to a hand-authored searchable dropdown', async () => {
+		const caller = createTestCaller(db, hackerUser);
+		openApplication();
+		db.question.findUnique.mockResolvedValue({
+			...presetQuestion,
+			linkedField: null,
+			options: ['Rust', 'Go'],
+			optionPreset: null
+		} as never);
+
+		await expect(
+			caller.application.save({ questionId: 'q-1', value: 'COBOL' })
+		).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+		expect(db.applicationResponse.upsert).not.toHaveBeenCalled();
+	});
+
+	it('writes a linked answer to the column the enum names, not to the enum member', async () => {
+		// `LINKED_FIELD_COLUMN` is the whole reason `linkedField` could become an enum
+		// without renaming a `User` column. A regression here writes to `User.UNIVERSITY`,
+		// which does not exist.
+		const caller = createTestCaller(db, hackerUser);
+		openApplication();
+		db.question.findUnique.mockResolvedValue(presetQuestion as never);
+
+		await caller.application.save({ questionId: 'q-1', value: 'Rice University' });
+
+		expect(db.user.update).toHaveBeenCalledWith(
+			expect.objectContaining({ data: { university: 'Rice University' } })
 		);
 	});
 });

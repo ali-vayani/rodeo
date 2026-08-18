@@ -73,7 +73,7 @@
 			<button
 				type="button"
 				onclick={() => insertVariable(v.key)}
-				title={'hint' in v ? `${v.label} — ${v.hint}` : `${v.label} — e.g. ${v.sample}`}
+				title={'hint' in v ? `${v.label} — ${v.hint}` : v.label}
 				class="cursor-pointer rounded-md border border-border bg-muted px-1.5 py-0.5 font-mono text-xs text-foreground hover:bg-neutral-100"
 			>
 				{'{{' + v.key + '}}'}
@@ -94,7 +94,7 @@
 			bind:value={body}
 			onfocus={() => (lastFocused = 'body')}
 			placeholder="Body of the {label} email"
-			class="min-h-0 w-full flex-1 resize-none rounded-md border border-border bg-card px-3 py-2 font-mono text-base leading-relaxed text-foreground outline-none focus:border-primary"
+			class="min-h-40 w-full flex-1 resize-none rounded-md border border-border bg-card px-3 py-2 font-mono text-base leading-relaxed text-foreground outline-none focus:border-primary md:min-h-0"
 		></textarea>
 	</div>
 </div>

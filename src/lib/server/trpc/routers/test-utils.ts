@@ -34,7 +34,7 @@ export const adminUser: User = {
 	email: 'admin@example.com',
 	university: null,
 	year: null,
-	roles: [Role.ADMIN],
+	role: Role.ADMIN,
 	status: UserStatus.CREATED,
 	pendingDecision: null,
 	activeDecision: null,
@@ -42,7 +42,13 @@ export const adminUser: User = {
 	groupId: null,
 	createdAt: new Date('2024-01-01'),
 	claimedBy: null,
-	claimedAt: null
+	claimedAt: null,
+	decidedBy: null,
+	decidedAt: null,
+	score: null,
+	notes: null,
+	scoredBy: null,
+	scoredAt: null
 };
 
 /** A second admin, for exercising review-lock contention between two reviewers. */
@@ -59,7 +65,7 @@ export const organizerUser: User = {
 	email: 'organizer@example.com',
 	university: null,
 	year: null,
-	roles: [Role.ORGANIZER],
+	role: Role.ORGANIZER,
 	status: UserStatus.CREATED,
 	pendingDecision: null,
 	activeDecision: null,
@@ -67,7 +73,13 @@ export const organizerUser: User = {
 	groupId: null,
 	createdAt: new Date('2024-01-01'),
 	claimedBy: null,
-	claimedAt: null
+	claimedAt: null,
+	decidedBy: null,
+	decidedAt: null,
+	score: null,
+	notes: null,
+	scoredBy: null,
+	scoredAt: null
 };
 
 export const hackerUser: User = {
@@ -76,7 +88,7 @@ export const hackerUser: User = {
 	email: 'hacker@example.com',
 	university: 'University of Texas at Austin',
 	year: 'Junior',
-	roles: [Role.HACKER],
+	role: Role.HACKER,
 	status: UserStatus.CREATED,
 	pendingDecision: null,
 	activeDecision: null,
@@ -84,7 +96,13 @@ export const hackerUser: User = {
 	groupId: null,
 	createdAt: new Date('2024-01-01'),
 	claimedBy: null,
-	claimedAt: null
+	claimedAt: null,
+	decidedBy: null,
+	decidedAt: null,
+	score: null,
+	notes: null,
+	scoredBy: null,
+	scoredAt: null
 };
 
 /** An applicant currently locked by `adminUser2`. Override claimedAt per test. */

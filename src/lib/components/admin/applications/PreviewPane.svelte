@@ -1,5 +1,6 @@
 <script lang="ts">
 	import type { Role, Question } from '$lib/generated/prisma/client';
+	import { OPTION_PRESET_LABEL } from '$lib/questions/options';
 
 	interface Props {
 		questions: Question[];
@@ -71,12 +72,21 @@
 								<span>{q.placeholder || q.title}</span>
 							</label>
 						{:else if q.type === 'DROPDOWN'}
-							<select disabled>
-								<option value="">{q.placeholder || 'Select an option'}</option>
-								{#each q.options as opt (opt)}
-									<option value={opt}>{opt}</option>
-								{/each}
-							</select>
+							<!--
+								A disabled text box, not a `Combobox`: this pane shows the organizer what
+								they built, and a live listbox they cannot open says less than one line
+								naming where the choices come from and how many there are.
+							-->
+							<input type="text" placeholder={q.placeholder || 'Search…'} disabled />
+							<p class="field-hint">
+								{#if q.optionPreset}
+									{OPTION_PRESET_LABEL[q.optionPreset]} · answers outside the list are accepted
+								{:else if q.options.length > 0}
+									Searchable · {q.options.length} option{q.options.length === 1 ? '' : 's'}
+								{:else}
+									No options defined yet
+								{/if}
+							</p>
 						{:else if q.type === 'MULTIPLE_CHOICE'}
 							<div class="radio-group">
 								{#each q.options as opt (opt)}
@@ -179,7 +189,6 @@
 
 	input[type='text'],
 	input[type='number'],
-	select,
 	textarea {
 		padding: 8px 10px;
 		border: 1px solid #e0e0e0;
@@ -194,7 +203,6 @@
 	}
 
 	input:disabled,
-	select:disabled,
 	textarea:disabled {
 		background: #fafafa;
 		cursor: not-allowed;

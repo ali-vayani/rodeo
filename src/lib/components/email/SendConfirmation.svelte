@@ -4,22 +4,29 @@
 </script>
 
 <script lang="ts">
-	import EmailPreview from './EmailPreview.svelte';
+	import EmailPreview, { type PreviewAs } from './EmailPreview.svelte';
 	import { Input } from '$lib/components/ui';
 
 	let {
 		subject,
 		body,
 		count,
+		/** How many of `count` have no portal account. Called out explicitly below. */
+		externalCount = 0,
 		loading,
 		sending,
+		vars = undefined,
+		previewAs = null,
 		confirmText = $bindable()
 	}: {
 		subject: string;
 		body: string;
 		count: number | null;
+		externalCount?: number;
 		loading: boolean;
 		sending: boolean;
+		vars?: Record<string, string>;
+		previewAs?: PreviewAs | null;
 		confirmText: string;
 	} = $props();
 </script>
@@ -39,16 +46,24 @@
 				Counting recipients…
 			{:else if count === null}
 				Could not determine the recipient count.
+			{:else if externalCount > 0}
+				{count} recipient{count === 1 ? '' : 's'} will receive this email.
 			{:else}
 				{count} user{count === 1 ? '' : 's'} will receive this email.
 			{/if}
 		</div>
+		{#if externalCount > 0}
+			<div class="mt-1 text-xs font-semibold text-destructive">
+				{externalCount} of them {externalCount === 1 ? 'is an address' : 'are addresses'} with no portal
+				account — this email leaves the portal.
+			</div>
+		{/if}
 		<div class="mt-1 text-xs text-foreground-secondary">
 			Subject: <span class="font-mono text-foreground">{subject}</span>
 		</div>
 	</div>
 
-	<EmailPreview {subject} {body} height="lg" />
+	<EmailPreview {subject} {body} {vars} {previewAs} height="lg" />
 
 	<Input
 		bind:value={confirmText}

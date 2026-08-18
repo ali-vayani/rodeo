@@ -2,9 +2,9 @@
 	import type { PageData } from './$types';
 	import { untrack } from 'svelte';
 	import { createClient } from '$lib/trpc/client';
-	import { Badge, Button, Input, Modal, Select } from '$lib/components/ui';
+	import { Badge, Button, Combobox, Input, Modal } from '$lib/components/ui';
 	import { DataTable, PageHeader, Pagination } from '$lib/components/patterns';
-	import type { Column, SelectOption } from '$lib/components/ui/types';
+	import type { Column, ComboboxOption } from '$lib/components/ui/types';
 	import { LOG_ACTION_GROUPS, actionLabel } from '$lib/log/actions';
 	import { actionTone } from '$lib/log/notable';
 	import { formatDateTime, pluralize, EM_DASH } from '$lib/format';
@@ -32,15 +32,17 @@
 
 	const hasFilters = $derived(Boolean(search.trim() || actorId || action || from || to));
 
-	const actorOptions: SelectOption[] = $derived([
+	// The leading blank row is the "no filter" choice, so these lists do not want
+	// `clearable` — that prop is for a control whose options do not include one.
+	const actorOptions: ComboboxOption[] = $derived([
 		{ value: '', label: 'All admins' },
 		...data.actors.map((a) => ({ value: a.actorId, label: `${a.name} (${a.count})` }))
 	]);
 
-	// Flattened with a group heading as a disabled row: the Select primitive takes
+	// Flattened with a group heading as a disabled row: the Combobox primitive takes
 	// a single option list, and the alternative — a second dropdown for the group —
 	// is two controls to find one action.
-	const actionOptions: SelectOption[] = [
+	const actionOptions: ComboboxOption[] = [
 		{ value: '', label: 'All actions' },
 		...LOG_ACTION_GROUPS.flatMap((group) => [
 			{ value: `__${group.group}`, label: group.group.toUpperCase(), disabled: true },
@@ -122,10 +124,13 @@
 		}));
 	});
 
+	// Column widths only from lg up: below that the viewport (or the sidebar at
+	// md) can't afford them, and fixed widths inflate the table's intrinsic
+	// width, which pushes the whole page wider instead of scrolling the table.
 	const COLUMNS: Column<Entry>[] = [
-		{ key: 'timestamp', header: 'When', nowrap: true, width: 'w-40' },
-		{ key: 'actor', header: 'Admin', nowrap: true, width: 'w-44' },
-		{ key: 'action', header: 'Action', nowrap: true, width: 'w-52' },
+		{ key: 'timestamp', header: 'When', nowrap: true, width: 'lg:w-40' },
+		{ key: 'actor', header: 'Admin', nowrap: true, width: 'lg:w-44' },
+		{ key: 'action', header: 'Action', nowrap: true, width: 'lg:w-52' },
 		{ key: 'summary', header: 'Detail' }
 	];
 </script>
@@ -140,27 +145,30 @@
 
 <div class="flex flex-col gap-4">
 	<!-- Filters -->
-	<div class="grid grid-cols-[1.6fr_1fr_1fr_auto_auto_auto] items-end gap-2">
+	<div class="grid grid-cols-2 items-end gap-2 lg:grid-cols-[1.6fr_1fr_1fr_auto_auto_auto]">
 		<Input
 			bind:value={search}
 			oninput={onSearchInput}
 			placeholder="search admin, applicant, or detail…"
 			mono
 			aria-label="Search the activity log"
+			class="col-span-2 lg:col-span-1"
 		/>
-		<Select
+		<Combobox
 			bind:value={actorId}
 			options={actorOptions}
 			placeholder="All admins"
 			ariaLabel="Filter by admin"
-			onValueChange={() => fetchPage(1)}
+			onChange={() => fetchPage(1)}
+			class="col-span-2 lg:col-span-1"
 		/>
-		<Select
+		<Combobox
 			bind:value={action}
 			options={actionOptions}
 			placeholder="All actions"
 			ariaLabel="Filter by action"
-			onValueChange={() => fetchPage(1)}
+			onChange={() => fetchPage(1)}
+			class="col-span-2 lg:col-span-1"
 		/>
 		<Input
 			bind:value={from}
@@ -170,7 +178,9 @@
 			aria-label="From date"
 		/>
 		<Input bind:value={to} type="date" mono onchange={() => fetchPage(1)} aria-label="To date" />
-		<Button onclick={clearFilters} disabled={!hasFilters}>Clear</Button>
+		<Button onclick={clearFilters} disabled={!hasFilters} class="col-span-2 lg:col-span-1">
+			Clear
+		</Button>
 	</div>
 
 	<DataTable

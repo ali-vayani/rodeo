@@ -9,6 +9,7 @@
  * than on the first hacker who tries to log in.
  */
 
+import { createHash, timingSafeEqual } from 'node:crypto';
 import { env } from '$env/dynamic/private';
 import { dev } from '$app/environment';
 
@@ -35,45 +36,100 @@ export function isProduction(): boolean {
 }
 
 /**
- * Whether to authenticate through Supabase rather than the yopmail dev bypass.
+ * Whether Supabase (Google) sign-in is available.
  *
- * Preview counts. A preview deploy runs against the production database, so a
- * cookie-only bypass there would be an unauthenticated door into real applicant
- * data — the bypass exists for localhost and nowhere else.
+ * Preview counts: previews are production builds with real credentials, and
+ * Google login must work there. Whether the yopmail bypass is *also* available
+ * is a separate question — `yopmailLoginEnabled()` — because preview deploys
+ * run against throwaway per-branch databases of seeded fixtures, not real
+ * applicant data.
  *
- * This answers what the environment *looks* like, not whether the bypass is
+ * This answers what the environment *looks* like, not whether the dev bypass is
  * permitted: `validateEnv()` additionally demands ALLOW_DEV_AUTH=1 before the
- * app will boot with it on.
+ * app will boot with development auth on.
  */
 export function usesSupabaseAuth(): boolean {
 	return deployEnv() !== 'development';
 }
 
 /**
- * Whether the dev-only account switcher may run.
+ * Whether /login may sign in a seeded @yopmail.com account with no password.
  *
- * Deliberately stricter than `usesSupabaseAuth()`, and deliberately redundant with
- * `validateEnv()`. The switcher is a passwordless login-as-any-account endpoint that
- * renders while signed out — a strictly larger capability than /login, which at least
- * makes you know an address. /login gets away with a single `usesSupabaseAuth()` check
- * only because `validateEnv()` refuses to boot in the dangerous states; that is safety
- * borrowed from an assertion in another module, invisible at the call site. Re-asserting
- * every condition here means loosening `validateEnv()` later cannot silently open this
- * door.
+ * Development (behind validateEnv's ALLOW_DEV_AUTH and local-database gates)
+ * and preview deploys — never production. Preview is deliberate, mirroring the
+ * previous Rodeo's staging: every preview runs against its own throwaway
+ * per-branch database holding only seeded fixtures, preview sends no outbound
+ * mail at all, and reviewers need to walk the admin portal without someone
+ * first granting their Google account roles.
+ * The bypass still only ever signs into @yopmail.com accounts, so a real
+ * person's Google-created account is never reachable through it.
+ */
+export function yopmailLoginEnabled(): boolean {
+	return !usesSupabaseAuth() || deployEnv() === 'preview';
+}
+
+/**
+ * Whether the account switcher may run.
  *
- * `dev` matters most: it is a build-time constant, so no runtime environment variable —
- * a stray ALLOW_DEV_AUTH=1 on a preview deploy, a self-hosted `node build` with NODE_ENV
- * unset — can turn it back on. The other three catch a `vite dev` process that has been
- * pointed somewhere it shouldn't be, which `validateEnv()` alone does not: it skips the
- * local-database check entirely once VERCEL_ENV is set.
+ * Preview deploys: on, unconditionally. The switcher grants exactly what the
+ * /login yopmail form already grants there (`yopmailLoginEnabled`) — enumerate
+ * and become seeded fixtures inside a throwaway branch schema — so hiding it
+ * there removes convenience, not capability.
+ *
+ * Everywhere else this is deliberately stricter than `usesSupabaseAuth()`, and
+ * deliberately redundant with `validateEnv()`. The switcher is a passwordless
+ * login-as-any-account endpoint that renders while signed out — a strictly larger
+ * capability than /login, which at least makes you know an address. Re-asserting
+ * every condition here means loosening `validateEnv()` later cannot silently open
+ * this door.
+ *
+ * `dev` matters most on that branch: it is a build-time constant, so no runtime
+ * environment variable — a self-hosted `node build` with NODE_ENV unset — can turn
+ * it back on. The other three catch a `vite dev` process that has been pointed
+ * somewhere it shouldn't be. And a production deploy never even ships the widget:
+ * vite.config.ts empties `src/lib/dev/` out of VERCEL_ENV=production builds.
  */
 export function devSwitcherEnabled(): boolean {
+	if (deployEnv() === 'preview') return true;
 	return (
 		dev && // built bundles are never dev
-		!usesSupabaseAuth() && // preview and production are not development
+		!usesSupabaseAuth() && // production is not development
 		env.ALLOW_DEV_AUTH === '1' && // opt-in, never inherited
 		databaseIsLocal(env.DATABASE_URL) // never against a remote database
 	);
+}
+
+/**
+ * Whether the second factor on the two whole-database operations is configured.
+ *
+ * `ADMIN_DATA_PASSWORD` gates the full export and the export-and-wipe. Being an
+ * admin is not enough for either: one hands over every applicant's name, email
+ * and answers in a single file, and the other destroys them. The password is a
+ * deliberate second step — a shared secret held outside the app, so a hijacked
+ * admin session cannot exfiltrate or erase the database on its own.
+ *
+ * Unset means both operations refuse. Failing closed is the only safe default:
+ * treating "no password configured" as "no password required" would turn a
+ * missing variable into an open door, which is the exact mistake `ALLOW_DEV_AUTH`
+ * exists to prevent elsewhere in this file.
+ */
+export function dataPasswordConfigured(): boolean {
+	return Boolean(env.ADMIN_DATA_PASSWORD);
+}
+
+/**
+ * Constant-time check of a submitted password.
+ *
+ * Both sides are hashed first so `timingSafeEqual` gets equal-length buffers —
+ * it throws otherwise — and so the comparison time cannot leak the length of the
+ * real password the way comparing raw buffers would.
+ */
+export function verifyDataPassword(candidate: string): boolean {
+	const expected = env.ADMIN_DATA_PASSWORD;
+	if (!expected) return false;
+	const submitted = createHash('sha256').update(candidate, 'utf8').digest();
+	const actual = createHash('sha256').update(expected, 'utf8').digest();
+	return timingSafeEqual(submitted, actual);
 }
 
 function required(key: string): string {
@@ -94,21 +150,37 @@ function databaseIsLocal(url: string | undefined): boolean {
 	}
 }
 
+/** What to say when mail is asked for and no provider is set up. */
+export const NO_EMAIL_MESSAGE =
+	'No email transport configured. Set RESEND_API_KEY (Resend dashboard > API Keys), ' +
+	'and verify the EMAIL_FROM domain in the same Resend account.';
+
 /**
- * Whether an email transport is configured, and which one.
+ * Whether Resend is configured.
  *
- * Resend wins when both are present — it is the provider the previous Rodeo
- * settled on, and SMTP stays as the escape hatch for a self-hosted deploy.
+ * Resend is the only transport. There used to be a nodemailer SMTP fallback
+ * behind it, carried over from the previous Rodeo, and it was never once
+ * reached: Resend wins whenever `RESEND_API_KEY` is set, and it is set in every
+ * deployed environment. The `EMAIL_HOST`/`EMAIL_USER`/`EMAIL_PASS` values that
+ * sat behind it were stale Amazon SES credentials left over from before the
+ * previous Rodeo moved to Resend — SES rejects them with `535 Authentication
+ * Credentials Invalid`. Keeping a fallback that cannot authenticate is worse
+ * than having none, so the branch is gone rather than merely deprioritised.
  */
-export function emailTransport(): 'resend' | 'smtp' | null {
-	if (env.RESEND_API_KEY) return 'resend';
-	if (env.EMAIL_HOST && env.EMAIL_USER && env.EMAIL_PASS) return 'smtp';
-	return null;
+export function resendConfigured(): boolean {
+	return Boolean(env.RESEND_API_KEY);
 }
 
-/** The From: address on everything the app sends. */
+/**
+ * The From: address on everything the app sends.
+ *
+ * `||`, not `??`: a variable created in Vercel and left blank arrives as `''`, which
+ * `??` passes straight through as the envelope sender. Resend rejects that with "The
+ * domain is invalid" — on every message, with the lifecycle callers logging the
+ * failure and carrying on, so a blank value reads as a mail outage with no cause.
+ */
 export function emailFrom(): string {
-	return env.EMAIL_FROM ?? 'hello@freetailhackers.com';
+	return env.EMAIL_FROM?.trim() || 'hello@freetailhackers.com';
 }
 
 /**
@@ -180,10 +252,7 @@ export function validateEnv(): void {
 	required('SUPABASE_URL');
 	required('SUPABASE_ANON_KEY');
 
-	if (!emailTransport()) {
-		throw new Error(
-			'No email transport configured. Set RESEND_API_KEY, or all of ' +
-				'EMAIL_HOST / EMAIL_USER / EMAIL_PASS for SMTP.'
-		);
+	if (!resendConfigured()) {
+		throw new Error(NO_EMAIL_MESSAGE);
 	}
 }

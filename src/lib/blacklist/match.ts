@@ -15,7 +15,16 @@
  * pronunciation rules and misfire badly on the international names a hackathon actually
  * receives. Unicode normalization plus edit-distance covers the realistic typo cases
  * without that bias.
+ *
+ * The string algorithms themselves live in `$lib/text/similarity` — they are generic and
+ * a second caller (typo-tolerant recipient search) now uses them. The *threshold* stayed
+ * here, because it is a policy about what a blacklist flag costs, not a property of
+ * Jaro-Winkler. Both are re-exported so existing importers of this module are unaffected.
  */
+
+import { jaroWinkler, normalizeName } from '$lib/text/similarity';
+
+export { jaroWinkler, normalizeName };
 
 /**
  * Jaro-Winkler score at or above which two name components are treated as the same name.
@@ -39,9 +48,6 @@
  */
 export const NAME_SIMILARITY_THRESHOLD = 0.92;
 
-/** Jaro score below which Winkler's prefix bonus is not applied, per the standard definition. */
-const WINKLER_BOOST_THRESHOLD = 0.7;
-
 export type BlacklistMatch = 'EMAIL' | 'NAME_EXACT' | 'NAME_FUZZY';
 
 /** The fields of a `Blacklist` row that matching actually reads. */
@@ -63,28 +69,6 @@ export function normalizeEmail(email: string): string {
 }
 
 /**
- * Fold a name to a comparable form.
- *
- * This step, not the edit-distance below, does most of the real work: it collapses
- * `José`/`Jose`, `O'Brien`/`O’Brien`/`OBrien`, `Smith-Jones`/`SmithJones` and
- * `JAY PATIL`/`Jay Patil` to identical strings for free, before any fuzziness is needed.
- */
-export function normalizeName(value: string): string {
-	return (
-		value
-			// NFKD splits an accented character into its base plus a combining mark, which the
-			// next line then discards -- the cheapest way to make é and e compare equal.
-			.normalize('NFKD')
-			.replace(/[\u0300-\u036f]/g, '')
-			.toLowerCase()
-			// Punctuation inside names is presentational and inconsistently typed.
-			.replace(/['’`.\-_]/g, '')
-			.replace(/\s+/g, ' ')
-			.trim()
-	);
-}
-
-/**
  * Split a single free-text name into the first and last token.
  *
  * `User.name` is one field, so this is a guess, and the first/last token rule is the
@@ -98,70 +82,6 @@ export function splitName(fullName: string): { first: string; last: string } | n
 	const parts = normalizeName(fullName).split(' ').filter(Boolean);
 	if (parts.length < 2) return null;
 	return { first: parts[0], last: parts[parts.length - 1] };
-}
-
-/**
- * Jaro similarity: matched characters within a sliding window, discounted by how many of
- * those matches appear out of order.
- */
-function jaro(a: string, b: string): number {
-	if (a === b) return 1;
-	if (!a.length || !b.length) return 0;
-
-	// Two characters count as matching only if they sit within this many positions of
-	// each other, which is what keeps the metric sensitive to position rather than
-	// degenerating into a bag-of-characters comparison.
-	const window = Math.max(0, Math.floor(Math.max(a.length, b.length) / 2) - 1);
-	const aMatched = new Array<boolean>(a.length).fill(false);
-	const bMatched = new Array<boolean>(b.length).fill(false);
-
-	let matches = 0;
-	for (let i = 0; i < a.length; i++) {
-		const start = Math.max(0, i - window);
-		const end = Math.min(i + window + 1, b.length);
-		for (let j = start; j < end; j++) {
-			if (bMatched[j] || a[i] !== b[j]) continue;
-			aMatched[i] = true;
-			bMatched[j] = true;
-			matches++;
-			break;
-		}
-	}
-	if (matches === 0) return 0;
-
-	// Walk both matched subsequences in parallel; each position where they disagree is
-	// half a transposition, since a swapped pair shows up as two such disagreements.
-	let transpositions = 0;
-	let k = 0;
-	for (let i = 0; i < a.length; i++) {
-		if (!aMatched[i]) continue;
-		while (!bMatched[k]) k++;
-		if (a[i] !== b[k]) transpositions++;
-		k++;
-	}
-	transpositions /= 2;
-
-	return (matches / a.length + matches / b.length + (matches - transpositions) / matches) / 3;
-}
-
-/**
- * Jaro-Winkler: Jaro, with a bonus for a shared prefix.
- *
- * Preferred over raw edit distance for names because it is length-normalized -- one wrong
- * character matters far more in `Ann` than in `Bartholomew`, which a flat "distance <= 2"
- * rule cannot express -- and because names are misspelled toward their ends far more
- * often than their beginnings.
- */
-export function jaroWinkler(a: string, b: string): number {
-	const score = jaro(a, b);
-	// Only boost already-plausible pairs, and cap the prefix at 4 characters, so a long
-	// shared prefix can't drag a genuinely poor match over the threshold.
-	if (score < WINKLER_BOOST_THRESHOLD) return score;
-
-	let prefix = 0;
-	while (prefix < 4 && prefix < a.length && prefix < b.length && a[prefix] === b[prefix]) prefix++;
-
-	return score + prefix * 0.1 * (1 - score);
 }
 
 /** Blacklist folded into the form `matchApplicant` compares against. */

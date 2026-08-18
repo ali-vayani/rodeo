@@ -14,17 +14,25 @@
  * editor advertises a placeholder that arrives in a hacker's inbox unsubstituted.
  * `variables.test.ts` asserts the two stay in sync.
  *
- * `sample` mirrors the real output format (`Date.toLocaleDateString()`), not a
- * prettier one — the preview is only useful if it shows what actually sends.
+ * `placeholder` names the value rather than imitating one. Invented stand-ins — a
+ * "Sarah Chen", a "4/15/2026" — read as data, so an organizer proofreading a draft
+ * cannot tell a working template from one about to mail every hacker the wrong date.
+ * A bracketed label can only be read one way, and it is shorter besides.
+ *
+ * These are only ever shown where there is no concrete recipient to substitute. Where
+ * there is one, the real values are used — see `buildTemplateVars` and the compose
+ * preview, which reads the dates back from Settings.
  */
 export const TEMPLATE_VARIABLES = [
-	{ key: 'name', label: "Hacker's full name", sample: 'Sarah Chen' },
-	{ key: 'hackathon_start', label: 'Hackathon start date', sample: '4/15/2026' },
-	{ key: 'rsvp_deadline', label: 'RSVP deadline', sample: '4/1/2026' },
+	{ key: 'name', label: "Hacker's full name", placeholder: '[hacker name]' },
+	{ key: 'hackathon_start', label: 'Hackathon start date', placeholder: '[start date]' },
+	// Not "[end date]": this is the RSVP cutoff, not when the event ends. Labelling it
+	// as an end date would be the same lie in a shorter form.
+	{ key: 'rsvp_deadline', label: 'RSVP deadline', placeholder: '[RSVP deadline]' },
 	{
 		key: 'check_in_pass',
 		label: 'Check-in pass',
-		sample: '[QR code + wallet buttons]',
+		placeholder: '[QR code + wallet buttons]',
 		hint:
 			"Inserts the recipient's QR code, their RC- code, and Add to Apple/Google " +
 			'Wallet buttons. Confirmed attendees only; the wallet buttons appear once ' +
@@ -58,10 +66,29 @@ export const RAW_VARIABLE_KEYS: ReadonlySet<string> = new Set(
 	TEMPLATE_VARIABLES.filter((v) => 'raw' in v && v.raw).map((v) => v.key)
 );
 
-/** Placeholder values used by the admin preview pane. */
+/**
+ * Placeholder values used where there is no concrete recipient to substitute against
+ * — the lifecycle template editor, which previews a template rather than a message.
+ * The custom-email compose preview does have one, and uses it instead.
+ */
 export const SAMPLE_VARS: Record<string, string> = Object.fromEntries(
-	TEMPLATE_VARIABLES.map((v) => [v.key, v.sample])
+	TEMPLATE_VARIABLES.map((v) => [v.key, v.placeholder])
 );
+
+/**
+ * What `{{name}}` becomes when there is no name to substitute.
+ *
+ * Two cases reach it. A custom email can go to an arbitrary address — a sponsor, a
+ * judge — with no User row to read a name off. And a User row can carry a blank name:
+ * `name` is populated by a linked application question, so anyone who has not answered
+ * it yet has `''`, which would render "Hi ," in a real inbox.
+ *
+ * "Hi {{name}}," has to still read as a sentence, so the substitution is a salutation
+ * filler rather than a name. Exported because the compose preview substitutes the same
+ * value: a preview that showed anything else would be lying about what lands in that
+ * inbox.
+ */
+export const NAME_FALLBACK = 'hacker';
 
 const VARIABLE_PATTERN = /\{\{(\w+)\}\}/g;
 
@@ -150,6 +177,24 @@ export function tokenizeTemplate(
 }
 
 /**
+ * The half of the substitution map that doesn't depend on who receives the message.
+ *
+ * Split out so the server can render these strings once and hand them to the compose
+ * preview. Formatting them in the browser instead would run `toLocaleDateString()`
+ * under the *viewer's* locale and timezone, and a preview that reads 4/14 for a send
+ * that renders 4/15 is worse than no preview at all.
+ */
+export function buildEventVars(settings: {
+	hackathonStartDate: Date;
+	RSVPDeadline: Date;
+}): Record<string, string> {
+	return {
+		hackathon_start: settings.hackathonStartDate.toLocaleDateString(),
+		rsvp_deadline: settings.RSVPDeadline.toLocaleDateString()
+	};
+}
+
+/**
  * Build the substitution map for a real send.
  *
  * Structurally typed so callers can pass a Prisma `User`/`Settings` row without
@@ -169,10 +214,25 @@ export function buildTemplateVars(
 	 */
 	checkInPass = ''
 ): Record<string, string> {
+	// `name` comes from a linked application question, so an account that has not
+	// answered it holds `''` — and "Hi ," is worse than a filler salutation.
 	return {
-		name: user.name,
-		hackathon_start: settings.hackathonStartDate.toLocaleDateString(),
-		rsvp_deadline: settings.RSVPDeadline.toLocaleDateString(),
+		name: user.name?.trim() || NAME_FALLBACK,
+		...buildEventVars(settings),
 		check_in_pass: checkInPass
 	};
+}
+
+/**
+ * The substitution map for an address with no account.
+ *
+ * Same event dates, generic salutation. `sendCustom` and the compose preview both
+ * call this, so what the admin reads is what the external recipient receives.
+ * No third argument: an external address has no account, so no check-in pass.
+ */
+export function buildExternalTemplateVars(settings: {
+	hackathonStartDate: Date;
+	RSVPDeadline: Date;
+}): Record<string, string> {
+	return buildTemplateVars({ name: NAME_FALLBACK }, settings);
 }

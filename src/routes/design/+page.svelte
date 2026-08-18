@@ -4,6 +4,7 @@
 		Button,
 		Card,
 		Checkbox,
+		Combobox,
 		Divider,
 		EmptyState,
 		Eyebrow,
@@ -11,7 +12,6 @@
 		IconButton,
 		Input,
 		Modal,
-		Select,
 		Spinner,
 		Switch,
 		Textarea,
@@ -36,6 +36,8 @@
 	let broken = $state('not-an-email');
 	let notes = $state('');
 	let role = $state('HACKER');
+	let school = $state('');
+	let filterRole = $state('');
 	let agreed = $state(true);
 	let notify = $state(false);
 	let tab = $state('general');
@@ -67,6 +69,17 @@
 		{ value: 'JUDGE', label: 'Judge' },
 		{ value: 'MENTOR', label: 'Mentor' },
 		{ value: 'VOLUNTEER', label: 'Volunteer' }
+	];
+
+	// A hand-picked slice of the real university preset, aliases included, so the
+	// specimen exercises keyword matching without pulling 650 KB into the style guide.
+	const SCHOOLS = [
+		{ value: 'The University of Texas at Austin', keywords: ['UT Austin'] },
+		{ value: 'The University of Texas at Dallas', keywords: ['UTD'] },
+		{ value: 'Texas A & M University-College Station', keywords: ['Texas A&M University'] },
+		{ value: 'Rice University' },
+		{ value: 'University of Waterloo' },
+		{ value: 'Tecnológico de Monterrey' }
 	];
 
 	const STATUS_OPTIONS = [
@@ -157,7 +170,7 @@
 
 <svelte:head><title>Rodeo — Design System</title></svelte:head>
 
-<div class="mx-auto max-w-4xl px-8 py-10">
+<div class="mx-auto max-w-4xl px-4 py-8 sm:px-8 sm:py-10">
 	<PageHeader
 		title="Design system"
 		subtitle="Every primitive and pattern, rendered from the real components."
@@ -267,7 +280,6 @@
 					<Input label="Starts" mono value="2026-09-19T12:00" readonly />
 					<Input label="Value" bind:value={broken} error="Enter a valid email address." />
 					<Input label="Locked" value="Under review by Ali" disabled />
-					<Select label="Role" options={ROLES} bind:value={role} />
 					<Input label="Team size" type="number" value="4" required />
 				</div>
 
@@ -277,6 +289,42 @@
 					bind:value={notes}
 					rows={3}
 				/>
+
+				<Divider label="Combobox — the only single-select control" />
+
+				<!--
+					There was briefly a second one, `Select`, a plain listbox for short lists.
+					It went because the choice between them was never really the author's to
+					make: it depends on how long the list grows, which is a runtime fact. A
+					type-ahead over six options costs nothing, and a plain listbox over 6,447
+					is unusable, so one control covers both ends.
+
+					`allowCustom` is what a long-but-incomplete list needs: pick "Not listed"
+					and the control becomes a text box, so nobody is blocked by a gap in the
+					vocabulary. `clearable` offers the placeholder as a real row, for filter
+					bars where "all of them" is a choice. Aliases are matched but never shown —
+					try "UT Austin" or "A&M".
+				-->
+				<div class="grid gap-5 sm:grid-cols-2">
+					<Combobox
+						label="School"
+						options={SCHOOLS}
+						bind:value={school}
+						placeholder="Search for your school"
+						allowCustom
+						customLabel="My school isn't listed"
+						hint="Type an alias — “UT Austin”, “A&M” — not just the full name."
+					/>
+					<Combobox label="Role" options={ROLES} bind:value={role} />
+					<Combobox
+						ariaLabel="Filter by role"
+						options={ROLES}
+						bind:value={filterRole}
+						placeholder="All roles"
+						clearable
+					/>
+					<Combobox label="Disabled" options={SCHOOLS} value="Rice University" disabled />
+				</div>
 
 				<Divider label="Toggles" />
 
@@ -436,7 +484,7 @@
 				{/snippet}
 			</Field>
 		</div>
-		<Select label="Role" options={ROLES} bind:value={role} />
+		<Combobox label="Role" options={ROLES} bind:value={role} />
 		<Checkbox bind:checked={agreed} label="Notify the applicant of this change" />
 	</div>
 

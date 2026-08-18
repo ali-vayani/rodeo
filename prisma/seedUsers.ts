@@ -56,17 +56,30 @@ const LAST_NAMES = [
 /** 15 × 10 = 150 distinct pairings before the generator has to reuse one. */
 const COMBOS = FIRST_NAMES.length * LAST_NAMES.length;
 
+/**
+ * Spelled as `src/lib/data/universities.json` spells them, which is not how anyone
+ * says them out loud — IPEDS files UT Austin under `The University of Texas…` and
+ * Texas A&M under `Texas A & M University-College Station`.
+ *
+ * They have to match, now that the seeded University question draws its choices from
+ * that preset. A name the preset doesn't contain is a write-in, so the form reopens
+ * as a text box and the filter facet fills with values no dropdown offers — which is
+ * the free-text mess this feature exists to end, reproduced in the demo data.
+ *
+ * The last entry is off-list on purpose: one applicant at a school the dataset missed,
+ * so the write-in path has a live example in every seeded database.
+ */
 const UNIVERSITIES = [
-	'University of Texas at Austin',
-	'Texas A&M University',
-	'UT Dallas',
+	'The University of Texas at Austin',
+	'Texas A & M University-College Station',
+	'The University of Texas at Dallas',
 	'Rice University',
 	'University of Houston',
 	'Texas State University',
-	'UT San Antonio',
+	'The University of Texas at San Antonio',
 	'Baylor University',
-	'Georgia Tech',
-	'University of Illinois Urbana-Champaign'
+	'Georgia Institute of Technology-Main Campus',
+	'Riverbend Institute of Technology'
 ];
 
 const YEARS = ['Freshman', 'Sophomore', 'Junior', 'Senior', 'Graduate', 'Alumni'];
@@ -126,7 +139,7 @@ const MENTOR_TOPICS = [
 // ---------------------------------------------------------------------------
 
 /** One lifecycle state a generated user can be parked in. */
-type StatePlan = {
+export type StatePlan = {
 	status: UserStatus;
 	pendingDecision?: DecisionStatus;
 	activeDecision?: DecisionStatus;
@@ -215,7 +228,7 @@ const STAFF_STATES: StatePlan[] = [
 /** Staff who never go through admissions at all. */
 const INTERNAL_STATES: StatePlan[] = [{ status: UserStatus.CREATED, weight: 1 }];
 
-type RolePlan = {
+export type RolePlan = {
 	role: Role;
 	/** Email local-part prefix: `hacker` → hacker1@yopmail.com */
 	prefix: string;
@@ -302,7 +315,7 @@ function expand(states: StatePlan[]): StatePlan[] {
 export type GeneratedUser = {
 	name: string;
 	email: string;
-	roles: Role[];
+	role: Role;
 	status: UserStatus;
 	pendingDecision: DecisionStatus | null;
 	activeDecision: DecisionStatus | null;
@@ -324,12 +337,15 @@ function countFor(plan: RolePlan): number {
  * Build every account up front. `seq` runs across roles rather than restarting per
  * role, so admin1 and hacker1 are different people — otherwise the same name would
  * show up once per role and make cross-role bugs hard to spot.
+ *
+ * Pass a custom `rolePlans` array to override state distributions — used by the
+ * scenario seed scripts (seedScenario1–3.ts) to simulate different admission phases.
  */
-export function generateUsers(): GeneratedUser[] {
+export function generateUsers(rolePlans: RolePlan[] = ROLE_PLANS): GeneratedUser[] {
 	const out: GeneratedUser[] = [];
 	let seq = 0;
 
-	for (const plan of ROLE_PLANS) {
+	for (const plan of rolePlans) {
 		const cycle = expand(plan.states);
 		const count = countFor(plan);
 
@@ -338,7 +354,7 @@ export function generateUsers(): GeneratedUser[] {
 			out.push({
 				name: nameFor(seq),
 				email: `${plan.prefix}${i + 1}@yopmail.com`,
-				roles: [plan.role],
+				role: plan.role,
 				status: state.status,
 				pendingDecision: state.pendingDecision ?? null,
 				activeDecision: state.activeDecision ?? null,
@@ -385,10 +401,10 @@ function longAnswer(title: string, seq: number): string {
 
 function answerFor(q: Question, user: GeneratedUser, seq: number): string | null {
 	// Linked questions write through to the User row, so they must agree with it.
-	if (q.linkedField === 'name') return user.name;
-	if (q.linkedField === 'university')
+	if (q.linkedField === 'NAME') return user.name;
+	if (q.linkedField === 'UNIVERSITY')
 		return user.university ?? UNIVERSITIES[seq % UNIVERSITIES.length];
-	if (q.linkedField === 'year') return user.year ?? YEARS[seq % YEARS.length];
+	if (q.linkedField === 'YEAR') return user.year ?? YEARS[seq % YEARS.length];
 
 	switch (q.type) {
 		case QuestionType.DROPDOWN:
@@ -412,7 +428,7 @@ function answerFor(q: Question, user: GeneratedUser, seq: number): string | null
 
 /** A question with no targetRole applies to everyone. */
 function appliesTo(q: Question, user: GeneratedUser): boolean {
-	return q.targetRole.length === 0 || q.targetRole.some((r) => user.roles.includes(r));
+	return q.targetRole.length === 0 || q.targetRole.includes(user.role);
 }
 
 export type GeneratedResponse = { userId: string; questionId: string; value: string };
@@ -428,7 +444,7 @@ export function generateResponses(
 		// Staff are provisioned directly and never apply. Generating responses for them
 		// would fabricate an application that production can't produce — and put an
 		// unreviewable row in the admissions queue.
-		if (!isApplicantRole(user.roles)) return;
+		if (!isApplicantRole(user.role)) return;
 
 		const mine = ordered.filter((q) => appliesTo(q, user));
 
@@ -453,28 +469,45 @@ export function generateResponses(
 // ---------------------------------------------------------------------------
 
 /**
- * Upsert every generated account and rebuild its application responses.
+ * Seed every generated account and rebuild its application responses.
  *
- * Idempotent by email: re-running moves an account back to its generated state
- * rather than creating a second copy, so `npm run db:seed` is the reset button.
- * Responses are deleted and rewritten for these users only — hand-made accounts
- * are never touched.
+ * By default (flush = false) this upserts — idempotent by email, so re-running
+ * moves an account back to its generated state without creating a second copy.
+ *
+ * With flush = true (used by scenario scripts) the generated accounts are deleted
+ * first and then recreated from scratch, guaranteeing a fully clean state. This
+ * clears review scores, claim locks, decision attribution, and any other admin
+ * activity that a plain upsert would leave behind.
  */
 export async function seedUsers(
-	prisma: PrismaClient
+	prisma: PrismaClient,
+	rolePlans?: RolePlan[],
+	{ flush = false }: { flush?: boolean } = {}
 ): Promise<{ users: User[]; responses: number }> {
-	const generated = generateUsers();
+	const generated = generateUsers(rolePlans);
+
+	if (flush) {
+		const emails = generated.map((u) => u.email);
+		await prisma.user.deleteMany({ where: { email: { in: emails } } });
+	}
+
 	const saved: (GeneratedUser & { uid: string })[] = [];
 	const rows: User[] = [];
 
 	for (const u of generated) {
-		const row = await prisma.user.upsert({
-			where: { email: u.email },
-			update: u,
-			create: u
-		});
-		rows.push(row);
-		saved.push({ ...u, uid: row.uid });
+		if (flush) {
+			const row = await prisma.user.create({ data: u });
+			rows.push(row);
+			saved.push({ ...u, uid: row.uid });
+		} else {
+			const row = await prisma.user.upsert({
+				where: { email: u.email },
+				update: u,
+				create: u
+			});
+			rows.push(row);
+			saved.push({ ...u, uid: row.uid });
+		}
 	}
 
 	const questions = await prisma.question.findMany();
@@ -497,17 +530,20 @@ export async function seedUsers(
  * Opt in with SEED_PRUNE=1 (or `npm run db:seed:fresh`) when you want the dev
  * database to contain exactly the generated set and nothing else.
  */
-export async function pruneUnmanagedUsers(prisma: PrismaClient): Promise<number> {
-	const keep = generateUsers().map((u) => u.email);
+export async function pruneUnmanagedUsers(
+	prisma: PrismaClient,
+	rolePlans?: RolePlan[]
+): Promise<number> {
+	const keep = generateUsers(rolePlans).map((u) => u.email);
 	const { count } = await prisma.user.deleteMany({
 		where: { email: { endsWith: '@yopmail.com', notIn: keep } }
 	});
 	return count;
 }
 
-export function summarize(users: GeneratedUser[]): string[] {
-	return ROLE_PLANS.map((plan) => {
-		const mine = users.filter((u) => u.roles.includes(plan.role));
+export function summarize(users: GeneratedUser[], rolePlans: RolePlan[] = ROLE_PLANS): string[] {
+	return rolePlans.map((plan) => {
+		const mine = users.filter((u) => u.role === plan.role);
 		if (!mine.length) return `  ${plan.role.toLowerCase()}: none`;
 		const first = mine[0].email;
 		const last = mine[mine.length - 1].email;

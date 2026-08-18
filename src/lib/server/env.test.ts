@@ -17,7 +17,8 @@ const {
 	deployEnv,
 	isProduction,
 	usesSupabaseAuth,
-	emailTransport,
+	yopmailLoginEnabled,
+	resendConfigured,
 	emailFrom,
 	appOrigin,
 	validateEnv,
@@ -70,38 +71,69 @@ describe('usesSupabaseAuth', () => {
 
 	it.each(['production', 'preview'])('is on for %s', (where) => {
 		env.VERCEL_ENV = where;
-		// The yopmail bypass against a preview deploy would be an unauthenticated
-		// door into the production database.
+		// Preview still authenticates through Supabase; the yopmail bypass there
+		// is an *additional* door, gated separately by yopmailLoginEnabled.
 		expect(usesSupabaseAuth()).toBe(true);
 	});
 });
 
-describe('emailTransport', () => {
-	it('is null when nothing is configured', () => {
-		expect(emailTransport()).toBeNull();
+describe('yopmailLoginEnabled', () => {
+	it('is on in development', () => {
+		expect(yopmailLoginEnabled()).toBe(true);
 	});
 
-	it('is smtp only when the whole SMTP triple is present', () => {
-		env.EMAIL_HOST = 'smtp.example.com';
-		expect(emailTransport()).toBeNull();
-
-		env.EMAIL_USER = 'user';
-		env.EMAIL_PASS = 'pass';
-		expect(emailTransport()).toBe('smtp');
+	it('is on for preview deploys', () => {
+		// Previews run against throwaway per-branch databases seeded with
+		// fixtures, mirroring the previous Rodeo's staging behavior.
+		env.VERCEL_ENV = 'preview';
+		expect(yopmailLoginEnabled()).toBe(true);
 	});
 
-	it('prefers resend', () => {
-		env.EMAIL_HOST = 'smtp.example.com';
-		env.EMAIL_USER = 'user';
-		env.EMAIL_PASS = 'pass';
+	it('is never on in production', () => {
+		env.VERCEL_ENV = 'production';
+		expect(yopmailLoginEnabled()).toBe(false);
+	});
+});
+
+describe('resendConfigured', () => {
+	it('is false when nothing is configured', () => {
+		expect(resendConfigured()).toBe(false);
+	});
+
+	it('needs only the key', () => {
 		env.RESEND_API_KEY = 'key';
+		expect(resendConfigured()).toBe(true);
+	});
 
-		expect(emailTransport()).toBe('resend');
+	it('is not satisfied by the leftover SMTP variables', () => {
+		// Stale Amazon SES credentials, still in Vercel Production. They are not a
+		// transport — SES rejects them — so they must not read as one.
+		env.EMAIL_HOST = 'email-smtp.us-east-1.amazonaws.com';
+		env.EMAIL_USER = 'AKIAEXAMPLE';
+		env.EMAIL_PASS = 'stale';
+
+		expect(resendConfigured()).toBe(false);
 	});
 });
 
 describe('emailFrom', () => {
 	it('defaults to the Freetail address', () => {
+		expect(emailFrom()).toBe('hello@freetailhackers.com');
+	});
+
+	it('honours a configured address', () => {
+		env.EMAIL_FROM = 'rodeo@freetailhackers.com';
+		expect(emailFrom()).toBe('rodeo@freetailhackers.com');
+	});
+
+	it('falls back when EMAIL_FROM is set but blank', () => {
+		// A variable created in Vercel and left empty arrives as ''. Under `??` that was
+		// passed through as the envelope sender and Resend rejected every message with
+		// "The domain is invalid" — confirmed against the live API, not hypothesised.
+		env.EMAIL_FROM = '';
+		expect(emailFrom()).toBe('hello@freetailhackers.com');
+
+		env.EMAIL_FROM = '   ';
 		expect(emailFrom()).toBe('hello@freetailhackers.com');
 	});
 });
@@ -233,13 +265,13 @@ describe('devSwitcherEnabled', () => {
 		expect(devSwitcherEnabled()).toBe(false);
 	});
 
-	it('refuses on a preview deploy', () => {
-		workingDevEnv();
+	it('allows preview deploys, with no other conditions', () => {
+		// Previews run against throwaway per-branch schemas of seeded fixtures,
+		// where the switcher grants nothing the /login yopmail form doesn't
+		// already grant — so it is on there even in a built (non-dev) bundle.
+		devFlag = false;
 		env.VERCEL_ENV = 'preview';
-
-		// Preview runs against the production database, which makes it the highest
-		// value target of the three. Both `dev` and usesSupabaseAuth() reject it.
-		expect(devSwitcherEnabled()).toBe(false);
+		expect(devSwitcherEnabled()).toBe(true);
 	});
 
 	it('refuses in production', () => {

@@ -9,11 +9,14 @@
 		open,
 		filters,
 		total,
+		/** Recipients with no account. They are in `total` but not in `user.list`. */
+		externalEmails = [],
 		onClose
 	}: {
 		open: boolean;
 		filters: RecipientParams;
 		total: number;
+		externalEmails?: string[];
 		onClose: () => void;
 	} = $props();
 
@@ -51,12 +54,19 @@
 		};
 	});
 
+	// External addresses aren't rows in the User table, so user.list can't return
+	// them — they are folded in here rather than left out of a list titled "all N".
+	let allRows = $derived<Row[]>([
+		...rows,
+		...externalEmails.map((email) => ({ uid: `ext:${email}`, name: 'No account', email }))
+	]);
+
 	let filtered = $derived(
 		search.trim()
-			? rows.filter((r) =>
+			? allRows.filter((r) =>
 					`${r.name} ${r.email}`.toLowerCase().includes(search.trim().toLowerCase())
 				)
-			: rows
+			: allRows
 	);
 
 	let copyState = $state<'idle' | 'copied' | 'failed'>('idle');
@@ -96,7 +106,7 @@
 <Modal
 	{open}
 	title="Recipients"
-	description="{total} user{total === 1 ? '' : 's'} match the current selection"
+	description="{total} recipient{total === 1 ? '' : 's'} in the current selection"
 	size="lg"
 	bodyClass="p-0"
 	{onClose}

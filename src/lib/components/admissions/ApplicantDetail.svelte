@@ -1,18 +1,21 @@
 <script lang="ts">
-	import DecisionBar from './DecisionBar.svelte';
+	import ScoreBar from './ScoreBar.svelte';
+	import ApplicationResponses from './ApplicationResponses.svelte';
 	import BlacklistBadge from './BlacklistBadge.svelte';
 	import type { ReviewPhase } from '$lib/admissions/reviewSession.svelte';
+	import { MAX_SCORE } from '$lib/admissions/score';
+	import { humanizeEnum } from '$lib/format';
 	import type { BlacklistMatch } from '$lib/blacklist/match';
-	import type { DecisionStatus } from '$lib/generated/prisma/enums';
 
 	let {
 		applicant,
-		onDecision,
-		decisionLoading,
+		onSaveScore,
+		scoreLoading,
 		hasPrev,
 		hasNext,
 		onPrev,
 		onNext,
+		onBack = undefined,
 		lockState,
 		claimerName,
 		lockFreed,
@@ -22,20 +25,26 @@
 			uid: string;
 			name: string;
 			email: string;
-			roles: string[];
+			role: string;
 			status: string;
 			pendingDecision: string | null;
 			activeDecision: string | null;
+			score: number | null;
+			notes: string | null;
+			scoredAt: Date | string | null;
+			scorer: { name: string } | null;
 			blacklistMatch: BlacklistMatch | null;
 			createdAt: Date | string;
 			application: Array<{ value: string; question: { title: string; order: number } }>;
 		};
-		onDecision: (decision: DecisionStatus) => void;
-		decisionLoading: boolean;
+		onSaveScore: (score: number, notes: string) => void;
+		scoreLoading: boolean;
 		hasPrev: boolean;
 		hasNext: boolean;
 		onPrev: () => void;
 		onNext: () => void;
+		/** Below md the detail view replaces the list; this returns to it. */
+		onBack?: () => void;
 		lockState: ReviewPhase;
 		claimerName: string | null;
 		lockFreed: boolean;
@@ -85,8 +94,8 @@
 		});
 	}
 
-	let sortedResponses = $derived(
-		[...applicant.application].sort((a, b) => a.question.order - b.question.order)
+	let pendingChip = $derived(
+		applicant.pendingDecision === 'PENDING' ? null : applicant.pendingDecision
 	);
 </script>
 
@@ -94,7 +103,7 @@
 	<!-- Read-only banner -->
 	{#if showBanner}
 		<div
-			class="flex shrink-0 items-center gap-2 border-b border-[#fde68a] bg-[#fffbeb] px-5 py-2.5"
+			class="flex shrink-0 items-center gap-2 border-b border-[#fde68a] bg-[#fffbeb] px-4 py-2.5 sm:px-5"
 		>
 			<span class="text-[12px] text-[#92400e]">
 				{#if banner}
@@ -108,7 +117,16 @@
 	{/if}
 
 	<!-- Header -->
-	<div class="shrink-0 border-b border-border px-6 pt-5 pb-4">
+	<div class="shrink-0 border-b border-border px-4 pt-3 pb-3 sm:px-6 sm:pt-4">
+		{#if onBack}
+			<!-- Mobile only: returns to the full-width list (and releases the claim) -->
+			<button
+				onclick={onBack}
+				class="mb-2 inline-flex cursor-pointer items-center gap-1 border-none bg-transparent p-0 text-base font-medium text-muted-foreground md:hidden"
+			>
+				← All applicants
+			</button>
+		{/if}
 		<div class="flex items-start justify-between gap-3">
 			<div>
 				<div class="text-[18px] leading-[1.2] font-bold text-primary">
@@ -118,20 +136,28 @@
 			</div>
 			<div class="flex shrink-0 flex-wrap justify-end gap-1.5">
 				<BlacklistBadge match={applicant.blacklistMatch} size="md" />
-				{#if applicant.roles.length}
+				{#if applicant.score !== null}
 					<span
-						class="inline-block rounded bg-[#f0f0f0] px-2 py-[3px] text-[11px] font-semibold tracking-[0.04em] text-[#555] uppercase"
+						class="inline-block rounded bg-[#eef2ff] px-2 py-[3px] font-mono text-[11px] font-semibold text-[#3730a3] tabular-nums"
 					>
-						{roleLabel(applicant.roles[0])}
+						{applicant.score}/{MAX_SCORE}
 					</span>
 				{/if}
-				{#if applicant.pendingDecision}
+				<span
+					class="inline-block rounded bg-[#f0f0f0] px-2 py-[3px] text-[11px] font-semibold tracking-[0.04em] text-[#555] uppercase"
+				>
+					{roleLabel(applicant.role)}
+				</span>
+				<!-- `pendingDecision` of PENDING is the enum's starting value, not a
+				     verdict — chipping it would label every untouched applicant
+				     "Pending: Pending". -->
+				{#if pendingChip}
 					<span
 						class="inline-block rounded px-2 py-[3px] text-[11px] font-semibold {DECISION_CLASS[
-							applicant.pendingDecision
+							pendingChip
 						] ?? 'bg-[#e5e7eb] text-[#374151]'}"
 					>
-						Pending: {decLabel(applicant.pendingDecision)}
+						Pending: {decLabel(pendingChip)}
 					</span>
 				{/if}
 				{#if applicant.activeDecision}
@@ -147,79 +173,53 @@
 		</div>
 	</div>
 
-	<!-- Info grid -->
-	<div class="grid shrink-0 grid-cols-2 gap-3 border-b border-[#f0f0f0] px-6 py-4">
-		<div>
-			<div class="mb-[3px] text-[10px] font-bold tracking-widest text-muted-foreground uppercase">
-				Role
-			</div>
-			<div class="text-[13px] text-[#333]">
-				{applicant.roles.length ? roleLabel(applicant.roles[0]) : '—'}
-			</div>
-		</div>
-		<div>
-			<div class="mb-[3px] text-[10px] font-bold tracking-widest text-muted-foreground uppercase">
-				Status
-			</div>
-			<div class="text-[13px] text-[#333]">
-				{applicant.status.charAt(0) + applicant.status.slice(1).toLowerCase().replace(/_/g, ' ')}
-			</div>
-		</div>
-		<div>
-			<div class="mb-[3px] text-[10px] font-bold tracking-widest text-muted-foreground uppercase">
-				Applied
-			</div>
-			<div class="font-mono text-[13px] text-[#333]">
-				{formatDate(applicant.createdAt)}
-			</div>
-		</div>
-		<div>
-			<div class="mb-[3px] text-[10px] font-bold tracking-widest text-muted-foreground uppercase">
-				UID
-			</div>
-			<div class="font-mono text-[11px] break-all text-muted-foreground">
-				{applicant.uid}
-			</div>
-		</div>
+	<!--
+		Metadata, on one line rather than as a labelled 2×2 grid.
+
+		The grid cost 122px of a 900px screen to carry four facts a reviewer does not
+		read: the role is already a chip two rows up, and status, applied date and uid
+		are reference details, not part of judging an application. The answers are
+		what this pane is for, so the metadata gets a line and they get the space.
+	-->
+	<div
+		class="flex shrink-0 flex-wrap items-center gap-x-2 gap-y-0.5 border-b border-[#f0f0f0] px-4 py-2 text-[11px] text-muted-foreground sm:px-6"
+	>
+		<span>{humanizeEnum(applicant.status)}</span>
+		<span aria-hidden="true">·</span>
+		<span>Applied {formatDate(applicant.createdAt)}</span>
+		<span aria-hidden="true">·</span>
+		<span class="font-mono break-all">{applicant.uid}</span>
 	</div>
 
 	<!-- Application responses -->
-	<div class="flex-1 overflow-y-auto px-6 py-5">
-		{#if sortedResponses.length === 0}
-			<div class="text-[13px] text-muted-foreground italic">No application responses.</div>
-		{:else}
+	<div class="flex-1 px-4 py-5 sm:px-6 md:overflow-y-auto">
+		{#if applicant.application.length > 0}
 			<div class="mb-[14px] text-[10px] font-bold tracking-widest text-muted-foreground uppercase">
 				Application Responses
 			</div>
-			<div class="flex flex-col gap-5">
-				{#each sortedResponses as response (response.question.title)}
-					<div>
-						<div class="mb-1.5 text-xs font-semibold text-[#555]">
-							{response.question.title}
-						</div>
-						<div
-							class="rounded border border-border bg-[#f9f9f9] px-3 py-[10px] text-[13px] leading-[1.5] break-words whitespace-pre-wrap text-primary"
-						>
-							{response.value || '—'}
-						</div>
-					</div>
-				{/each}
-			</div>
 		{/if}
+		<ApplicationResponses responses={applicant.application} />
 	</div>
 
-	<!-- Decision bar -->
-	<DecisionBar
-		pendingDecision={applicant.pendingDecision}
-		{onDecision}
-		loading={decisionLoading}
-		{hasPrev}
-		{hasNext}
-		{onPrev}
-		{onNext}
-		{lockState}
-		{claimerName}
-		{lockFreed}
-		{onReclaim}
-	/>
+	<!-- Scoring bar. Keyed so switching applicants reseeds the score and notes
+	     drafts from the newly selected row rather than carrying the last one's
+	     typing across. -->
+	{#key applicant.uid}
+		<ScoreBar
+			score={applicant.score}
+			notes={applicant.notes}
+			scorerName={applicant.scorer?.name ?? null}
+			scoredAt={applicant.scoredAt}
+			onSave={onSaveScore}
+			saving={scoreLoading}
+			{hasPrev}
+			{hasNext}
+			{onPrev}
+			{onNext}
+			{lockState}
+			{claimerName}
+			{lockFreed}
+			{onReclaim}
+		/>
+	{/key}
 </div>

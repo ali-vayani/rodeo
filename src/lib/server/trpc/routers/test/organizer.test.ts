@@ -48,14 +48,16 @@ describe('organizer is denied everything holding user data', () => {
 	const denied: Record<string, (c: ReturnType<typeof createTestCaller>) => Promise<unknown>> = {
 		'user.list': (c) => c.user.list({ page: 1, pageSize: 10 }),
 		'user.getById': (c) => c.user.getById({ uid: hackerUser.uid }),
-		'user.updateRole': (c) =>
-			c.user.updateRole({ uid: hackerUser.uid, roles: ['HACKER'] as never }),
+		'user.updateRole': (c) => c.user.updateRole({ uid: hackerUser.uid, role: 'HACKER' as never }),
 		'user.exportCsv': (c) => c.user.exportCsv(),
 		'admissions.list': (c) => c.admissions.list({}),
 		'admissions.presence': (c) => c.admissions.presence(),
 		'admissions.setDecision': (c) =>
 			c.admissions.setDecision({ uid: hackerUser.uid, decision: 'ACCEPTED' as never }),
 		'blacklist.list': (c) => c.blacklist.list(),
+		// Aggregate counts, but of a named applicant pool — at a count of one they are
+		// per-person data, and no organizer-reachable page uses them.
+		'filters.linkedFacets': (c) => c.filters.linkedFacets(),
 		'blacklist.add': (c) =>
 			c.blacklist.add({ firstName: 'A', lastName: 'B', email: 'a@b.com' } as never),
 		'email.sendCustom': (c) => c.email.sendCustom({ subject: 's', body: 'b' } as never),
@@ -66,7 +68,12 @@ describe('organizer is denied everything holding user data', () => {
 		// The application editor defines what gets asked of applicants — admin only.
 		'questions.listAll': (c) => c.questions.listAll(),
 		'questions.create': (c) => c.questions.create({ title: 'Q', type: 'SHORT_TEXT' } as never),
-		'questions.delete': (c) => c.questions.delete({ id: 'q1' } as never)
+		'questions.delete': (c) => c.questions.delete({ id: 'q1' } as never),
+		// The whole database, read out or destroyed. Both also demand a password an
+		// organizer has no more access to than an admin does — but the role gate is
+		// what has to fail first, before anything reads the environment.
+		'data.exportAll': (c) => c.data.exportAll({ password: 'x' }),
+		'data.wipe': (c) => c.data.wipe({ password: 'x', confirm: 'WIPE' })
 	};
 
 	/** The tRPC error code a call rejected with, or null if it got through. */

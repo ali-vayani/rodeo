@@ -17,9 +17,19 @@ import type { LogAction } from './actions';
 // still a compile error.
 export const NOTABLE_ACTIONS: ReadonlySet<string> = new Set<LogAction>([
 	'admissions.release',
+	// One click, arbitrarily many applicants. Still reversible until release —
+	// hence a dot rather than the warning tone `admissions.release` carries — but
+	// it is the entry that explains why two hundred rows changed at 3am.
+	'admissions.decision.bulk',
 	'admissions.decision.blocked',
 	'user.decision.override',
 	'user.export',
+	// The whole database, out the door or gone entirely. `data.wipe` is written
+	// after the wipe has already emptied `Log`, so in the ordinary case it is the
+	// oldest entry in the feed rather than one among many — which is precisely
+	// why it needs to be marked.
+	'data.export',
+	'data.wipe',
 	'email.custom.send',
 	'blacklist.import',
 	'question.delete',
@@ -40,6 +50,8 @@ export function actionTone(action: string): Tone {
 		case 'admissions.decision.blocked':
 		case 'user.decision.override':
 		case 'user.export':
+		case 'data.export':
+		case 'data.wipe':
 			return 'danger';
 		case 'admissions.release':
 		case 'email.custom.send':

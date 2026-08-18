@@ -4,7 +4,7 @@
 	import type { ScheduleModel as Schedule } from '$lib/generated/prisma/models';
 	import type { EventInput } from '$lib/schedule/types';
 	import { toZonedInput, fromZonedInput } from '$lib/schedule/days';
-	import { Button, Card, Input, Select, Textarea } from '$lib/components/ui';
+	import { Button, Card, Combobox, Input, Textarea } from '$lib/components/ui';
 	import { humanizeEnum } from '$lib/format';
 	import { cn } from '$lib/utils';
 
@@ -135,7 +135,7 @@
 				error={shown('location')}
 				onblur={() => (touched.location = true)}
 			/>
-			<Select label="Type" options={TYPE_OPTIONS} bind:value={type} />
+			<Combobox label="Type" options={TYPE_OPTIONS} bind:value={type} />
 		</div>
 
 		<Textarea

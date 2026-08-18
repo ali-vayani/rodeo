@@ -1,7 +1,7 @@
 import type { RequestEvent } from '@sveltejs/kit';
 import { prisma } from '$lib/server/db';
 import { createSupabaseServerClient } from '$lib/server/supabase';
-import { usesSupabaseAuth } from '$lib/server/env';
+import { usesSupabaseAuth, yopmailLoginEnabled } from '$lib/server/env';
 import { Role } from '$lib/generated/prisma/client';
 
 const COOKIE_NAME = 'session_uid';
@@ -23,9 +23,9 @@ export function setSessionCookie(event: RequestEvent, uid: string) {
 		httpOnly: true,
 		sameSite: 'lax',
 		maxAge: COOKIE_MAX_AGE,
-		// This cookie only exists on the dev bypass path, which never runs over
-		// HTTPS; production sessions are Supabase's own cookies.
-		secure: false
+		// The bypass runs on plain-HTTP localhost and on HTTPS preview deploys;
+		// production sessions are Supabase's own cookies.
+		secure: event.url.protocol === 'https:'
 	});
 }
 
@@ -45,9 +45,10 @@ async function getProdSession(event: RequestEvent) {
 
 	if (!sbUser?.email) return null;
 
-	// Find or create the local User record from the Supabase identity. Google is
-	// the only sign-in path in production, so first login *is* registration —
-	// there is no separate sign-up step that could have created this row.
+	// Find or create the local User record from the Supabase identity (Google
+	// OAuth or email/password). Either way first login *is* registration — the
+	// sign-up form registers with Supabase only, so no earlier step could have
+	// created this row.
 	const email = sbUser.email.toLowerCase();
 	const name = sbUser.user_metadata?.full_name ?? sbUser.user_metadata?.name ?? email.split('@')[0];
 
@@ -63,9 +64,9 @@ async function getProdSession(event: RequestEvent) {
 		where: { email },
 		update: {},
 		// A brand-new account is a HACKER in CREATED — the state the application
-		// page's "filling out" view expects. Roles are widened from /admin/users;
-		// nothing about an OAuth profile can grant someone organizer access.
-		create: { email, name, roles: [Role.HACKER] }
+		// page's "filling out" view expects. The role is changed from /admin/users;
+		// nothing about an OAuth profile can grant someone staff access.
+		create: { email, name, role: Role.HACKER }
 	});
 }
 
@@ -74,5 +75,16 @@ async function getProdSession(event: RequestEvent) {
 // ---------------------------------------------------------------------------
 
 export async function getSession(event: RequestEvent) {
-	return usesSupabaseAuth() ? getProdSession(event) : getDevSession(event);
+	if (!usesSupabaseAuth()) return getDevSession(event);
+
+	const session = await getProdSession(event);
+	if (session) return session;
+
+	// Preview deploys also honor the yopmail bypass (see yopmailLoginEnabled for
+	// why that is safe there), but only for @yopmail.com accounts: the cookie is
+	// a bare uid, and without this check a guessed uid would impersonate a real
+	// Google-created account — seeded fixtures are fair game, people are not.
+	if (!yopmailLoginEnabled()) return null;
+	const devUser = await getDevSession(event);
+	return devUser?.email.endsWith('@yopmail.com') ? devUser : null;
 }

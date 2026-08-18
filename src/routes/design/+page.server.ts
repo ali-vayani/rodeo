@@ -18,7 +18,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		redirect(302, `/login?redirectTo=${encodeURIComponent(url.pathname)}`);
 	}
 
-	if (!hasPortalAccess(locals.user.roles)) {
+	if (!hasPortalAccess(locals.user.role)) {
 		error(404, 'Not found');
 	}
 };
