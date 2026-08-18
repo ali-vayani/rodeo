@@ -184,6 +184,32 @@ export function emailFrom(): string {
 }
 
 /**
+ * The public origin, for links that leave the app — currently email.
+ *
+ * A relative href is meaningless in an inbox, and the request that triggered a
+ * send is the wrong source for this: an admin working from a preview deployment
+ * or a `vercel.app` hostname would mail every recipient links back to whatever
+ * host that admin happened to be on. `APP_ORIGIN` is the canonical answer and
+ * wins whenever it is set.
+ *
+ * The Vercel fallbacks exist so a deploy that forgets it still produces working
+ * links: `VERCEL_PROJECT_PRODUCTION_URL` is the stable production hostname, and
+ * `VERCEL_URL` is the per-deployment one, correct for a preview build. Both are
+ * bare hostnames, so the scheme is ours to add.
+ */
+export function appOrigin(): string {
+	const configured = env.APP_ORIGIN?.trim();
+	if (configured) return configured.replace(/\/+$/, '');
+
+	if (isProduction() && env.VERCEL_PROJECT_PRODUCTION_URL) {
+		return `https://${env.VERCEL_PROJECT_PRODUCTION_URL}`;
+	}
+	if (env.VERCEL_URL) return `https://${env.VERCEL_URL}`;
+
+	return 'http://localhost:5173';
+}
+
+/**
  * Validate the environment at boot. Called once from `hooks.server.ts`.
  *
  * The production checks deliberately don't apply to preview: a preview deploy is

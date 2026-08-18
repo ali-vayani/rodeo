@@ -5,8 +5,8 @@ import { Role, DecisionStatus } from '$lib/generated/prisma/client';
 import { router, adminProcedure } from '../init';
 import { logAction } from '$lib/server/log';
 import { sendTemplatedEmail } from '$lib/server/email';
+import { buildEmailPersonalization } from '$lib/server/wallet/email-block';
 import { emailSettings } from '$lib/server/settings';
-import { buildTemplateVars } from '$lib/email/variables';
 import { CLAIM_TTL_MS } from '$lib/admissions/lock';
 import { effectiveDecision } from '$lib/admissions/decision';
 import { MAX_SCORE, MIN_SCORE } from '$lib/admissions/score';
@@ -806,9 +806,12 @@ export const admissionsRouter = router({
 			const emailsAttempted = recipients.length;
 
 			const results = await Promise.allSettled(
-				recipients.map((u) =>
-					sendTemplatedEmail(u.email, templateMap[u.pendingDecision!], buildTemplateVars(u, mail))
-				)
+				recipients.map(async (u) => {
+					// Raw row, not `mail`: the check-in block's wallet gate must fail closed
+					// on an unconfigured install — see buildEmailPersonalization.
+					const { vars, attachments } = await buildEmailPersonalization(u, settings);
+					return sendTemplatedEmail(u.email, templateMap[u.pendingDecision!], vars, attachments);
+				})
 			);
 			const emailsFailed = results.filter((r) => r.status === 'rejected').length;
 

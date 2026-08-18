@@ -8,8 +8,8 @@ import { normalizeEmail } from '$lib/blacklist/match';
 import { LINKED_FIELD_COLUMN, isLinkedField } from '$lib/linkedFields';
 import { acceptsWriteIn, isOptionsType } from '$lib/questions/options';
 import { sendTemplatedEmail } from '$lib/server/email';
+import { buildEmailPersonalization } from '$lib/server/wallet/email-block';
 import { emailSettings } from '$lib/server/settings';
-import { buildTemplateVars } from '$lib/email/variables';
 import { formatDateLong } from '$lib/format';
 
 /**
@@ -320,10 +320,15 @@ export const applicationRouter = router({
 		// A template an admin has deliberately blanked still opts out.
 		const mail = emailSettings(settings);
 		if (mail.confirmTemplate) {
+			// The RSVP-confirmation email is exactly where a hacker wants their pass, so
+			// this send carries the check-in block. Personalization takes the raw row —
+			// the wallet gate must fail closed on an unconfigured install.
+			const { vars, attachments } = await buildEmailPersonalization(updated, settings);
 			await sendTemplatedEmail(
 				user.email,
 				{ subject: mail.confirmSubject, body: mail.confirmTemplate },
-				buildTemplateVars(user, mail)
+				vars,
+				attachments
 			).catch(reportSendFailure('RSVP confirmation', user.email));
 		}
 
@@ -367,12 +372,15 @@ export const applicationRouter = router({
 			data: { status: UserStatus.DECLINED }
 		});
 
-		const mail = emailSettings(await ctx.prisma.settings.findFirst());
+		const settings = await ctx.prisma.settings.findFirst();
+		const mail = emailSettings(settings);
 		if (mail.declineTemplate) {
 			await sendTemplatedEmail(
 				user.email,
 				{ subject: mail.declineSubject, body: mail.declineTemplate },
-				buildTemplateVars(user, mail)
+				// Vars only: a declined account has no check-in block, so there is no
+				// attachment to carry.
+				(await buildEmailPersonalization(user, settings)).vars
 			).catch(reportSendFailure('RSVP decline', user.email));
 		}
 
@@ -484,10 +492,12 @@ export const applicationRouter = router({
 			// an application that is allowed through still gets acknowledged.
 			const mail = emailSettings(settings);
 			if (mail.submitTemplate) {
+				const { vars, attachments } = await buildEmailPersonalization(updatedUser, settings);
 				await sendTemplatedEmail(
 					user.email,
 					{ subject: mail.submitSubject, body: mail.submitTemplate },
-					buildTemplateVars(updatedUser, mail)
+					vars,
+					attachments
 				).catch(reportSendFailure('application submitted', user.email));
 			}
 

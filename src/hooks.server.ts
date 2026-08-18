@@ -2,6 +2,7 @@ import { redirect } from '@sveltejs/kit';
 import type { Handle } from '@sveltejs/kit';
 import { getSession } from '$lib/server/auth';
 import { validateEnv } from '$lib/server/env';
+import { warnIncompleteWalletConfig } from '$lib/server/wallet/config';
 import {
 	canAccess,
 	canAccessHackerPortal,
@@ -12,6 +13,11 @@ import {
 } from '$lib/auth/permissions';
 
 validateEnv();
+
+// Warns, never throws — see the header comment on `wallet/config`. Wallet passes
+// are the one feature here that is allowed to be absent, so a missing certificate
+// must not take the application form down with it.
+warnIncompleteWalletConfig();
 
 /**
  * The path SvelteKit will actually route on.

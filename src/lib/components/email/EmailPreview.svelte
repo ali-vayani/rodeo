@@ -77,7 +77,14 @@
 	as whitespace-pre-wrap, so any newline between {#each} and its content risks
 	showing up as spacing the real email doesn't have.
 -->
-{#snippet part(seg: TemplateSegment)}{#if seg.type === 'text'}{seg.value}{:else}<span
+<!--
+	An empty known value renders nothing at all — a variable that substitutes to ''
+	for this recipient (e.g. the QR block for someone who won't get one) must not
+	leave an empty highlight pill the real email doesn't have.
+-->
+{#snippet part(
+	seg: TemplateSegment
+)}{#if seg.type === 'text'}{seg.value}{:else if seg.value === ''}{:else}<span
 			class="rounded-md px-1 py-0.5 text-sm {seg.type === 'known'
 				? 'bg-info-50 text-info-700'
 				: 'bg-warning-50 text-warning-700'}">{seg.value}</span

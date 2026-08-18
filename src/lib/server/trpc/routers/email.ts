@@ -12,11 +12,12 @@ import {
 import { TEMPLATE_KEYS } from '$lib/email/templates';
 import {
 	buildEventVars,
-	buildTemplateVars,
 	buildExternalTemplateVars,
 	substituteVariables,
 	SAMPLE_VARS
 } from '$lib/email/variables';
+import { buildEmailPersonalization } from '$lib/server/wallet/email-block';
+import { UserStatus } from '$lib/generated/prisma/enums';
 import { logAction } from '$lib/server/log';
 
 /**
@@ -54,7 +55,10 @@ export const emailRouter = router({
 					where,
 					take: sampleSize,
 					orderBy: { createdAt: 'desc' },
-					select: { uid: true, name: true, email: true }
+					// `status` so the compose preview can show the QR block only to sampled
+					// recipients who would actually receive one — see previewVars in
+					// /admin/custom-email.
+					select: { uid: true, name: true, email: true, status: true }
 				})
 			]);
 
@@ -167,24 +171,27 @@ export const emailRouter = router({
 			// Personalise per recipient, so {{name}} in a custom blast behaves the same
 			// way it does in the lifecycle templates. External recipients have no User row
 			// to read a name off and get the documented fallback instead.
-			// Defaults when no Settings row exists. Passing `{}` meant `substituteVariables`
-			// found no value for `name` and left the literal `{{name}}` in the body — which
-			// is exactly what landed in real inboxes before the fallback existed.
-			const settings = emailSettings(await ctx.prisma.settings.findFirst());
-			const externalVars = buildExternalTemplateVars(settings);
+			// The raw row goes to buildEmailPersonalization, which defaults the email
+			// half itself — the check-in block's wallet gate must fail closed when no
+			// Settings row exists.
+			const settingsRow = await ctx.prisma.settings.findFirst();
+			const externalVars = buildExternalTemplateVars(emailSettings(settingsRow));
 			const results = await Promise.allSettled([
-				...users.map((u) => {
-					const vars = buildTemplateVars(u, settings);
+				...users.map(async (u) => {
+					// Per recipient: the check-in block embeds that hacker's own QR as an
+					// inline attachment, and is empty for anyone who hasn't confirmed.
+					const { vars, attachments } = await buildEmailPersonalization(u, settingsRow);
 					return sendEmail({
 						to: u.email,
-						subject: substituteVariables(subject, vars),
-						body: substituteVariables(body, vars, { escapeValues: true })
+						subject: substituteVariables(subject, vars, { dropRawValues: true }),
+						body: substituteVariables(body, vars, { escapeValues: true }),
+						attachments
 					});
 				}),
 				...external.map((email) =>
 					sendEmail({
 						to: email,
-						subject: substituteVariables(subject, externalVars),
+						subject: substituteVariables(subject, externalVars, { dropRawValues: true }),
 						body: substituteVariables(body, externalVars, { escapeValues: true })
 					})
 				)
@@ -258,19 +265,28 @@ export const emailRouter = router({
 			// body deliberately never written to EmailLog. "Yourself" is the whole feature.
 			const to = ctx.user.email;
 			const settings = await ctx.prisma.settings.findFirst();
+
 			// No Settings row yet on a fresh install — fall back to the preview samples for
 			// the dates so a test send still demonstrates substitution. `name` is overridden
 			// with the real recipient regardless: this mail lands in the admin's own inbox,
 			// and greeting them by a stand-in name is the one substitution a proofreading
 			// send must never show.
-			const vars = settings
-				? buildTemplateVars(ctx.user, settings)
-				: { ...SAMPLE_VARS, name: ctx.user.name };
+			//
+			// The status override is the one deliberate lie in this procedure. Most
+			// admins are not confirmed hackers, so a truthful render would drop
+			// `{{hacker_qr_code}}` to nothing and leave the organizer unable to
+			// proofread the block they just inserted — which is the entire purpose of
+			// a test send. The QR encodes the admin's own uid and the wallet links
+			// still refuse them at the endpoint, so nothing is granted by pretending.
+			const { vars, attachments } = settings
+				? await buildEmailPersonalization({ ...ctx.user, status: UserStatus.CONFIRMED }, settings)
+				: { vars: { ...SAMPLE_VARS, name: ctx.user.name }, attachments: [] };
 
 			await sendEmail({
 				to,
-				subject: substituteVariables(input.subject, vars),
-				body: substituteVariables(input.body, vars, { escapeValues: true })
+				subject: substituteVariables(input.subject, vars, { dropRawValues: true }),
+				body: substituteVariables(input.body, vars, { escapeValues: true }),
+				attachments
 			});
 
 			await logAction(ctx, {

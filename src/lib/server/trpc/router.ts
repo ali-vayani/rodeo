@@ -11,6 +11,7 @@ import { teamRouter } from './routers/team';
 import { emailRouter } from './routers/email';
 import { dashboardRouter } from './routers/dashboard';
 import { logRouter } from './routers/log';
+import { walletRouter } from './routers/wallet';
 import { filtersRouter } from './routers/filters';
 import { statsRouter } from './routers/stats';
 import { dataRouter } from './routers/data';
@@ -28,6 +29,7 @@ export const appRouter = router({
 	email: emailRouter,
 	dashboard: dashboardRouter,
 	log: logRouter,
+	wallet: walletRouter,
 	filters: filtersRouter,
 	stats: statsRouter,
 	data: dataRouter

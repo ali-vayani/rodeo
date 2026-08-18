@@ -43,8 +43,31 @@ function excludeDevOnlyClientCode() {
 
 export default defineConfig({
 	plugins: [tailwindcss(), sveltekit(), excludeDevOnlyClientCode()],
+	build: {
+		/**
+		 * Never inline the wallet pass model.
+		 *
+		 * Vite inlines imported assets under 4 kB as `data:` URIs, and `read()` from
+		 * `$app/server` handles those — so the placeholder artwork currently in
+		 * `src/lib/server/wallet/model/` works without any of this. The moment someone
+		 * replaces it with real logo and strip images it crosses the threshold, Vite
+		 * emits real files instead, and the code path changes from "decode a string in
+		 * the bundle" to "resolve a traced server asset". A build-time cliff triggered
+		 * by a designer handing over a PNG is not a thing anyone would think to test.
+		 *
+		 * Forcing the emitted-file path means placeholders and real artwork exercise
+		 * exactly the same mechanism, and `npm run build` proves it either way.
+		 */
+		assetsInlineLimit: (filePath: string) =>
+			/[\\/]src[\\/]lib[\\/]server[\\/]wallet[\\/]model[\\/]/.test(filePath) ? false : undefined
+	},
 	ssr: {
-		external: ['pg']
+		// Left for Node to resolve at runtime rather than bundled. `pg` has always been
+		// here; the two wallet packages join it because Rollup mangles them:
+		// `passkit-generator` pulls in node-forge and joi, both of which reach for CJS
+		// interop the SSR bundler gets wrong, and `google-auth-library` ships no
+		// `exports` field for it to follow.
+		external: ['pg', 'passkit-generator', 'google-auth-library']
 	},
 	test: {
 		expect: { requireAssertions: true },
