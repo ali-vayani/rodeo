@@ -1,12 +1,10 @@
 /**
  * Scenario 1 — Applications Open
  *
- * Simulates the period right after the application portal goes live:
- * - Hackers are a mix of newly registered (CREATED) and submitted (APPLIED + PENDING).
- *   No reviews or decisions have been made yet.
- * - Staff (judges, mentors, volunteers) are recruited ahead of hacker applications,
- *   so they are spread across applied → accepted → confirmed.
- * - Admins and organizers are internal and never go through admissions.
+ * Right after the application portal goes live. Hackers are a mix of newly registered
+ * (CREATED) and submitted (APPLIED + PENDING), with no reviews or decisions yet. Staff
+ * are recruited ahead of hacker applications, so they are spread across applied,
+ * accepted and confirmed. Admins and organizers never go through admissions.
  *
  * Run: npm run db:seed:open
  * Add SEED_PRUNE=1 to also remove any @yopmail.com accounts not generated here.
@@ -45,8 +43,8 @@ const HACKER_STATES: StatePlan[] = [
 ];
 
 /**
- * Staff are recruited before hacker apps open.  A realistic mix: some still in
- * the pipeline, most already confirmed for the event.
+ * Staff are recruited before hacker apps open: some still in the pipeline, most
+ * already confirmed for the event.
  */
 const STAFF_STATES: StatePlan[] = [
 	{ status: UserStatus.APPLIED, pendingDecision: DecisionStatus.PENDING, weight: 2 },

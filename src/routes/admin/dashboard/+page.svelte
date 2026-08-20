@@ -24,15 +24,12 @@
 	/**
 	 * One time range for the whole page, rather than a control per card.
 	 *
-	 * Per-card ranges let two panels sitting side by side describe different
-	 * slices with nothing on screen saying so. This replaces the window picker
-	 * `AdminStatsChart` used to own.
+	 * Per-card ranges let two panels side by side describe different slices with nothing
+	 * on screen saying so.
 	 *
-	 * It scopes only what it can honestly scope — the trend, the feed and the
-	 * per-admin tallies, all of which have a timestamp to filter on. The funnel and
-	 * the decision split are present-state counts (`UserStatus` records where
-	 * someone *is*, never when they got there), so they are marked "current" and
-	 * left alone. A control that appeared to filter them would be a lie.
+	 * It scopes only what it can honestly scope: the trend, the feed and the per-admin
+	 * tallies, all of which have a timestamp. The funnel and the decision split are
+	 * present-state counts, so they are marked "current" and left alone.
 	 */
 	const WINDOWS = [
 		{ value: '7d', label: '7d' },
@@ -51,9 +48,9 @@
 	let feedLoading = $state(false);
 
 	/**
-	 * `stats.byAdmin` predates the shared window and takes a date rather than a
-	 * window name. Resolved at call time, so a page left open overnight doesn't keep
-	 * asking for yesterday's seven days.
+	 * `stats.byAdmin` predates the shared window and takes a date rather than a window
+	 * name. Resolved at call time, so a page left open overnight does not keep asking for
+	 * yesterday's seven days.
 	 */
 	function windowStart(value: string): Date | undefined {
 		const days = value === '7d' ? 7 : value === '30d' ? 30 : 0;
@@ -65,9 +62,8 @@
 		try {
 			const [nextTrend, nextActivity, nextAdminStats] = await Promise.all([
 				trpc.dashboard.overTime.query({ window: next as Window }),
-				// `data.activity` rather than the live `activity`: it records whether this
-				// reader is an admin at all. An organizer must not start fetching a feed
-				// they were deliberately not served.
+				// `data.activity` rather than the live `activity`: it records whether this reader is
+				// an admin at all. An organizer must not start fetching a feed they were not served.
 				data.activity
 					? trpc.dashboard.activity.query({
 							source: activitySource as Source,
@@ -103,9 +99,8 @@
 		}
 	}
 
-	// From `applicants`, not the whole-table `byDecision`: staff accounts never apply
-	// and never hold a decision, so counting them made every card describe a
-	// population that isn't being admitted.
+	// From `applicants`, not the whole-table `byDecision`. Staff accounts never apply and
+	// never hold a decision, so counting them made every card describe the wrong population.
 	const a = $derived(data.stats.applicants);
 
 	const decisionCounts = $derived({
@@ -139,9 +134,8 @@
 	const stageCount = $derived(
 		(key: string) => data.funnel.find((stage) => stage.key === key)?.count ?? 0
 	);
-	// The funnel is the one place stage counts are derived, so the header and the
-	// charts can never disagree about how many people applied. Conversion rates
-	// live on the funnel itself rather than being recomputed here.
+	// The funnel is the one place stage counts are derived, so the header and the charts
+	// cannot disagree about how many people applied.
 	const applied = $derived(stageCount('applied'));
 
 	const totals = $derived({
@@ -200,9 +194,8 @@
 		</Card>
 
 		<!-- Counts, never rates. The funnel already spells out every conversion, and
-		     `StatCard` renders a plain number — a tile reading "72" under "RSVP rate"
-		     would be a percentage with its sign filed off. These carry the operational
-		     figures the funnel and the decision bar don't. -->
+				     `StatCard` renders a plain number, so a tile reading "72" under "RSVP rate"
+				     would be a percentage with its sign filed off. -->
 		{#if adminStats || data.demographics}
 			<div class="grid grid-cols-2 gap-4 self-start">
 				<StatCard label="Awaiting" value={a.awaiting.total} breakdown={decisionByRole.awaiting} />
@@ -227,10 +220,9 @@
 		{/if}
 	</div>
 
-	<!-- Who did the work, directly under the decision split it explains: the bars
-	     here are the same accepted/waitlisted/rejected counts as the card above,
-	     attributed to the people who set them. Reading one straight after the other
-	     is the point; a trend chart between them broke that. -->
+	<!-- Who did the work, directly under the decision split it explains: the same
+		     accepted/waitlisted/rejected counts as the card above, attributed to the people
+		     who set them. Reading one straight after the other is the point. -->
 	{#if adminStats}
 		<div class="mb-4">
 			<AdminStatsChart
@@ -241,12 +233,9 @@
 		</div>
 	{/if}
 
-	<!-- Trend and the unified feed. Both are scoped by the range control above.
-	     The row is stretched and the feed scrolls inside its card, so the two stay
-	     level: the chart's height is deterministic (a fixed viewBox height, one
-	     unit per pixel) while the feed's depends on how much happened, and letting
-	     the feed drive left a growing field of white beside it. `min-h-0` is what
-	     stops the list's content from forcing the grid row taller. -->
+	<!-- Trend and the unified feed, both scoped by the range control above. The row is
+		     stretched and the feed scrolls inside its card so the two stay level: the
+		     chart's height is deterministic while the feed's depends on how much happened. -->
 	<div class="mb-4 grid grid-cols-1 gap-4 lg:grid-cols-[2fr_1fr]">
 		<Card title="Applications & decisions per day">
 			{#snippet actions()}
@@ -262,13 +251,11 @@
 		</Card>
 
 		{#if activity}
-			<!-- `lg:h-0 lg:min-h-full` is what makes the CHART set the row height rather
-			     than the feed. `min-h-0` alone only lets a grid item shrink; the row is
-			     still sized to its max-content, so eight entries stretched the chart card
-			     instead and the dead space simply moved. Zero height removes the list
-			     from that calculation entirely, then `min-h-full` fills whatever the
-			     chart decided. Only from lg — below that the two cards stack and the feed
-			     should take its natural height. -->
+			<!-- `lg:h-0 lg:min-h-full` is what makes the CHART set the row height rather than
+						     the feed. `min-h-0` alone only lets a grid item shrink, so the row is still
+						     sized to max-content and the dead space just moves. Zero height removes the
+						     list from that calculation, then `min-h-full` fills whatever the chart
+						     decided. Only from lg, since below that the two cards stack. -->
 			<Card
 				title="Recent activity"
 				class="flex flex-col lg:h-0 lg:min-h-full"
@@ -288,10 +275,9 @@
 	{#if data.demographics}
 		{@const demo = data.demographics}
 		<div class="grid grid-cols-1 gap-4 lg:grid-cols-2">
-			<!-- Titled with the question's own wording rather than "Top universities":
-			     the label is whatever the form asks, and "Top where do you study?" is
-			     what string-concatenating a title gets you. The count of what is shown
-			     goes in the actions slot, where it needs no grammar. -->
+			<!-- Titled with the question's own wording rather than "Top universities", since
+						     the label is whatever the form asks and "Top where do you study?" is what
+						     string-concatenating a title gets you. -->
 			<Card title={demo.universityLabel}>
 				{#snippet actions()}
 					<span class="font-mono text-2xs text-foreground-tertiary">
@@ -302,7 +288,7 @@
 
 				{#if demo.tail}
 					<!-- The tail is a residual, not a peer category. Drawn as a bar it would
-					     out-length the largest single school and read as if it were one. -->
+										     out-length the largest single school and read as if it were one. -->
 					<div
 						class="mt-2.5 grid grid-cols-[minmax(5rem,11rem)_1fr_auto] items-center gap-2.5 border-t border-border pt-2.5"
 					>

@@ -4,14 +4,12 @@
 	/**
 	 * A small set of mutually exclusive choices, all visible at once.
 	 *
-	 * Distinct from `Select`, which hides its options behind a trigger. Use this
-	 * when the options are few, short, and worth showing — a time range the reader
-	 * should be able to see they *could* change, rather than one they must open a
-	 * menu to discover.
+	 * Distinct from `Select`, which hides its options behind a trigger. Use this when the
+	 * options are few, short, and worth showing.
 	 *
-	 * Radio semantics rather than a row of buttons: arrow keys move between
-	 * options and only the selected one is a tab stop, which is what a screen
-	 * reader announces as a group of choices instead of five unrelated actions.
+	 * Radio semantics rather than a row of buttons: arrow keys move between options and
+	 * only the selected one is a tab stop, which a screen reader announces as a group of
+	 * choices instead of five unrelated actions.
 	 */
 	let {
 		value = $bindable(),

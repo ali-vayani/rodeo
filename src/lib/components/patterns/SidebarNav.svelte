@@ -38,11 +38,9 @@
 />
 
 <!--
-	routes/admin/+layout.svelte and routes/hacker/+layout.svelte were
-	byte-identical except for the links array.
-
-	Below md this renders as a fixed top bar whose hamburger opens the same nav
-	as an overlay drawer; from md up it is the familiar fixed left rail.
+	routes/admin/+layout.svelte and routes/hacker/+layout.svelte were byte-identical
+	except for the links array. Below md this renders as a fixed top bar whose hamburger
+	opens the same nav as an overlay drawer; from md up it is the familiar left rail.
 -->
 
 {#snippet navContent(inDrawer: boolean)}

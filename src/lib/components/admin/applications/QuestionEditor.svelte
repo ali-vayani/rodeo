@@ -17,10 +17,9 @@
 		/**
 		 * Title and type the Add Question form was carrying when it opened this.
 		 *
-		 * Only consulted for a new question. It exists so picking "Dropdown" out
-		 * there lands you straight in the options editor: the type-dependent
-		 * sections below key off `type`, so seeding it is what makes them visible
-		 * before anything has been added, rather than after an add-then-edit trip.
+		 * Only consulted for a new question. Seeding `type` is what makes the
+		 * type-dependent sections visible before anything has been added, so picking
+		 * "Dropdown" lands you straight in the options editor.
 		 */
 		seed?: { title: string; type: QuestionType } | null;
 		isOpen: boolean;
@@ -72,11 +71,9 @@
 	let newOptionInput = $state('');
 
 	/**
-	 * The suggestion the organizer has waved away, so it stays away.
-	 *
-	 * Keyed by field rather than a bare boolean: dismissing the University chip on one
-	 * title should not suppress the Year chip when they rewrite the question, and it
-	 * resets with the modal anyway.
+	 * The suggestion the organizer has waved away, so it stays away. Keyed by field
+	 * rather than a bare boolean, so dismissing the University chip does not suppress
+	 * the Year chip when they rewrite the question.
 	 */
 	let dismissed = $state<LinkedField | null>(null);
 
@@ -128,9 +125,8 @@
 	/**
 	 * The linked field this title looks like it is asking for, when it isn't linked yet.
 	 *
-	 * Suppressed once a field is attached — the chip's whole job is done — and once the
-	 * organizer dismisses it. Purely advisory: `suggestLinkedField` decides nothing, and
-	 * every field remains reachable from the select below whatever this proposes.
+	 * Suppressed once a field is attached and once the organizer dismisses it. Purely
+	 * advisory: every field remains reachable from the select below.
 	 */
 	const suggestion = $derived(linkedField === '' ? (suggestLinkedField(title) ?? null) : null);
 	const showSuggestion = $derived(suggestion !== null && suggestion !== dismissed);
@@ -138,10 +134,9 @@
 	/**
 	 * Attach a linked field and take the question shape it implies.
 	 *
-	 * Applied on every change, including back to None, so switching University → Year
-	 * does not leave the university preset behind on a six-option dropdown. Defaults,
-	 * not constraints: nothing below is disabled afterwards, and the organizer can edit
-	 * the type, the options, or drop the preset.
+	 * Applied on every change, including back to None, so switching University to Year
+	 * does not leave the university preset behind. Defaults, not constraints: nothing
+	 * below is disabled afterwards.
 	 */
 	function setLinkedField(field: LinkedField | '') {
 		linkedField = field;
@@ -187,16 +182,13 @@
 	}
 
 	/**
-	 * The option rows, each carrying its index into the *unfiltered* `options`.
+	 * The option rows, each carrying its index into the unfiltered `options`.
 	 *
-	 * `updateOption` and `removeOption` both address that array, so the row has to
-	 * hand them the real index. Filtering first and using the loop counter edited
-	 * the wrong entry whenever a blank sat earlier in the list, and left the rows
-	 * with no stable key — option text is editable and may repeat, so the index is
-	 * the only identity available.
+	 * `updateOption` and `removeOption` both address that array. Filtering first and using
+	 * the loop counter edited the wrong entry whenever a blank sat earlier in the list,
+	 * and left the rows with no stable key, since option text is editable and may repeat.
 	 *
-	 * A lone blank survives the filter so the editor always shows one empty row to
-	 * type into; `position` is what the placeholder counts, independent of it.
+	 * A lone blank survives the filter so the editor always shows one empty row.
 	 */
 	const editableOptions = $derived(
 		options
@@ -294,11 +286,10 @@
 					{#if errors.title}<p class="error-msg">{errors.title}</p>{/if}
 
 					<!--
-						Offered from the title, because the two things an organizer would have to
-						already know — that linked fields exist, and that this question is one —
-						are nowhere else on this form. Dismissible, and it decides nothing: the
-						select below still offers every field regardless of what this proposes.
-					-->
+											Offered from the title, because the two things an organizer would have to
+											already know are nowhere else on this form. Dismissible, and it decides
+											nothing: the select below still offers every field.
+										-->
 					{#if showSuggestion && suggestion}
 						<div class="suggestion">
 							<span class="suggestion-text">
@@ -466,10 +457,9 @@
 					<div class="field">
 						<label for="q-linked">Linked Field</label>
 						<!--
-							`onChange` rather than `bind:value`, because attaching a field also applies
-							the question shape it implies — see `setLinkedField`. A binding would set
-							the state and skip that.
-						-->
+													`onChange` rather than `bind:value`, because attaching a field also applies
+													the question shape it implies. A binding would skip that.
+												-->
 						<Combobox
 							id="q-linked"
 							options={LINKED_FIELD_CHOICES}
@@ -755,11 +745,9 @@
 	/*
 	 * The suggestion strip and the preset row.
 	 *
-	 * Written in this modal's own scoped-CSS idiom rather than in design tokens: the
-	 * file predates the design system (see docs/component-library-plan.md) and porting
-	 * it is a separate job. The chip shape still follows the one the admissions and
-	 * users pages use — small radius, 1px border, colour-only hover, dark fill when
-	 * active — so the three read as the same affordance.
+	 * Written in this modal's own scoped-CSS idiom rather than in design tokens: the file
+	 * predates the design system and porting it is a separate job. The chip shape still
+	 * follows the one the admissions and users pages use.
 	 */
 	.suggestion {
 		display: flex;

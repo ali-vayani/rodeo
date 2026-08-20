@@ -18,9 +18,8 @@ beforeEach(() => mockReset(db));
 /**
  * Makes the mocked `$transaction` run its callback against the same client.
  *
- * The deep mock resolves it without invoking anything, which would leave the
- * re-count inside the transaction — the whole point of the atomic join path —
- * unexercised. Writes inside the transaction are then asserted on `db` exactly
+ * The deep mock resolves it without invoking anything, which would leave the re-count
+ * inside the transaction unexercised. Writes inside are then asserted on `db` exactly
  * like writes outside one.
  */
 function runTransactions() {
@@ -32,10 +31,9 @@ function runTransactions() {
 const writeConflict = Object.assign(new Error('write conflict'), { code: 'P2034' });
 
 /**
- * `hackerUser` made team-eligible: ACCEPTED + CONFIRMED. Keeps `hacker-uid` so it
- * stays distinct from `confirmedHacker` (used as the invitee), which matters for
- * the self-invite guard. `teamId` is null, so the same object also satisfies the
- * in-transaction `findUniqueOrThrow({ select: { teamId } })` re-read.
+ * `hackerUser` made team-eligible: ACCEPTED + CONFIRMED. Keeps `hacker-uid` so it stays
+ * distinct from `confirmedHacker`, which matters for the self-invite guard. `teamId` is
+ * null, so the same object satisfies the in-transaction re-read.
  */
 const eligibleHacker = {
 	...hackerUser,
@@ -45,9 +43,7 @@ const eligibleHacker = {
 
 /**
  * Someone with no relationship to `mockTeam`, for the invitee side of the tests.
- *
- * `hackerUser` is a *member* of `mockTeam`, so reusing it as the invitee now trips
- * the already-on-your-team guard before the case under test is reached.
+ * `hackerUser` is a member, so reusing it trips the already-on-your-team guard first.
  */
 const outsider = {
 	...hackerUser,
@@ -268,9 +264,8 @@ describe('team.inviteMember', () => {
 	});
 
 	it('reports { sent: true } without creating an invitation when the invitee is not a hacker', async () => {
-		// A judge, mentor or volunteer clears the same accept/confirm funnel a hacker
-		// does, so status alone said yes to them. Silent like every other ineligible
-		// case: naming it would turn the endpoint into a probe for who holds what role.
+		// A judge, mentor or volunteer clears the same accept/confirm funnel a hacker does,
+		// so status alone said yes to them. Silent like every other ineligible case.
 		const caller = createTestCaller(db, hackerUser);
 		db.user.findUniqueOrThrow.mockResolvedValue({ ...eligibleHacker, team: mockTeam } as never);
 		db.user.findUnique.mockResolvedValue({
@@ -299,9 +294,8 @@ describe('team.inviteMember', () => {
 	});
 
 	it('rejects a malformed address with a spelled-out reason', async () => {
-		// The sentence the inviter ends up reading. Asserted on the issue rather than
-		// the error message because a direct caller skips the errorFormatter that
-		// unwraps it at the HTTP boundary — that half is covered in init.test.ts.
+		// Asserted on the issue rather than the error message, because a direct caller skips
+		// the errorFormatter that unwraps it. That half is covered in init.test.ts.
 		const caller = createTestCaller(db, hackerUser);
 
 		const rejected = await caller.team
@@ -333,9 +327,8 @@ describe('team.inviteMember', () => {
 
 	it('refuses a self-invite by name — the inviter is in their own member list', async () => {
 		const caller = createTestCaller(db, hackerUser);
-		// Inviter and invitee resolve to the same eligible account, which is also the
-		// member list's only entry. The `uid !== inviter.uid` check below stays as the
-		// backstop for a self-invite that somehow gets past the member list.
+		// Inviter and invitee resolve to the same eligible account, which is also the member
+		// list's only entry. The `uid !== inviter.uid` check below is the backstop.
 		db.user.findUniqueOrThrow.mockResolvedValue({ ...eligibleHacker, team: mockTeam } as never);
 
 		await expect(caller.team.inviteMember({ email: eligibleHacker.email })).rejects.toMatchObject({

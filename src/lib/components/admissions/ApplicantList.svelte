@@ -45,9 +45,8 @@
 		search: string;
 		onSearchInput: (value: string) => void;
 		/**
-		 * Which half of the queue is on screen. Defaults to `unscored` — the pass is
-		 * "work until this list is empty" — but scored applicants have to stay
-		 * reachable or a mistyped score would be uncorrectable from the UI.
+		 * Which half of the queue is on screen. Defaults to `unscored`, but scored
+		 * applicants stay reachable or a mistyped score would be uncorrectable from the UI.
 		 */
 		scoreFilter: ScoreFilter;
 		onScoreFilterChange: (value: ScoreFilter) => void;
@@ -70,39 +69,32 @@
 		selfClaimUid: string | null;
 	} = $props();
 
-	// The collapsed rail is a desktop-only affordance — below md the list is a
-	// full-width stacked view and a 44px strip would be useless. Gate on the
-	// same 48rem breakpoint as `md:` so a collapse toggled on desktop doesn't
-	// leave a shrunken list behind after resizing down.
+	// The collapsed rail is a desktop-only affordance. Gate on the same 48rem breakpoint
+	// as `md:` so a collapse toggled on desktop does not leave a shrunken list behind
+	// after resizing down.
 	const mdUp = new MediaQuery('(min-width: 48rem)');
 	let isCollapsed = $derived(collapsed && mdUp.current);
 
 	/**
 	 * The filter panel is a disclosure at every width, not just on phones.
 	 *
-	 * `FacetFilters` has a `collapsible` of its own, but it only folds below md —
-	 * right for a full-width page, wrong here. This column is 300px wide and already
-	 * spends its first two rows on tabs and a search box; three facets open underneath
-	 * them (two comboboxes and a six-row checkbox list) push the queue itself off a
-	 * laptop screen. So the disclosure is owned here and applies at all breakpoints,
-	 * and the panel is capped and scrolls rather than growing without bound.
+	 * `FacetFilters` has a `collapsible` of its own, but it only folds below md, which is
+	 * wrong for a 300px column that already spends two rows on tabs and a search box.
+	 * Three facets open underneath would push the queue off a laptop screen.
 	 *
-	 * `FacetFilters` now folds each facet individually as well. The two are one
-	 * mechanism at two scales, not two competing ones: this toggle decides whether the
-	 * panel is on screen at all, and only once it is do the per-facet folds inside it
-	 * mean anything. `collapsible` is still not forwarded — a third, breakpoint-gated
-	 * toggle for the same panel is the one combination that would fight.
+	 * `FacetFilters` also folds each facet individually. The two are one mechanism at two
+	 * scales: this toggle decides whether the panel is on screen at all. `collapsible` is
+	 * still not forwarded, since a third breakpoint-gated toggle would fight.
 	 *
-	 * Shut on arrival, deliberately: the per-facet folds start open, so opening this
-	 * shows every facet, and nothing about the first paint of the queue changes.
+	 * Shut on arrival, deliberately: the per-facet folds start open, so opening this shows
+	 * every facet.
 	 */
 	let filtersOpen = $state(false);
 
 	/**
-	 * How many facets are narrowing the queue — the badge on a shut panel.
-	 *
-	 * Facets rather than values, because not every control has a value count to give: a
-	 * substring box and a numeric range are each one filter however they are filled in.
+	 * How many facets are narrowing the queue, for the badge on a shut panel. Facets
+	 * rather than values, because a substring box and a numeric range are each one filter
+	 * however they are filled in.
 	 */
 	let activeFilterCount = $derived(
 		Object.values(facetSelection).filter((selection) => isEngaged(selection)).length
@@ -111,9 +103,8 @@
 	/**
 	 * Shown only when there is something to suggest.
 	 *
-	 * `fuzzy` means the fold ran, not that it found anything: a term matching nobody and
-	 * resembling nobody still sets it, and "did you mean:" followed by nothing is worse
-	 * than the plain empty state.
+	 * `fuzzy` means the fold ran, not that it found anything, and "did you mean:" followed
+	 * by nothing is worse than the plain empty state.
 	 */
 	let showSuggestions = $derived(searchInfo.fuzzy && searchInfo.names.length > 0);
 
@@ -121,21 +112,19 @@
 	 * The wording follows `exact`, not `fuzzy`.
 	 *
 	 * `fuzzy` only says the fold ran, and it runs below a floor of five rather than at
-	 * zero — so on a queue this size it runs constantly over terms that DID match. Keying
-	 * the sentence off it put "No exact match" above three people named Vayani, which
-	 * reads as a broken search rather than a suggestion.
+	 * zero. Keying the sentence off it put "No exact match" above three people named
+	 * Vayani, which reads as a broken search.
 	 */
 	let suggestionsPrefix = $derived(
 		searchInfo.exact > 0 ? 'Similar names:' : 'No exact match — did you mean:'
 	);
 
 	/**
-	 * Built here rather than in markup so the sentence keeps its spacing — Svelte trims
+	 * Built here rather than in markup so the sentence keeps its spacing. Svelte trims
 	 * whitespace at an `{#if}` boundary, which glued the cap onto the colon.
 	 *
 	 * The cap is stated, never hidden: a list that stopped at 25 is a different answer
-	 * from one that ran out, and an organizer who can't find their person needs to know
-	 * which of the two they are looking at.
+	 * from one that ran out.
 	 */
 	let suggestionsLabel = $derived(
 		searchInfo.capped
@@ -232,9 +221,9 @@
 
 		<!-- Scored / unscored split, then search -->
 		<div class="shrink-0 border-b border-border px-3 py-[10px]">
-			<!-- Built from the same plain buttons as the role tabs directly above rather
-			     than a shared control: the two sit two rows apart in a 300px rail and
-			     have to read as one set of filters, not as two borrowed widgets. -->
+			<!-- Built from the same plain buttons as the role tabs above rather than a shared
+						     control: the two sit two rows apart in a 300px rail and have to read as one
+						     set of filters. -->
 			<div class="mb-2 flex gap-1" role="group" aria-label="Filter by scoring state">
 				{#each SCORE_FILTERS as option (option.key)}
 					<button
@@ -260,20 +249,17 @@
 		</div>
 
 		<!--
-			"Did you mean" — the fallback the server actually applied, in the order it
-			ranked. Rendered as its own strip rather than folded into the list because
-			the rows below are `createdAt desc`: reordering them to match this would
-			imply a relevance the queue does not have.
-		-->
+					"Did you mean" -- the fallback the server applied, in the order it ranked.
+					Its own strip rather than folded into the list, because the rows below are
+					`createdAt desc` and reordering them would imply a relevance the queue lacks.
+				-->
 		{#if showSuggestions}
 			<div class="shrink-0 border-b border-border bg-muted px-3 py-2">
 				<div class="text-2xs text-foreground-secondary">{suggestionsLabel}</div>
 				<!--
-					Capped and scrolled for the same reason the filter panel is: at the cap
-					this is 25 full names, which wraps to ten-odd rows and would leave two
-					applicants visible on a laptop. The strip corrects the search; the queue
-					is still the thing on screen.
-				-->
+									Capped and scrolled like the filter panel: at the cap this is 25 full names,
+									which would leave two applicants visible on a laptop.
+								-->
 				<div class="mt-1.5 flex max-h-40 flex-wrap gap-1 overflow-y-auto">
 					{#each searchInfo.names as name (name)}
 						{@const active =
@@ -309,10 +295,8 @@
 					>
 						<span class="flex items-center gap-1.5">
 							Filters
-							<!--
-								The count is what keeps a shut panel honest: a filter you cannot see
-								is still narrowing the queue, and this is the only thing that says so.
-							-->
+							<!-- The count is what keeps a shut panel honest: a filter you cannot see is
+														     still narrowing the queue. -->
 							{#if activeFilterCount > 0}
 								<span
 									class="rounded-sm bg-primary px-1 font-mono text-2xs text-primary-foreground tabular-nums"

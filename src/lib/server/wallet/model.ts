@@ -1,14 +1,12 @@
 /**
  * Where the `.pkpass` model comes from.
  *
- * Two sources behind one call. Locally, and by default, the copy bundled with the
- * build; in production with `WALLET_ASSETS_BASE_URL` set, a bucket, so artwork can
- * be swapped without a deploy.
+ * Two sources behind one call: the copy bundled with the build by default, or a bucket
+ * when `WALLET_ASSETS_BASE_URL` is set, so artwork can be swapped without a deploy.
  *
- * The remote source falls back to the local one on any failure. That asymmetry is
- * deliberate: the bundled model is always present, so there is no scenario in
- * which a bucket problem should stop a confirmed attendee getting a pass. A
- * misconfigured URL costs the artwork and nothing else, and says so in the log.
+ * The remote source falls back to the local one on any failure. The bundled model is
+ * always present, so no bucket problem should stop a confirmed attendee getting a pass.
+ * A misconfigured URL costs the artwork and says so in the log.
  */
 
 import { passAssetSource } from './config';

@@ -7,11 +7,9 @@
 
 	let { children, data }: { children: Snippet; data: LayoutData } = $props();
 
-	// `as const` so each href stays a literal: `resolve` is typed against the
-	// generated route union, and a widened `string` would fail to typecheck —
-	// which is the whole point, since it also catches a link to a route that
-	// doesn't exist. The section literals stay narrow too, so `canAccess`
-	// typechecks them against AdminSection.
+	// `as const` so each href stays a literal: `resolve` is typed against the generated
+	// route union, and a widened `string` would fail to typecheck, which also catches a
+	// link to a route that does not exist.
 	const links = [
 		{ href: '/admin/dashboard', label: 'Dashboard', section: 'dashboard' },
 		{ href: '/admin/users', label: 'Users', section: 'users' },

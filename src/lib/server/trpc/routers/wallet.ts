@@ -13,10 +13,10 @@ export type WalletAvailability = {
 	/**
 	 * Whether this deployment has any wallet credentials at all.
 	 *
-	 * Separate from the two booleans above because they collapse two very different
+	 * Separate from the two booleans above because they collapse two different
 	 * situations into `false`: "this event does not do wallet passes" and "yours is
 	 * not ready yet". The card renders nothing for the first and an explanation for
-	 * the second, and cannot tell them apart without this.
+	 * the second.
 	 */
 	configured: boolean;
 	/** Why no pass is on offer, when the deployment does have credentials. */
@@ -27,12 +27,10 @@ export const walletRouter = router({
 	/**
 	 * What the account page should render.
 	 *
-	 * Combines "is the provider configured" with "may this caller have a pass", so
-	 * the page never draws a button whose endpoint would answer 403. The reason is
-	 * returned separately because a confirmed hacker waiting on the RSVP deadline
-	 * gets told when passes unlock, rather than being shown nothing at all — a
-	 * missing feature and a not-yet feature look identical otherwise, and the first
-	 * one gets reported as a bug.
+	 * Combines "is the provider configured" with "may this caller have a pass", so the
+	 * page never draws a button whose endpoint would answer 403. The reason comes back
+	 * separately so a confirmed hacker waiting on the RSVP deadline is told when passes
+	 * unlock, rather than being shown nothing and reporting it as a bug.
 	 */
 	availability: authedProcedure.query(async ({ ctx }): Promise<WalletAvailability> => {
 		const reason = await walletIneligibility(ctx.prisma, ctx.user);
@@ -51,9 +49,8 @@ export const walletRouter = router({
 	/**
 	 * Rewrite the Google Wallet class definition.
 	 *
-	 * Pass generation only ever *creates* the class, never updates it, so artwork
-	 * and layout changes need this explicit action — otherwise a deploy would
-	 * silently restyle every pass already sitting in an attendee's phone.
+	 * Pass generation only ever creates the class, so artwork and layout changes need this
+	 * explicit action. Otherwise a deploy would restyle every pass already in a phone.
 	 */
 	provisionGoogleClass: adminProcedure.mutation(async ({ ctx }) => {
 		if (!googleWalletConfigured()) {

@@ -7,11 +7,9 @@ import { Role, UserStatus, type PrismaClient } from '$lib/generated/prisma/clien
 /**
  * The projection every endpoint here hands back in place of a `User` row.
  *
- * Organizers may work the scan page (`ORGANIZER_SECTIONS` in src/lib/auth/permissions.ts)
- * but are explicitly not to see per-person data, and a full row carries phone-book
- * detail plus `pendingDecision`/`activeDecision` — i.e. who was rejected. These are
- * exactly the fields the scan UI consumes: `ScanConfirmDialog`'s `DialogUser` prop,
- * plus `uid`, which the page sends back to `scanUser` on confirm.
+ * Organizers may work the scan page but are explicitly not to see per-person data,
+ * and a full row carries phone-book detail plus the decision columns. These are the
+ * fields the scan UI consumes, plus `uid`, which the page sends back on confirm.
  */
 const scanUserSelect = {
 	uid: true,
@@ -30,10 +28,9 @@ const scanUserSelect = {
 const scanSelect = { id: true, action: true, timestamp: true } as const;
 
 /**
- * A scanned QR code carries the whole uid, but a human typing from the printed
- * badge has only the `RC-` + last four (see `QRCard.svelte`), and that tail is
- * matched as a uid *suffix*. Anything shorter stops identifying one person: `RC-`
- * on its own strips to `''`, which is `uid LIKE '%'` — every user in the table.
+ * A scanned QR carries the whole uid, but a human typing from the printed badge has
+ * only the `RC-` + last four, matched as a uid suffix. Anything shorter stops
+ * identifying one person: `RC-` alone strips to `''`, which is `uid LIKE '%'`.
  */
 const MIN_CODE_SUFFIX_LENGTH = 4;
 
@@ -75,12 +72,10 @@ async function resolveUserByCode(prisma: PrismaClient, userCode: string) {
 		});
 	}
 
-	// `take: 2` is all it costs to tell "one match" from "more than one": a suffix is
-	// not a unique key, so silently taking the first row checks in the wrong person and
-	// audit-logs it under their name. Two rows means the volunteer has to disambiguate.
-	// Case-insensitive on the suffix because the badge prints it uppercased
-	// (`QRCard.svelte`) while a cuid is lowercase — a hand-typed `RC-AB12` would
-	// otherwise never match the `ab12` actually stored.
+	// `take: 2` is all it costs to tell "one match" from "more than one". A suffix is not
+	// a unique key, so silently taking the first row checks in the wrong person and
+	// audit-logs it under their name. Case-insensitive because the badge prints the suffix
+	// uppercased while a cuid is lowercase.
 	const users = await prisma.user.findMany({
 		where: { OR: [{ uid: code }, { uid: { endsWith: suffix, mode: 'insensitive' } }] },
 		select: scanUserSelect,
@@ -207,19 +202,16 @@ export const scanRouter = router({
 			})
 		)
 		.mutation(async ({ ctx, input }) => {
-			// The write path runs the same helpers as `lookup` on purpose: it used to carry
-			// its own copy of the action check and the code lookup, which meant a fix to one
-			// left the other resolving codes the old way.
+			// The write path runs the same helpers as `lookup` on purpose. It used to carry its
+			// own copy of the action check and the code lookup, so a fix to one missed the other.
 			const settings = await ctx.prisma.settings.findFirst();
 			assertActionAllowed(settings, input.action);
 			const user = await resolveUserByCode(ctx.prisma, input.userCode);
 			const isDuplicate = await isDuplicateToday(ctx.prisma, user.uid, input.action);
 
-			// Checking in is what actually moves a CONFIRMED attendee to CHECKED_IN — nothing
-			// else in the app writes that status, so without this the check-in count, the
-			// hacker "checked in" view, and joinByCode's CHECKED_IN allowance were all dead.
-			// The scan row and the status change commit together so a recorded check-in can't
-			// exist without the status, or vice versa.
+			// Checking in is what moves a CONFIRMED attendee to CHECKED_IN, and nothing else in
+			// the app writes that status. The scan row and the status change commit together, so
+			// a recorded check-in cannot exist without the status, or vice versa.
 			const promotesToCheckedIn =
 				input.action === checkInAction(settings) && user.status === UserStatus.CONFIRMED;
 

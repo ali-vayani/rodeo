@@ -1,20 +1,10 @@
 /**
  * Pass artwork fetched from a bucket, so it can be changed without a deploy.
  *
- * Plain HTTPS `fetch`, not the AWS SDK. The previous Rodeo used
- * `@aws-sdk/client-s3` with `ListObjectsV2` to discover the files and `GetObject`
- * to read them, which bought two things we don't need: discovery of a file set
- * Apple already fixes, and authentication for content that is a logo and a
- * template. There are no secrets in a `.pkpass` model. A public-read bucket or a
- * CDN in front of one removes a ~20 MB dependency whose dynamic requires are a
- * known adapter-vercel bundling hazard.
- *
- * It also removes a subtler trap. Vercel's Node runtime sets `AWS_REGION` and the
- * Lambda credential variables itself, so an SDK configured from bare `AWS_*`
- * names — as the old code was — silently picks up the platform's region and
- * credential chain instead of the ones you meant. Any future private-bucket
- * variant must namespace every variable as `WALLET_ASSETS_S3_*`; keep this
- * module's interface identical and that swap stays one file.
+ * Plain HTTPS `fetch`, not the AWS SDK. There are no secrets in a `.pkpass` model, so a
+ * public-read bucket removes a ~20 MB dependency and a real trap: Vercel sets
+ * `AWS_REGION` and the Lambda credentials itself, so an SDK on bare `AWS_*` names
+ * silently uses the platform's. A private-bucket variant must namespace every variable.
  */
 
 import { walletAssetsBaseUrl } from './config';
@@ -25,12 +15,9 @@ import type { PassModel } from './model';
 const REQUIRED = new Set(['pass.json', 'icon.png']);
 
 /**
- * How long a fetched model stays good.
- *
- * A warm serverless instance serves many downloads, and re-fetching seven files
- * per click would put the bucket in the critical path of every request. Ten
- * minutes is short enough that swapping artwork mid-event is still a
- * same-morning operation.
+ * How long a fetched model stays good. A warm instance serves many downloads, and
+ * re-fetching seven files per click would put the bucket in every request's critical
+ * path. Ten minutes still makes swapping artwork a same-morning operation.
  */
 const TTL_MS = 10 * 60 * 1000;
 
@@ -42,11 +29,8 @@ export function resetRemoteModelCache(): void {
 }
 
 /**
- * Fetch the model from `WALLET_ASSETS_BASE_URL`.
- *
- * Throws on anything that would yield a partial model. The caller in `model.ts`
- * turns that into a fall back to the bundled copy, which is the whole reason this
- * is allowed to fail loudly: a bad URL should cost the artwork, never the feature.
+ * Fetch the model from `WALLET_ASSETS_BASE_URL`. Throws on anything that would yield a
+ * partial model; `model.ts` turns that into a fall back to the bundled copy.
  */
 export async function loadRemotePassModel(now: number = Date.now()): Promise<PassModel> {
 	if (cache && cache.expires > now) return cache.model;

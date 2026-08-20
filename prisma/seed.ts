@@ -12,8 +12,8 @@ const prisma = createPrismaClient(connectionString);
 // ---------------------------------------------------------------------------
 // Main
 //
-// Questions run first: the generated application responses are built from
-// whatever is in the Question table, so they need it populated.
+// Questions run first: the generated application responses are built from whatever
+// is in the Question table.
 // ---------------------------------------------------------------------------
 
 async function main() {

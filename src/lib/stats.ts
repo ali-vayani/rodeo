@@ -1,11 +1,9 @@
 /**
  * Shapes for the per-admin activity stats.
  *
- * Isomorphic on purpose: `$lib/server/trpc/routers/stats` builds these and
- * `AdminStatsChart` renders them. Living outside `$lib/server` is what lets the
- * component name the type without importing a server-only module.
- *
- * Keep it free of Prisma, `$env`, and node builtins.
+ * Isomorphic on purpose: the stats router builds these and `AdminStatsChart` renders
+ * them, so the component can name the type without importing a server-only module.
+ * Keep it free of Prisma, `$env` and node builtins.
  */
 
 import type { Role } from '$lib/generated/prisma/enums';
@@ -27,9 +25,9 @@ export interface AdminStats {
 }
 
 /**
- * Decisions with no admin behind them: history from before attribution existed,
- * and the blacklist auto-reject in `application.submit`. Reported rather than
- * dropped so the per-admin bars sum to the real decision totals.
+ * Decisions with no admin behind them: history from before attribution existed, and the
+ * blacklist auto-reject. Reported rather than dropped so the per-admin bars sum to the
+ * real totals.
  */
 export interface UnattributedStats {
 	accepted: number;

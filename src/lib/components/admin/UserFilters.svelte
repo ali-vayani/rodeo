@@ -13,13 +13,11 @@
 		decisionFilter,
 		onToggleDecision,
 		onClearDecision,
-		// Defaults to the Users-page sidebar: a full-width strip stacked on top
-		// below md, a fixed left rail from md up. The custom-email wizard overrides
-		// this to render the same controls inline.
+		// Defaults to the Users-page sidebar: a full-width strip below md, a fixed left rail
+		// from md up. The custom-email wizard overrides this to render inline.
 		//
-		// 240px rather than the original 200px because the facet comboboxes
-		// live here now: their popover is anchored to the control's own width, and a
-		// university list rendered at 168px truncates every row to "The Universit…".
+		// 240px rather than 200px because the facet comboboxes live here now, and their
+		// popover is anchored to the control's width. At 168px every university row truncated.
 		class:
 			className = 'w-full shrink-0 border-b border-border bg-white px-4 py-4 md:w-60 md:overflow-y-auto md:border-r md:border-b-0 md:py-5',
 		columns = false,
@@ -45,15 +43,14 @@
 		/** Below md, collapse the groups behind a Filters toggle. No effect from md up. */
 		collapsible?: boolean;
 		/**
-		 * Filters over the application answers. Empty (the default) renders nothing, so a
-		 * caller that doesn't fetch them — or a form with nothing filterable left on it —
-		 * is simply the three groups again.
+		 * Filters over the application answers. Empty renders nothing, so a caller that does
+		 * not fetch them is simply the three groups again.
 		 */
 		facets?: Facet[];
 		/**
-		 * What each facet's controls hold. Empty means "no filter" here, the opposite of
-		 * the checkbox groups above, because these controls start with nothing ticked —
-		 * `facetParams` in `$lib/admin/filters` is what reconciles the two for the wire.
+		 * What each facet's controls hold. Empty means "no filter" here, the opposite of the
+		 * checkbox groups above, because these controls start with nothing ticked.
+		 * `facetParams` in `$lib/admin/filters` reconciles the two for the wire.
 		 */
 		selection?: FacetState;
 		onSelectionChange?: (selected: FacetState) => void;
@@ -74,9 +71,8 @@
 	/**
 	 * The three account-level groups, as data.
 	 *
-	 * They were three copies of the same markup; giving each one a fold made that a
-	 * third copy of the disclosure too. One list keeps the header — title, count,
-	 * chevron, clear — written once, and keeps the three from drifting apart.
+	 * They were three copies of the same markup, and giving each one a fold would have
+	 * made that a third copy of the disclosure too. One list keeps the header written once.
 	 */
 	let groups = $derived([
 		{
@@ -109,9 +105,8 @@
 	]);
 
 	/**
-	 * Per-group fold state. Absent means open, so every group is expanded on
-	 * arrival at every width — folding is something the reader asks for, never a
-	 * default that hides a filter they have not seen yet.
+	 * Per-group fold state. Absent means open, so folding is something the reader asks
+	 * for, never a default that hides a filter they have not seen yet.
 	 */
 	let openGroups = $state<Record<string, boolean>>({});
 
@@ -119,9 +114,8 @@
 	const panelId = (key: string) => `${uid}-${key}`;
 
 	/**
-	 * How many options a group has ticked. These groups read "all checked" *and* "none
-	 * checked" as no filter (see `buildRecipientParams`), so only a partial, non-zero
-	 * count is narrowing the table — which is exactly what a folded group has to admit to.
+	 * How many options a group has ticked. These groups read "all checked" and "none
+	 * checked" as no filter, so only a partial, non-zero count is narrowing the table.
 	 */
 	function checkedCount(options: readonly string[], state: Record<string, boolean>): number {
 		return options.filter((o) => state[o] ?? true).length;
@@ -160,9 +154,9 @@
 			: ''} {collapsible && expanded ? 'mt-4 md:mt-0' : ''}"
 	>
 		<!--
-			Role, Status and Decision. Each folds on its own — the header, and with it
-			the count of what the group is doing, stays put when the options go away.
-		-->
+					Role, Status and Decision. Each folds on its own, so the header and the count of
+					what the group is doing stay put when the options go away.
+				-->
 		{#each groups as group, index (group.key)}
 			{@const open = openGroups[group.key] ?? true}
 			{@const checked = checkedCount(group.options, group.state)}
@@ -189,10 +183,10 @@
 							{group.title}
 						</span>
 						<!--
-							A partial count is the group narrowing the table; folded shut,
-							this badge is the only thing on screen that says so. All ticked
-							and none ticked both mean "no filter", so neither earns a badge.
-						-->
+												A partial count is the group narrowing the table, and folded shut this
+												badge is the only thing that says so. All ticked and none ticked both
+												mean "no filter", so neither earns a badge.
+											-->
 						{#if checked > 0 && checked < group.options.length}
 							<span
 								class="rounded-sm bg-primary px-1 font-mono text-2xs leading-normal text-primary-foreground tabular-nums"
@@ -226,16 +220,14 @@
 		{/each}
 
 		<!--
-			Filters over the application answers. Rendered from `facets`, so the controls are
-			whatever the form currently asks — this component knows the three account-level
-			groups above are Role, Status and Decision, and knows nothing at all about what
-			is below.
+					Filters over the application answers, rendered from `facets`, so the controls are
+					whatever the form currently asks. This component knows the three groups above are
+					Role, Status and Decision, and knows nothing about what is below.
 
-			`collapsible` is deliberately not forwarded: the wrapper this sits inside is
-			already hidden by the Filters toggle above, and a second Show/Hide would collapse
-			a section that is already collapsed. `basis-full` puts it on its own row in
-			columns mode rather than as a fourth narrow column.
-		-->
+					`collapsible` is deliberately not forwarded: the wrapper this sits inside is
+					already hidden by the Filters toggle above. `basis-full` puts it on its own row in
+					columns mode rather than as a fourth narrow column.
+				-->
 		<FacetFilters
 			{facets}
 			bind:selected={selection}

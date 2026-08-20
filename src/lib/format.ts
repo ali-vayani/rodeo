@@ -1,10 +1,9 @@
 /**
  * Display formatting shared across the app.
  *
- * These existed as five copies of `formatDate`, two of `initials`, four of
- * `decLabel`, and an inline `charAt(0) + slice(1).toLowerCase()` incantation
- * in roughly eight places. Copies drift — the old `decLabel` returned `''` in
- * one component and `'—'` in three others for the same null input.
+ * These existed as five copies of `formatDate`, two of `initials` and four of
+ * `decLabel`. Copies drift: the old `decLabel` returned `''` in one component and
+ * `'—'` in three others for the same null input.
  */
 
 /** What every formatter returns for a null/absent value. */
@@ -68,16 +67,12 @@ export function formatDateTime(value: DateInput, timeZone?: string): string {
 }
 
 /**
- * `40s` / `12m` / `3h` / `5d` — elapsed time, for a feed where the exact instant
- * matters less than how long ago it was.
+ * `40s` / `12m` / `3h` / `5d` — elapsed time, for a feed where how long ago matters
+ * more than the exact instant.
  *
- * Moved here from `ActivityFeed`, which owned the only copy until the dashboard
- * feed replaced it. Deliberately terse and unsuffixed: these sit in a narrow
- * right-hand column beside every row, where "3 hours ago" would wrap.
- *
- * Caps at days rather than rolling over to weeks or months. A feed showing
- * anything that old has bigger problems than its formatting, and "5w" reads as a
- * typo more often than it reads as five weeks.
+ * Deliberately terse and unsuffixed: these sit in a narrow right-hand column where
+ * "3 hours ago" would wrap. Caps at days rather than rolling over to weeks, because
+ * "5w" reads as a typo more often than as five weeks.
  */
 export function formatRelativeTime(value: DateInput): string {
 	const date = toDate(value);
@@ -105,9 +100,8 @@ export function humanizeEnum(value: string | null | undefined): string {
 }
 
 /**
- * Avatar initials. Two letters from a first and last name where both exist,
- * otherwise the first two characters — which keeps mononyms from rendering
- * as a single lonely letter.
+ * Avatar initials. Two letters from a first and last name where both exist, otherwise
+ * the first two characters, so mononyms do not render as a single lonely letter.
  */
 export function initials(name: string): string {
 	const parts = name.trim().split(/\s+/).filter(Boolean);

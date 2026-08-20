@@ -1,45 +1,18 @@
 /**
- * Google Wallet passes.
+ * Google Wallet passes: a "generic" pass carrying the same `User.uid` barcode the
+ * on-screen QR encodes, handed to the browser as a `pay.google.com/gp/v/save/<jwt>` link.
  *
- * A "generic" pass carrying the same `User.uid` barcode the on-screen QR code
- * encodes, handed to the browser as a `https://pay.google.com/gp/v/save/<jwt>`
- * link.
+ * The object is inserted server-side rather than inlined in the JWT. Google allows
+ * inlining, but the JWT rides in a URL against a documented safe length of 1800
+ * characters, and an RS256 signature alone is 342 while a realistic object is 700-1000
+ * bytes of JSON. It would pass review with a short test name and fail for a hacker with
+ * a long one. Referencing `{ id, classId }` costs ~110 bytes and is a constant size.
+ * A stored object also stays mutable, where a JWT-inlined one is write-once.
  *
- * ## Why the object is inserted server-side instead of inlined in the JWT
- *
- * Google lets you skip the API entirely by embedding whole class and object
- * definitions in the signed JWT — they get created when the user saves. Tempting,
- * and wrong here, because the JWT rides inside the URL and Google documents 1800
- * characters as the safe encoded length. Past that, browsers truncate and the save
- * fails with no error worth reading.
- *
- * The budget doesn't work. An RS256 signature alone is 342 base64 characters. A
- * realistic generic object — barcode, header, subheader, logo URI, two text
- * modules — is 700-1000 bytes of JSON, so ~1300 characters once encoded, and the
- * header pushes it over. It would pass review with a short test name and fail for
- * a hacker with a long one: data-dependent, per-user, and unreproducible by
- * whoever is asked to debug it.
- *
- * Inserting the object first and referencing it as `{ id, classId }` costs ~110
- * bytes of payload, so the finished JWT is around 700 characters and — the part
- * that actually matters — a *constant* size regardless of anybody's name.
- *
- * The better reason is that a stored object stays mutable. `genericobject.patch`
- * updates a pass already sitting in someone's phone, so check-in status or a team
- * name can change after the fact. A JWT-inlined object is write-once.
- *
- * ## Why `google-auth-library` and not `googleapis`
- *
- * We need one OAuth access token and three REST calls. `googleapis` is a ~50 MB
- * metapackage and even `@googleapis/walletobjects` is a generated client wrapping
- * requests we can write by hand in twenty lines; either would be paid for on every
- * serverless cold start. The token is worth a dependency because refresh and clock
- * skew are fiddly. The save JWT is signed with `node:crypto` directly, so
- * `jsonwebtoken` isn't needed either.
- *
- * The previous Rodeo's attempt at this (commented out on branch `144-google-wallet`)
- * read a misspelled `GOOGLE_APPLICATIONS_CREDENTIALS` and passed a parsed JSON
- * object as `keyFile`, which wants a filesystem path. Neither could have worked.
+ * `google-auth-library` rather than `googleapis`, which is a ~50 MB metapackage paid
+ * for on every cold start. We need one OAuth token and three REST calls; the token is
+ * worth a dependency because refresh and clock skew are fiddly, and the save JWT is
+ * signed with `node:crypto`.
  */
 
 import { createSign } from 'node:crypto';
@@ -51,10 +24,8 @@ const SCOPE = 'https://www.googleapis.com/auth/wallet_object.issuer';
 const SAVE_URL = 'https://pay.google.com/gp/v/save';
 
 /**
- * Google's documented safe length for the encoded JWT, because it travels in a URL.
- *
- * Asserted in tests rather than enforced at runtime: if a change ever pushes the
- * payload over this, the build should fail, not one hacker's phone.
+ * Google's documented safe length for the encoded JWT. Asserted in tests rather than
+ * enforced at runtime: a change that pushes the payload over should fail the build.
  */
 export const SAFE_JWT_LENGTH = 1800;
 
@@ -65,11 +36,8 @@ export type GooglePassSubject = {
 };
 
 /**
- * Resource ids may only contain these characters.
- *
- * `User.uid` is a cuid and already complies, but it is user-adjacent data being
- * interpolated into a URL path, and "already complies" is a property of today's id
- * scheme rather than a guarantee.
+ * Resource ids may only contain these characters. `User.uid` is a cuid and already
+ * complies, but it is user-adjacent data being interpolated into a URL path.
  */
 function safeId(value: string): string {
 	return value.replace(/[^A-Za-z0-9._-]/g, '');
@@ -134,14 +102,12 @@ function classDefinition(credentials: GoogleWalletCredentials) {
 }
 
 /**
- * Create the pass class if it isn't there.
+ * Create the pass class if it isn't there. Memoised in a module-scoped promise so a
+ * warm instance pays once, and a 409 counts as success since two cold starts racing is
+ * normal.
  *
- * Memoised in a module-scoped promise, so a warm instance pays for this once
- * rather than on every download. A 409 counts as success: two cold starts racing
- * each other is normal and not a problem.
- *
- * Deliberately never updates. Artwork changes are an operator action — see
- * `provisionGoogleWalletClass` — not a side effect of a hacker tapping a button.
+ * Deliberately never updates: artwork changes are an operator action, not a side effect
+ * of a hacker tapping a button.
  */
 let ensured: Promise<void> | null = null;
 
@@ -204,10 +170,8 @@ function displayCode(uid: string): string {
 }
 
 /**
- * Create or update the hacker's pass object.
- *
- * `POST` then `PATCH` on conflict, rather than `GET` and decide — two concurrent
- * clicks would both read "absent" and both insert.
+ * Create or update the hacker's pass object. `POST` then `PATCH` on conflict, rather
+ * than `GET` and decide, since two concurrent clicks would both read "absent".
  */
 async function upsertObject(
 	credentials: GoogleWalletCredentials,
@@ -241,10 +205,8 @@ function base64url(input: Buffer | string): string {
 }
 
 /**
- * Sign the save token.
- *
- * The payload is only `{ id, classId }` — no name, no email, nothing that would
- * otherwise end up in browser history, a referrer header, or a shared link.
+ * Sign the save token. The payload is only `{ id, classId }` — no name, no email,
+ * nothing that would end up in browser history, a referrer header, or a shared link.
  */
 function signSaveJwt(credentials: GoogleWalletCredentials, objectResourceId: string): string {
 	const header = base64url(JSON.stringify({ alg: 'RS256', typ: 'JWT' }));
@@ -267,10 +229,8 @@ function signSaveJwt(credentials: GoogleWalletCredentials, objectResourceId: str
 }
 
 /**
- * The "Add to Google Wallet" URL for one hacker, or `null` when Google isn't configured.
- *
- * Callers are responsible for having checked eligibility first — this mints a pass
- * for whoever it is handed.
+ * The "Add to Google Wallet" URL for one hacker, or `null` when Google isn't
+ * configured. Callers must have checked eligibility first.
  */
 export async function buildGoogleSaveUrl(user: GooglePassSubject): Promise<string | null> {
 	const credentials = googleWalletCredentials();
@@ -284,11 +244,8 @@ export async function buildGoogleSaveUrl(user: GooglePassSubject): Promise<strin
 }
 
 /**
- * Rewrite the class definition. Admin-triggered, never automatic.
- *
- * `ensureClass` only ever creates, so artwork and layout changes need an explicit
- * action — otherwise a deploy would silently restyle every pass already in
- * circulation.
+ * Rewrite the class definition. Admin-triggered, never automatic: `ensureClass` only
+ * creates, so a deploy must not silently restyle every pass already in circulation.
  */
 export async function provisionGoogleWalletClass(): Promise<string> {
 	const credentials = googleWalletCredentials();

@@ -83,12 +83,10 @@
 			const original = questions.find((q) => q.id === wq.id);
 			return original && JSON.stringify(original) !== JSON.stringify(wq);
 		});
-		// `order` in the database is sparse — 0,1,2,10,11,12,20,21,… — because it only
-		// has to sort, not count. Comparing a stored `order` against its array index
-		// therefore flagged most of the list as reordered the moment the page loaded,
-		// which is what lit "Unsaved changes" on an untouched page. Compare *sequences*
-		// instead: whoever was loaded into slot N versus whoever occupies it now. The
-		// values sent to the server stay index-based — that part was always right.
+		// `order` in the database is sparse (0,1,2,10,11,...) because it only has to sort,
+		// not count. Comparing a stored `order` against its array index therefore flagged
+		// most of the list as reordered on load. Compare sequences instead: whoever was
+		// loaded into slot N versus whoever occupies it now.
 		const persisted = workingQuestions.filter((q) => q.id && !q.id.startsWith('temp-'));
 		// Deleting a row closes the gap it left, and that is not a reorder, so the
 		// baseline is the loaded sequence with deleted rows taken out of it.
@@ -96,10 +94,9 @@
 			.filter((q) => persisted.some((p) => p.id === q.id))
 			.map((q) => q.id);
 		const sequenceChanged = persisted.some((q, i) => loadedSequence[i] !== q.id);
-		// When the sequence moves, renumber the whole list rather than only the rows
-		// that shifted. Because the stored values are sparse, writing index-based
-		// numbers to a subset would let an untouched row's larger legacy value
-		// (say 10) sort behind a neighbour that just became 4.
+		// When the sequence moves, renumber the whole list rather than only the rows that
+		// shifted. Because the stored values are sparse, renumbering a subset would let an
+		// untouched row's larger legacy value sort behind a neighbour that just became 4.
 		const reordered = sequenceChanged ? persisted.map((q, i) => ({ id: q.id!, order: i })) : [];
 
 		return { added, modified, deleted, reordered };
@@ -127,13 +124,10 @@
 		return () => window.removeEventListener('beforeunload', handleBeforeUnload);
 	});
 
-	// ── Reordering ───────────────────────────────────────────────────────────────
-	//
-	// The list renders `filteredQuestions`, so a row's visible index is NOT its index
-	// in `workingQuestions` whenever the Role dropdown hides something. The old
-	// index-based moveUp/moveDown indexed straight into `workingQuestions` and so
-	// moved the wrong question under any filter. Everything below works by id and
-	// resolves positions against the full array.
+	// -- Reordering --------------------------------------------------------------
+	// The list renders `filteredQuestions`, so a row's visible index is NOT its index in
+	// `workingQuestions` whenever the Role dropdown hides something. Everything below
+	// works by id and resolves positions against the full array.
 
 	let listEl = $state<HTMLDivElement | null>(null);
 
@@ -156,12 +150,11 @@
 	let drag = $state<DragState | null>(null);
 
 	/**
-	 * Move `id` so that it takes the slot the visible row at `toIndex` occupies,
-	 * rewriting `workingQuestions` — the full array — around it.
+	 * Move `id` so it takes the slot the visible row at `toIndex` occupies, rewriting
+	 * `workingQuestions` around it.
 	 *
-	 * Note what this deliberately does not do: touch `order`. Rewriting `order` on
-	 * every row made a one-row move look like eighteen edits. Array position is the
-	 * source of truth; `pendingChanges.reordered` derives the numbers at save time.
+	 * Deliberately does not touch `order`. Array position is the source of truth, and
+	 * `pendingChanges.reordered` derives the numbers at save time.
 	 */
 	function moveQuestion(id: string, toIndex: number) {
 		const visible = filteredQuestions;
@@ -235,16 +228,15 @@
 	 * How far the visible row at `index` should slide while a drag is in flight.
 	 *
 	 * The dragged row follows the pointer; every row it has passed slides one slot the
-	 * other way, which opens the gap it will drop into. Nothing moves in the DOM until
-	 * the pointer is released, so the geometry measured at pointerdown stays valid.
+	 * other way. Nothing moves in the DOM until release, so the geometry measured at
+	 * pointerdown stays valid.
 	 */
 	function dragOffsetFor(index: number) {
 		if (!drag) return 0;
 		const { fromIndex, toIndex, slot, offset } = drag;
 		if (index === fromIndex) return offset;
-		// Everything the row has passed slides by the *dragged* row's height — the size
-		// of the hole it left. Shifting by each row's own height instead would leave
-		// overlaps wherever two rows differ in height (they do: role chips wrap).
+		// Rows slide by the dragged row's height, the size of the hole it left. Shifting by
+		// each row's own height would leave overlaps wherever two rows differ (role chips wrap).
 		if (fromIndex < toIndex && index > fromIndex && index <= toIndex) return -slot;
 		if (fromIndex > toIndex && index >= toIndex && index < fromIndex) return slot;
 		return 0;
@@ -305,22 +297,17 @@
 
 	function deleteQuestion(id: string | undefined) {
 		if (!id) return;
-		// No `order` rewrite here either: renumbering the survivors made every
-		// remaining row look edited. `order` only has to sort, and removing one row
-		// leaves the rest in the same relative sequence.
+		// No `order` rewrite here either: renumbering the survivors made every remaining row
+		// look edited, and removing one row leaves the rest in the same relative sequence.
 		workingQuestions = workingQuestions.filter((q) => q.id !== id);
 	}
 
 	/**
-	 * Hand the typed title and type to the editor rather than adding straight to
-	 * the list.
+	 * Hand the typed title and type to the editor rather than adding straight to the list.
 	 *
-	 * This form used to append the question itself, which meant a Dropdown arrived
-	 * with zero options and the only way to give it any was to add it, find the row,
-	 * and press Edit. The editor already reveals options, placeholder and linked
-	 * field the moment a type is chosen — it just wasn't on the path anyone took to
-	 * create a question. Routing through it also means new questions face the same
-	 * validation as edited ones, so "Dropdown with no options" stops being reachable.
+	 * Appending directly meant a Dropdown arrived with zero options, and the only way to
+	 * give it any was to add it, find the row and press Edit. Routing through the editor
+	 * also means new questions face the same validation as edited ones.
 	 */
 	function handleQuickAdd() {
 		if (!addTitle.trim()) return;

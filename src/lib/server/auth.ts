@@ -45,27 +45,24 @@ async function getProdSession(event: RequestEvent) {
 
 	if (!sbUser?.email) return null;
 
-	// Find or create the local User record from the Supabase identity (Google
-	// OAuth or email/password). Either way first login *is* registration — the
-	// sign-up form registers with Supabase only, so no earlier step could have
-	// created this row.
+	// Find or create the local User record from the Supabase identity. Either way first
+	// login is registration: the sign-up form registers with Supabase only, so no earlier
+	// step could have created this row.
 	const email = sbUser.email.toLowerCase();
 	const name = sbUser.user_metadata?.full_name ?? sbUser.user_metadata?.name ?? email.split('@')[0];
 
-	// The common case — a returning user — is a read: this runs on every routed request
-	// via hooks, and an unconditional upsert took a row-lock write per page view,
-	// contending with admissions.claim/heartbeat on the same rows. Only a first login
-	// falls through to the upsert, which still resolves the two-tabs handshake race (both
-	// tabs would otherwise collide on the unique email index and 500 one).
+	// The common case, a returning user, is a read. This runs on every routed request, and
+	// an unconditional upsert took a row-lock write per page view, contending with
+	// admissions.claim/heartbeat. Only a first login falls through to the upsert, which
+	// still resolves the two-tabs handshake race.
 	const existing = await prisma.user.findUnique({ where: { email } });
 	if (existing) return existing;
 
 	return prisma.user.upsert({
 		where: { email },
 		update: {},
-		// A brand-new account is a HACKER in CREATED — the state the application
-		// page's "filling out" view expects. The role is changed from /admin/users;
-		// nothing about an OAuth profile can grant someone staff access.
+		// A brand-new account is a HACKER in CREATED, the state the application page's
+		// "filling out" view expects. Nothing about an OAuth profile can grant staff access.
 		create: { email, name, role: Role.HACKER }
 	});
 }
@@ -80,10 +77,9 @@ export async function getSession(event: RequestEvent) {
 	const session = await getProdSession(event);
 	if (session) return session;
 
-	// Preview deploys also honor the yopmail bypass (see yopmailLoginEnabled for
-	// why that is safe there), but only for @yopmail.com accounts: the cookie is
-	// a bare uid, and without this check a guessed uid would impersonate a real
-	// Google-created account — seeded fixtures are fair game, people are not.
+	// Preview deploys also honor the yopmail bypass, but only for @yopmail.com accounts.
+	// The cookie is a bare uid, and without this check a guessed uid would impersonate a
+	// real Google-created account.
 	if (!yopmailLoginEnabled()) return null;
 	const devUser = await getDevSession(event);
 	return devUser?.email.endsWith('@yopmail.com') ? devUser : null;

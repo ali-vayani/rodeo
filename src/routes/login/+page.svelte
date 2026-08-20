@@ -6,11 +6,9 @@
 
 	let signingIn = $state(false);
 
-	// A failed post re-renders the page, so the mode has to be recovered from
-	// the action result or the error would render under a form that doesn't
-	// match it. Reading only the initial `form` is deliberate: these forms post
-	// without use:enhance, so every action response arrives via a full page
-	// load that remounts this component.
+	// A failed post re-renders the page, so the mode has to be recovered from the action
+	// result. Reading only the initial `form` is deliberate: these forms post without
+	// use:enhance, so every action response arrives via a full page load.
 	// svelte-ignore state_referenced_locally
 	let mode: 'signin' | 'signup' | 'forgot' = $state(
 		form?.signupError || form?.signupPending
@@ -74,12 +72,10 @@
 
 		{#if data.supabaseAuth}
 			<!--
-				Deployed environments sign in through Supabase: Google, or email and
-				password. Either way the first login creates the account — sign-up
-				registers with Supabase, and the local User row is provisioned on the
-				first authenticated request. Preview deploys additionally render the
-				yopmail form below, for the seeded test accounts.
-			-->
+							Deployed environments sign in through Supabase: Google, or email and password.
+							Either way the first login creates the account. Preview deploys additionally
+							render the yopmail form below, for the seeded test accounts.
+						-->
 			<button
 				onclick={signInWithGoogle}
 				disabled={signingIn}

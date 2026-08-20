@@ -1,24 +1,14 @@
 /**
  * The Settings row's stand-in, and the rule for when standing in is correct.
  *
- * `seed.ts` creates no Settings row, so a fresh install — and production, until
- * someone saves /admin/settings once — has none. Two kinds of reader disagreed
- * about what that meant, which is how every lifecycle email silently stopped:
+ * A fresh install has no Settings row. `settings.get` served `DEFAULT_SETTINGS` while
+ * the senders read the row directly and guarded on a falsy template, so the editor
+ * showed copy that existed nowhere and every lifecycle email silently stopped. Both
+ * now resolve the same values through this module.
  *
- * - `settings.get` served `DEFAULT_SETTINGS`, so the template editor rendered six
- *   healthy-looking templates.
- * - The senders read the row directly and guarded on `settings?.submitTemplate`,
- *   which is falsy when the row is absent, so they sent nothing and said nothing.
- *
- * The editor showed copy that existed nowhere and the senders skipped mail nobody
- * knew was skipped. Both now resolve the same values through this module.
- *
- * Deliberately NOT applied to the application/RSVP window guards: they read an
- * absent row as "no window enforced" on purpose (see `assertWithinApplicationWindow`),
- * and the three dates here are `new Date()` evaluated at import — already expired by
- * the time the process has been up a second. Substituting them there would lock every
- * applicant out of an unconfigured event. Email copy has a safe default; a deadline
- * does not.
+ * Deliberately NOT applied to the window guards, which read an absent row as "no window
+ * enforced". The dates here are `new Date()` at import, so substituting them would lock
+ * every applicant out. Email copy has a safe default; a deadline does not.
  */
 export const DEFAULT_SETTINGS = {
 	applicationOpen: new Date(),
@@ -44,11 +34,8 @@ export const DEFAULT_SETTINGS = {
 };
 
 /**
- * The settings an outbound message should be rendered against.
- *
- * Always returns something: a missing row means "not configured yet", never "send
- * nothing". Callers that also enforce deadlines must keep reading the raw row for
- * that — this is the email half only.
+ * The settings an outbound message should be rendered against. Always returns
+ * something: a missing row means "not configured yet", never "send nothing".
  */
 export function emailSettings<T>(row: T | null): T | typeof DEFAULT_SETTINGS {
 	return row ?? DEFAULT_SETTINGS;

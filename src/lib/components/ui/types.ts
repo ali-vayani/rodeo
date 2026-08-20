@@ -6,13 +6,9 @@
  */
 
 /**
- * One option in a `MultiCombobox`.
- *
- * `label` is optional because the common case is a vocabulary of raw stored values
- * that are already their own display text; `count` is optional because not every
- * caller has one, but when it exists it is load-bearing — it is the only thing that
- * tells an organizer that two near-identical universities are two real populations
- * and not a rendering glitch.
+ * One option in a `MultiCombobox`. `count` is optional but load-bearing where it
+ * exists: it is the only thing that tells an organizer two near-identical
+ * universities are two real populations.
  */
 export interface MultiComboboxOption {
 	value: string;

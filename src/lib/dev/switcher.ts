@@ -1,15 +1,10 @@
 /**
- * DEV ONLY — pure helpers for the account switcher widget.
+ * DEV ONLY. Pure helpers for the account switcher widget.
  *
- * Kept out of the `.svelte` file because `vite.config.ts` defines exactly one vitest
- * project (`server`, node, no DOM). A plain module is testable there; a component is
- * not, and a dev tool does not justify adding a browser project to the config. So
- * everything with a rule worth pinning down lives here and the component stays as
- * close to markup-and-handlers as it can.
- *
- * Enums are imported as *types* from the generated `enums` module, never the client
- * barrel — the barrel runs `fileURLToPath` at module load and 500s hydration when it
- * reaches the browser.
+ * Kept out of the `.svelte` file because vitest has one project here (node, no DOM), so
+ * a plain module is testable and a component is not. Enums are imported as types from
+ * the generated `enums` module: the client barrel runs `fileURLToPath` at module load
+ * and 500s hydration.
  */
 
 import type { Role, UserStatus, DecisionStatus } from '$lib/generated/prisma/enums';
@@ -36,8 +31,8 @@ export interface IndexedAccount extends DevAccount {
 }
 
 /**
- * Sort order for the panel. Staff first, descending by access, then the population
- * the app is actually about — which is also roughly how often you switch to each.
+ * Sort order for the panel. Staff first, descending by access, then the population the
+ * app is actually about.
  */
 const ROLE_RANK: Role[] = [
 	'ADMIN',
@@ -49,10 +44,6 @@ const ROLE_RANK: Role[] = [
 	'UNDECLARED'
 ] as Role[];
 
-// `primaryRole` used to live here, resolving a mixed-role account to the strongest
-// role it held. Roles are exclusive now, so an account *is* its role and the
-// grouping reads `account.role` directly. ROLE_RANK survives as sort order only.
-
 /** Trailing integer of a seeded address — `hacker42@yopmail.com` → 42. */
 function emailSequence(email: string): number {
 	const match = /(\d+)@/.exec(email);
@@ -60,11 +51,8 @@ function emailSequence(email: string): number {
 }
 
 /**
- * Attach the derived fields once, at fetch time.
- *
- * The haystack folds in the role name as well as name and email, which is the single
- * highest-leverage detail in the panel: typing `judge` filters to judges without
- * anyone touching a filter chip, and that is what you actually do most of the time.
+ * Attach the derived fields once, at fetch time. The haystack folds in the role name,
+ * so typing `judge` filters to judges without touching a filter chip.
  */
 export function indexAccounts(accounts: readonly DevAccount[]): IndexedAccount[] {
 	return accounts.map((account) => ({
@@ -90,11 +78,9 @@ export function sortAccounts(accounts: readonly IndexedAccount[]): IndexedAccoun
 // ---------------------------------------------------------------------------
 
 /**
- * The synthetic "no decision recorded" option, spelled the same way as
- * `NO_DECISION` in `$lib/admin/filters` so the two decision filters in this app
- * agree on what a null column is called. Not imported from there: that module
- * pulls the enums in as *values*, and this one is types-only by design (see the
- * header).
+ * The synthetic "no decision recorded" option, spelled like `NO_DECISION` in
+ * `$lib/admin/filters` so both decision filters agree on what a null column is called.
+ * Not imported from there, which pulls the enums in as values.
  */
 export const NO_DECISION = 'NONE';
 
@@ -102,9 +88,8 @@ export const NO_DECISION = 'NONE';
 export type DecisionFilterValue = DecisionStatus | typeof NO_DECISION;
 
 /**
- * Chip order for both decision groups: the outcomes first, in the order an
- * organizer thinks about them, then the two flavours of "not decided". Sorting
- * alphabetically would put Accepted next to Rejected and bury Waitlisted.
+ * Chip order for both decision groups: outcomes first, then the two flavours of "not
+ * decided". Alphabetical would put Accepted next to Rejected and bury Waitlisted.
  */
 const DECISION_RANK: DecisionFilterValue[] = [
 	'ACCEPTED',
@@ -122,11 +107,8 @@ export function decisionValue(account: DevAccount, field: DecisionField): Decisi
 	return account[field] ?? (NO_DECISION as DecisionFilterValue);
 }
 
-/**
- * The chips worth offering for one decision column — only values some row
- * actually has, for the same reason `roleOptions` is derived rather than listed:
- * a seed that created no rejections should not show a dead Rejected chip.
- */
+/** The chips worth offering for one decision column: only values some row has, so a
+    seed that created no rejections does not show a dead Rejected chip. */
 export function decisionOptions(
 	accounts: readonly DevAccount[],
 	field: DecisionField
@@ -146,16 +128,11 @@ export interface AccountFilters {
 }
 
 /**
- * Search AND role AND status AND each decision column; within a group, OR.
+ * Search AND role AND status AND each decision column; within a group, OR. An empty
+ * selection means "no filter", matching `buildRecipientParams`.
  *
- * An empty selection means "no filter" rather than "match nothing", matching how
- * `buildRecipientParams` reads its checkbox state — the two filter UIs in this app
- * should not disagree about what an untouched control means.
- *
- * The two decision columns are separate groups, never merged. They routinely
- * disagree — a released ACCEPTED sitting next to a held REJECTED is exactly the
- * fixture you open this widget to find — and a single "decision" filter would make
- * that state unreachable.
+ * The two decision columns are separate groups, never merged. A released ACCEPTED next
+ * to a held REJECTED is exactly the fixture you open this widget to find.
  */
 export function filterAccounts(
 	accounts: readonly IndexedAccount[],
@@ -203,11 +180,8 @@ export const POSITION_KEY = 'rodeo:dev-switcher:position';
 const POSITION_VERSION = 1;
 
 /**
- * Read the persisted position, or null to mean "use the default corner".
- *
- * Every failure funnels to null on purpose. This widget mounts on every page in the
- * app, so a hand-edited or half-written storage value must never be able to take the
- * page down with it — and `getItem` itself throws outright in Safari private mode.
+ * Read the persisted position, or null for the default corner. Every failure funnels to
+ * null: this widget mounts on every page, and `getItem` throws in Safari private mode.
  */
 export function loadPosition(storage: Pick<Storage, 'getItem'>): Position | null {
 	try {
@@ -237,15 +211,12 @@ export function savePosition(storage: Pick<Storage, 'setItem'>, pos: Position): 
 }
 
 /**
- * Keep the button on screen.
+ * Keep the button on screen. Called while dragging, when restoring a stored position,
+ * on resize and from the reset control, which is what makes "I dragged it off the edge"
+ * unreachable rather than merely unlikely.
  *
- * Called in four places — while dragging, when restoring a stored position, on window
- * resize, and from the panel's reset control — which is what makes "I dragged it off
- * the edge and now I can't get it back" unreachable rather than merely unlikely.
- *
- * `Math.max` on the upper bound handles a viewport narrower than the button itself:
- * without it the clamp inverts and pins the button to a negative coordinate, which is
- * the one way this function could cause the problem it exists to prevent.
+ * `Math.max` on the upper bound handles a viewport narrower than the button itself,
+ * where the clamp would otherwise invert and pin it to a negative coordinate.
  */
 export function clampPosition(pos: Position, viewport: Size, size: Size, margin: number): Position {
 	const maxX = Math.max(margin, viewport.w - size.w - margin);
@@ -261,13 +232,9 @@ export function clampPosition(pos: Position, viewport: Size, size: Size, margin:
 // ---------------------------------------------------------------------------
 
 /**
- * Why the filters are persisted at all.
- *
- * Switching account is a full `location.assign`, on purpose — see `switchTo`. That
- * remounts this component, so a search and four chip selections were thrown away by
- * the one action the panel exists to perform. Narrowing to "confirmed hackers", then
- * having to narrow again to reach the next one, is the whole friction. Storage
- * survives the navigation; component state cannot.
+ * Why the filters are persisted at all. Switching account is a full `location.assign`,
+ * which remounts this component, so a search and four chip selections were thrown away
+ * by the one action the panel exists to perform.
  */
 export const FILTERS_KEY = 'rodeo:dev-switcher:filters';
 
@@ -296,15 +263,12 @@ function stringList(value: unknown): string[] {
 }
 
 /**
- * Read the persisted filters, always returning a usable object.
+ * Read the persisted filters, always returning a usable object. Every failure funnels
+ * to the empty set, like `loadPosition`.
  *
- * Every failure funnels to the empty set for the same reason `loadPosition` funnels
- * to null: this component mounts on every page in dev, so a hand-edited or
- * half-written storage value must never be able to take the page down with it.
- *
- * Values are *not* validated against the current enums. A filter naming a role that
- * no longer exists simply matches nothing and is one click of Clear away, whereas
- * dropping the whole record because one chip went stale loses the other four.
+ * Values are not validated against the current enums: a filter naming a role that no
+ * longer exists matches nothing and is one click of Clear away, where dropping the
+ * whole record loses the other four.
  */
 export function loadFilters(storage: Pick<Storage, 'getItem'>): StoredFilters {
 	try {

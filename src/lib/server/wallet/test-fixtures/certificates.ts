@@ -1,13 +1,11 @@
 /**
  * Self-signed certificates used only by pem.test.ts.
  *
- * Generated once with OpenSSL and checked in rather than built at test time,
- * because Node has no X.509 *issuer* — `generateKeyPairSync` makes keys, not
- * certificates — and the alternatives were shelling out to `openssl` (absent on
- * some CI images) or pulling node-forge in as a devDependency to test five lines.
+ * Generated once with OpenSSL and checked in rather than built at test time, because
+ * Node has no X.509 issuer. The alternatives were shelling out to `openssl`, absent on
+ * some CI images, or pulling node-forge in as a devDependency to test five lines.
  *
- * The long-lived one expires in 2100 so this file does not become a time bomb.
- * Both have throwaway keys that were never written to disk.
+ * The long-lived one expires in 2100. Both have throwaway keys never written to disk.
  */
 
 export const EXPIRED_CERT_PEM = `-----BEGIN CERTIFICATE-----

@@ -69,9 +69,8 @@ describe('user.list', () => {
 	});
 
 	/**
-	 * What the Users page sends when only the role group narrows. The quiet groups
-	 * must contribute no clause at all — an emptied group that sent `[]` put
-	 * `uid: IMPOSSIBLE_NO_MATCH` into the AND and returned zero organizers.
+	 * What the Users page sends when only the role group narrows. The quiet groups must
+	 * contribute no clause at all: an emptied group sending `[]` returned zero organizers.
 	 */
 	it('filters by role alone when the other groups are cleared', async () => {
 		const caller = createTestCaller(db, adminUser);
@@ -110,9 +109,8 @@ describe('user.getById', () => {
 		);
 	});
 
-	// The answers only read correctly in the order they were asked, and two
-	// consumers sorting for themselves is two chances to disagree about what
-	// "the application" looks like. The ordering belongs to the payload.
+	// The answers only read correctly in the order they were asked, and two consumers
+	// sorting for themselves is two chances to disagree.
 	it('orders application responses by question.order', async () => {
 		const caller = createTestCaller(db, adminUser);
 		db.user.findUniqueOrThrow.mockResolvedValue({
@@ -159,9 +157,8 @@ describe('user.updateRole', () => {
 	});
 
 	it('writes one role, so the previous one cannot survive alongside it', async () => {
-		// The mutual-exclusivity guarantee at its only general-purpose write path: the
-		// update is a replacement, never an addition. A caller that sends ORGANIZER for
-		// a hacker must not leave HACKER behind in any form.
+		// The mutual-exclusivity guarantee at its only general-purpose write path: the update
+		// is a replacement, never an addition.
 		const caller = createTestCaller(db, adminUser);
 		db.user.findUniqueOrThrow.mockResolvedValue(hackerUser as never);
 		db.user.update.mockResolvedValue({ ...hackerUser, role: Role.ORGANIZER } as never);
@@ -427,10 +424,9 @@ describe('user.updateDecisions attribution', () => {
 	});
 
 	/**
-	 * The regression this guard exists for: /admin/users saves role, status and
-	 * decision in one Promise.all, so this mutation fires on every save with the
-	 * decision field echoed back untouched. Stamping unconditionally would let
-	 * someone editing a role quietly take credit for another admin's decision.
+	 * The regression this guard exists for: /admin/users saves role, status and decision
+	 * in one Promise.all, so this fires on every save with the decision echoed back
+	 * untouched. Stamping unconditionally would misattribute another admin's decision.
 	 */
 	it('leaves attribution alone when the decision is unchanged', async () => {
 		const data = await override(
@@ -462,9 +458,9 @@ describe('user.updateDecisions attribution', () => {
 	});
 
 	/**
-	 * Zod strips unknown keys rather than rejecting them, so a client that still
-	 * sends `activeDecision` — a stale bundle, a hand-rolled request — doesn't get
-	 * an error. What matters is that the field never reaches the database.
+	 * Zod strips unknown keys rather than rejecting them, so a stale client that still
+	 * sends `activeDecision` gets no error. What matters is that it never reaches the
+	 * database.
 	 */
 	it('drops activeDecision from the payload if a caller still sends it', async () => {
 		const caller = createTestCaller(db, adminUser);
@@ -488,9 +484,9 @@ describe('user.updateDecisions attribution', () => {
 });
 
 /**
- * Released applicants are closed to decision edits here. `release` clears the
- * pending decision and emails the outcome, and this endpoint will not edit one
- * back and forth behind an outcome the applicant has already been told.
+ * Released applicants are closed to decision edits here. `release` clears the pending
+ * decision and emails the outcome, and this endpoint will not edit one back and forth
+ * behind an outcome the applicant has already been told.
  */
 describe('user.updateDecisions once released', () => {
 	function releasedApplicant(pendingDecision: DecisionStatus | null) {
@@ -522,9 +518,8 @@ describe('user.updateDecisions once released', () => {
 
 	/**
 	 * The no-op case matters most: /admin/users fires this on every save. It still
-	 * refuses rather than passing through, which is why the page skips the call
-	 * entirely for a released applicant — otherwise editing someone's role would
-	 * fail on a decision nobody touched.
+	 * refuses rather than passing through, which is why the page skips the call entirely
+	 * for a released applicant.
 	 */
 	it('rejects even a no-op resend, which is why the page skips the call', async () => {
 		const caller = releasedApplicant(null);

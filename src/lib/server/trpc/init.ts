@@ -7,19 +7,11 @@ import type { Context } from './context';
 /**
  * Makes an input-validation failure readable.
  *
- * tRPC turns a thrown `ZodError` into a BAD_REQUEST whose `message` is the raw
- * issue array serialized as JSON, and every catch block in the UI renders
- * `error.message` directly. A hacker mistyping their teammate's address got a wall
- * of `[{"origin":"string","code":"invalid_format",...}]` where a sentence belonged.
- * Replacing the message with the issues' own text means a procedure that spells one
- * out — `.email('Enter a valid email address.')` — has it show up verbatim, with no
- * per-call-site unwrapping.
+ * tRPC turns a `ZodError` into a BAD_REQUEST whose `message` is the raw issue array as
+ * JSON, and every catch block in the UI renders `error.message` directly. Using the
+ * issues' own text means a procedure that spells one out has it show up verbatim.
  *
- * `data.zodError` keeps the field-keyed breakdown for any form that would rather
- * mark up individual inputs than print one line.
- *
- * Exported for its own test: `createCallerFactory` bypasses the formatter, so the
- * router tests can't reach it and it would otherwise be covered nowhere.
+ * Exported for its own test: `createCallerFactory` bypasses the formatter.
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- tRPC's shape type is internal and not exported.
 export function formatTRPCError({ shape, error }: { shape: any; error: { cause?: unknown } }) {
@@ -47,11 +39,8 @@ export const authedProcedure = t.procedure.use(({ ctx, next }) => {
 });
 
 /**
- * ADMIN only — the default for anything touching user data.
- *
- * Deliberately the stricter of the two: an endpoint an organizer should reach has to
- * opt in to `portalProcedure` below. A call site nobody thought about therefore denies
- * rather than leaks, which is the only safe direction for a permission split.
+ * ADMIN only — the default for anything touching user data. Deliberately the stricter
+ * of the two, so a call site nobody thought about denies rather than leaks.
  */
 export const adminProcedure = t.procedure.use(({ ctx, next }) => {
 	if (!ctx.user) throw new TRPCError({ code: 'UNAUTHORIZED' });

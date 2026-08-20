@@ -1,40 +1,21 @@
 /**
- * The check-in block that `{{hacker_qr_code}}` expands to.
+ * The check-in block that `{{hacker_qr_code}}` expands to: the hacker's QR code, the
+ * printed `RC-` code, and, when they are eligible, the two wallet buttons. One insert
+ * produces all of it, because a QR without the buttons is what this feature exists to
+ * stop people needing.
  *
- * One insert in the email editor produces the hacker's QR code, the printed
- * `RC-` code beneath it, and — when they are eligible — an Add to Apple Wallet
- * and an Add to Google Wallet button. Organizers place one variable; the three
- * pieces travel together, because a QR code without the wallet buttons is the
- * thing this feature exists to stop people needing.
+ * The QR is an inline `cid:` attachment. `data:` URIs are stripped by Gmail and
+ * Outlook, and a hosted `/qr/<uid>.png` would make the check-in credential fetchable by
+ * anyone holding the URL, with Gmail's proxy caching a copy. Resend carries it as
+ * `content_id`.
  *
- * ## The QR is an inline attachment, not a hosted image
+ * The wallet buttons are ordinary authenticated links that re-check eligibility, so a
+ * signed-out click bounces through `/login?redirectTo=...`. That bounce is the point: a
+ * forwarded copy carries no credential that could mint somebody else's pass.
  *
- * Email clients run no JavaScript, so the code has to arrive as an `<img>`. The
- * three ways to do that are not equivalent:
- *
- *   - `data:` URIs are stripped by Gmail and Outlook. Not an option.
- *   - A hosted `/qr/<uid>.png` endpoint works everywhere, but it makes the
- *     check-in credential fetchable by anyone holding the URL, and Gmail's image
- *     proxy would keep a cached copy on googleusercontent.com.
- *   - A `cid:` attachment travels inside the message. Nothing is hosted, no
- *     endpoint exists to be found, and no proxy caches it.
- *
- * The third, therefore — Resend carries it as `content_id`.
- *
- * ## The wallet buttons are ordinary authenticated links
- *
- * They point at `/hacker/account/wallet/{apple,google}`, which require a session
- * and re-check eligibility. Someone who clicks from a signed-out browser lands on
- * `/login?redirectTo=…` and arrives at their pass afterwards. That bounce is the
- * point: it means the email carries no credential that would let a forwarded copy
- * mint somebody else's pass.
- *
- * ## Eligibility mirrors the account page exactly
- *
- * Not confirmed → no block at all, and the rest of the email sends normally.
- * Confirmed but the RSVP deadline hasn't passed → the QR, no wallet buttons —
- * matching `showEventContent` and the wallet gate respectively. A hacker should
- * never receive an email showing them something the site would not.
+ * Eligibility mirrors the account page exactly. Not confirmed means no block at all and
+ * the rest of the email sends normally; confirmed before the RSVP deadline means the QR
+ * without wallet buttons.
  */
 
 import QRCode from 'qrcode';
@@ -76,11 +57,9 @@ function escapeHtml(value: string): string {
 }
 
 /**
- * A stable but per-recipient Content-ID.
- *
- * Per-recipient because a bulk send builds one message per person and a shared id
- * would risk a client pairing the wrong image with the wrong body. The `@rodeo`
- * suffix keeps it a well-formed addr-spec, which older clients are fussy about.
+ * A stable but per-recipient Content-ID. Per-recipient because a bulk send builds one
+ * message per person and a shared id risks a client pairing the wrong image with the
+ * wrong body. The `@rodeo` suffix keeps it a well-formed addr-spec.
  */
 function contentId(uid: string): string {
 	return `checkin-${uid}@rodeo`;
@@ -123,9 +102,8 @@ export async function buildCheckInPassBlock(
 		);
 	}
 
-	// Tables and inline styles, not flexbox and classes: Outlook renders on Word's
-	// engine, which supports neither. `role="presentation"` keeps screen readers
-	// from announcing the layout scaffolding as a data table.
+	// Tables and inline styles, not flexbox and classes: Outlook renders on Word's engine,
+	// which supports neither. `role="presentation"` keeps the scaffolding unannounced.
 	const html = `
 <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:24px auto;border-collapse:collapse;">
 	<tr>
@@ -154,19 +132,14 @@ export async function buildCheckInPassBlock(
 }
 
 /**
- * Everything one recipient's message needs: their variable values and any
- * attachment those values reference.
+ * Everything one recipient's message needs: their variable values and any attachment
+ * those values reference. A single call, so a caller cannot take the vars without the
+ * attachment and mail a broken image.
  *
- * A single call so the two cannot drift — `{{hacker_qr_code}}` expands to markup
- * containing `cid:…`, and a caller that took the vars without the attachment
- * would mail a broken image. Every send path goes through here.
- *
- * Takes the raw Settings row, nullable, and splits it deliberately: the template
- * dates go through `emailSettings`, whose defaults keep an unconfigured install
- * sending, while wallet gating reads the row as-is — `DEFAULT_SETTINGS.RSVPDeadline`
- * is process boot time, which reads as "deadline passed" and would put wallet
- * buttons in every confirmed hacker's inbox. Same rule `$lib/server/settings`
- * documents: email copy has a safe default; a deadline does not.
+ * Takes the raw Settings row and splits it deliberately: template dates go through
+ * `emailSettings`, whose defaults keep an unconfigured install sending, while wallet
+ * gating reads the row as-is, since `DEFAULT_SETTINGS.RSVPDeadline` is process boot
+ * time and would put wallet buttons in every confirmed hacker's inbox.
  */
 export async function buildEmailPersonalization(
 	user: CheckInPassSubject,

@@ -4,14 +4,11 @@
 	/**
 	 * Ranked magnitude — universities, years, anything that is one series of counts.
 	 *
-	 * **One hue for every bar.** Shading each bar darker-where-bigger is the
-	 * classic mistake here: it double-encodes length as colour, spends the only
-	 * free channel restating what the bar already says, and on nominal categories
-	 * (schools have no natural order) it implies a ranking the data doesn't carry.
+	 * One hue for every bar. Shading each bar darker-where-bigger double-encodes length as
+	 * colour, and on nominal categories it implies a ranking the data does not carry.
 	 *
-	 * `ordered` opts into keeping the caller's order instead of sorting by count —
-	 * the right choice for an ordinal field like Year, where Freshman → Senior is
-	 * the sequence the reader expects and re-sorting by popularity makes the shape
+	 * `ordered` opts into keeping the caller's order instead of sorting by count, which is
+	 * right for an ordinal field like Year where re-sorting by popularity makes the shape
 	 * of the cohort unreadable.
 	 */
 	let {
@@ -31,9 +28,9 @@
 		/** Scale bars against this instead of the largest row. */
 		max?: number;
 		/**
-		 * Widen the label column. University names run long — "University of Illinois
-		 * Urbana-Champaign" truncates to "University of Illinois…" at the default
-		 * width, which is indistinguishable from "University of Illinois Chicago".
+		 * Widen the label column. "University of Illinois Urbana-Champaign" truncates to
+		 * "University of Illinois..." at the default width, which is indistinguishable
+		 * from "University of Illinois Chicago".
 		 */
 		wideLabels?: boolean;
 	} = $props();

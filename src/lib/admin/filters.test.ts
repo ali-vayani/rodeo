@@ -37,10 +37,9 @@ const LINKED_KEYS = ['names', 'universities', 'years'] as const;
 
 describe('facetParams — the omitted-vs-empty convention', () => {
 	/**
-	 * The regression this whole file exists for. `$lib/server/recipients` reads an
-	 * absent key as "no filter" and `[]` as "match nobody"; every facet control
-	 * starts empty, so sending `[]` for an untouched one would take the Users page to
-	 * zero rows and the custom-email count to zero recipients.
+	 * The regression this whole file exists for. `$lib/server/recipients` reads an absent
+	 * key as "no filter" and `[]` as "match nobody", and every facet control starts empty,
+	 * so sending `[]` for an untouched one would take the Users page to zero rows.
 	 */
 	it('omits a facet with nothing selected rather than sending an empty array', () => {
 		const params = facetParams({});
@@ -225,9 +224,8 @@ describe('buildRecipientParams — checkbox groups', () => {
 	});
 
 	/**
-	 * A cleared group filters nothing. It must omit its keys rather than send `[]`,
-	 * which `$lib/server/recipients` reads as match-nobody — that is what made clicking
-	 * `clear` under Decision empty the Users table.
+	 * A cleared group filters nothing. It must omit its keys rather than send `[]`, which
+	 * `$lib/server/recipients` reads as match-nobody.
 	 */
 	it('omits the decision keys when every box is unchecked', () => {
 		const [roles, statuses] = everything();
@@ -237,9 +235,8 @@ describe('buildRecipientParams — checkbox groups', () => {
 	});
 
 	/**
-	 * The reported bug. Clearing all three groups and ticking one role returned zero
-	 * rows: the emptied decision group contributed `uid: IMPOSSIBLE_NO_MATCH`, which
-	 * ANDed with the role clause and matched nobody.
+	 * The reported bug. Clearing all three groups and ticking one role returned zero rows:
+	 * the emptied decision group contributed `uid: IMPOSSIBLE_NO_MATCH`.
 	 */
 	it('selects a role after every group has been cleared', () => {
 		const params = buildRecipientParams(

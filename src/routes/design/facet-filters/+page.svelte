@@ -17,8 +17,7 @@
 	 * Specimens for the application-answer filter controls, rendered from the real
 	 * components against a fixed copy of the shape the server sends.
 	 *
-	 * Counts and spellings are taken from the seeded data, near-duplicates included:
-	 * the two spellings of UT Austin are the whole reason counts are on screen.
+	 * Counts and spellings are taken from the seeded data, near-duplicates included.
 	 */
 	const UNIVERSITIES = [
 		{ value: 'The University of Texas at Austin', count: 408 },
@@ -95,13 +94,11 @@
 
 	/**
 	 * The state facet. Derived from each applicant's university rather than asked, and
-	 * labelled from the home state in Settings — which is why the rows read "Texas" and
-	 * "Outside Texas" rather than "Home" and "Away".
+	 * labelled from the home state in Settings.
 	 *
-	 * Two rows and no more, deliberately: the question an organizer asks of an applicant
-	 * pool is "local or travelling", and a row per state buried that under a list. The
-	 * international applicants are inside "Outside Texas" rather than beside it, so these
-	 * two plus `noneCount` partition the table.
+	 * Two rows and no more, deliberately: the question an organizer asks is "local or
+	 * travelling", and a row per state buried that. International applicants are inside
+	 * "Outside Texas", so these two plus `noneCount` partition the table.
 	 */
 	const STATE_FACET: Facet = {
 		key: STATE_FACET_KEY,

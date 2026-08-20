@@ -53,7 +53,7 @@
 	let decisionFilter = $state(allChecked(DECISION_OPTIONS));
 	// The application-answer facets run the other way round: nothing selected is the
 	// "everyone" default, and `buildRecipientParams` omits an untouched facet's key
-	// rather than sending `[]` — which the send path would read as "nobody".
+	// rather than sending `[]`, which the send path would read as "nobody".
 	let facetSelection = $state<FacetState>({});
 	let emailText = $state('');
 
@@ -123,10 +123,9 @@
 	/**
 	 * Exactly what `sendCustom` will substitute for `previewTarget`.
 	 *
-	 * The dates come pre-rendered from the server: formatting them here would use the
-	 * browser's locale and timezone. `eventVars` falls back to the defaults rather than
-	 * arriving null, matching the send — and the blank-name fallback is applied here for
-	 * the same reason, so a nameless recipient previews as the salutation they get.
+	 * The dates come pre-rendered from the server, since formatting them here would use
+	 * the browser's locale and timezone. The blank-name fallback is applied here too, so
+	 * a nameless recipient previews as the salutation they actually get.
 	 */
 	let previewVars = $derived(
 		previewTarget === null
@@ -134,11 +133,9 @@
 			: {
 					name: previewTarget.name?.trim() || NAME_FALLBACK,
 					...data.eventVars,
-					// The QR block is per-recipient, so the send substitutes it server-side.
-					// Mirror its gate here: confirmed/checked-in recipients preview the
-					// placeholder, everyone else previews the nothing they will receive —
-					// never the literal {{hacker_qr_code}}, which would (wrongly) read as
-					// a variable about to send as-is.
+					// The QR block is per-recipient, so the send substitutes it server-side. Mirror
+					// its gate here: confirmed recipients preview the placeholder, everyone else
+					// previews the nothing they will receive, never the literal {{hacker_qr_code}}.
 					hacker_qr_code:
 						previewTarget.status === UserStatus.CONFIRMED ||
 						previewTarget.status === UserStatus.CHECKED_IN
@@ -209,9 +206,9 @@
 				subject,
 				body,
 				filters: filters as never,
-				// Bind the send to the number just shown in the confirm step; the server
-				// refuses if the set drifted, so a stale filter can't silently mail everyone.
-				// External recipients are inside that number, not alongside it.
+				// Bind the send to the number just shown in the confirm step. The server refuses if
+				// the set drifted, so a stale filter cannot silently mail everyone. External
+				// recipients are inside that number, not alongside it.
 				expectedCount: count,
 				allowExternal: sendExternal
 			});

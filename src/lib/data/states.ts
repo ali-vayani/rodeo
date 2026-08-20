@@ -1,13 +1,11 @@
 /**
  * US states and territories, as the `region` codes `universities.json` carries.
  *
- * Hand-written rather than generated: it is 56 rows that have not changed since 1959,
- * and the university dataset's generator has no state table of its own to derive it
- * from. Small enough to be a static import anywhere — unlike `universities.json`,
- * which is 650 KB behind a lazy `import()`.
+ * Hand-written rather than generated: 56 rows that have not changed since 1959, and the
+ * university dataset's generator has no state table to derive them from. Small enough
+ * to be a static import anywhere, unlike `universities.json`.
  *
- * Isomorphic: the Settings picker reads it in the browser, the state facet reads it on
- * the server. Keep it free of Prisma, node builtins and `$env`.
+ * Isomorphic, so keep it free of Prisma, node builtins and `$env`.
  */
 export const US_STATES: Record<string, string> = {
 	AL: 'Alabama',

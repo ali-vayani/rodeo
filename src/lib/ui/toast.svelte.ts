@@ -1,15 +1,13 @@
 /**
  * App-wide toast store.
  *
- * Eight pages each carried their own `showToast` + timer + `{#if toast}` block.
- * Six were byte-identical at 3200ms; application-editor had drifted to 3500ms
- * and blacklist to 3600ms, so the same feature behaved three different ways.
+ * Eight pages each carried their own `showToast` + timer + `{#if toast}` block. Six
+ * were byte-identical at 3200ms; application-editor had drifted to 3500ms and
+ * blacklist to 3600ms, so the same feature behaved three different ways.
  *
  * `ToastHost` renders this once from the root layout. Callers just do:
  *
- *     import { toast } from '$lib/ui/toast.svelte';
  *     toast.success('Event added');
- *     toast.error(message);
  */
 
 import type { Tone } from './tone';
@@ -25,8 +23,7 @@ export interface ToastItem {
 	id: number;
 	message: string;
 	tone: Extract<Tone, 'success' | 'danger'>;
-	/** Its own expiry handle. Kept on the item so there is no side table to
-	    keep in sync when one is evicted early. */
+	/** Its own expiry handle, kept on the item so there is no side table to sync. */
 	timer?: ReturnType<typeof setTimeout>;
 }
 
@@ -68,9 +65,8 @@ export const toast = {
 	error: (message: string) => push(message, 'danger'),
 
 	/**
-	 * Report a caught error. Falls back to `fallback` when the thrown value
-	 * has no usable message, which is what every page's local `errorMessage`
-	 * helper was doing by hand.
+	 * Report a caught error. Falls back to `fallback` when the thrown value has no
+	 * usable message, which is what every page's local helper was doing by hand.
 	 */
 	fromError(error: unknown, fallback: string) {
 		return push(errorMessage(error, fallback), 'danger');

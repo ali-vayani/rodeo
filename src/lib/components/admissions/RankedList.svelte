@@ -61,8 +61,8 @@
 	/** The applicant whose individual release is being confirmed. */
 	let releaseTarget = $state<(typeof rows)[number] | null>(null);
 
-	// Rank is assigned here rather than read off the row because it is a property
-	// of position in this list, not of the applicant — and the table has no index.
+	// Rank is assigned here rather than read off the row because it is a property of
+	// position in this list, not of the applicant.
 	let rows = $derived(applicants.map((applicant, i) => ({ ...applicant, rank: i + 1 })));
 	type Row = (typeof rows)[number];
 
@@ -86,11 +86,10 @@
 	}
 
 	/**
-	 * Select — never decide — the top N.
+	 * Select, never decide, the top N.
 	 *
-	 * The cutoff is the one action here that touches an unbounded number of people
-	 * from a single keystroke, so it lands the operator in front of a selection
-	 * they can see and adjust rather than firing the decision itself.
+	 * The cutoff is the one action here that touches an unbounded number of people from a
+	 * single keystroke, so it lands the operator in front of a selection they can adjust.
 	 */
 	function selectTop() {
 		if (topN === undefined || !Number.isInteger(topN) || topN < 1) return;
@@ -187,8 +186,8 @@
 </div>
 
 <!--
-	The unscored are invisible here by construction — there is no rank to put them
-	at. Saying so is what keeps "I worked the whole list" from being wrong.
+	The unscored are invisible here by construction, since there is no rank to put them
+	at. Saying so keeps "I worked the whole list" from being wrong.
 -->
 {#if unscoredCount > 0}
 	<div

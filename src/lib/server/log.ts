@@ -1,23 +1,18 @@
 /**
- * Writing to the audit trail.
+ * Writing to the audit trail. Every admin mutation ends with a `logAction` call.
  *
- * Every admin mutation ends with a `logAction` call. The rule for a good entry:
- *
- *   - `action` is the stable slug the logs page filters on (see `$lib/log/actions`).
- *   - `summary` is a sentence **starting with the verb** — the dashboard feed and
- *     the logs table both render it as "{actor} {summary}", so "Accepted Sarah
- *     Chen" reads correctly where "Ali accepted Sarah Chen" would stutter.
- *   - `target` names the row acted on, so history survives that row's deletion.
- *   - `metadata` is the before/after detail nobody wants in the sentence.
+ * `action` is the stable slug the logs page filters on. `summary` is a sentence
+ * starting with the verb, since both readers render it as "{actor} {summary}".
+ * `target` names the row acted on, so history survives that row's deletion.
+ * `metadata` is the before/after detail nobody wants in the sentence.
  */
 
 import type { Prisma, PrismaClient } from '$lib/generated/prisma/client';
 import type { LogAction } from '$lib/log/actions';
 
 /**
- * Structural rather than `PrismaClient`, so a caller inside `$transaction` can
- * pass the transaction client and have the audit row roll back with the change
- * it describes.
+ * Structural rather than `PrismaClient`, so a caller inside `$transaction` can pass
+ * the transaction client and have the audit row roll back with the change.
  */
 export interface LogWriter {
 	log: PrismaClient['log'];
@@ -47,11 +42,9 @@ export interface LogInput {
 /**
  * Append one entry to the audit trail.
  *
- * Failures are swallowed with a stderr warning rather than thrown. An audit write
- * is a side effect of the real work: if the Log insert fails after decisions have
- * already been released and emails sent, surfacing that as a failed mutation would
- * invite the admin to retry a batch that has already gone out. A missing row is the
- * lesser harm, and the stderr line is what makes it findable.
+ * Failures warn to stderr rather than throwing: if the insert fails after decisions
+ * have been released and emails sent, a failed mutation would invite a retry of a batch
+ * that already went out.
  */
 export async function logAction(ctx: LogContext, input: LogInput): Promise<void> {
 	try {

@@ -15,11 +15,9 @@ import { formatDateLong } from '$lib/format';
 /**
  * Report a lifecycle send that failed, without failing the mutation behind it.
  *
- * These sends must not throw into the caller: an RSVP that reports failure because
- * Resend was briefly down would tell a hacker their spot wasn't held when the row
- * had already committed. But the rejection was previously dropped on the floor
- * entirely, which is how every lifecycle email could stop for two real applicants
- * with no error, no log, and nothing in the Resend dashboard to find.
+ * These sends must not throw into the caller — an RSVP that reported failure because
+ * Resend was briefly down would tell a hacker their spot wasn't held. Logged rather
+ * than dropped, so a silent outage is findable.
  */
 function reportSendFailure(kind: string, to: string) {
 	return (error: unknown) => {
@@ -28,10 +26,8 @@ function reportSendFailure(kind: string, to: string) {
 }
 
 /**
- * The three columns that gate everything in this router.
- *
- * Structurally typed so a Prisma `Settings` row passes without this file caring about
- * the other sixteen columns, and so the guards below can be exercised on a literal.
+ * The three columns that gate everything in this router. Structurally typed so a
+ * Prisma `Settings` row passes and the guards can be exercised on a literal.
  */
 type ApplicationWindow = {
 	applicationOpen: Date;
@@ -40,19 +36,14 @@ type ApplicationWindow = {
 };
 
 /**
- * Why a missing Settings row opens the gate instead of closing it.
+ * A missing Settings row opens the gate rather than closing it.
  *
- * `seed.ts` creates no Settings row, and `DEFAULT_SETTINGS` in the settings router is
- * three `new Date()` values evaluated at import — so a fresh install has no window, and
- * anything it could be made to stand in for is already expired by the time the process
- * has been up a second. Reading "unconfigured" as "closed" would therefore lock every
- * applicant out of an event nobody has set up yet, and the first person to find out
- * would be an applicant, not an admin. An absent row means no window is enforced; one
- * save of /admin/settings turns enforcement on.
+ * A fresh install has no window, so reading "unconfigured" as "closed" would lock
+ * applicants out of an event nobody has set up yet. One save of /admin/settings turns
+ * enforcement on.
  *
- * These guards are applicant-facing only. Admins reach status through
- * `admissions.setDecision`, which is deliberately unaffected — closing applications must
- * not also stop the organizers from working through the ones already in.
+ * Applicant-facing only — `admissions.setDecision` is deliberately unaffected, so
+ * closing applications doesn't also stop organizers working through the ones already in.
  */
 function assertWithinApplicationWindow(settings: ApplicationWindow | null) {
 	if (!settings) return;
@@ -75,15 +66,10 @@ function assertWithinApplicationWindow(settings: ApplicationWindow | null) {
 /**
  * Guards `rsvp` — and deliberately not `rsvpDecline`. Same missing-row rule as above.
  *
- * The RSVP deadline exists so organizers can freeze the confirmed headcount they buy
- * food, badges, and floor space against. A late *confirmation* grows that number after
- * it was frozen, which is exactly what has to be stopped. A late *decline* only shrinks
- * it: refusing one leaves a spot held by someone who has just told us they aren't
- * coming, which is strictly worse for the event than taking the information. So a
- * decline is accepted at any time.
- *
- * The asymmetry is one-way on purpose — a hacker who declines late cannot re-confirm,
- * because re-confirming is the post-deadline growth this guard rejects.
+ * The deadline exists to freeze the confirmed headcount. A late confirmation grows
+ * that number after it was frozen; a late decline only shrinks it, and refusing one
+ * would hold a spot for someone who has just said they aren't coming. The asymmetry
+ * is one-way: a hacker who declines late cannot re-confirm.
  */
 function assertBeforeRSVPDeadline(settings: ApplicationWindow | null) {
 	if (!settings) return;
@@ -111,11 +97,10 @@ type AnswerableQuestion = {
 /**
  * Validate a non-empty answer against its question definition.
  *
- * The client renders these constraints, but a direct tRPC call bypasses the browser
- * entirely — so `type`, `options`, `min`/`max`, and `regex` have to be enforced here
- * too or a reviewer ends up looking at a NUMBER field holding "potato" or a dropdown
- * answer that was never one of the offered options. Empty values are handled by the
- * caller (a blank draft field is allowed; a blank *required* answer is caught at submit).
+ * The client renders these constraints, but a direct tRPC call bypasses the browser —
+ * so `type`, `options`, `min`/`max` and `regex` are enforced here too. Empty values are
+ * handled by the caller: a blank draft field is allowed, a blank required answer is
+ * caught at submit.
  */
 function assertAnswerValid(question: AnswerableQuestion, value: string) {
 	if (question.type === QuestionType.NUMBER) {
@@ -161,9 +146,7 @@ function assertAnswerValid(question: AnswerableQuestion, value: string) {
 }
 
 export const applicationRouter = router({
-	/**
-	 * Get all responses for the current user
-	 */
+	/** Get all responses for the current user. */
 	getMyResponses: authedProcedure.query(async ({ ctx }) => {
 		return ctx.prisma.applicationResponse.findMany({
 			where: { userId: ctx.user.uid },
@@ -172,13 +155,11 @@ export const applicationRouter = router({
 	}),
 
 	/**
-	 * Save a response for a question
+	 * Save a response for a question.
 	 *
 	 * Writable only while the application is still CREATED, and only inside the
-	 * application window. Once it is submitted, the answers are the thing an admin
-	 * reviews and decides on — leaving this open lets the text behind an accepted (or
-	 * rejected) application change out from under the decision, and an upsert here
-	 * writes no audit entry, so nothing downstream would ever show that it moved.
+	 * application window. Once submitted, the answers are what an admin decided on —
+	 * and an upsert here writes no audit entry, so a later edit would be invisible.
 	 *
 	 * @param questionId - the id of the question
 	 * @param value - the value of the response
@@ -193,9 +174,8 @@ export const applicationRouter = router({
 			})
 		)
 		.mutation(async ({ ctx, input }) => {
-			// This runs on every field blur, so the two gate reads go out together rather
-			// than in series. `ctx.user` is not trusted for status: it was loaded when the
-			// request arrived, and a decision may have landed since.
+			// This runs on every field blur, so the two gate reads go out together. `ctx.user`
+			// is not trusted for status: a decision may have landed since the request arrived.
 			const [user, settings] = await Promise.all([
 				ctx.prisma.user.findUniqueOrThrow({
 					where: { uid: ctx.user.uid },
@@ -246,9 +226,7 @@ export const applicationRouter = router({
 			}
 
 			// Write through to the user record for linked fields. The allowlist lives in
-			// `$lib/linkedFields` because the admin filter panels derive their vocabulary
-			// from the same three columns — an inline copy here is what stopped anything
-			// else from reusing it.
+			// `$lib/linkedFields` because the admin filter panels share the same three columns.
 			if (isLinkedField(question.linkedField)) {
 				await ctx.prisma.user.update({
 					where: { uid: ctx.user.uid },
@@ -272,9 +250,7 @@ export const applicationRouter = router({
 			});
 		}),
 
-	/**
-	 * RSVP — confirm attendance after being accepted
-	 */
+	/** RSVP — confirm attendance after being accepted. */
 	rsvp: authedProcedure.mutation(async ({ ctx }) => {
 		const user = await ctx.prisma.user.findUniqueOrThrow({
 			where: { uid: ctx.user.uid }
@@ -296,9 +272,8 @@ export const applicationRouter = router({
 			throw new TRPCError({ code: 'BAD_REQUEST', message: 'You are already checked in.' });
 		}
 
-		// Declining releases the spot permanently — the confirm dialog says as much. A
-		// DECLINED user re-confirming is exactly the post-release headcount growth the
-		// deadline exists to prevent, so it is refused before *and* after the deadline.
+		// Declining releases the spot permanently. A DECLINED user re-confirming is the
+		// post-release headcount growth the deadline exists to prevent, so it is always refused.
 		if (user.status === UserStatus.DECLINED) {
 			throw new TRPCError({
 				code: 'BAD_REQUEST',
@@ -320,9 +295,8 @@ export const applicationRouter = router({
 		// A template an admin has deliberately blanked still opts out.
 		const mail = emailSettings(settings);
 		if (mail.confirmTemplate) {
-			// The RSVP-confirmation email is exactly where a hacker wants their pass, so
-			// this send carries the check-in block. Personalization takes the raw row —
-			// the wallet gate must fail closed on an unconfigured install.
+			// The RSVP confirmation is where a hacker wants their pass, so this send carries the
+			// check-in block. Personalization takes the raw row so the wallet gate fails closed.
 			const { vars, attachments } = await buildEmailPersonalization(updated, settings);
 			await sendTemplatedEmail(
 				user.email,
@@ -336,10 +310,9 @@ export const applicationRouter = router({
 	}),
 
 	/**
-	 * Decline RSVP — release spot after being accepted
+	 * Decline RSVP — release spot after being accepted.
 	 *
-	 * Accepted after the RSVP deadline too; see `assertBeforeRSVPDeadline` for why the
-	 * two halves of the RSVP are not gated the same way.
+	 * Accepted after the RSVP deadline too; see `assertBeforeRSVPDeadline` for why.
 	 */
 	rsvpDecline: authedProcedure.mutation(async ({ ctx }) => {
 		const user = await ctx.prisma.user.findUniqueOrThrow({
@@ -357,9 +330,8 @@ export const applicationRouter = router({
 			throw new TRPCError({ code: 'BAD_REQUEST', message: 'You have already declined.' });
 		}
 
-		// A checked-in attendee tapping decline would erase their check-in with no audit
-		// trail and, past the RSVP deadline, could never re-confirm. They are physically
-		// here — refuse the downgrade.
+		// A checked-in attendee tapping decline would erase their check-in and, past the
+		// deadline, could never re-confirm. They are physically here — refuse the downgrade.
 		if (user.status === UserStatus.CHECKED_IN) {
 			throw new TRPCError({
 				code: 'BAD_REQUEST',
@@ -388,21 +360,18 @@ export const applicationRouter = router({
 	}),
 
 	/**
-	 * Submit the application
+	 * Submit the application.
 	 *
-	 * `role` is the audience the applicant filled the form out as (Hacker/Judge/Mentor/
-	 * Volunteer). The page renders questions for the selected role, so submission has to
-	 * persist it — otherwise a self-registered account stays `[HACKER]` and `submit`
-	 * validates the wrong required set, dead-ending anyone who applied as anything else.
+	 * `role` is the audience the applicant filled the form out as. The page renders
+	 * questions for the selected role, so submission has to persist it — otherwise a
+	 * self-registered account stays `[HACKER]` and `submit` validates the wrong required set.
 	 */
 	submit: authedProcedure
 		.input(z.object({ role: z.nativeEnum(Role).optional() }).optional())
 		.mutation(async ({ ctx, input }) => {
 			// Only an applicant role may be submitted as — never staff. A bad or staff role
-			// is ignored rather than rejected, falling back to the user's stored role.
-			// This is the one place an account's role changes without an admin, which is
-			// why the staff roles are unreachable through it: submitting `role: "ADMIN"`
-			// must not be a privilege escalation.
+			// falls back to the user's stored role rather than being rejected. This is the one
+			// place a role changes without an admin, so `role: "ADMIN"` must be unreachable.
 			const submittedRole =
 				input?.role && APPLICANT_ROLES.includes(input.role) ? input.role : undefined;
 
@@ -420,9 +389,8 @@ export const applicationRouter = router({
 
 			assertWithinApplicationWindow(settings);
 
-			// The role the applicant is submitting as decides which required questions apply
-			// and is written onto the user below. Falls back to their stored role when the
-			// client sends nothing, so older callers keep working.
+			// Decides which required questions apply, and is written onto the user below.
+			// Falls back to their stored role so older callers keep working.
 			const applicationRole = submittedRole ?? user.role;
 
 			// Validate all required questions are answered
@@ -437,9 +405,8 @@ export const applicationRouter = router({
 				where: { userId: ctx.user.uid }
 			});
 
-			// A response row with a blank value is not an answer. Building the set from row
-			// existence alone let an applicant satisfy every required question by saving ""
-			// (autosave fires on each keystroke, including the one that clears the field).
+			// A response row with a blank value is not an answer: building the set from row
+			// existence let an applicant satisfy every required question by saving "".
 			const answeredIds = new Set(
 				responses.filter((r) => r.value.trim() !== '').map((r) => r.questionId)
 			);
@@ -452,21 +419,17 @@ export const applicationRouter = router({
 				});
 			}
 
-			// Blacklist check.
-			//
-			// Only an exact email match auto-rejects. A blacklisted *name* is a heuristic --
-			// `admissions.list` matches names tolerantly enough to catch misspellings -- so it is
-			// surfaced as a flag for a human reviewer there and deliberately decides nothing here.
-			// A typo must never cost someone their application.
+			// Only an exact email match auto-rejects. A blacklisted *name* is a heuristic —
+			// surfaced as a flag for a human reviewer in `admissions.list` — because a typo must
+			// never cost someone their application.
 			const blacklistedEmail = await ctx.prisma.blacklist.findUnique({
 				where: { email: normalizeEmail(user.email) },
 				select: { id: true }
 			});
 
 			// Compare-and-swap on status: the guard above read CREATED, but two rapid submits
-			// would both pass it and both send the confirmation email. Gating the write on
-			// `status: CREATED` means only the first transitions the row; the loser sees
-			// count 0 and is told it's already in, mailing nothing twice.
+			// would both pass it and both send the confirmation email. Only the first transitions
+			// the row; the loser sees count 0 and is told it's already in.
 			const applied = await ctx.prisma.user.updateMany({
 				where: { uid: ctx.user.uid, status: UserStatus.CREATED },
 				data: {
@@ -487,9 +450,8 @@ export const applicationRouter = router({
 				where: { uid: ctx.user.uid }
 			});
 
-			// Send confirmation email. Defaults when no Settings row exists — the window
-			// guards above deliberately read that as "unconfigured, allow through", and
-			// an application that is allowed through still gets acknowledged.
+			// Defaults when no Settings row exists — the window guards read that as
+			// "unconfigured, allow through", and an application allowed through gets acknowledged.
 			const mail = emailSettings(settings);
 			if (mail.submitTemplate) {
 				const { vars, attachments } = await buildEmailPersonalization(updatedUser, settings);

@@ -1,26 +1,18 @@
 /**
  * Wallet pass configuration, and why none of it lives in `env.ts`.
  *
- * `validateEnv()` throws at module scope in `hooks.server.ts`, so anything it
- * requires is a condition for the site existing at all. Its three existing
- * demands — a database, an auth provider, a mail transport — earn that. Wallet
- * credentials do not: a missing Apple certificate should take away one button,
- * not the hacker portal, and taking away the hacker portal takes away the
- * application form with it. That trade is bad on the merits and worse in
- * practice, because Apple pass certificates expire annually — wiring them into
- * `validateEnv()` would mean the whole site refuses to boot on renewal day.
+ * `validateEnv()` throws at module scope, so anything it requires is a condition for
+ * the site existing at all. Wallet credentials do not earn that: a missing Apple
+ * certificate should take away one button, not the hacker portal and the application
+ * form with it. Apple pass certificates also expire annually, so wiring them into
+ * `validateEnv()` would mean the site refuses to boot on renewal day.
  *
- * So every accessor here answers "is this configured?" with a boolean or a
- * `null`, never an exception, and the feature simply isn't offered when the
- * answer is no. The one thing that does get shouted about is *partial*
- * configuration (see `warnIncompleteWalletConfig`): fully absent is a deliberate
- * off switch, half-present is a typo, and a typo that silently disables a feature
- * is worse than one that complains.
+ * So every accessor here answers "is this configured?" with a boolean or a `null`,
+ * never an exception. The one thing that does get shouted about is partial
+ * configuration: fully absent is a deliberate off switch, half-present is a typo.
  *
- * Values are read lazily inside each function rather than captured at module
- * load — `$env/dynamic/private` is populated at runtime, and a frozen value would
- * be wrong under `vite preview` and in tests that set the variable themselves.
- * Same reasoning as `deployEnv()`.
+ * Values are read lazily inside each function rather than captured at module load,
+ * because `$env/dynamic/private` is populated at runtime.
  */
 
 import { env } from '$env/dynamic/private';
@@ -71,10 +63,9 @@ export function appleWalletCredentials(): AppleWalletCredentials | null {
 /**
  * Whether Apple passes can actually be issued right now.
  *
- * Deliberately stricter than "the variables are set": an expired signer
- * certificate produces a `.pkpass` that builds, downloads, and is then refused by
- * iOS with no diagnostic anywhere. Hiding the button is a far better outcome than
- * handing out passes that don't work, so expiry is part of "configured".
+ * Deliberately stricter than "the variables are set". An expired signer certificate
+ * produces a `.pkpass` that builds, downloads, and is then refused by iOS with no
+ * diagnostic anywhere, so expiry is part of "configured".
  */
 export function appleWalletConfigured(now: Date = new Date()): boolean {
 	let credentials: AppleWalletCredentials | null;
@@ -93,11 +84,9 @@ export function appleWalletConfigured(now: Date = new Date()): boolean {
 /**
  * Google credentials, or `null` if they aren't all present.
  *
- * The service account arrives as base64 of the whole JSON key file, single line.
- * The previous Rodeo pasted the raw multi-line JSON into `.env` unquoted, so
- * dotenv read the first line — a bare `{` — and stopped; the variable had a length
- * of one and the integration could never have worked. Base64 removes the entire
- * class of problem.
+ * The service account arrives as base64 of the whole JSON key file, single line. Raw
+ * multi-line JSON pasted into `.env` unquoted makes dotenv read the first line, a bare
+ * `{`, and stop. Base64 removes the entire class of problem.
  */
 export function googleWalletCredentials(): GoogleWalletCredentials | null {
 	const serviceAccount = env.GOOGLE_WALLET_SERVICE_ACCOUNT;
@@ -156,9 +145,8 @@ export function googleWalletConfigured(): boolean {
 /**
  * Where to load the `.pkpass` model files from.
  *
- * The explicit override exists so the remote path can be exercised locally.
- * Without it, a production-only branch is only ever executed in production, which
- * is precisely how it comes to be broken there.
+ * The explicit override exists so the remote path can be exercised locally. Otherwise
+ * a production-only branch is only ever executed in production.
  */
 export function passAssetSource(): PassAssetSource {
 	const override = env.WALLET_ASSETS_SOURCE;
@@ -175,11 +163,9 @@ export function walletAssetsBaseUrl(): string | null {
 /**
  * Complain about half-configured providers at boot.
  *
- * Called from `hooks.server.ts` after `validateEnv()`, and deliberately not part
- * of it: this warns, it never throws. A provider with nothing set is switched off
- * on purpose. A provider with three of its four variables set is a typo that
- * would otherwise present as "the button just doesn't appear", with nothing
- * anywhere to explain why.
+ * Called after `validateEnv()` and deliberately not part of it, because this warns and
+ * never throws. A provider with nothing set is switched off on purpose. Three of four
+ * variables set is a typo that would otherwise present as a missing button.
  */
 export function warnIncompleteWalletConfig(): void {
 	for (const message of walletConfigWarnings()) console.warn(`[wallet] ${message}`);

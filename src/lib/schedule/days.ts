@@ -1,10 +1,9 @@
 /**
  * Day bucketing and time formatting for the schedule.
  *
- * Everything here works in the hackathon's configured timezone (`Settings.timezone`)
- * rather than the browser's. An organizer editing the schedule from another timezone
- * must see the same day boundaries as the attendees standing in the venue — otherwise
- * a 9pm event lands under the wrong day tab.
+ * Everything here works in the hackathon's configured timezone rather than the
+ * browser's. An organizer editing from another timezone must see the same day
+ * boundaries as the attendees in the venue, or a 9pm event lands under the wrong tab.
  */
 
 const formatters = new Map<string, Intl.DateTimeFormat>();
@@ -51,10 +50,10 @@ function offsetMs(date: Date, timeZone: string): number {
 
 /**
  * Renders an instant as the `YYYY-MM-DDTHH:mm` an `<input type="datetime-local">`
- * expects, using the wall clock of `timeZone` — NOT the browser's.
+ * expects, using the wall clock of `timeZone` and NOT the browser's.
  *
- * `toDatetimeLocal()` in $lib/utils is the browser-local equivalent; using it here
- * would show an admin in Los Angeles a different time than the event card beside it.
+ * `toDatetimeLocal()` in $lib/utils is the browser-local equivalent, which here would
+ * show an admin in Los Angeles a different time than the event card beside it.
  */
 export function toZonedInput(date: Date, timeZone: string): string {
 	const w = wallClock(date, timeZone);

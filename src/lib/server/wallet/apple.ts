@@ -1,27 +1,15 @@
 /**
- * Apple Wallet passes.
+ * Apple Wallet passes: a signed `.pkpass` carrying the same `User.uid` barcode the
+ * on-screen QR encodes.
  *
- * A signed `.pkpass` — a zip of the model files plus a manifest and a signature —
- * carrying the same `User.uid` barcode the on-screen QR code encodes.
+ * The identifiers come from the environment rather than `pass.json`, because
+ * `passTypeIdentifier` and `teamIdentifier` must agree with the signing certificate or
+ * iOS rejects the pass. A certificate reissued under a different team is then a config
+ * change rather than a code change.
  *
- * ## The identifiers come from the environment, not from `pass.json`
- *
- * `passTypeIdentifier` and `teamIdentifier` have to agree with the signing
- * certificate or iOS rejects the pass. Reading them from the environment and
- * overriding the template means a certificate reissued under a different team is a
- * configuration change rather than a code change — which matters because these
- * certificates expire annually and the reissue is usually done by whoever is
- * available, not by whoever wrote this.
- *
- * ## Expiry is checked before signing, not after
- *
- * node-forge, underneath passkit-generator, signs perfectly happily with an
- * expired certificate. The `.pkpass` builds, downloads, and is then refused by iOS
- * with "Safari cannot download this file" — no mention of a certificate, nothing
- * in any server log, and the file works fine on the machine of whoever last
- * renewed it. `appleWalletConfigured()` already hides the button; this refuses to
- * build as well, so a direct request to the endpoint gets a real error instead of
- * a file that silently doesn't work.
+ * Expiry is checked before signing. node-forge signs happily with an expired
+ * certificate, producing a `.pkpass` that iOS refuses with "Safari cannot download this
+ * file" and nothing in any server log.
  */
 
 import { PKPass } from 'passkit-generator';
@@ -48,12 +36,8 @@ function displayCode(uid: string): string {
 }
 
 /**
- * Apple's WWDR intermediate.
- *
- * Vendored in the repo because it is public, identical for every developer, and
- * valid until 2030. The override exists only for the eventual G5 transition — the
- * previous Rodeo made this a required variable and filled it with a copy of the
- * *signer* certificate, so that setup could never have produced a valid pass.
+ * Apple's WWDR intermediate. Vendored because it is public, identical for every
+ * developer, and valid until 2030. The override exists for the eventual G5 transition.
  */
 async function wwdrCertificate(): Promise<string> {
 	const override = env.APPLE_PASS_WWDR_CERT;
@@ -63,9 +47,7 @@ async function wwdrCertificate(): Promise<string> {
 
 /**
  * Build a signed `.pkpass` for one hacker, or `null` when Apple isn't configured.
- *
- * Callers are responsible for having checked eligibility — this signs a pass for
- * whoever it is handed.
+ * Callers are responsible for having checked eligibility.
  */
 export async function buildApplePass(
 	user: ApplePassSubject,

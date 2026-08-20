@@ -3,21 +3,15 @@
  * Rebuilds `src/lib/data/universities.json`, the vocabulary behind the University
  * linked field.
  *
- * Two sources, because no single one answers both halves of the question. IPEDS is
- * the US Department of Education's own register, so it has every accredited US
- * institution *and* a real address for each — but it stops at the US border. Hipo's
- * list crosses the border but carries only a country code, and its US half is a
- * third the size of IPEDS's. So: IPEDS for the US, Hipo for everywhere else in
- * North America.
+ * Two sources, because no single one answers both halves. IPEDS is the US Department
+ * of Education's register, so it has every accredited US institution and a real
+ * address for each, but stops at the US border. Hipo's list crosses the border but
+ * carries only a country code. So IPEDS for the US, Hipo for the rest of North America.
  *
- * The output is committed. Builds must not depend on two third-party hosts being
- * up, and a dataset that silently changes under a deploy would move the ground the
- * `assertAnswerValid` check stands on. Re-run this deliberately:
- *
- *   npm run data:universities
- *
- * Then read the diff. A large drop in row count means a source moved, not that
- * hundreds of colleges closed.
+ * The output is committed: builds must not depend on two third-party hosts, and a
+ * dataset that silently changed would move the ground `assertAnswerValid` stands on.
+ * Re-run deliberately with `npm run data:universities`, then read the diff. A large
+ * drop in row count means a source moved, not that hundreds of colleges closed.
  */
 
 import { execFileSync } from 'node:child_process';
@@ -29,10 +23,8 @@ const ROOT = new URL('..', import.meta.url).pathname;
 const OUT = join(ROOT, 'src/lib/data/universities.json');
 
 /**
- * IPEDS "Institutional Characteristics" directory file.
- *
- * Pinned to a year rather than tracking "latest" so a rebuild is reproducible. Bump
- * it when NCES publishes the next one; the URL shape has been stable for a decade.
+ * IPEDS "Institutional Characteristics" directory file. Pinned to a year rather than
+ * tracking "latest" so a rebuild is reproducible.
  */
 const IPEDS_URL = 'https://nces.ed.gov/ipeds/datacenter/data/HD2023.zip';
 
@@ -42,9 +34,8 @@ const HIPO_URL =
 /**
  * North America, as ISO 3166-1 alpha-2, minus the US.
  *
- * The US is absent because IPEDS covers it — including Puerto Rico (130 rows) and
- * the US Virgin Islands, which is why `PR` and `VI` are not here either. Taking
- * them from Hipo as well would duplicate every San Juan campus under two spellings.
+ * The US is absent because IPEDS covers it, including Puerto Rico and the US Virgin
+ * Islands. Taking those from Hipo too would duplicate every San Juan campus.
  */
 const HIPO_COUNTRIES = {
 	CA: 'Canada',
@@ -80,9 +71,8 @@ const HIPO_COUNTRIES = {
 /**
  * US-flagged IPEDS rows that are not in North America.
  *
- * The Pacific territories and freely associated states are US for statistical
- * purposes and Oceania for geographic ones. Eight rows, dropped so that "North
- * America only" is true rather than nearly true.
+ * The Pacific territories are US for statistical purposes and Oceania for geographic
+ * ones. Eight rows, dropped so "North America only" is true rather than nearly true.
  */
 const PACIFIC = new Set(['AS', 'GU', 'MP', 'FM', 'MH', 'PW']);
 
@@ -135,11 +125,10 @@ function parseCsv(text) {
 /**
  * IPEDS's alias column, which has no agreed separator.
  *
- * Across the 2,195 rows that have one, entries are divided by `|`, by a comma, by a
- * run of spaces, or by nothing at all. Splitting on the first three and leaving the
- * fourth as a single long string is the right trade: an unsplit alias is still a
- * usable haystack for prefix and substring matching, whereas guessing at word
- * boundaries would invent aliases nobody uses.
+ * Across the 2,195 rows that have one, entries are divided by `|`, by a comma, by a run
+ * of spaces, or by nothing at all. An unsplit alias is still a usable haystack for
+ * prefix and substring matching, whereas guessing at word boundaries would invent
+ * aliases nobody uses.
  */
 function parseAliases(raw, name) {
 	if (!raw || raw.trim() === '' || raw.trim() === '-2') return [];
@@ -204,10 +193,8 @@ const [ipeds, hipo] = await Promise.all([fetchIpeds(), fetchHipo()]);
 /**
  * Deduplicate by name, first source wins.
  *
- * The two sources cannot overlap by construction (disjoint countries), so this only
- * catches duplicates *within* a source — IPEDS lists a handful of institutions twice
- * under one name at different UNITIDs, and the dropdown must not show the same
- * school twice.
+ * The two sources cannot overlap by construction, so this only catches duplicates
+ * within a source. IPEDS lists a handful of institutions twice under one name.
  */
 const byName = new Map();
 for (const entry of [...ipeds, ...hipo]) {
@@ -225,9 +212,8 @@ const universities = [...byName.values()]
 	}));
 
 mkdirSync(join(ROOT, 'src/lib/data'), { recursive: true });
-// The code→name map travels with the rows so the display label has one source. The
-// alternative — an ISO table hand-kept in `universities.ts` — is the same 27 lines
-// written twice, drifting the first time a country is added here.
+// The code-to-name map travels with the rows so the display label has one source. An
+// ISO table hand-kept in `universities.ts` would be the same 27 lines written twice.
 writeFileSync(
 	OUT,
 	JSON.stringify({ countries: { US: 'United States', ...HIPO_COUNTRIES }, universities }) + '\n'

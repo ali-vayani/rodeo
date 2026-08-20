@@ -16,10 +16,9 @@ function safeInternalPath(raw: string | null, origin: string): string {
 /**
  * Where Google returns to after the OAuth handshake.
  *
- * Deliberately does *not* pick a landing page itself. `/` already resolves the
- * portal from the user's roles, and duplicating that here is how the two drift —
- * this route used to send everyone to `/admin/dashboard`, which bounced every
- * hacker straight back out through the admin guard.
+ * Deliberately does not pick a landing page itself. `/` already resolves the portal from
+ * the user's role, and duplicating that here is how the two drift: this route used to
+ * send everyone to `/admin/dashboard`, bouncing every hacker straight back out.
  */
 export const GET: RequestHandler = async (event) => {
 	const code = event.url.searchParams.get('code');

@@ -1,32 +1,22 @@
 /**
  * The filter vocabulary for application answers, and the contract the panels render.
  *
- * One facet is one filterable thing an applicant told us: a question that writes
- * through to a `User` column (`linked:UNIVERSITY`), any other question on the form
- * (`question:<id>`), or something derived from those (`state`). The three kinds share
- * this contract precisely so the panel never branches on which kind it is holding —
- * it branches on `control`, which is chosen from the question's own type.
+ * One facet is one filterable thing an applicant told us: a linked `User` column, any
+ * other question on the form, or something derived from those. The three kinds share
+ * this contract so the panel branches on `control`, never on which kind it holds.
  *
- * Deliberately isomorphic. Imported by the filter UI (browser) and by the routers that
- * build the Prisma predicate (server), so keep it free of Prisma, node builtins and
- * `$env`. The Prisma import below is `import type`, which erases at build.
+ * Isomorphic, so keep it free of Prisma, node builtins and `$env`.
  */
 
 import type { LinkedField } from '$lib/generated/prisma/client';
 
 /**
- * How a facet is rendered, derived from the question's `type` — never from its name.
+ * How a facet is rendered, derived from the question's `type`.
  *
- * `select`   — the question enumerates its answers (`DROPDOWN`, `MULTIPLE_CHOICE`,
- *              `CHECKBOX`), so its options are authoritative and a checkbox list can
- *              show the whole vocabulary at once.
- * `combobox` — free text with a bounded observed vocabulary (a preset-backed question,
- *              or a linked column). No authoritative list, so it needs type-ahead.
- * `search`   — free text with no useful vocabulary at all. A substring box, because a
- *              list of what 1,800 people typed into "Why do you want to attend?" is a
- *              transcript, not a filter.
- * `range`    — numeric. Two bounds, because "under 21" is the question people ask of a
- *              number and no checkbox list expresses it.
+ * `select`   — the question enumerates its answers, so its options are authoritative.
+ * `combobox` — free text with a bounded observed vocabulary; needs type-ahead.
+ * `search`   — free text with no useful vocabulary, so a substring box.
+ * `range`    — numeric, two bounds, because "under 21" is what people ask of a number.
  */
 export type FacetControl = 'select' | 'combobox' | 'search' | 'range';
 
@@ -50,11 +40,9 @@ export interface Facet {
 	/** Users with no answer, selectable via `NO_VALUE`. */
 	noneCount: number;
 	/**
-	 * The option list was cut at `MAX_FACET_OPTIONS`; rarer values are missing.
-	 *
-	 * Only ever set on a `combobox`, whose vocabulary is unbounded by construction. The
-	 * UI must say so rather than implying a value doesn't exist: the predicate still
-	 * accepts any value, and the search box is how someone finds one that isn't listed.
+	 * The option list was cut at `MAX_FACET_OPTIONS`; rarer values are missing. Only ever
+	 * set on a `combobox`. The predicate still accepts any value, and the search box
+	 * finds what is not listed.
 	 */
 	truncated?: boolean;
 	/** `range` only: the observed extent, used to caption the two inputs. */
@@ -77,46 +65,29 @@ export interface FacetSelection {
 export type FacetState = Record<string, FacetSelection>;
 
 /**
- * Most options a facet returns.
- *
- * Applies to `combobox` facets only — a `select`'s list is bounded by the question that
- * declares it. Kept most-held-first, so what survives the cut is the part of the
- * vocabulary a filter is actually used on.
+ * Most options a facet returns. `combobox` only, since a `select`'s list is bounded by
+ * its question. Kept most-held-first, so what survives the cut is what gets used.
  */
 export const MAX_FACET_OPTIONS = 500;
 
 /**
- * Selects users whose answer to a facet is absent.
+ * Selects users whose answer to a facet is absent, which organizers actually ask for.
  *
- * "Who hasn't filled this in" is a question organizers actually ask, and roughly a
- * third of seeded users have no university. A sentinel rather than a per-facet boolean
- * keeps the wire format one array per facet, so the engaged-but-empty rule applies
- * uniformly.
- *
- * Printable and URL-safe on purpose. This was briefly a NUL byte, on the reasoning that
- * no real answer could contain one — true, but it also cannot survive the places a
- * filter selection legitimately travels: Postgres `text` rejects NUL outright, and
- * `%00` in a query string is refused by some proxies and by Node's URL parsing.
+ * A sentinel rather than a per-facet boolean keeps the wire format one array per facet.
+ * Printable and URL-safe: a NUL byte cannot survive Postgres `text` or a query string.
  */
 export const NO_VALUE = '__NO_VALUE__';
 
 /**
- * The state facet's second row, and its whole reason for existing.
- *
- * The facet is exactly two options — the home state from Settings, and this. "Are they
- * from Texas or not" is the question an organizer asks of an applicant pool, because it
- * drives catering, travel reimbursement and housing; "which of the fifty states" is not.
- * Only offered when a home state is configured, since without one there is no "out" to
- * be out of, and a facet that is half a pair is no facet.
+ * The state facet's second row. The facet is exactly two options, home and not home,
+ * because "local or travelling" drives catering, travel and housing where "which of
+ * the fifty states" does not. Only offered when a home state is configured.
  */
 export const OUT_OF_STATE = '__OUT_OF_STATE__';
 
 /**
- * A university we can place, outside the US.
- *
- * An internal bucket key, never an offered option: international applicants are counted
- * inside `OUT_OF_STATE`, since someone flying in from Toronto is no less
- * not-from-Texas than someone driving from Atlanta. Exported because
+ * A university we can place, outside the US. An internal bucket key, never an offered
+ * option: international applicants are counted inside `OUT_OF_STATE`. Exported because
  * `$lib/server/homeState` keys its tally map on it.
  */
 export const INTERNATIONAL = '__INTERNATIONAL__';
@@ -133,11 +104,8 @@ export function questionFacetKey(questionId: string): string {
 }
 
 /**
- * A facet key, taken apart.
- *
- * The panel never calls this — it treats keys as opaque. The two ends that do are the
- * client's params builder and the server's predicate builder, and they must agree, so
- * the parsing lives here rather than as a `split(':')` at each of them.
+ * A facet key, taken apart. The panel treats keys as opaque; the two ends that parse
+ * them are the client's params builder and the server's predicate builder.
  */
 export type ParsedFacetKey =
 	| { kind: 'linked'; field: LinkedField }

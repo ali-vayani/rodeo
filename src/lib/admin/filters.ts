@@ -2,22 +2,10 @@ import { Role, UserStatus, DecisionStatus } from '$lib/generated/prisma/enums';
 import type { LinkedField } from '$lib/linkedFields';
 import { isEngaged, parseFacetKey, type FacetState } from '$lib/facets';
 
-/**
- * Shared checkbox-filter vocabulary and the translation from checkbox state to
- * tRPC filter params.
- *
- * The Users page and the custom-email wizard both drive `buildRecipientWhere` on
- * the server, so they must agree on what "all checked" and "none checked" mean —
- * otherwise a count from one and a send from the other disagree.
- */
-// Kept as the enum types, not widened to string[]. Widening them was the single
-// cause of the `as any` at every tRPC call site downstream: the params these
-// build feed procedures whose input schemas are the enums.
 export const ALL_ROLES: Role[] = Object.values(Role);
 export const ALL_STATUSES: UserStatus[] = Object.values(UserStatus);
 export const DECISION_VALUES: DecisionStatus[] = Object.values(DecisionStatus);
 
-/** Synthetic option for users with no `activeDecision` yet. Not a DecisionStatus. */
 export const NO_DECISION = 'NONE';
 export const DECISION_OPTIONS: string[] = [...DECISION_VALUES, NO_DECISION];
 
@@ -28,17 +16,12 @@ export function allChecked(options: readonly string[]): FilterState {
 	return Object.fromEntries(options.map((o) => [o, true]));
 }
 
-/** The wire keys for the linked application fields, mirroring `linkedFieldFilterSchema`. */
 export type LinkedParams = {
 	names?: string[];
 	universities?: string[];
 	years?: string[];
 };
 
-/**
- * One entry of the `answers` wire key — a filter over an answer that lives in
- * `ApplicationResponse` rather than in a `User` column. Mirrors `answerFilterSchema`.
- */
 export type AnswerParam = {
 	questionId: string;
 	values?: string[];
@@ -62,39 +45,12 @@ export type RecipientParams = {
 } & LinkedParams &
 	AnswerParams;
 
-/**
- * Linked field → the plural wire key `recipientFilterSchema` accepts for it.
- *
- * These keys are also the query parameters in a shared filter link, so they stay as
- * they are. Renaming them alongside the enum would have broken every link anyone had
- * already sent, to buy nothing.
- */
 const LINKED_PARAM_KEY = {
 	NAME: 'names',
 	UNIVERSITY: 'universities',
 	YEAR: 'years'
 } as const satisfies Record<LinkedField, keyof LinkedParams>;
 
-/**
- * Translate the filter panel's state into tRPC filter params.
- *
- * **A facet with nothing selected must be omitted, never sent as `[]`.** The two are
- * opposite instructions to the shared predicate: `$lib/server/recipients` reads an
- * absent key as "no filter" and an empty array as "match nobody", because a checkbox
- * group the admin engaged and then emptied means "show nobody". Every one of these
- * controls starts empty, so sending `[]` for an untouched filter would make the Users
- * page show zero rows and — through that same predicate — make the custom-email count
- * read 0 while the wizard still offers to send.
- *
- * The asymmetry with the role/status/decision groups is real and is a property of the
- * controls, not an inconsistency: those default to *all* checked, so "no filter" is a
- * full selection, while these default to *none* checked, so "no filter" is an empty
- * one. Both end up as an omitted key, which is the only thing the server sees.
- *
- * A facet whose key doesn't parse is dropped rather than forwarded. That is a filter
- * for a question that has since been deleted, and the honest response to "narrow by
- * something that no longer exists" is to stop narrowing by it, not to empty the table.
- */
 export function facetParams(selection: FacetState = {}): LinkedParams & AnswerParams {
 	const params: LinkedParams & AnswerParams = {};
 	const answers: AnswerParam[] = [];
@@ -153,28 +109,7 @@ export function malformedEmails(emails: string[]): string[] {
 }
 
 /**
- * Translate checkbox state into tRPC filter params.
- *
- * One rule for every group: a key is sent only while it is *narrowing*. Everything
- * ticked → omitted, since that selects everyone anyway. Nothing ticked → omitted too:
- * a group selecting none of its options has stopped filtering, not asked for nobody.
- * The panels' `clear` buttons reset a group to all ticked, so all-unticked is only
- * reachable by hand — but it must still not empty the table.
- *
- * The second half was false for the decision group alone, which sent `decisions: []`
- * plus `includeNoDecision: false` — and `$lib/server/recipients` reads an empty array
- * as match-nobody. So clearing Decision emptied the Users table, and clearing the panel
- * and then ticking a single role left it empty, since the poisoned decision clause
- * ANDed with everything else. Role and status already behaved correctly; decision now
- * agrees with them.
- *
- * That leaves engaged-but-empty to the two places whose controls start *empty* and so
- * genuinely need it — the explicit address list and the application-answer facets; see
- * `facetParams`, which omits an untouched key for the same reason from the other end.
- *
- * Mailing the whole database is prevented where it can actually be prevented:
- * `email.sendCustom` binds a send to the `expectedCount` the admin previewed and
- * refuses when the resolved set has moved.
+ * Translate checkbox state into tRPC filter params..
  */
 export function buildRecipientParams(
 	roleFilter: FilterState,

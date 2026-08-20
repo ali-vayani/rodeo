@@ -13,11 +13,9 @@ const DEFAULT_WINDOW = 'all' as const;
 export const load: PageServerLoad = async (event) => {
 	const caller = createCaller(createContext(event));
 
-	// Organizers get the aggregates only. The three admin-only calls name people —
-	// staff ranked against each other, and applicants by name — so calling them for
-	// an organizer would throw FORBIDDEN and take the whole page load down with it.
-	// They come back null instead, and the page checks for that rather than
-	// branching on the role a second time.
+	// Organizers get the aggregates only. The three admin-only calls name people, so
+	// calling them for an organizer would throw FORBIDDEN and take the whole page load
+	// down. They come back null instead.
 	const admin = isAdmin(event.locals.user?.role ?? Role.UNDECLARED);
 
 	const [stats, funnel, trend, activity, adminStats, demographics] = await Promise.all([

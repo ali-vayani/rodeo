@@ -1,12 +1,10 @@
 /**
  * Whole-database export, and the wipe that always follows one.
  *
- * Both live here rather than in the router so the two halves that have to agree
- * — which tables are carried out, and which are emptied — sit next to each
- * other. A table added to the schema and forgotten in `buildExport` would be
- * destroyed by `wipeDatabase` without ever appearing in the file that was
- * supposed to preserve it, and `EXPORTED_TABLES` below is the single list both
- * read from so that divergence is visible in one place.
+ * Both live here rather than in the router so the two halves that have to agree, which
+ * tables are carried out and which are emptied, sit next to each other. A table added
+ * to the schema and forgotten in `buildExport` would be destroyed by `wipeDatabase`
+ * without appearing in the file. `EXPORTED_TABLES` is the single list both read from.
  */
 
 import { Role } from '$lib/generated/prisma/client';
@@ -18,10 +16,8 @@ export const EXPORT_VERSION = 1;
 /**
  * Staff survive a wipe, along with the blacklist.
  *
- * Wiping the account that ran the wipe would, on the production deploy, be
- * unrecoverable: signing back in through Google creates a HACKER, and there
- * would be no admin left to grant anyone a role again. Keeping ORGANIZER too
- * means the team that ran the event still has its logins for the next one.
+ * Wiping the account that ran the wipe would be unrecoverable in production: signing
+ * back in through Google creates a HACKER, and no admin would be left to grant roles.
  */
 export const WIPE_KEEPS_ROLES = [Role.ADMIN, Role.ORGANIZER];
 
@@ -36,11 +32,9 @@ export interface DatabaseExport {
 /**
  * Every table, read inside one transaction.
  *
- * The transaction is what makes this a snapshot rather than twelve unrelated
- * reads: without it an applicant could submit between the `user` read and the
- * `applicationResponse` read, and the file would carry answers belonging to
- * nobody. It matters most in the wipe path, where this is the only copy that
- * will exist.
+ * The transaction is what makes this a snapshot rather than twelve unrelated reads.
+ * Without it an applicant could submit between the `user` and `applicationResponse`
+ * reads, and the file would carry answers belonging to nobody.
  */
 export async function buildExport(prisma: PrismaClient): Promise<DatabaseExport> {
 	const [
@@ -100,18 +94,15 @@ export async function buildExport(prisma: PrismaClient): Promise<DatabaseExport>
 /**
  * Empty every table except the staff accounts and the blacklist.
  *
- * Ordered child-before-parent even though every foreign key in the schema is
- * `ON DELETE SET NULL` or `CASCADE`: relying on the database to null out
- * references would leave the outcome dependent on constraint definitions that
- * live in migrations, and this reads as what it is.
+ * Ordered child-before-parent even though every foreign key is `ON DELETE SET NULL` or
+ * `CASCADE`, because relying on the database would leave the outcome dependent on
+ * constraint definitions that live in migrations.
  *
- * `Settings` goes too. `settings.get` falls back to `DEFAULT_SETTINGS` when the
- * table is empty, so the app comes back up on defaults rather than on last
- * year's deadlines — which is what a reset is for.
+ * `Settings` goes too. `settings.get` falls back to `DEFAULT_SETTINGS` when the table
+ * is empty, so the app comes back up on defaults rather than last year's deadlines.
  *
- * Not run inside a transaction with the export deliberately: the file has to be
- * on the operator's disk *before* anything is deleted, so the caller downloads
- * it first and only then calls this. See the danger-zone flow.
+ * Deliberately not run in a transaction with the export: the file has to be on the
+ * operator's disk before anything is deleted.
  */
 export async function wipeDatabase(prisma: PrismaClient): Promise<Record<string, number>> {
 	// Children first, then the rows they point at.
@@ -124,9 +115,8 @@ export async function wipeDatabase(prisma: PrismaClient): Promise<Record<string,
 	const schedule = await prisma.schedule.deleteMany();
 	const settings = await prisma.settings.deleteMany();
 
-	// Everyone who is not staff. Their scans and responses are already gone
-	// above, and the self-referencing claim/decision/score columns on the staff
-	// rows that survive are nulled by the schema's SET NULL foreign keys.
+	// Everyone who is not staff. Their scans and responses are already gone above, and
+	// the self-referencing columns on surviving staff rows are nulled by SET NULL.
 	const user = await prisma.user.deleteMany({
 		where: { role: { notIn: WIPE_KEEPS_ROLES } }
 	});

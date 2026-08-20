@@ -1,20 +1,14 @@
 /**
  * The Apple Wallet download.
  *
- * A real HTTP response rather than a tRPC procedure, because the `Content-Type` is
- * the entire mechanism: `application/vnd.apple.pkpass` on a genuine response is
- * what makes Mobile Safari open the "Add Pass" sheet. The previous Rodeo shipped
- * the bytes through tRPC as `Array.from(buffer)` and rebuilt a Blob client-side —
- * superjson has no binary type, so a 90 KB pass became a JSON array of 90,000
- * decimal integers, and the `blob:` URL handoff is the most common cause of
- * "Safari cannot download this file".
+ * A real HTTP response rather than a tRPC procedure, because the `Content-Type` is the
+ * entire mechanism: `application/vnd.apple.pkpass` is what makes Mobile Safari open the
+ * Add Pass sheet. Shipping the bytes through tRPC turned a 90 KB pass into a JSON array
+ * of 90,000 integers, and the `blob:` handoff is the most common cause of "Safari
+ * cannot download this file". It also means the pass is signed when someone asks.
  *
- * It also means the pass is signed when someone asks for it. The old account page
- * minted *two* passes in its load function on every render, whether or not anyone
- * clicked.
- *
- * Kept thin on purpose: this repo has no `+server.ts` handler tests, so everything
- * with a decision in it lives in `$lib/server/wallet` where it is covered.
+ * Kept thin: this repo has no `+server.ts` handler tests, so anything with a decision
+ * in it lives in `$lib/server/wallet`.
  */
 
 import { error } from '@sveltejs/kit';
@@ -24,8 +18,8 @@ import { assertWalletPassEligible } from '$lib/server/wallet/guard';
 import { prisma } from '$lib/server/db';
 
 export const GET: RequestHandler = async ({ locals }) => {
-	// `hooks.server.ts` has already established who this is and that they may reach
-	// /hacker/*; it has not established that they may have a pass.
+	// `hooks.server.ts` has established who this is and that they may reach /hacker/*.
+	// It has not established that they may have a pass.
 	const user = locals.user;
 	if (!user) error(401, 'Sign in to download your wallet pass.');
 

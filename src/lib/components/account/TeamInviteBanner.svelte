@@ -7,10 +7,9 @@
 	/**
 	 * The pending team invitation, rendered above every page of the hacker portal.
 	 *
-	 * Mounted from `hacker/+layout.svelte` rather than from a page, which is the whole
-	 * point: the layout survives client-side navigation, so dismissing it is a decision
-	 * the hacker makes once instead of one the router makes for them every time they
-	 * click Account.
+	 * Mounted from `hacker/+layout.svelte` rather than from a page, which is the point: the
+	 * layout survives client-side navigation, so dismissing it is a decision the hacker
+	 * makes once.
 	 */
 
 	const MAX_TEAM_SIZE = 4;
@@ -36,9 +35,9 @@
 
 	/**
 	 * Phrased for the banner rather than reused from `TEAM_INELIGIBLE_MESSAGE`, which
-	 * answers "why were you refused" after the fact. Here nothing has been attempted
-	 * yet, and the two cases want opposite tones: a pending RSVP is a next step, a
-	 * non-hacker account is a dead end and should not read like one more form to fill.
+	 * answers "why were you refused" after the fact. Here nothing has been attempted yet,
+	 * and the two cases want opposite tones: a pending RSVP is a next step, a non-hacker
+	 * account is a dead end.
 	 */
 	const blockedReason = $derived(
 		invite.ineligibility === 'NOT_HACKER'
@@ -50,8 +49,7 @@
 
 	/**
 	 * Clear the server-side cookie as well as the local flag. Without it the banner is
-	 * back on the next full page load, which is exactly the behaviour this component
-	 * was built to stop — just inverted.
+	 * back on the next full page load, which is what this component exists to stop.
 	 */
 	async function forget() {
 		try {
@@ -103,11 +101,10 @@
 			</p>
 
 			<!--
-				Both of these used to be reasons the banner simply didn't render, which
-				left the link looking broken. Saying why is the fix; the invitation is
-				kept either way, so a full team that frees a seat, or an RSVP that lands
-				later, resolves itself with no second link.
-			-->
+							Both of these used to be reasons the banner simply didn't render, which left the
+							link looking broken. The invitation is kept either way, so a full team that
+							frees a seat, or an RSVP that lands later, resolves itself with no second link.
+						-->
 			{#if full}
 				<p class="mb-3 text-sm text-muted-foreground">
 					This team is full. Ask them to free up a spot, or start your own team from your account

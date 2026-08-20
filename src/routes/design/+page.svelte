@@ -293,18 +293,14 @@
 				<Divider label="Combobox — the only single-select control" />
 
 				<!--
-					There was briefly a second one, `Select`, a plain listbox for short lists.
-					It went because the choice between them was never really the author's to
-					make: it depends on how long the list grows, which is a runtime fact. A
-					type-ahead over six options costs nothing, and a plain listbox over 6,447
-					is unusable, so one control covers both ends.
+									There was briefly a second one, `Select`, a plain listbox for short lists. It
+									went because the choice between them depends on how long the list grows, which
+									is a runtime fact.
 
-					`allowCustom` is what a long-but-incomplete list needs: pick "Not listed"
-					and the control becomes a text box, so nobody is blocked by a gap in the
-					vocabulary. `clearable` offers the placeholder as a real row, for filter
-					bars where "all of them" is a choice. Aliases are matched but never shown —
-					try "UT Austin" or "A&M".
-				-->
+									`allowCustom` is what a long-but-incomplete list needs: pick "Not listed" and
+									the control becomes a text box. `clearable` offers the placeholder as a real
+									row. Aliases are matched but never shown; try "UT Austin" or "A&M".
+								-->
 				<div class="grid gap-5 sm:grid-cols-2">
 					<Combobox
 						label="School"

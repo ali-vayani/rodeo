@@ -13,8 +13,8 @@
 		/** Which edge of this row to draw the landing indicator on, if any. */
 		dropEdge?: 'above' | 'below' | null;
 		/**
-		 * Vertical offset in px. On the row being dragged this follows the pointer; on
-		 * the rows it is passing, it is the one-slot shift that opens the landing gap.
+		 * Vertical offset in px. On the row being dragged this follows the pointer; on the
+		 * rows it is passing, it is the one-slot shift that opens the landing gap.
 		 */
 		dragOffset?: number;
 		onEdit: () => void;
@@ -42,16 +42,16 @@
 	}: Props = $props();
 
 	let handleEl = $state<HTMLButtonElement | null>(null);
-	// Not `$state`: nothing renders off it, and it must be readable synchronously
-	// inside the pointer handlers.
+	// Not `$state`: nothing renders off it, and it must be readable synchronously inside
+	// the pointer handlers.
 	let activePointer: number | null = null;
 
-	// Pointer events rather than HTML5 drag-and-drop: `dragstart` never fires from a
-	// touch, and organizers triage on their phones (CONTRIBUTING.md, rule 2).
+	// Pointer events rather than HTML5 drag-and-drop: `dragstart` never fires from a touch,
+	// and organizers triage on their phones.
 	function handlePointerDown(event: PointerEvent) {
 		if (event.button !== 0 || activePointer !== null) return;
-		// Suppresses the compatibility mouse events, so text does not select while
-		// dragging. That also suppresses the click-to-focus, hence the explicit focus.
+		// Suppresses the compatibility mouse events, so text does not select while dragging.
+		// That also suppresses click-to-focus, hence the explicit focus.
 		event.preventDefault();
 		activePointer = event.pointerId;
 		handleEl?.setPointerCapture(event.pointerId);
@@ -78,8 +78,8 @@
 		// Otherwise the arrow scrolls the page out from under the row being moved.
 		event.preventDefault();
 		onKeyboardMove(event.key === 'ArrowUp' ? -1 : 1);
-		// The keyed `{#each}` relocates this node rather than rebuilding it, but the
-		// move can still drop focus — put it back so repeated presses keep working.
+		// The keyed `{#each}` relocates this node rather than rebuilding it, but the move can
+		// still drop focus.
 		await tick();
 		handleEl?.focus();
 	}
@@ -330,9 +330,8 @@
 		flex-wrap: wrap;
 	}
 
-	/* Sentence-case prose ("Multiple Choice"), so it stays sans on the 12px
-	   secondary tier rather than becoming a mono uppercase eyebrow — it labels the
-	   row, it does not classify it the way the Required badge and role chips do. */
+	/* Sentence-case prose, so it stays sans on the 12px secondary tier rather than
+		   becoming a mono uppercase eyebrow. It labels the row, it does not classify it. */
 	.type-badge {
 		font-size: var(--text-sm);
 		font-weight: 500;

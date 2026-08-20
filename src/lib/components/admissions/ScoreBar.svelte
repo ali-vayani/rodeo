@@ -39,15 +39,14 @@
 	} = $props();
 
 	/**
-	 * Drafts, not bindings. The parent remounts this bar per applicant (`{#key}`),
-	 * which is what seeds them — an `$effect` syncing props into state would fight
-	 * the reviewer's own typing on every parent update.
+	 * Drafts, not bindings. The parent remounts this bar per applicant (`{#key}`), which
+	 * is what seeds them. An `$effect` syncing props into state would fight the
+	 * reviewer's own typing on every parent update.
 	 */
 	/**
-	 * Held as a number, not a string: `bind:value` on `<input type="number">`
-	 * coerces, so this is whatever the DOM hands back — a number, or undefined
-	 * once the field is cleared. Typing it as a string and calling `.trim()` on
-	 * it threw on the first keystroke and left Save permanently disabled.
+	 * Held as a number, not a string: `bind:value` on `<input type="number">` coerces,
+	 * so this is whatever the DOM hands back, or undefined once the field is cleared.
+	 * Typing it as a string and calling `.trim()` threw on the first keystroke.
 	 */
 	let scoreDraft = $state<number | undefined>(untrack(() => score ?? undefined));
 	let notesDraft = $state(untrack(() => notes ?? ''));
@@ -55,9 +54,8 @@
 	let empty = $derived(scoreDraft === undefined || Number.isNaN(scoreDraft));
 	let valid = $derived(!empty && isValidScore(scoreDraft as number));
 
-	// While the claim is in flight the controls stay put but dimmed, matching how
-	// the queue behaved before: flashing a read-only strip on every applicant
-	// switch trains reviewers to click through it.
+	// While the claim is in flight the controls stay put but dimmed. Flashing a read-only
+	// strip on every applicant switch trains reviewers to click through it.
 	let showControls = $derived(lockState === 'owned' || lockState === 'acquiring');
 	let busy = $derived(saving || lockState === 'acquiring');
 
@@ -83,9 +81,8 @@
 		lockState === 'locked' ? 'Claim' : (ACTION_LABEL[lockState] ?? 'Claim')
 	);
 
-	// Nothing to offer while someone else genuinely holds the lock — the server
-	// refuses any claim against a fresh one, so a button would be a no-op that
-	// reads like a force-takeover. The presence poll flips this once it frees up.
+	// Nothing to offer while someone else genuinely holds the lock: the server refuses any
+	// claim against a fresh one, so a button would be a no-op that reads like a takeover.
 	let showAction = $derived(lockState !== 'locked' || lockFreed);
 	let actionIsPrimary = $derived(lockState === 'expired' || (lockState === 'locked' && lockFreed));
 
@@ -97,9 +94,8 @@
 	/**
 	 * Enter saves from the score field.
 	 *
-	 * The whole pass is type-a-number-move-on, several hundred times; reaching for
-	 * the mouse between each one is the cost this removes. Not wired to the notes
-	 * box, where Enter has to stay a newline.
+	 * The whole pass is type-a-number-move-on, several hundred times. Not wired to the
+	 * notes box, where Enter has to stay a newline.
 	 */
 	function onScoreKeydown(event: KeyboardEvent) {
 		if (event.key !== 'Enter') return;
@@ -146,10 +142,9 @@
 
 			<div class="flex items-center gap-2.5 max-md:w-full">
 				<!--
-					A plain labelled number field rather than 21 buttons or a slider: the
-					reviewer already has both hands on the keyboard reading the answers,
-					and a slider can't be typed into.
-				-->
+									A plain labelled number field rather than 21 buttons or a slider: the reviewer
+									already has both hands on the keyboard, and a slider cannot be typed into.
+								-->
 				<label for="score-input" class="text-xs font-semibold whitespace-nowrap text-foreground">
 					Score
 				</label>

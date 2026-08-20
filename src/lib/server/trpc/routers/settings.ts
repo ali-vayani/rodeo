@@ -6,9 +6,9 @@ import { DEFAULT_SETTINGS } from '$lib/server/settings';
 import { US_STATES } from '$lib/data/states';
 import { logAction, listOrNone } from '$lib/server/log';
 
-// Same bounds `updateTemplates` enforces — a subject is 1–200 chars, a body ≤20k. This
-// full-object PUT is the other write path to those columns, and leaving it unbounded let
-// it store an empty subject or a multi-megabyte template that `admissions.release` mails.
+// Same bounds `updateTemplates` enforces. This full-object PUT is the other write path
+// to those columns, and leaving it unbounded let it store an empty subject or a
+// multi-megabyte template that `admissions.release` mails.
 const subject = z.string().min(1).max(200);
 const templateBody = z.string().max(20000);
 
@@ -53,8 +53,7 @@ const settingsInput = z
 	});
 
 // Lives in `$lib/server/settings` so the senders resolve the same values this router
-// serves the editor — the two disagreeing is what silenced every lifecycle email.
-// Re-exported because this was its home, and callers still import it from here.
+// serves the editor. Re-exported because this was its home.
 export { DEFAULT_SETTINGS };
 
 type TemplateColumns = Record<`${TemplateKey}Template` | `${TemplateKey}Subject`, string>;
@@ -62,18 +61,14 @@ type TemplateColumns = Record<`${TemplateKey}Template` | `${TemplateKey}Subject`
 /**
  * The lifecycle template and subject columns, emptied.
  *
- * `settings.get` is `authedProcedure` because non-admins genuinely need parts of
- * this row: the hacker portal reads the RSVP deadline and start date, the scan
- * page reads `scanActions`, the schedule page reads the start date and timezone.
- * The six templates and their subjects are internal copy, and every hacker being
- * able to read them is not something any of those callers asked for.
+ * `settings.get` is `authedProcedure` because non-admins need parts of this row: the
+ * RSVP deadline, the start date, `scanActions`, the timezone. The six templates and
+ * their subjects are internal copy that none of those callers asked for.
  *
- * Emptied rather than omitted: the same payload feeds components typed against the
- * full `Settings` row, so dropping keys would make the response shape depend on
- * who asked. Every caller keeps the fields; only an admin gets their contents.
+ * Emptied rather than omitted, because the same payload feeds components typed against
+ * the full `Settings` row. Every caller keeps the fields; only an admin gets contents.
  *
- * Derived from `TEMPLATE_KEYS` so a seventh template is covered the day it lands,
- * rather than leaking until someone remembers this list exists.
+ * Derived from `TEMPLATE_KEYS` so a seventh template is covered the day it lands.
  */
 const REDACTED_TEMPLATES = Object.fromEntries(
 	TEMPLATE_KEYS.flatMap((key) => [
@@ -83,10 +78,8 @@ const REDACTED_TEMPLATES = Object.fromEntries(
 ) as TemplateColumns;
 
 /**
- * Which keys of `next` differ from `previous`.
- *
- * Dates arrive as `Date` and arrays as `string[]`, so `!==` alone would report
- * every field as changed on every save. Both are compared by value.
+ * Which keys of `next` differ from `previous`. Dates arrive as `Date` and arrays as
+ * `string[]`, so `!==` alone would report every field as changed on every save.
  */
 function changedFields(previous: Record<string, unknown>, next: Record<string, unknown>): string[] {
 	return Object.keys(next).filter((key) => {
@@ -117,9 +110,8 @@ export const settingsRouter = router({
 	update: adminProcedure.input(settingsInput).mutation(async ({ ctx, input }) => {
 		const existing = await ctx.prisma.settings.findFirst();
 
-		// The page is a full-object PUT, so every save sends all nineteen columns.
-		// Logging "updated settings" would be true of every entry and useful in
-		// none — name the fields that actually moved.
+		// The page is a full-object PUT, so every save sends all nineteen columns. Logging
+		// "updated settings" would be true of every entry and useful in none.
 		const changed = existing ? changedFields(existing, input) : Object.keys(input);
 
 		const settings = existing
@@ -138,10 +130,8 @@ export const settingsRouter = router({
 	}),
 
 	/**
-	 * Writes only the template/subject columns.
-	 *
-	 * `update` is a full-object PUT, so an admin saving templates would clobber a
-	 * concurrent edit to the dates or timezone. This touches nothing else.
+	 * Writes only the template/subject columns. `update` is a full-object PUT, so an admin
+	 * saving templates would otherwise clobber a concurrent edit to the dates or timezone.
 	 */
 	updateTemplates: adminProcedure
 		.input(

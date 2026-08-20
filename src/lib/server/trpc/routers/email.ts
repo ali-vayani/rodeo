@@ -23,11 +23,10 @@ import { logAction } from '$lib/server/log';
 /**
  * Whether addresses with no account are recipients or mistakes.
  *
- * Off — the historical behaviour — an explicit address list is a *lookup* into the
- * User table and anything that misses is reported back as unknown and not mailed. On,
- * the misses become real envelope addresses. That is a deliberate widening of the
- * blast radius, so it is an explicit per-request flag rather than something inferred:
- * an admin has to have ticked it.
+ * Off, an explicit address list is a lookup into the User table and anything that
+ * misses is reported back as unknown and not mailed. On, the misses become real
+ * envelope addresses. That widens the blast radius, so it is an explicit per-request
+ * flag rather than something inferred.
  */
 const allowExternalSchema = z.boolean().default(false);
 
@@ -55,9 +54,8 @@ export const emailRouter = router({
 					where,
 					take: sampleSize,
 					orderBy: { createdAt: 'desc' },
-					// `status` so the compose preview can show the QR block only to sampled
-					// recipients who would actually receive one — see previewVars in
-					// /admin/custom-email.
+					// `status` so the compose preview can show the QR block only to sampled recipients
+					// who would actually receive one.
 					select: { uid: true, name: true, email: true, status: true }
 				})
 			]);
@@ -75,9 +73,8 @@ export const emailRouter = router({
 				unknownEmails = filters.emails.filter((e) => !found.has(e.trim().toLowerCase()));
 			}
 
-			// With the toggle on those same misses stop being errors and start being
-			// recipients, so they are counted here — the count is what the send is bound
-			// to, and an uncounted recipient would trip the drift check on every send.
+			// With the toggle on those same misses stop being errors and start being recipients,
+			// so they are counted here. An uncounted recipient would trip the drift check.
 			const { external, invalid } = allowExternal
 				? splitExplicitEmails(filters.emails, matched)
 				: { external: [] as string[], invalid: [] as string[] };
@@ -96,13 +93,12 @@ export const emailRouter = router({
 		}),
 
 	/**
-	 * The recipient-independent variables, already rendered to the exact strings a
-	 * send will substitute.
+	 * The recipient-independent variables, already rendered to the exact strings a send
+	 * will substitute.
 	 *
-	 * The compose preview needs these; it must not format the dates itself, because
-	 * `toLocaleDateString()` in the browser uses the viewer's locale and timezone
-	 * rather than the server's. Never null: `sendCustom` falls back to
-	 * `DEFAULT_SETTINGS` when no row exists, so the preview shows the same.
+	 * The compose preview must not format the dates itself, because `toLocaleDateString()`
+	 * in the browser uses the viewer's locale and timezone. Never null: `sendCustom` falls
+	 * back to `DEFAULT_SETTINGS` when no row exists, so the preview shows the same.
 	 */
 	eventVars: adminProcedure.query(async ({ ctx }) => {
 		return buildEventVars(emailSettings(await ctx.prisma.settings.findFirst()));
@@ -111,13 +107,10 @@ export const emailRouter = router({
 	/**
 	 * Sends a hand-written email to the selected recipients.
 	 *
-	 * With `allowExternal` this reaches addresses that have no portal account, which is
-	 * the same capability `sendTest` had its `to` field removed for — see the comment
-	 * there. What makes it acceptable here and not there is that all three of that
-	 * incident's mitigations survive: it is `adminProcedure`, the send **is** written to
-	 * EmailLog with every address it reached, and the audit entry names the external
-	 * count. The relay was dangerous because it was untraceable, not because it had a
-	 * recipient field.
+	 * With `allowExternal` this reaches addresses that have no portal account, the same
+	 * capability `sendTest` had its `to` field removed for. What makes it acceptable here
+	 * is that the send is written to EmailLog with every address it reached and the audit
+	 * entry names the external count. That relay was dangerous because it was untraceable.
 	 */
 	sendCustom: adminProcedure
 		.input(
@@ -125,10 +118,9 @@ export const emailRouter = router({
 				subject: z.string().min(1).max(200),
 				body: z.string().min(1).max(20000),
 				filters: recipientFilterSchema,
-				// The recipient count the admin saw in the confirm step. The send is bound to
-				// it: recipients.ts documents that `filters: {}` matches everyone, so a client
-				// bug or a replay that lost the filters would otherwise blast the whole
-				// database. If the set has changed since preview, we refuse rather than send.
+				// The recipient count the admin saw in the confirm step. The send is bound to it:
+				// `filters: {}` matches everyone, so a client bug or a replay that lost the filters
+				// would otherwise blast the whole database.
 				expectedCount: z.number().int().min(0),
 				allowExternal: allowExternalSchema
 			})
@@ -136,15 +128,13 @@ export const emailRouter = router({
 		.mutation(async ({ ctx, input }) => {
 			const { subject, body, filters, expectedCount, allowExternal } = input;
 
-			// Same resolver as previewRecipients, including the fuzzy-search expansion:
-			// both sides derive the recipient set from the input the same way, so the
+			// Same resolver as previewRecipients, including the fuzzy-search expansion, so the
 			// drift check below only ever fires on a set that genuinely changed.
 			const { where } = await resolveRecipientWhere(ctx.prisma, filters);
 			const users = await ctx.prisma.user.findMany({ where });
 
-			// Resolved by membership in the User table, not against `users` — the same
-			// question `previewRecipients` asks. Deriving it from the filtered set instead
-			// would call a real hacker "external" whenever another filter excluded them.
+			// Resolved by membership in the User table, not against `users`. Deriving it from
+			// the filtered set would call a real hacker "external" whenever a filter excluded them.
 			let external: string[] = [];
 			if (allowExternal && filters.emails?.length) {
 				const matched = await ctx.prisma.user.findMany({
@@ -168,12 +158,9 @@ export const emailRouter = router({
 				return { sent: 0, external: 0 };
 			}
 
-			// Personalise per recipient, so {{name}} in a custom blast behaves the same
-			// way it does in the lifecycle templates. External recipients have no User row
-			// to read a name off and get the documented fallback instead.
-			// The raw row goes to buildEmailPersonalization, which defaults the email
-			// half itself — the check-in block's wallet gate must fail closed when no
-			// Settings row exists.
+			// Personalise per recipient, so {{name}} in a custom blast behaves like it does in
+			// the lifecycle templates. The raw row goes to buildEmailPersonalization, which
+			// defaults the email half itself so the check-in block's wallet gate fails closed.
 			const settingsRow = await ctx.prisma.settings.findFirst();
 			const externalVars = buildExternalTemplateVars(emailSettings(settingsRow));
 			const results = await Promise.allSettled([
@@ -198,9 +185,8 @@ export const emailRouter = router({
 			]);
 			const failed = results.filter((r) => r.status === 'rejected').length;
 
-			// Store the raw template, not a rendered copy — one row covers N recipients.
-			// External addresses are recorded prefixed rather than omitted, so the row
-			// still accounts for every message this send produced.
+			// Store the raw template, not a rendered copy: one row covers N recipients. External
+			// addresses are recorded prefixed rather than omitted.
 			const emailLog = await ctx.prisma.emailLog.create({
 				data: {
 					subject,
@@ -213,11 +199,9 @@ export const emailRouter = router({
 				}
 			});
 
-			// EmailLog already holds the body and the recipient list; the audit entry
-			// records the act — who pressed send, on how many people — and points at
-			// that row rather than duplicating it. Reaching outside the portal is the
-			// part a reader needs to see without opening the row, so it goes in the
-			// sentence as well as the metadata.
+			// EmailLog already holds the body and recipient list. The audit entry records the
+			// act and points at that row. Reaching outside the portal goes in the sentence as
+			// well as the metadata, since that is what a reader needs without opening the row.
 			const reached =
 				external.length > 0
 					? `${total} ${total === 1 ? 'recipient' : 'recipients'} ` +
@@ -259,25 +243,21 @@ export const emailRouter = router({
 			})
 		)
 		.mutation(async ({ ctx, input }) => {
-			// Always to the admin's own address — this exists to read a draft in a real
-			// inbox. Accepting an arbitrary `to` turned it into an authenticated relay that
-			// could send hand-written HTML from the org's From: address to anyone, with the
-			// body deliberately never written to EmailLog. "Yourself" is the whole feature.
+			// Always to the admin's own address. Accepting an arbitrary `to` turned this into an
+			// authenticated relay that could send hand-written HTML from the org's From: address
+			// to anyone, with the body deliberately never written to EmailLog.
 			const to = ctx.user.email;
 			const settings = await ctx.prisma.settings.findFirst();
 
-			// No Settings row yet on a fresh install — fall back to the preview samples for
-			// the dates so a test send still demonstrates substitution. `name` is overridden
-			// with the real recipient regardless: this mail lands in the admin's own inbox,
-			// and greeting them by a stand-in name is the one substitution a proofreading
-			// send must never show.
+			// No Settings row yet on a fresh install, so fall back to the preview samples for the
+			// dates. `name` is overridden with the real recipient regardless: this lands in the
+			// admin's own inbox, and greeting them by a stand-in is the one substitution a
+			// proofreading send must never show.
 			//
-			// The status override is the one deliberate lie in this procedure. Most
-			// admins are not confirmed hackers, so a truthful render would drop
-			// `{{hacker_qr_code}}` to nothing and leave the organizer unable to
-			// proofread the block they just inserted — which is the entire purpose of
-			// a test send. The QR encodes the admin's own uid and the wallet links
-			// still refuse them at the endpoint, so nothing is granted by pretending.
+			// The status override is the one deliberate lie here. Most admins are not confirmed
+			// hackers, so a truthful render would drop `{{hacker_qr_code}}` and leave the organizer
+			// unable to proofread the block they just inserted. The QR encodes the admin's own uid
+			// and the wallet links still refuse them, so nothing is granted by pretending.
 			const { vars, attachments } = settings
 				? await buildEmailPersonalization({ ...ctx.user, status: UserStatus.CONFIRMED }, settings)
 				: { vars: { ...SAMPLE_VARS, name: ctx.user.name }, attachments: [] };

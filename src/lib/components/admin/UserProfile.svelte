@@ -1,10 +1,8 @@
 <script lang="ts" module>
 	/**
-	 * Everything the person actually submitted, plus the two relations that say
-	 * where they sit in the event. Typed structurally rather than off the router
-	 * so this component stays free of server imports — and the responses use the
-	 * same shape `ApplicantDetail` takes, so an application reads the same way
-	 * here as it does in admissions triage.
+	 * Everything the person submitted, plus the two relations that say where they sit in
+	 * the event. Typed structurally rather than off the router so this component stays
+	 * free of server imports, and the responses use the same shape `ApplicantDetail` takes.
 	 */
 	export type ProfileData = {
 		application: Array<{ id: string; value: string; question: { title: string; order: number } }>;
@@ -34,9 +32,8 @@
 </script>
 
 <!--
-	The read-only half of the user detail modal: the application answers, the
-	team, and the scan trail. The editing controls live above this in the modal
-	and are unaffected by whether this half has loaded yet.
+	The read-only half of the user detail modal: the application answers, the team, and
+	the scan trail. The editing controls live above this in the modal.
 -->
 <section class="flex flex-col gap-5 border-t border-border pt-5">
 	<div>
@@ -76,10 +73,9 @@
 							{response.question.title}
 						</dt>
 						<!--
-							Each answer scrolls inside its own box. The essay questions run to
-							several paragraphs, and without a cap one of them pushes every other
-							answer — and the team and scan sections — out of reach.
-						-->
+													Each answer scrolls inside its own box. Essay questions run to several
+													paragraphs, and without a cap one pushes every other answer out of reach.
+												-->
 						<dd
 							class="m-0 max-h-40 overflow-y-auto rounded-md border border-border bg-muted px-3 py-2.5
 							       text-base leading-relaxed break-words whitespace-pre-wrap text-foreground"

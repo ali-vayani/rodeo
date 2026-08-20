@@ -43,12 +43,10 @@
 	/**
 	 * Export first, save the file, and only then delete.
 	 *
-	 * The order is the whole safety property, which is why it lives in the client
-	 * rather than in one server call: the backup has to be on disk before anything
-	 * is destroyed. A server-side "export then wipe" would put the only copy of
-	 * the data in a response body sent *after* the delete, where a dropped
-	 * connection loses it permanently. If either the export or the download throws,
-	 * this returns before `wipe` is ever called and nothing has been touched.
+	 * The order is the whole safety property, which is why it lives in the client rather
+	 * than one server call. A server-side "export then wipe" would put the only copy of the
+	 * data in a response body sent after the delete. If either the export or the download
+	 * throws, this returns before `wipe` is called and nothing has been touched.
 	 */
 	async function handleExportAndWipe() {
 		wiping = true;
@@ -67,8 +65,8 @@
 				`Exported ${counts.user} users, then removed ${deleted.user}. Staff and blacklist kept.`
 			);
 		} catch (e) {
-			// Reached from either half. If it was the export, nothing was deleted;
-			// if it was the wipe, the file is already saved.
+			// Reached from either half. If it was the export, nothing was deleted; if it was
+			// the wipe, the file is already saved.
 			onToast(
 				errorMessage(
 					e,
@@ -150,8 +148,8 @@
 	</div>
 </div>
 
-<!-- Release modal — shared Modal handles the overlay, focus trap, Escape, and
-     mobile sizing (width: calc(100% - 2rem), so it fits a 320px screen). -->
+<!-- Release modal. The shared Modal handles the overlay, focus trap, Escape and mobile
+     sizing. -->
 <Modal
 	bind:open={showReleaseModal}
 	title="Release Decisions"

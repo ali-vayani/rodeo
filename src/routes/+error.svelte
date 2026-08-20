@@ -11,9 +11,8 @@
 
 	/**
 	 * `page.error.message` is safe to show: SvelteKit replaces the message of an
-	 * unexpected server error with "Internal Error" before it reaches the client,
-	 * so nothing internal leaks. Only messages from an explicit `error()` call
-	 * survive, and those are written to be read.
+	 * unexpected server error with "Internal Error" before it reaches the client. Only
+	 * messages from an explicit `error()` call survive, and those are written to be read.
 	 */
 	const message = $derived(page.error?.message ?? 'Something went wrong.');
 

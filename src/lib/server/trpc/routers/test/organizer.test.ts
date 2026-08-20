@@ -40,9 +40,8 @@ function mockGroupBy(fn: unknown, value: unknown) {
  * The organizer boundary, asserted in one place.
  *
  * ORGANIZER used to be a straight alias for ADMIN, so every one of these calls
- * succeeded. Hiding the nav links doesn't change that — these procedures are reachable
- * at /api/trpc/* regardless — which is why the boundary is tested at this layer rather
- * than through the pages.
+ * succeeded. Hiding the nav links does not change that, since these procedures are
+ * reachable at /api/trpc/* regardless.
  */
 describe('organizer is denied everything holding user data', () => {
 	const denied: Record<string, (c: ReturnType<typeof createTestCaller>) => Promise<unknown>> = {

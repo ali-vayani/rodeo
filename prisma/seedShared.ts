@@ -1,9 +1,8 @@
 /**
  * Infrastructure shared by seed.ts and the three scenario seed scripts.
  *
- * Keeping the Prisma client setup, production guard, question list, and question
- * seeding here means all four entry points stay in sync when the application form
- * changes — edit the questions once and every seed picks them up.
+ * Keeping the Prisma client setup, production guard and question list here means all
+ * four entry points stay in sync when the application form changes.
  */
 
 import 'dotenv/config';
@@ -116,8 +115,7 @@ export const questions = [
 	{
 		title: 'University',
 		// Was SHORT_TEXT, which is what put the same school in the filter under four
-		// spellings. The preset supplies the list; an applicant whose school is missing
-		// still types their own.
+		// spellings. The preset supplies the list; a missing school is still typed in.
 		type: QuestionType.DROPDOWN,
 		optionPreset: OptionPreset.UNIVERSITIES_NA,
 		required: true,
@@ -278,9 +276,8 @@ export const questions = [
 
 // ---------------------------------------------------------------------------
 // Question seeding
-// Matched on order+targetRole, not title. Titles are editable in the admin UI;
-// matching on them would produce a second copy of a question when its title is
-// renamed and then re-seeded.
+// Matched on order+targetRole, not title. Titles are editable in the admin UI, so
+// matching on them would duplicate a question that had been renamed.
 // ---------------------------------------------------------------------------
 
 export async function seedQuestions(prisma: PrismaClient): Promise<void> {

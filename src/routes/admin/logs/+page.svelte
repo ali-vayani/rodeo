@@ -39,9 +39,9 @@
 		...data.actors.map((a) => ({ value: a.actorId, label: `${a.name} (${a.count})` }))
 	]);
 
-	// Flattened with a group heading as a disabled row: the Combobox primitive takes
-	// a single option list, and the alternative — a second dropdown for the group —
-	// is two controls to find one action.
+	// Flattened with a group heading as a disabled row: the Combobox primitive takes a
+	// single option list, and a second dropdown for the group is two controls to find one
+	// action.
 	const actionOptions: ComboboxOption[] = [
 		{ value: '', label: 'All actions' },
 		...LOG_ACTION_GROUPS.flatMap((group) => [
@@ -51,10 +51,9 @@
 	];
 
 	/**
-	 * Fetch one page under the current filters.
-	 *
-	 * Always resets to page 1 unless told otherwise — a filter that narrows 400
-	 * entries to 3 while you sit on page 5 would otherwise show an empty table.
+	 * Fetch one page under the current filters. Always resets to page 1 unless told
+	 * otherwise, since a filter that narrows 400 entries to 3 while you sit on page 5
+	 * would show an empty table.
 	 */
 	async function fetchPage(nextPage = 1) {
 		loading = true;
@@ -99,9 +98,8 @@
 
 	const totalPages = $derived(Math.max(1, Math.ceil(total / PAGE_SIZE)));
 
-	// --- Detail ---
-	/** The row whose full record is open. Kept alongside `detailOpen` so the
-	    dialog can animate out without its contents vanishing mid-transition. */
+	/** The row whose full record is open. Kept alongside `detailOpen` so the dialog can
+	    animate out without its contents vanishing mid-transition. */
 	let selected = $state<Entry | null>(null);
 	let detailOpen = $state(false);
 
@@ -124,9 +122,9 @@
 		}));
 	});
 
-	// Column widths only from lg up: below that the viewport (or the sidebar at
-	// md) can't afford them, and fixed widths inflate the table's intrinsic
-	// width, which pushes the whole page wider instead of scrolling the table.
+	// Column widths only from lg up: below that the viewport cannot afford them, and fixed
+	// widths inflate the table's intrinsic width, pushing the page wider instead of
+	// scrolling the table.
 	const COLUMNS: Column<Entry>[] = [
 		{ key: 'timestamp', header: 'When', nowrap: true, width: 'lg:w-40' },
 		{ key: 'actor', header: 'Admin', nowrap: true, width: 'lg:w-44' },

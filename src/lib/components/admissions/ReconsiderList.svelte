@@ -61,12 +61,9 @@
 	);
 
 	/**
-	 * Toggle a decision on a single row. Pressing a decision that's already the
-	 * pending one clears it; pressing a different one sets it.
-	 *
-	 * Pressing a decision that matches the already-released active decision is a
-	 * no-op — the button is disabled at the template level so this guard is a
-	 * safety net only.
+	 * Toggle a decision on a single row. Pressing the already-pending decision clears it;
+	 * pressing a different one sets it. Pressing one that matches the released active
+	 * decision is a no-op, and the button is disabled at the template level anyway.
 	 */
 	function decideOne(uid: string, decision: DecisionStatus) {
 		const row = applicants.find((a) => a.uid === uid);

@@ -4,14 +4,12 @@
 	/**
 	 * The admissions pipeline, stage by stage.
 	 *
-	 * Single ink hue throughout. Bar length already encodes the count, so tinting
-	 * each stage a different colour would spend the page's one free channel
-	 * restating what the reader can already see — and would put four more colours
-	 * beside the decision bar, where colour means something specific.
+	 * Single ink hue throughout. Bar length already encodes the count, so tinting each
+	 * stage would spend the page's one free channel restating what the reader can see, and
+	 * put four more colours beside the decision bar where colour means something specific.
 	 *
-	 * Laid out as a grid rather than a flex row so the counts line up in their own
-	 * column down the funnel. Under flex, a 100%-wide first bar squeezes its own
-	 * label against the card edge and the numbers stagger.
+	 * Laid out as a grid rather than a flex row so the counts line up in their own column.
+	 * Under flex, a 100%-wide first bar squeezes its label against the card edge.
 	 */
 	let { stages }: { stages: FunnelStage[] } = $props();
 

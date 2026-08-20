@@ -14,12 +14,10 @@
 
 <!--
 	The account switcher: `vite dev` and preview deploys, decided server-side by
-	devSwitcherEnabled (src/lib/server/env.ts). Production bundles don't even
-	contain the chunk — vite.config.ts empties src/lib/dev/ out of
-	VERCEL_ENV=production builds — so there the flag is false AND the import
-	would load an empty component. The import is dynamic so the chunk loads only
-	when mounted, and never during SSR, so the component can read localStorage
-	at init with no `typeof window` guards.
+	devSwitcherEnabled. Production bundles do not contain the chunk at all, since
+	vite.config.ts empties src/lib/dev/ out of VERCEL_ENV=production builds. The import
+	is dynamic so the chunk loads only when mounted, and never during SSR, so the
+	component can read localStorage at init with no `typeof window` guards.
 
 	Last, after ToastHost, so it can never shift anything above it.
 

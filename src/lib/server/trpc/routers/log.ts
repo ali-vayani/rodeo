@@ -5,13 +5,11 @@ import { router, adminProcedure } from '../init';
 /**
  * Reading the audit trail.
  *
- * Nothing here writes — entries come from `logAction` at the call site of the
- * action being recorded. This router is the `/admin/logs` page's data source and
- * the dashboard's activity feed.
+ * Nothing here writes; entries come from `logAction` at the call site of the action
+ * being recorded. This router feeds `/admin/logs` and the dashboard's activity feed.
  *
- * Note that no query joins `actor`. Every field the UI renders is snapshotted on
- * the row itself, which is what lets history survive an organizer being deleted;
- * joining would reintroduce exactly the dependency the snapshot exists to avoid.
+ * No query joins `actor`. Every field the UI renders is snapshotted on the row itself,
+ * which is what lets history survive an organizer being deleted.
  */
 
 const listInput = z.object({
@@ -67,9 +65,8 @@ export const logRouter = router({
 	/**
 	 * The distinct admins who appear in the trail, for the page's actor filter.
 	 *
-	 * Grouped over the log itself rather than listing all admins: an organizer who
-	 * has never done anything is noise in a filter, and one who has since been
-	 * removed still needs to be selectable.
+	 * Grouped over the log itself rather than listing all admins: an organizer who has
+	 * never done anything is noise, and one since removed still needs to be selectable.
 	 */
 	actors: adminProcedure.query(async ({ ctx }) => {
 		const rows = await ctx.prisma.log.groupBy({

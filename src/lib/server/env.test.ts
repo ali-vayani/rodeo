@@ -3,9 +3,9 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 const env: Record<string, string | undefined> = {};
 vi.mock('$env/dynamic/private', () => ({ env }));
 
-// `dev` is a build-time constant in the real app, so it has no runtime setter to
-// stub. A getter over a local lets the devSwitcherEnabled tests flip it, which is
-// the only way to prove the build-time layer of the gate is load-bearing.
+// `dev` is a build-time constant in the real app, so it has no runtime setter to stub.
+// A getter over a local lets these tests flip it, which is the only way to prove the
+// build-time layer of the gate is load-bearing.
 let devFlag = true;
 vi.mock('$app/environment', () => ({
 	get dev() {
@@ -127,9 +127,9 @@ describe('emailFrom', () => {
 	});
 
 	it('falls back when EMAIL_FROM is set but blank', () => {
-		// A variable created in Vercel and left empty arrives as ''. Under `??` that was
-		// passed through as the envelope sender and Resend rejected every message with
-		// "The domain is invalid" — confirmed against the live API, not hypothesised.
+		// A variable created in Vercel and left empty arrives as ''. Under `??` that was passed
+		// through as the envelope sender and Resend rejected every message. Confirmed against
+		// the live API, not hypothesised.
 		env.EMAIL_FROM = '';
 		expect(emailFrom()).toBe('hello@freetailhackers.com');
 
@@ -251,24 +251,23 @@ describe('devSwitcherEnabled', () => {
 		expect(devSwitcherEnabled()).toBe(true);
 	});
 
-	// Each of the four conditions is removed on its own, so a test fails the moment
-	// anyone drops one from the predicate. This gate is the whole security story for
-	// a passwordless login-as-anyone endpoint, so it is worth spelling out.
+	// Each of the four conditions is removed on its own, so a test fails the moment anyone
+	// drops one from the predicate. This gate is the whole security story for a
+	// passwordless login-as-anyone endpoint.
 	it('refuses when `dev` is false, whatever the environment says', () => {
 		workingDevEnv();
 		devFlag = false;
 
-		// The self-hosted `node build` with NODE_ENV unset: deployEnv() falls through
-		// to 'development' and every runtime check passes, so the build-time constant
-		// is the only thing standing between that deploy and an open door.
+		// The self-hosted `node build` with NODE_ENV unset: deployEnv() falls through to
+		// 'development' and every runtime check passes, so the build-time constant is the only
+		// thing standing between that deploy and an open door.
 		expect(usesSupabaseAuth()).toBe(false);
 		expect(devSwitcherEnabled()).toBe(false);
 	});
 
 	it('allows preview deploys, with no other conditions', () => {
-		// Previews run against throwaway per-branch schemas of seeded fixtures,
-		// where the switcher grants nothing the /login yopmail form doesn't
-		// already grant — so it is on there even in a built (non-dev) bundle.
+		// Previews run against throwaway per-branch schemas of seeded fixtures, where the
+		// switcher grants nothing the /login yopmail form does not already grant.
 		devFlag = false;
 		env.VERCEL_ENV = 'preview';
 		expect(devSwitcherEnabled()).toBe(true);
@@ -290,9 +289,8 @@ describe('devSwitcherEnabled', () => {
 		workingDevEnv();
 		env.DATABASE_URL = 'postgres://user:pw@db.abcdefg.supabase.co:5432/postgres';
 
-		// The realistic local incident: a developer points DATABASE_URL at production
-		// to debug a data issue. validateEnv() would catch this too — but only while
-		// VERCEL_ENV is unset, so the switcher re-checks rather than inheriting it.
+		// The realistic local incident: a developer points DATABASE_URL at production to debug
+		// a data issue. validateEnv() would catch it too, but only while VERCEL_ENV is unset.
 		expect(devSwitcherEnabled()).toBe(false);
 	});
 

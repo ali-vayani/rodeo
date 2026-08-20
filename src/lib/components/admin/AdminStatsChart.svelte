@@ -6,19 +6,16 @@
 	/**
 	 * Per-admin review activity, ranked.
 	 *
-	 * Segment colours come from the status ramps, which is the one job colour does
-	 * in this product — accepted/rejected/waitlisted genuinely are statuses, not
-	 * arbitrary series. That ramp puts green next to red, a pair colour-blind
-	 * readers separate poorly (ΔE 6.3 deutan) and which clears neither swatch the
-	 * 3:1 contrast bar against a white card. Both are why **every segment is also
-	 * spelled out as a number underneath**: the bar is the comparison, the digits
-	 * are the data, and nothing here is legible by hue alone.
+	 * Segment colours come from the status ramps, which is the one job colour does here.
+	 * That ramp puts green next to red, a pair colour-blind readers separate poorly
+	 * (delta-E 6.3 deutan) and which clears neither swatch the 3:1 contrast bar against a
+	 * white card. So every segment is also spelled out as a number underneath: the bar is
+	 * the comparison, the digits are the data.
 	 */
 	/**
-	 * The time window used to live here, as a `Select` in this card's header. It
-	 * moved up to the dashboard, which now owns one range for every panel that can
-	 * honestly be scoped by one — a filter inside a chart card lets two panels side
-	 * by side describe different slices with nothing on screen saying so.
+	 * The time window used to live here as a `Select` in this card's header. It moved up
+	 * to the dashboard, which now owns one range for every panel that can honestly be
+	 * scoped by one.
 	 */
 	let {
 		admins,
@@ -31,7 +28,7 @@
 	} = $props();
 
 	/**
-	 * Written out rather than built as `bg-${tone}-500` — Tailwind scans source
+	 * Written out rather than built as `bg-${tone}-500`, since Tailwind scans source
 	 * text statically and never sees a constructed class name.
 	 */
 	const SEGMENTS = [
@@ -40,9 +37,8 @@
 		{ key: 'waitlisted', label: 'Waitlisted', bar: 'bg-warning-500', dot: 'bg-warning-500' }
 	] as const;
 
-	// Everyone with something to show. The query zero-fills the full staff roster so
-	// the shape is stable, but rendering 60 empty rows buries the handful of people
-	// who actually reviewed anything.
+	// Everyone with something to show. The query zero-fills the full staff roster so the
+	// shape is stable, but 60 empty rows would bury the handful who reviewed anything.
 	const active = $derived(
 		admins.filter((a) => a.decisions > 0 || a.emailCampaigns > 0 || a.scans > 0)
 	);
@@ -130,12 +126,12 @@
 		</ul>
 
 		{#if unattributed.total > 0}
-			<!-- Decisions nobody is on the hook for: made before attribution existed, or
-			     by the blacklist auto-reject, which no admin triggered. Shown rather than
-			     dropped so the bars above sum to the real decision totals. -->
-			<!-- `pluralize` already emits the count, so pairing it with a formatted
-			     number printed "98 unattributed 98 decisions". The formatted number wins
-			     — it is the one that groups thousands. -->
+			<!-- Decisions nobody is on the hook for: made before attribution existed, or by the
+						     blacklist auto-reject. Shown rather than dropped so the bars above sum to the
+						     real decision totals. -->
+			<!-- `pluralize` already emits the count, so pairing it with a formatted number
+						     printed "98 unattributed 98 decisions". The formatted number wins, being the
+						     one that groups thousands. -->
 			<p class="mt-4 border-t border-border pt-3 text-xs text-foreground-tertiary">
 				<span class="font-mono tabular-nums">{nf.format(unattributed.total)}</span>
 				unattributed {unattributed.total === 1 ? 'decision' : 'decisions'} — recorded before attribution

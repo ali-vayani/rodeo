@@ -1,14 +1,10 @@
 /**
  * Scenario 2 — Applications Closed
  *
- * Simulates the period after the deadline has passed and admins have finished
- * reviewing every application:
- * - All hackers who applied now have a pendingDecision (ACCEPTED, REJECTED, or
- *   WAITLISTED), but activeDecision is still null — decisions have not been
- *   released to applicants yet.
- * - A small share of hackers registered but never submitted (CREATED).
- * - Staff are fully confirmed; event logistics are locked in.
- * - Admins and organizers are internal and never go through admissions.
+ * The deadline has passed and admins have reviewed every application. Every hacker
+ * who applied has a pendingDecision, but activeDecision is still null, so nothing has
+ * been released to applicants yet. A small share registered but never submitted.
+ * Staff are fully confirmed; admins and organizers never go through admissions.
  *
  * Run: npm run db:seed:closed
  * Add SEED_PRUNE=1 to also remove any @yopmail.com accounts not generated here.
@@ -38,15 +34,11 @@ const prisma = createPrismaClient(connectionString);
 // ---------------------------------------------------------------------------
 
 /**
- * Everyone who applied has been reviewed — pendingDecision is set on all of them
- * — but activeDecision remains null across the board.  Hackers see no decision
- * in their portal yet.
+ * Everyone who applied has been reviewed, but activeDecision remains null across the
+ * board, so hackers see no decision in their portal yet.
  *
- * Weight breakdown (total 11):
- *   ~9%  CREATED       — registered but never applied
- *  ~36%  ACCEPTED      — pending, unreleased
- *  ~36%  REJECTED      — pending, unreleased
- *  ~18%  WAITLISTED    — pending, unreleased
+ * Weight breakdown (total 11): ~9% CREATED, ~36% ACCEPTED, ~36% REJECTED,
+ * ~18% WAITLISTED, all pending and unreleased.
  */
 const HACKER_STATES: StatePlan[] = [
 	{ status: UserStatus.CREATED, weight: 1 },

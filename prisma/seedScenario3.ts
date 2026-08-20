@@ -1,19 +1,16 @@
 /**
  * Scenario 3 — Hackathon Start
  *
- * Simulates the morning of the event: decisions have been released, the RSVP
- * window has closed, and attendees are arriving.
+ * The morning of the event: decisions released, RSVP window closed, attendees
+ * arriving. Staff are a mix of confirmed and already checked in.
  *
  * Hacker distribution (total weight 14):
- *   hacker1–5    CONFIRMED  — said yes, not yet scanned (5 per cycle)
- *   hacker6–8    CHECKED_IN — already through the door (3 per cycle)
- *   hacker9–10   APPLIED + ACCEPTED/ACCEPTED — accepted, never RSVPd (no-shows)
+ *   hacker1-5    CONFIRMED  — said yes, not yet scanned
+ *   hacker6-8    CHECKED_IN — already through the door
+ *   hacker9-10   APPLIED + ACCEPTED — accepted, never RSVPd
  *   hacker11     DECLINED   — accepted but said no
- *   hacker12–13  REJECTED   — released rejection
- *   hacker14     WAITLISTED — released waitlist
- *   (pattern repeats every 14 hackers)
- *
- * Staff are a mix of confirmed and already checked in.
+ *   hacker12-13  REJECTED
+ *   hacker14     WAITLISTED
  *
  * Run: npm run db:seed:event
  * Add SEED_PRUNE=1 to also remove any @yopmail.com accounts not generated here.
@@ -43,17 +40,12 @@ const prisma = createPrismaClient(connectionString);
 // ---------------------------------------------------------------------------
 
 /**
- * The state cycle is ordered so the first accounts in each email range land in
- * the most useful states — hacker1–5 are always CONFIRMED and hacker6–8 are
- * always CHECKED_IN, making manual testing straightforward.
+ * Ordered so the first accounts in each email range land in the most useful states:
+ * hacker1-5 are always CONFIRMED and hacker6-8 always CHECKED_IN.
  *
- * Weight breakdown (total 14):
- *  ~36%  CONFIRMED         — accepted and RSVPd, arriving soon
- *  ~21%  CHECKED_IN        — already scanned at the door
- *  ~14%  APPLIED+ACCEPTED  — accepted, RSVP window closed without a response
- *   ~7%  DECLINED          — accepted but said no
- *  ~14%  REJECTED          — released rejection
- *   ~7%  WAITLISTED        — released waitlist
+ * Weight breakdown (total 14): ~36% CONFIRMED, ~21% CHECKED_IN, ~14%
+ * APPLIED+ACCEPTED (RSVP window closed without a response), ~7% DECLINED,
+ * ~14% REJECTED, ~7% WAITLISTED.
  */
 const HACKER_STATES: StatePlan[] = [
 	{

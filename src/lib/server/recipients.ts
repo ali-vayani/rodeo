@@ -7,16 +7,9 @@ import { stateCondition } from '$lib/server/homeState';
 import { tokenMatch, normalizeName } from '$lib/text/similarity';
 
 /**
- * Filters over the `User` columns an application question writes through to.
- *
- * Split out from `recipientFilterSchema` because `admissions.list` keeps its own
- * predicate (it matches pendingDecision OR activeDecision, which the recipient
- * predicate deliberately never does) but must accept and interpret these three keys
- * identically. One schema plus one clause-builder is what stops the two from drifting
- * a second time — they already had duplicate copies of the search clause.
- *
- * Each key follows the engaged-but-empty rule: `[]` selects nobody, absent means "no
- * filter". See `linkedFieldConditions`.
+ * Filters over the `User` columns an application question writes through to. Shared
+ * with `admissions.list`, which keeps its own predicate but must read these keys
+ * identically. `[]` selects nobody; absent means no filter.
  */
 export const linkedFieldFilterSchema = z.object({
 	names: z.array(z.string()).optional(),
@@ -27,24 +20,16 @@ export const linkedFieldFilterSchema = z.object({
 export type LinkedFieldFilters = z.infer<typeof linkedFieldFilterSchema>;
 
 /**
- * Filters over answers that live in `ApplicationResponse` rather than in a `User`
- * column — which is every question the organizer did not link, i.e. almost all of them.
+ * Filters over answers stored in `ApplicationResponse` rather than a `User` column.
  *
- * One entry per engaged facet. The keys are mutually exclusive in practice because the
- * control decides which one it sets: a checkbox list sets `values`, a short-text box
- * sets `contains`, a number range sets `min`/`max`. They are separate keys rather than
- * a discriminated union because the *question* can change type under a saved filter,
- * and a filter that merely stops applying is better than one that fails to parse.
- *
- * `states` is here rather than beside the linked fields because it is derived from
- * `User.university` through a dataset lookup, so it cannot be a plain column `IN` —
- * see `$lib/server/homeState`.
+ * Separate keys rather than a discriminated union, so a filter saved against a question
+ * whose type later changed stops applying instead of failing to parse.
  */
 const answerFilter = z.object({
 	questionId: z.string().min(1),
-	/** Exact membership. `[]` selects nobody — the engaged-but-empty rule. */
+	/** Exact membership. `[]` selects nobody. */
 	values: z.array(z.string()).optional(),
-	/** Case-insensitive substring, for a short-text question with no useful vocabulary. */
+	/** Case-insensitive substring, for a short-text question. */
 	contains: z.string().optional(),
 	/** Inclusive numeric bounds, for a NUMBER question. Either end may be omitted. */
 	min: z.number().optional(),
@@ -52,19 +37,14 @@ const answerFilter = z.object({
 });
 
 export const answerFilterSchema = z.object({
-	// Bounded because each entry is a separate correlated subquery, and a form has
-	// perhaps twenty questions — fifty is already far past anything a panel can send.
+	// Bounded because each entry is a separate correlated subquery.
 	answers: z.array(answerFilter).max(50).optional(),
 	states: z.array(z.string()).max(80).optional()
 });
 
 export type AnswerFilters = z.infer<typeof answerFilterSchema>;
 
-/**
- * Filter key ↔ linked field. The plural is the wire name, which is also the query
- * parameter in a shared filter link — so it stays lowercase and plural even though
- * the field it names is now an enum member.
- */
+/** Filter key ↔ linked field. The plural is the wire name and the query parameter. */
 const LINKED_FILTER_KEYS: Record<keyof LinkedFieldFilters, LinkedField> = {
 	names: 'NAME',
 	universities: 'UNIVERSITY',
@@ -72,24 +52,14 @@ const LINKED_FILTER_KEYS: Record<keyof LinkedFieldFilters, LinkedField> = {
 };
 
 /**
- * The linked columns that are nullable in `prisma/schema.prisma`.
- *
- * `User.name` is `String` (NOT NULL) while `university` and `year` are `String?`, and
- * Prisma rejects `{ name: null }` at runtime rather than treating it as a never-true
- * filter. So "no value" means NULL-or-empty for two of the three columns and
- * empty-only for `name` — which is exactly right anyway, since a NULL name cannot
- * exist for the facet count to have found one.
+ * The linked columns that are nullable. Prisma rejects `{ name: null }` at runtime, so
+ * "no value" means NULL-or-empty for these two and empty-only for `name`.
  */
 const NULLABLE_LINKED_FIELDS = new Set<LinkedField>(['UNIVERSITY', 'YEAR']);
 
 /**
- * The one definition of "which users does this filter select".
- *
- * `user.list` (browse) and `email.sendCustom` / `email.previewRecipients` (send)
- * MUST share this. They previously disagreed on the empty-selection case in the
- * worst possible direction: the browse query matched nothing while the send query
- * dropped the clause and matched everyone, so a UI showing "0 recipients" from one
- * would mail the entire database via the other.
+ * The one definition of "which users does this filter select". Browse and send MUST
+ * share it, or a UI showing "0 recipients" could mail the entire database.
  */
 export const recipientFilterSchema = z.object({
 	search: z.string().optional(),
@@ -97,11 +67,7 @@ export const recipientFilterSchema = z.object({
 	statuses: z.array(z.nativeEnum(UserStatus)).optional(),
 	decisions: z.array(z.nativeEnum(DecisionStatus)).optional(),
 	includeNoDecision: z.boolean().optional(),
-	/**
-	 * Explicit recipient list. Present means "these addresses", intersected with any
-	 * other filters supplied. An empty array means nobody — same "engaged but empty"
-	 * rule the decision filter uses.
-	 */
+	/** Explicit recipient list, intersected with any other filters. `[]` means nobody. */
 	emails: z.array(z.string()).optional(),
 	...linkedFieldFilterSchema.shape,
 	...answerFilterSchema.shape
@@ -113,36 +79,19 @@ export type RecipientFilters = z.infer<typeof recipientFilterSchema>;
 // the browser, and everything under $lib/server is barred from client bundles.
 
 /**
- * Forces a match-nothing predicate. Used when a caller engaged a filter but selected
- * none of its options — "show nothing", not "show all".
- *
- * The keys that implement the rule are the explicit address list, the linked
- * application fields, and the decision pair — the places where an empty selection is
- * expressible as a deliberate act. `roles: []` and `statuses: []` never reach here:
- * `recipientConditions` drops an empty clause for those two, so their `[]` matches
- * everyone. The UI sends `[]` for none of the checkbox groups either way —
- * `buildRecipientParams` omits a group's keys once it stops narrowing — so the
- * distinction only faces direct API callers.
+ * Forces a match-nothing predicate, for a filter engaged with none of its options
+ * selected. Applies to the address list, the linked fields and the decision pair;
+ * `roles: []` and `statuses: []` never reach here, so their `[]` matches everyone.
  */
 const MATCH_NOTHING = 'IMPOSSIBLE_NO_MATCH';
 
-/**
- * Marks an `EmailLog.userIds` entry that is an address rather than a uid.
- *
- * `userIds` is the record of who a send reached, and an external recipient has no
- * uid to put there. Dropping them would make the row understate its own blast radius
- * — the one thing that record exists to state — so they go in prefixed. A uid is a
- * cuid, which can never contain a colon, so the two are unambiguous, and
- * `SendHistory` (which only counts the array) stays correct.
- */
+/** Marks an `EmailLog.userIds` entry that is an address rather than a uid, since an
+    external recipient has no uid. A cuid can never contain a colon. */
 export const EXTERNAL_RECIPIENT_PREFIX = 'external:';
 
 /**
- * Server-side address validation for the external-send path.
- *
- * The client filters malformed entries out of the textarea before they are sent, but
- * with the external toggle on this list becomes envelope addresses rather than a
- * lookup key — so it is re-checked here rather than trusted.
+ * Server-side address validation for the external-send path, re-checked rather than
+ * trusted because with the toggle on this list becomes envelope addresses.
  */
 const externalEmailSchema = z.string().email();
 
@@ -154,14 +103,9 @@ function normalize(email: string): string {
 /**
  * Splits an explicit address list into the addresses no User row claims.
  *
- * `email.previewRecipients` and `email.sendCustom` MUST share this, for exactly the
- * reason they share `buildRecipientWhere`: the count the admin confirms is what the
- * send is bound to, so both sides have to derive the external set identically or the
- * drift check fires on a set that never changed.
- *
- * Addresses already belonging to a user are dropped — a pasted address that matches a
- * hacker is mailed once, as that hacker, so `{{name}}` still personalises. Malformed
- * entries land in `invalid` rather than being silently mailed or silently dropped.
+ * Preview and send MUST share this, so the count the admin confirms matches what the
+ * send is bound to. Addresses already belonging to a user are dropped so they are
+ * mailed once as that user; malformed entries land in `invalid`.
  */
 export function splitExplicitEmails(
 	emails: readonly string[] | undefined,
@@ -186,58 +130,27 @@ export function splitExplicitEmails(
 }
 
 /**
- * Jaro-Winkler score at or above which a stored name is offered as a match for a typed
- * search term.
+ * Jaro-Winkler score at or above which a stored name is offered as a search match.
  *
- * Deliberately far below the blacklist's 0.92, and for a reason that is about
- * consequences rather than strings: a blacklist hit accuses someone, so it is tuned to
- * reject `patel`/`patil`; a search hit merely puts an extra row on screen next to the
- * rows the admin was already going to see. Over-matching here costs a glance,
- * under-matching costs the feature — an organizer who types `Sara Chn` and gets "no
- * results" concludes the person isn't in the system.
- *
- *   catches at .80  sarh/sarah .953  chn/chen .933  mohamed/mohammed .975
- *                   jonhson/johnson .962  patel/patil .907 (fine here — a suggestion)
- *   still rejects   chen/rodriguez .00  sara/martinez .58  ada/lovelace .49
- *
- * It only ever runs as a fallback (see `expandSearch`), so a term that matches anything
- * exactly never reaches this bar at all.
+ * Well below the blacklist's 0.92, because a blacklist hit accuses someone while a
+ * search hit merely puts an extra row on screen. Catches chn/chen (.933) and
+ * mohamed/mohammed (.975); rejects chen/rodriguez and sara/martinez.
  */
 export const SEARCH_SIMILARITY_THRESHOLD = 0.8;
 
-/**
- * Most fuzzy names folded into one predicate.
- *
- * A bound on the `IN (...)` list, not on the scan — the fold itself is over every
- * distinct name either way. 25 is generous for "did you mean", and past it the result
- * is noise rather than a suggestion.
- */
+/** Cap on the `IN (...)` list of fuzzy names — past this the result is noise. */
 export const MAX_FUZZY_NAMES = 25;
 
 /**
- * Concrete `name` values to widen a search with, plus how they were arrived at.
- *
- * The values are resolved to explicit strings on purpose. `previewRecipients` and
- * `sendCustom` must select the same people from the same input or the `expectedCount`
- * drift check fires, and a similarity score is not something a WHERE clause can
- * express — so the fuzziness is collapsed to a list of names *before* it reaches the
- * predicate, and the predicate stays exact.
+ * Concrete `name` values to widen a search with. Resolved to explicit strings so the
+ * predicate stays exact: a similarity score is not something a WHERE clause can
+ * express, and preview and send must select the same people.
  */
 export interface SearchExpansion {
 	/**
-	 * Extra names ORed into the search clause, **most relevant first**.
-	 *
-	 * This ordering is the only relevance signal the feature can offer. The rows
-	 * themselves come back `orderBy: createdAt desc` because they are paginated, and
-	 * a score computed in application memory cannot drive a SQL `ORDER BY` without
-	 * loading every candidate row first — so the table is honestly unranked and this
-	 * list is honestly ranked. A UI should render it in the order given, not silently
-	 * reorder the table to imply otherwise, and should caption it off `exact` rather
-	 * than off `fuzzy`.
-	 *
-	 * Only ever names the substring clause did **not** already select. A name containing
-	 * the typed term is in the result set regardless, so offering it back widens nothing
-	 * and merely captions rows the admin can already see.
+	 * Extra names ORed into the search clause, most relevant first. This ordering is
+	 * the only relevance signal available, since the rows come back `createdAt desc`
+	 * under pagination. Only ever names the substring clause did not already select.
 	 */
 	names: string[];
 	/** Whether the fold ran, i.e. the term returned fewer than `EXACT_MATCH_FLOOR` rows. */
@@ -245,15 +158,11 @@ export interface SearchExpansion {
 	/** More names cleared the threshold than `MAX_FUZZY_NAMES` — the list is truncated. */
 	capped: boolean;
 	/**
-	 * How many rows the typed term matched **exactly**, within the caller's own scope.
+	 * How many rows the typed term matched exactly, within the caller's own scope.
 	 *
-	 * The field the suggestion strip has to caption itself from. `fuzzy` only says the
-	 * fold ran, and since the fold runs below a floor of five rather than at zero, it
-	 * runs all the time over rows that *did* match — so a UI keying its wording off
-	 * `fuzzy` says "No exact match" above three exact matches. Searching `Vayani` on a
-	 * twelve-person Admissions queue did exactly that.
-	 *
-	 * Zero when there is no search term, which is also when there is nothing to caption.
+	 * What a suggestion strip should caption itself from. `fuzzy` only says the fold
+	 * ran, and it runs below a floor of five, so keying wording off it prints "No
+	 * exact match" above three exact matches.
 	 */
 	exact: number;
 }
@@ -269,12 +178,7 @@ function exactSearchOr(search: string): Prisma.UserWhereInput[] {
 	];
 }
 
-/**
- * The search clause, shared verbatim by `buildRecipientWhere` and `admissions.list`.
- *
- * Both used to carry their own copy of this literal, which is how their predicates
- * drifted in the first place.
- */
+/** The search clause, shared verbatim by `buildRecipientWhere` and `admissions.list`. */
 export function searchCondition(
 	search: string | undefined,
 	expansion: SearchExpansion = NO_EXPANSION
@@ -286,62 +190,26 @@ export function searchCondition(
 }
 
 /**
- * Exact-hit count at or above which the fuzzy fold is skipped entirely.
- *
- * The fast path, and the reason it is a small number rather than zero: an exact
- * substring runs over name *and email*, so a three-letter query lands on somebody's
- * address by coincidence far more often than it finds the person meant. `Chn` returns
- * exactly one row on the dev database — an unrelated email containing "chn" — and a
- * zero-only trigger let that single coincidence suppress the whole feature, hiding
- * `Zhizhen Chen` at a .933 match.
- *
- * Five is the point where a result set stops looking like an accident. Below it the
- * fold runs and its names are added to, never substituted for, whatever matched
- * exactly; at or above it the query is clearly productive and costs one count.
- *
- * Counted *within the caller's own scope* — see `expandSearch`. The floor was never
- * the problem; a global count was.
+ * Exact-hit count at or above which the fuzzy fold is skipped. Not zero: the substring
+ * runs over name *and email*, so a short query lands on somebody's address by
+ * coincidence often enough that one such hit would suppress the feature.
  */
 export const EXACT_MATCH_FLOOR = 5;
 
 /**
  * Resolve a search term into extra names to widen it with.
  *
- * Exact-first, fuzzy-as-a-supplement. A query that already returns a real result set
- * skips the fold entirely, so a good query is never slowed or altered. A query that
- * returns almost nothing gets close matches **unioned in** — `searchCondition` ORs
- * these names alongside the substring clauses, so every exact hit still matches and
- * the fuzzy names are additional rows, never a replacement set.
+ * Exact-first, fuzzy-as-a-supplement: a query that already returns a real result set
+ * skips the fold, and otherwise close matches are unioned in rather than substituted.
+ * The fold happens in memory because similarity is not expressible as a WHERE clause,
+ * and scans `distinct` names, so it is bounded by people rather than rows.
  *
- * The fold happens in memory because similarity is not expressible as a WHERE clause;
- * `admissions.list` already does the same thing with the blacklist for the same reason.
- * The scan is over `distinct` names, so it is bounded by the number of distinct people
- * rather than the number of rows.
+ * Candidates qualify on `best` and are ranked by `score`; thresholding on the mean
+ * would make multi-token queries unsatisfiable.
  *
- * Candidates qualify on `best` — one query token being a convincing typo of one name
- * token — and are *ranked* by `score`, the mean across query tokens. Thresholding on
- * the mean instead would make a two-token query unsatisfiable: `sarh chn` against
- * `Zhizhen Chen` means .69 even though `chn`/`chen` is .933, so every multi-token
- * query would return nothing. Ranking on the mean is what puts a name matching both
- * tokens above a name matching one.
- *
- * `scope` is the caller's own conditions **with the search clause left out**, and the
- * probe is counted inside it. The exclusion is not an optimisation, it is the only way
- * the question is askable: the search clause depends on the expansion this function is
- * computing, so a scope that contained it would be circular. Callers get the two halves
- * from one builder (`recipientConditions`, or `admissions.list`'s own condition list)
- * so the scope they probe with and the predicate they finally run cannot drift.
- *
- * A *global* count was the bug. `adm` matched `admin1@yopmail.com`…`admin5@…` plus a
- * few undeclared accounts — eight rows, none of them applicants — so the probe cleared
- * the floor and suppressed the fold for an Admissions queue that then rendered "No
- * applicants found" instead of offering `Adam Hmaidan`. A term is only "productive" if
- * it is productive for the list the caller is actually about to show.
- *
- * Preview/send agreement survives because it never depended on the expansion being
- * global — it depends on both procedures deriving it from the same input, which they
- * still do: `previewRecipients` and `sendCustom` build their scope from the same
- * `filters` and so compute the same probe, the same expansion, and the same set.
+ * `scope` is the caller's own conditions with the search clause left out, since that
+ * clause is built from the expansion this computes. Probing globally is a bug: a term
+ * productive across the whole table can be unproductive for the list being shown.
  */
 export async function expandSearch(
 	prisma: Pick<PrismaClient, 'user'>,
@@ -361,57 +229,39 @@ export async function expandSearch(
 	const query = normalizeName(term);
 	if (!query) return { ...NO_EXPANSION, exact };
 
-	// One `SELECT DISTINCT name` over the whole table, then a Jaro-Winkler pass in
-	// memory. ~3ms of SQL and ~2ms of scoring at 1,865 users / 1,852 distinct names, and
-	// both halves grow linearly with the distinct-name count — so if this ever shows up
-	// in a profile at 20k applicants, the fix is to hand `scope` to this query too (it is
-	// right here) or to reach for a trigram index, not to raise the floor.
+	// One `SELECT DISTINCT name` then a Jaro-Winkler pass in memory: ~3ms of SQL and ~2ms
+	// of scoring at 1,865 users, both linear in the distinct-name count. If this ever shows
+	// up in a profile, hand `scope` to this query too or reach for a trigram index.
 	const rows = await prisma.user.findMany({ select: { name: true }, distinct: ['name'] });
 
-	// The substring half of the predicate, measured against the caller's raw term because
-	// that is the string `searchCondition` puts in `contains`. Trimming here instead would
-	// let a padded term like `" ada "` drop a name the predicate never actually matched.
+	// Measured against the caller's raw term because that is the string
+	// `searchCondition` puts in `contains`.
 	const alreadyExact = search.toLowerCase();
 
 	const scored: { name: string; score: number }[] = [];
 	for (const { name } of rows) {
 		// A name the substring clause already selects cannot widen anything — every row
-		// carrying it is in the result set before this list is consulted. Suggesting it
-		// would be the strip pointing at rows already on screen, which is how "No exact
-		// match — did you mean: Ali Vayani" ended up above Ali Vayani.
+		// carrying it is in the result set before this list is consulted.
 		if (name.toLowerCase().includes(alreadyExact)) continue;
 		const { score, best } = tokenMatch(query, normalizeName(name));
 		if (best >= SEARCH_SIMILARITY_THRESHOLD) scored.push({ name, score });
 	}
-	// Most relevant first. The caller returns this list to the UI as the ranking the
-	// paginated rows themselves cannot carry — see `SearchExpansion.names`.
 	scored.sort((a, b) => b.score - a.score || a.name.localeCompare(b.name));
 
 	return {
 		names: scored.slice(0, MAX_FUZZY_NAMES).map((s) => s.name),
 		fuzzy: true,
-		// Reported rather than swallowed: a truncated suggestion list is a different
-		// answer from a complete one, and the caller returns this to the UI.
 		capped: scored.length > MAX_FUZZY_NAMES,
 		exact
 	};
 }
 
 /**
- * One AND condition per engaged linked-field filter.
+ * One AND condition per engaged linked-field filter: absent means no condition, `[]`
+ * means match nothing, and the `NO_VALUE` sentinel ORs in the absent case alongside
+ * real values.
  *
- * The rules, identical for all three keys and identical to the decision filter's:
- *
- *   - absent          → no condition at all
- *   - `[]`            → match nothing. Engaging a filter and selecting none of its
- *                       options means "show nobody", never "show everybody". Getting
- *                       this backwards on the send path is how a UI reading "0
- *                       recipients" mails the whole database.
- *   - `[NO_VALUE, …]` → the sentinel ORs in the absent case alongside any real values.
- *
- * Exact `IN (...)` throughout. Fuzziness belongs in `expandSearch`, which resolves it
- * to explicit values before the predicate ever sees it — a predicate that scored rows
- * could not be reproduced identically by preview and send.
+ * Exact `IN (...)` throughout — fuzziness belongs in `expandSearch`.
  */
 export function linkedFieldConditions(filters: LinkedFieldFilters): Prisma.UserWhereInput[] {
 	const conditions: Prisma.UserWhereInput[] = [];
@@ -435,8 +285,7 @@ export function linkedFieldConditions(filters: LinkedFieldFilters): Prisma.UserW
 		if (values.length) or.push({ [column]: { in: values } } as Prisma.UserWhereInput);
 		if (includeNone) {
 			// The write-through does not trim, so a blank answer stores '' rather than
-			// leaving the column NULL. Both spellings of "absent" have to be selected or
-			// the "No value" option silently misses everyone who submitted a blank.
+			// leaving the column NULL. Both spellings of "absent" have to be selected.
 			if (NULLABLE_LINKED_FIELDS.has(field)) {
 				or.push({ [column]: null } as Prisma.UserWhereInput);
 			}
@@ -450,13 +299,9 @@ export function linkedFieldConditions(filters: LinkedFieldFilters): Prisma.UserW
 }
 
 /**
- * Selects users who did not answer a question — no response row at all, or one holding
- * a blank.
- *
- * Both spellings, because both occur: a question added after someone applied leaves no
- * row, while a field they opened and cleared leaves an empty one. Counting only the
- * first would make "No answer" silently miss half the people it names — the same
- * NULL-or-empty asymmetry the linked columns have.
+ * Selects users who did not answer a question: no response row, or one holding a
+ * blank. Both occur, since a question added later leaves no row while a field opened
+ * and cleared leaves an empty one.
  */
 function unansweredConditions(questionId: string): Prisma.UserWhereInput[] {
 	return [
@@ -473,18 +318,9 @@ function answeredWith(questionId: string, values: string[]): Prisma.UserWhereInp
 /**
  * The distinct answers to a NUMBER question that fall inside a range.
  *
- * Answers are stored as text — `ApplicationResponse.value` is one column serving every
- * question type — so `value >= 18` is a string comparison in which "9" beats "18". A
- * numeric comparison would need a cast Prisma cannot express, so instead the range is
- * resolved to the explicit values that satisfy it *before* it reaches the predicate.
- *
- * The same move `expandSearch` makes for fuzzy names, and it pays the same way: the
- * predicate stays an exact `IN (...)`, so preview and send select identically. It is
- * affordable because the list is distinct *answers*, not rows — a "how many hackathons"
- * question has perhaps twenty, an age question ten.
- *
- * Non-numeric answers simply fail the range, which is the honest outcome: a question
- * that was short text before someone changed it to NUMBER can hold "twenty".
+ * Answers are stored as text, so `value >= 18` would be a string comparison in which
+ * "9" beats "18". Resolving the range to explicit values keeps the predicate an exact
+ * `IN (...)`. Affordable because the list is distinct answers, not rows.
  */
 async function numericMatches(
 	prisma: Pick<PrismaClient, 'applicationResponse'>,
@@ -509,22 +345,10 @@ async function numericMatches(
 }
 
 /**
- * One AND condition per engaged answer filter, plus the state filter.
- *
- * Async because two of the four controls cannot be expressed as a predicate directly
- * and are resolved to explicit values first — numeric ranges (see `numericMatches`) and
- * states (see `$lib/server/homeState`). Everything else is built in memory.
- *
- * The rules are the linked fields' rules, unchanged:
- *
- *   - absent          → no condition at all
- *   - `[]`            → match nothing. Engaging a filter and selecting none of its
- *                       options means "show nobody", never "show everybody".
- *   - `[NO_VALUE, …]` → the sentinel ORs in the unanswered case alongside real values.
- *
- * An entry with none of `values`/`contains`/`min`/`max` set is skipped rather than
- * treated as empty: it is a facet the panel is holding open but has not been used, not
- * a selection anyone made.
+ * One AND condition per engaged answer filter, plus the state filter. Async because
+ * numeric ranges and states resolve to explicit values first. An entry with none of
+ * `values`/`contains`/`min`/`max` set is an open facet, not a selection, so it is
+ * skipped.
  */
 export async function resolveAnswerConditions(
 	prisma: Pick<PrismaClient, 'user' | 'applicationResponse' | 'settings'>,
@@ -566,9 +390,7 @@ export async function resolveAnswerConditions(
 		if (filters.states.length === 0) {
 			conditions.push({ uid: MATCH_NOTHING });
 		} else {
-			// Read only when the filter is actually engaged: the home state is needed for
-			// the "outside <state>" bucket alone, and every other request should not pay a
-			// Settings lookup for it.
+			// Read only when the filter is engaged, so every other request avoids the lookup.
 			const settings = await prisma.settings.findFirst({ select: { homeState: true } });
 			const condition = await stateCondition(prisma, filters.states, settings?.homeState ?? null);
 			if (condition) conditions.push(condition);
@@ -579,10 +401,9 @@ export async function resolveAnswerConditions(
 }
 
 /**
- * One AND condition list from a set of conditions, or match-everyone when there are none.
- *
- * The "no filter keys supplied at all" case is the dangerous one — it matches the whole
- * database — so it is spelled once, here, rather than at each caller.
+ * One AND condition list, or match-everyone when empty. The "no filter keys supplied"
+ * case matches the whole database, so it is spelled once here rather than at each
+ * caller.
  */
 export function whereFromConditions(
 	conditions: readonly Prisma.UserWhereInput[]
@@ -591,13 +412,9 @@ export function whereFromConditions(
 }
 
 /**
- * The recipient predicate's conditions **without** the search clause.
- *
- * Split out because `expandSearch` has to probe inside the caller's own scope, and the
- * search clause cannot be part of that scope: it is built *from* the expansion the probe
- * decides. Factoring it this way means the scope and the final predicate come from one
- * evaluation of the filters rather than two similar-looking ones — which is what keeps
- * `previewRecipients` and `sendCustom` counting the same rows.
+ * The recipient predicate's conditions without the search clause. Split out because
+ * `expandSearch` probes inside the caller's scope, and the search clause is built from
+ * the expansion that probe decides.
  */
 export function recipientConditions(filters: RecipientFilters): Prisma.UserWhereInput[] {
 	const { roles, statuses, decisions, includeNoDecision, emails } = filters;
@@ -605,10 +422,7 @@ export function recipientConditions(filters: RecipientFilters): Prisma.UserWhere
 	// AND conditions so each filter stacks independently.
 	const conditions: Prisma.UserWhereInput[] = [];
 
-	// Explicit address list. Engaged-but-empty means nobody, not everybody.
-	// Lowercased to match stored addresses: accounts are written lowercase everywhere,
-	// so a pasted `Alice@X.com` against a stored `alice@x.com` would otherwise silently
-	// match nobody — and previewRecipients would report a real user as "unknown".
+	// Lowercased to match stored addresses, which are written lowercase everywhere.
 	if (emails !== undefined) {
 		conditions.push(
 			emails.length
@@ -617,14 +431,12 @@ export function recipientConditions(filters: RecipientFilters): Prisma.UserWhere
 		);
 	}
 
-	// `in`, not `hasSome`: `roles` is still a list here — it is the set of roles the
-	// admin ticked in the filter — but each *user* now holds exactly one, so the
-	// predicate is membership rather than array overlap.
+	// `in`, not `hasSome`: `roles` is the set the admin ticked, but each user holds
+	// exactly one — so the predicate is membership rather than array overlap.
 	if (roles?.length) conditions.push({ role: { in: roles } });
 	if (statuses?.length) conditions.push({ status: { in: statuses } });
 
-	// Decision filter: specific decisions AND/OR null (no decision yet).
-	// Note this reads activeDecision — never pendingDecision, which is unreleased.
+	// Reads activeDecision — never pendingDecision, which is unreleased.
 	if (decisions !== undefined || includeNoDecision !== undefined) {
 		const decisionOr: Prisma.UserWhereInput[] = [];
 		if (decisions?.length) decisionOr.push({ activeDecision: { in: decisions } });
@@ -632,7 +444,6 @@ export function recipientConditions(filters: RecipientFilters): Prisma.UserWhere
 
 		if (decisionOr.length === 1) conditions.push(decisionOr[0]);
 		else if (decisionOr.length > 1) conditions.push({ OR: decisionOr });
-		// Engaged the filter but selected nothing → match nothing.
 		else conditions.push({ uid: MATCH_NOTHING });
 	}
 
@@ -644,14 +455,9 @@ export function recipientConditions(filters: RecipientFilters): Prisma.UserWhere
 /**
  * The full recipient predicate: the caller's conditions plus the resolved search clause.
  *
- * No filter keys supplied at all → match everyone. This is the "email the whole
- * database" case, so callers that send must gate on the resulting count.
- *
- * **Covers only the keys expressible without a query.** `answers` and `states` need one
- * — a numeric range and a state both resolve to explicit values first — so they are
- * built by `resolveAnswerConditions` and are absent from this predicate. No procedure
- * calls this directly; `resolveRecipientWhere` is the entry point, and it covers both
- * halves. This one exists for the synchronous unit tests over the checkbox groups.
+ * No filter keys at all means match everyone, so callers that send must gate on the
+ * count. Covers only the keys expressible without a query; `answers` and `states` come
+ * from `resolveAnswerConditions`. `resolveRecipientWhere` is the real entry point.
  */
 export function buildRecipientWhere(
 	filters: RecipientFilters,
@@ -666,24 +472,16 @@ export function buildRecipientWhere(
 /**
  * `buildRecipientWhere` with the search term already resolved against the database.
  *
- * The single entry point for every procedure that both accepts a `search` and shares a
- * recipient set with another procedure. `previewRecipients` and `sendCustom` calling
- * this — rather than each doing its own expansion — is what makes "the count I
- * confirmed is the set that gets mailed" true by construction rather than by review.
- *
- * The conditions are built **once** and used twice: as the scope the search probe counts
- * inside, and as the predicate the search clause is appended to. Building them twice —
- * once for the probe, once for the predicate — is the drift this function exists to
- * make impossible.
+ * The single entry point for every procedure that accepts a `search` and shares a
+ * recipient set with another. The conditions are built once and used twice, as the
+ * probe's scope and as the predicate, which is what keeps preview and send in step.
  */
 export async function resolveRecipientWhere(
 	prisma: Pick<PrismaClient, 'user' | 'applicationResponse' | 'settings'>,
 	filters: RecipientFilters
 ): Promise<{ where: Prisma.UserWhereInput; expansion: SearchExpansion }> {
-	// The answer conditions are part of the scope the search probe counts inside, not an
-	// afterthought appended to the finished predicate — otherwise `expandSearch` would
-	// measure "is this term productive" against a population the caller is not showing,
-	// which is the exact bug a global probe count caused on the Admissions queue.
+	// The answer conditions are part of the scope the search probe counts inside, not
+	// an afterthought appended to the finished predicate.
 	const conditions = [
 		...recipientConditions(filters),
 		...(await resolveAnswerConditions(prisma, filters))

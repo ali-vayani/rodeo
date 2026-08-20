@@ -24,16 +24,15 @@
 	} from './switcher';
 
 	/**
-	 * DEV ONLY — floating account switcher.
+	 * DEV ONLY. Floating account switcher.
 	 *
 	 * Mounted from the root layout behind `{#if dev}` and a dynamic import, so neither
-	 * this component nor the chunk it lives in exists in a production build. See
+	 * this component nor its chunk exists in a production build. See
 	 * `src/routes/dev/accounts/+server.ts` for the endpoint and the gate.
 	 *
-	 * This file sits in `src/lib/dev/` rather than `components/ui|patterns/` because
+	 * It sits in `src/lib/dev/` rather than `components/ui|patterns/` because
 	 * `scripts/lint-tokens.mjs` scopes those directories and a draggable widget needs
-	 * runtime `left`/`top`/`z-index` numbers no token can express. Everything else here
-	 * still uses the design system by hand.
+	 * runtime `left`/`top`/`z-index` numbers no token can express.
 	 */
 
 	const BUTTON_SIZE = 36;
@@ -49,8 +48,7 @@
 	let loading = $state(false);
 	/**
 	 * Whether a fetch has ever completed. Without it the header claims "Not signed in"
-	 * for the ~100ms before the first response lands — which is a lie, and the one
-	 * moment you are most likely to be reading it.
+	 * for the ~100ms before the first response lands.
 	 */
 	let loaded = $state(false);
 	let showSpinner = $state(false);
@@ -58,8 +56,7 @@
 	let switching = $state(false);
 
 	/**
-	 * Restored at init rather than in an `$effect`, which is safe for the same reason
-	 * `loadPosition` is safe to call at all: the root layout imports this component
+	 * Restored at init rather than in an `$effect`. The root layout imports this component
 	 * dynamically behind `{#if dev}`, so it never runs during SSR and `localStorage`
 	 * always exists here.
 	 */
@@ -90,17 +87,15 @@
 	let searchEl = $state<HTMLInputElement | null>(null);
 	let buttonEl: HTMLButtonElement | null = null;
 
-	// ── Position ────────────────────────────────────────────────────────────────
+	// -- Position ---------------------------------------------------------------
 	// `null` means "not yet dragged": the button renders with right/bottom so it stays
-	// glued to its corner across resizes with no JS at all. The first drag converts it
-	// to explicit left/top.
+	// glued to its corner across resizes. The first drag converts it to left/top.
 	let pos = $state<Position | null>(null);
 
-	// Deliberately NOT $state. These are written on every pointermove and read only by
-	// the rAF that repaints, the same reasoning as `lastActivityAt` in
-	// admissions/reviewSession.svelte.ts — routing a ~120Hz pointer stream through the
-	// reactive graph would schedule a render per sample. The one reactive write happens
-	// on pointerup, when the drag is over.
+	// Deliberately NOT $state. Written on every pointermove and read only by the rAF that
+	// repaints, the same reasoning as `lastActivityAt` in reviewSession.svelte.ts. Routing
+	// a ~120Hz pointer stream through the reactive graph would render per sample. The one
+	// reactive write happens on pointerup.
 	let dragging = false;
 	let moved = false;
 	let grabX = 0;
@@ -196,10 +191,9 @@
 	}
 
 	function onClick() {
-		// The threshold is checked here rather than in pointerup because a drag ends
-		// with a click too. Doing it here is also what keeps keyboard activation
-		// working: Enter and Space produce a click with no pointer events before it,
-		// so `moved` is false and the panel opens.
+		// Checked here rather than in pointerup because a drag ends with a click too. It is
+		// also what keeps keyboard activation working: Enter and Space produce a click with
+		// no pointer events before it, so `moved` is false and the panel opens.
 		if (moved) {
 			moved = false;
 			return;
@@ -247,9 +241,8 @@
 
 	async function openPanel() {
 		open = true;
-		// Fetched on first open rather than on mount: this component is on every page
-		// and most page loads never open it. A switch is a full navigation, so the
-		// cache only ever has to survive one document.
+		// Fetched on first open rather than on mount, since this component is on every page
+		// and most loads never open it. A switch is a full navigation.
 		if (!accounts.length && !loading) void fetchAccounts();
 		await tick();
 		searchEl?.focus();
@@ -271,10 +264,9 @@
 			if (!res.ok) throw new Error(`Switch failed (${res.status}).`);
 			const { redirectTo }: { redirectTo: string } = await res.json();
 
-			// A real document navigation rather than invalidateAll(). Becoming someone
-			// else invalidates every piece of client state in the app — an open dialog,
-			// an unsaved draft, the admissions claim, resolved tRPC data — and there is
-			// no reliable way to enumerate it. A full load is the only clean slate.
+			// A real document navigation rather than invalidateAll(). Becoming someone else
+			// invalidates every piece of client state in the app, and there is no reliable way
+			// to enumerate it. A full load is the only clean slate.
 			location.assign(redirectTo);
 		} catch (error) {
 			switching = false;
@@ -284,10 +276,9 @@
 
 	// ── Filtering ───────────────────────────────────────────────────────────────
 
-	// Only offer chips that can match something, which drops the roles and statuses
-	// this seed never created rather than showing dead controls. `accounts` is already
-	// in role-rank order, and a Set keeps first-seen order, so the chips come out
-	// ranked without a sort.
+	// Only offer chips that can match something, which drops the roles and statuses this
+	// seed never created. `accounts` is already in role-rank order and a Set keeps
+	// first-seen order, so the chips come out ranked without a sort.
 	const roleOptions = $derived([...new Set(accounts.map((a) => a.role))]);
 	const statusOptions = $derived([...new Set(accounts.map((a) => a.status))].sort());
 	const activeDecisionOptions = $derived(decisionOptions(accounts, 'activeDecision'));
@@ -356,10 +347,9 @@
 <!--
 	One labelled row of toggle chips for one column.
 
-	Rendered as a snippet rather than four copies because the only thing that differed
-	between the role and status rows was the array — and the moment two more columns
-	were added, the copies would have been the thing to get wrong. `string` rather than
-	a generic: every value here is a string enum, and the call sites do the one cast.
+	A snippet rather than four copies, because the only thing that differed between the
+	role and status rows was the array. `string` rather than a generic: every value here
+	is a string enum, and the call sites do the one cast.
 -->
 {#snippet chipRow(
 	label: string,
@@ -375,10 +365,9 @@
 			aria-label={label}
 		>
 			<!--
-				`title` rather than visible help text: the panel is already dense, and the
-				label alone answers the question this row exists to answer. The tooltip
-				names the actual column for the times it doesn't.
-			-->
+							`title` rather than visible help text: the panel is already dense, and the
+							label alone answers the question this row exists to answer.
+						-->
 			<span
 				title={hint}
 				class="cursor-help pt-1 font-mono text-2xs tracking-eyebrow text-foreground-tertiary uppercase"
@@ -409,12 +398,10 @@
 {/snippet}
 
 <!--
-	Fixed rather than absolute: it has to stay put while a long table scrolls under it.
-	z-index 300 puts it above ToastHost (200) — that container is pointer-events-none
-	with only the toast card clickable, so sitting below toasts would make the button
-	dead for 3.2s after every success, which is worse than covering a toast corner.
-	Hidden while the panel is open, because Modal portals at z-50 and the button would
-	otherwise float over its own backdrop.
+	Fixed rather than absolute, so it stays put while a long table scrolls under it.
+	z-index 300 puts it above ToastHost (200), whose container is pointer-events-none, so
+	sitting below toasts would make the button dead for 3.2s after every success. Hidden
+	while the panel is open, because Modal portals at z-50.
 -->
 <button
 	bind:this={buttonEl}
@@ -454,10 +441,10 @@
 	bodyClass="pt-0"
 >
 	<!--
-		Sticky rather than outside the scroll container: Modal's body owns the
-		`panel-scroll` cap, and reaching around it would mean overriding a utility the
-		primitive is entitled to change.
-	-->
+			Sticky rather than outside the scroll container: Modal's body owns the
+			`panel-scroll` cap, and reaching around it would override a utility the primitive
+			is entitled to change.
+		-->
 	<div class="sticky top-0 z-10 -mx-6 bg-card px-6 pt-5 pb-3">
 		<input
 			bind:this={searchEl}
@@ -469,11 +456,10 @@
 		/>
 
 		<!--
-			Every group is labelled with the column it filters, rather than four
-			unlabelled chip rows that only made sense if you already knew the schema.
-			"Decision" and "Pending" are named exactly as /admin/users titles the same
-			two columns, so the vocabulary is one thing to learn, not two.
-		-->
+					Every group is labelled with the column it filters, rather than four unlabelled
+					chip rows. "Decision" and "Pending" are named exactly as /admin/users titles the
+					same two columns, so the vocabulary is one thing to learn.
+				-->
 		{@render chipRow('Role', 'Matches any role the account holds', roleOptions, roleFilter, (v) => {
 			roleFilter = toggle(roleFilter, v as Role);
 		})}
@@ -553,10 +539,9 @@
 				{@const header = groupHeader(filtered, index)}
 				{#if header}
 					<!--
-						Static rather than sticky: the search block above already owns `top-0`,
-						so a sticky header would slide underneath it and vanish. Grouping a
-						searchable list this short is a divider's job anyway.
-					-->
+											Static rather than sticky: the search block above already owns `top-0`, so a
+											sticky header would slide underneath it and vanish.
+										-->
 					<li
 						class="flex items-center gap-2 bg-card pt-3 pb-1 font-mono text-2xs
 						       tracking-eyebrow text-foreground-tertiary uppercase"
@@ -597,9 +582,8 @@
 						</span>
 
 						<span class="flex shrink-0 flex-wrap items-center justify-end gap-1">
-							<!-- Outline, not a colored tone: tone.ts reserves color for status, and
-							     /admin/users badges the role too — a privilege rainbow there would read
-							     as an alert. Role is separated from state by weight instead. -->
+							<!-- Outline, not a colored tone: tone.ts reserves color for status, and a privilege
+														     rainbow would read as an alert. Role is separated from state by weight. -->
 							<Badge variant="outline">{humanizeEnum(account.role)}</Badge>
 
 							<Badge tone={statusTone(account.status)} dot>{humanizeEnum(account.status)}</Badge>

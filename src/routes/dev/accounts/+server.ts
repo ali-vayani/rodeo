@@ -9,29 +9,20 @@ import { setSessionCookie, clearSessionCookie } from '$lib/server/auth';
 import { homePathFor } from '$lib/auth/permissions';
 
 /**
- * DEV ONLY — the backend for the account switcher widget.
+ * DEV ONLY. The backend for the account switcher widget.
  *
- * Deleting this directory and `src/lib/dev` removes the feature entirely.
+ * A passwordless login-as-any-account endpoint that works while signed out, so the gate
+ * matters more than the feature. `devSwitcherEnabled()` is that gate, and every handler
+ * calls `assertEnabled()` first.
  *
- * This is a passwordless login-as-any-account endpoint that works while signed out,
- * so the gate matters more than the feature does. `devSwitcherEnabled()` in
- * `$lib/server/env` is that gate and carries the reasoning; every handler here calls
- * `assertEnabled()` on its first line.
- *
- * It lives outside `/admin/*` and `/hacker/*` deliberately. `hooks.server.ts` guards
- * those two prefixes and treats an unmapped `/admin/*` path as admin-only, which
- * would make a switcher that must work signed out impossible. Guarding here rather
- * than adding a prefix to the hook follows `src/routes/design/+page.server.ts`: the
- * rule protects exactly one route and is easier to trust sitting next to it.
+ * Outside `/admin/*` and `/hacker/*` deliberately: the hook treats an unmapped
+ * `/admin/*` path as admin-only, which would make a signed-out switcher impossible.
  */
 
 /**
- * The switcher's universe, matching the constraint `/login`'s dev action already
- * enforces. That is the point rather than an accident: applying the identical filter
- * means this endpoint grants no capability that door does not already grant, so
- * reviewing it is one question instead of two. It is also what makes returning
- * `pendingDecision` below defensible — the only rows this can ever describe are seed
- * fixtures, never a real applicant.
+ * The switcher's universe, matching what `/login`'s dev action already enforces, so
+ * this endpoint grants no capability that door does not. It is also what makes
+ * returning `pendingDecision` below defensible: these rows are only ever fixtures.
  */
 const SEED_EMAIL_SUFFIX = '@yopmail.com';
 
@@ -39,14 +30,10 @@ const SEED_EMAIL_SUFFIX = '@yopmail.com';
 const MAX_ACCOUNTS = 500;
 
 /**
- * Deliberately not in `$lib/server/trpc/selects.ts`, and deliberately including
- * `pendingDecision`, which that file exists to withhold.
- *
- * Which account is sitting on a decided-but-unreleased application is the single most
- * common thing you open this widget to check, and there is nowhere else to see it
- * short of Prisma Studio. Keeping an embargo-breaking projection next to the embargo
- * whitelist would be an invitation to reuse it, so it lives here, behind the gate,
- * and must not move.
+ * Deliberately not in `../trpc/selects.ts`, and deliberately including
+ * `pendingDecision`, which that file exists to withhold. Which account sits on a
+ * decided-but-unreleased application is the most common thing you open this widget to
+ * check. Keeping it next to the embargo whitelist would invite reuse.
  */
 const DEV_ACCOUNT_SELECT = {
 	uid: true,
@@ -59,14 +46,9 @@ const DEV_ACCOUNT_SELECT = {
 } as const;
 
 /**
- * 404 in anything that is not `vite dev` — a deployed build must not confirm that a
- * passwordless-login endpoint lives at this path, even a disabled one. The same
- * reasoning, and the same choice of 404 over 403, as the `/design` guard.
- *
- * Inside a dev server the gate can still be shut (no `ALLOW_DEV_AUTH`, a remote
- * `DATABASE_URL`), and a bare 404 there is baffling — confusing errors are how safety
- * rails get ripped out. `dev` is a build-time constant, so this explanatory branch
- * does not exist in a built bundle.
+ * 404 in anything that is not `vite dev`: a deployed build must not confirm that a
+ * passwordless-login endpoint lives here, even a disabled one. Inside a dev server the
+ * gate can still be shut, and a bare 404 there is baffling.
  */
 function assertEnabled(): void {
 	if (devSwitcherEnabled()) return;
@@ -89,10 +71,8 @@ async function endSupabaseSession(event: RequestEvent): Promise<void> {
 /**
  * Every seeded account, for the switcher panel to filter client-side.
  *
- * Unauthenticated on purpose: the switcher's most useful moment is on `/login` while
- * signed out, so there is no session to check. That is safe only because of
- * `assertEnabled()` — if the gate is ever weakened, this enumerates every user's
- * email, status and decision. It is the line to look at first in review.
+ * Unauthenticated on purpose, since the switcher's most useful moment is on `/login`.
+ * That is safe only because of `assertEnabled()`.
  */
 export const GET: RequestHandler = async ({ locals }) => {
 	assertEnabled();
@@ -108,20 +88,16 @@ export const GET: RequestHandler = async ({ locals }) => {
 };
 
 /**
- * Become another account, or sign out with `{ uid: null }`.
- *
- * Note what the body does *not* carry: a redirect target. The destination is derived
- * from the account's own roles, so unlike `/login` — whose `?redirectTo` crosses the
- * trust boundary and needs `safeRedirect` — there is nothing here that could become
- * an open redirect.
+ * Become another account, or sign out with `{ uid: null }`. Note what the body does not
+ * carry: a redirect target. The destination comes from the account's own role, so
+ * nothing here could become an open redirect.
  */
 export const POST: RequestHandler = async (event) => {
 	assertEnabled();
 
-	// Login-CSRF. This endpoint *sets* a session cookie rather than reading one, so
-	// SameSite=Lax protects nothing, and SvelteKit's own CSRF check only covers the
-	// form-encodable content types. Requiring JSON forces a preflight cross-origin,
-	// and the Origin check closes the rest. Cheap, and this is a login primitive.
+	// Login-CSRF. This endpoint sets a session cookie rather than reading one, so
+	// SameSite=Lax protects nothing, and SvelteKit's own check only covers form-encodable
+	// content types. Requiring JSON forces a preflight cross-origin.
 	if (event.request.headers.get('content-type') !== 'application/json') {
 		error(415, 'Expected application/json.');
 	}
@@ -149,17 +125,15 @@ export const POST: RequestHandler = async (event) => {
 		error(400, 'uid must be a string, or null to sign out.');
 	}
 
-	// Look the account up rather than writing the uid straight into the cookie: an
-	// unknown value would read back as a null session on every later request, which
-	// presents as a mysterious logout rather than as the typo it is.
+	// Look the account up rather than writing the uid straight into the cookie. An
+	// unknown value would read back as a null session and present as a mysterious logout.
 	const user = await prisma.user.findUnique({
 		where: { uid },
 		select: { uid: true, email: true, name: true, role: true }
 	});
 
 	// The same 404 for "no such uid" and "not a seed account", so it is an oracle for
-	// neither. The constraint is re-derived from the row; a client-sent email would
-	// be worthless here.
+	// neither. The constraint is re-derived from the row.
 	if (!user || !user.email.endsWith(SEED_EMAIL_SUFFIX)) error(404, 'No such account.');
 
 	await endSupabaseSession(event);

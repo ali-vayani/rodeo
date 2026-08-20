@@ -32,9 +32,8 @@ describe('buildRecipientWhere — empty-selection contract', () => {
 	});
 
 	it('matches nothing when the decision filter is engaged but nothing is selected', () => {
-		// This is the regression that matters: browse and send must agree here.
-		// Previously user.list matched nothing while sendCustom matched EVERYONE,
-		// so a UI reading one and calling the other would mail the whole database.
+		// The regression that matters: browse and send must agree here. `user.list` used to
+		// match nothing while `sendCustom` matched everyone.
 		expect(buildRecipientWhere({ decisions: [], includeNoDecision: false })).toEqual({
 			AND: [{ uid: 'IMPOSSIBLE_NO_MATCH' }]
 		});
@@ -226,9 +225,8 @@ describe('buildRecipientWhere — linked application fields', () => {
 	});
 
 	it('matches NOTHING when a linked filter is engaged but empty', () => {
-		// The test that matters. `buildRecipientWhere` is shared by browse and send, so
-		// an empty selection that fell through to "no clause" would mean a UI reading
-		// "0 recipients" mails the entire database through sendCustom.
+		// `buildRecipientWhere` is shared by browse and send, so an empty selection that
+		// fell through to "no clause" would mean a UI reading "0 recipients" mails everyone.
 		for (const filters of [{ names: [] }, { universities: [] }, { years: [] }]) {
 			expect(buildRecipientWhere(filters)).toEqual({ AND: [{ uid: 'IMPOSSIBLE_NO_MATCH' }] });
 		}

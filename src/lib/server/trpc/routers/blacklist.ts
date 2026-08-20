@@ -18,9 +18,9 @@ const entryInput = z.object({
 /**
  * Import rows arrive unvalidated on purpose.
  *
- * Validating the payload as `z.array(entryInput)` would reject the whole file over one bad
- * address, which is the wrong failure mode for a hand-maintained CSV. Each row is instead
- * checked individually below and the caller is told exactly which ones failed.
+ * Validating the payload as `z.array(entryInput)` would reject the whole file over one
+ * bad address, which is the wrong failure mode for a hand-maintained CSV. Each row is
+ * checked individually below and the caller is told which ones failed.
  */
 const importRowInput = z.object({
 	firstName: z.string(),
@@ -51,8 +51,8 @@ export const blacklistRouter = router({
 		};
 
 		// Re-adding an address updates the name and reason rather than failing on the unique
-		// index -- an admin typing in an address that already exists means to correct the
-		// entry. Name-only rows have no unique key to upsert against, so they just insert.
+		// index, since an admin retyping an existing address means to correct the entry.
+		// Name-only rows have no unique key to upsert against, so they just insert.
 		const entry = email
 			? await ctx.prisma.blacklist.upsert({
 					where: { email },
@@ -80,11 +80,10 @@ export const blacklistRouter = router({
 	 * Bulk import, typically from a CSV.
 	 *
 	 * Partial success is the contract: valid rows are inserted, invalid rows are reported
-	 * back with their position so the admin can fix them, and nothing is rolled back.
+	 * back with their position, and nothing is rolled back.
 	 *
-	 * Unlike `add`, an import never overwrites an existing entry. A file re-imported after
-	 * an edit would otherwise silently revert reasons an organizer had curated by hand; to
-	 * change an existing entry, add it again through the form.
+	 * Unlike `add`, an import never overwrites an existing entry, which would silently
+	 * revert reasons an organizer curated by hand.
 	 */
 	addBulk: adminProcedure
 		.input(z.object({ rows: z.array(importRowInput).max(MAX_IMPORT_ROWS) }))
@@ -112,9 +111,9 @@ export const blacklistRouter = router({
 				});
 			});
 
-			// `skipDuplicates` leans on the unique index, which only covers rows that have an
-			// address. Name-only rows would otherwise accumulate a fresh copy on every import,
-			// so they are deduplicated here against both the file and the existing table.
+			// `skipDuplicates` leans on the unique index, which only covers rows with an address.
+			// Name-only rows would otherwise accumulate a copy per import, so they are deduplicated
+			// here against both the file and the existing table.
 			const existingNames = new Set(
 				(
 					await ctx.prisma.blacklist.findMany({

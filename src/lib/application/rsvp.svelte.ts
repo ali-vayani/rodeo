@@ -8,11 +8,8 @@ type UserWithStatus = { status: UserStatus };
  * Confirming a spot.
  *
  * `error` exists because this handler used to swallow the rejection entirely. Every
- * reason `application.rsvp` refuses is a sentence written for the applicant to read —
- * the RSVP deadline has passed, the spot was already released, the decision isn't
- * ACCEPTED — and dropping it turned all of them into a button that visibly does
- * nothing. That is the worst possible rendering of a rule: the applicant cannot tell
- * a closed deadline from a broken page, and neither can whoever they report it to.
+ * reason `application.rsvp` refuses is a sentence written for the applicant to read,
+ * and dropping it turned all of them into a button that visibly does nothing.
  */
 export function createRsvpHandler(options: { user: UserWithStatus; onSuccess?: () => void }) {
 	const trpc = createClient();

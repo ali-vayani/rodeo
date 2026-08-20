@@ -2,9 +2,8 @@
 	/**
 	 * Whose substitution a preview is showing.
 	 *
-	 * Omitted by callers previewing a *template* rather than a message — the lifecycle
-	 * editor at /admin/email-templates has no concrete recipient, so it keeps the
-	 * placeholder samples and shows no attribution line.
+	 * Omitted by callers previewing a template rather than a message: the lifecycle editor
+	 * has no concrete recipient, so it keeps the placeholder samples.
 	 */
 	export type PreviewAs = {
 		name: string;
@@ -44,9 +43,9 @@
 	// arbitrary height past the token rules.
 	const HEIGHTS = { sm: 'h-36', md: 'h-44', lg: 'h-56' };
 
-	// Debounced so the preview doesn't re-tokenize on every keystroke. Seeded from
-	// the initial props deliberately; the $effect below carries every later change.
-	// The parent remounts this component on template switch so the seed stays fresh.
+	// Debounced so the preview does not re-tokenize on every keystroke. Seeded from the
+	// initial props; the $effect below carries every later change, and the parent remounts
+	// this component on template switch.
 	let debouncedSubject = $state(untrack(() => subject));
 	let debouncedBody = $state(untrack(() => body));
 
@@ -73,9 +72,9 @@
 </script>
 
 <!--
-	The segment loops below are kept on a single line on purpose: the body renders
-	as whitespace-pre-wrap, so any newline between {#each} and its content risks
-	showing up as spacing the real email doesn't have.
+	The segment loops below are kept on a single line on purpose: the body renders as
+	whitespace-pre-wrap, so a newline between {#each} and its content risks showing up as
+	spacing the real email does not have.
 -->
 <!--
 	An empty known value renders nothing at all — a variable that substitutes to ''

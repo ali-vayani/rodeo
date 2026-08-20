@@ -1,39 +1,20 @@
 /**
- * The one place decisions get a colour, and the reasoning for it.
+ * The one place decisions get a colour.
  *
- * Rodeo is monochrome: colour carries exactly one meaning, status. A decision is
- * a status, so the decision buckets are the only coloured series on the
- * dashboard and everything else — universities, per-day volume, the funnel — is
- * ink. That is a constraint, not a limitation: it means a splash of green on the
- * page always means the same thing.
+ * Rodeo is monochrome: colour carries exactly one meaning, status. Decisions are the
+ * only coloured series on the dashboard and everything else is ink.
  *
- * ## Validated, not eyeballed
+ * Validated against the `#ffffff` card surface rather than eyeballed. Two warnings
+ * carry obligations that every chart here meets: a CVD delta-E in the 6-8 band is legal
+ * only with secondary encoding, so segments are separated by a 2px surface gap and
+ * every value is written out as a number; sub-3:1 contrast obliges visible labels or a
+ * table view, and `DecisionBar` ships both.
  *
- * Run against the `#ffffff` card surface (dataviz validator, categorical mode):
+ * The darker 700-step ramp was rejected — Rejected/Waitlisted measures delta-E 3.9
+ * deutan. Brighter-and-labelled beats darker-and-indistinguishable.
  *
- *     [PASS] Lightness band        all inside L 0.43–0.77
- *     [PASS] Chroma floor
- *     [PASS] Normal-vision floor   worst adjacent 16.0 (Rejected↔Waitlisted)
- *     [WARN] CVD separation        worst adjacent 6.5 protan (Waitlisted↔Accepted)
- *     [WARN] Contrast vs surface   Accepted 2.76, Waitlisted 2.35
- *
- * Both warnings carry obligations, and every chart in this directory meets them:
- *
- *   - A CVD ΔE in the 6–8 band is legal **only with secondary encoding**. So
- *     stacked segments are separated by a 2px surface gap and every segment's
- *     value is also written out as a number. Nothing here is readable by hue
- *     alone.
- *   - Sub-3:1 contrast obliges visible labels or a table view. `DecisionBar`
- *     ships both.
- *
- * The darker 700-step ramp was tried first and **rejected**: Rejected↔Waitlisted
- * measures ΔE 3.9 (deutan) and 6.1 with normal vision, i.e. hard to tell apart
- * even for readers with full colour vision. Brighter-and-labelled beats
- * darker-and-indistinguishable.
- *
- * `awaiting` is the de-emphasis gray rather than a fourth hue. It is the absence
- * of a decision, and giving it a colour would make "nobody has looked at this
- * yet" compete for attention with the outcomes.
+ * `awaiting` is the de-emphasis gray rather than a fourth hue, being the absence of a
+ * decision.
  */
 
 export type DecisionKey = 'accepted' | 'waitlisted' | 'rejected' | 'awaiting';
@@ -50,10 +31,8 @@ export interface DecisionSeries {
 }
 
 /**
- * Order is the funnel's order — accepted, waitlisted, rejected, then the
- * undecided tail — not a colour-safety ordering. The adjacent pair that scores
- * worst (waitlisted↔accepted, 6.5) is adjacent in *either* arrangement, so
- * reordering buys nothing and costs the reader a sequence they already expect.
+ * Order is the funnel's order, not a colour-safety ordering. The worst-scoring adjacent
+ * pair is adjacent either way, so reordering buys nothing.
  */
 export const DECISION_SERIES: readonly DecisionSeries[] = [
 	{

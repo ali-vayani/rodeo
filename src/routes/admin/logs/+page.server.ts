@@ -6,9 +6,9 @@ import { createContext } from '$lib/server/trpc/context';
 const createCaller = createCallerFactory(appRouter);
 
 /**
- * Only the first page is server-rendered. Every filter change and page step goes
- * back through tRPC from the client — the trail is append-only and can run to
- * thousands of rows, so paging through it must not mean a full page navigation.
+ * Only the first page is server-rendered. Every filter change and page step goes back
+ * through tRPC from the client, since the trail is append-only and can run to thousands
+ * of rows.
  */
 export const load: PageServerLoad = async (event) => {
 	const caller = createCaller(createContext(event));

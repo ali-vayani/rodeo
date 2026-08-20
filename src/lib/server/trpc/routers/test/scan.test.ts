@@ -22,11 +22,9 @@ const db = prisma as DeepMockProxy<PrismaClient>;
 beforeEach(() => mockReset(db));
 
 /**
- * Makes the mocked `$transaction` run its interactive callback against the same
- * client, so `tx.scan.create` / `tx.user.update` inside `scanUser` land on `db`
- * and can be asserted exactly like writes outside a transaction. The deep mock
- * otherwise resolves `$transaction` without invoking the callback, leaving the
- * scan-write-and-promote atom unexercised.
+ * Makes the mocked `$transaction` run its interactive callback against the same client,
+ * so writes inside `scanUser` land on `db` and can be asserted like writes outside one.
+ * The deep mock otherwise leaves the scan-write-and-promote atom unexercised.
  */
 function runTransactions() {
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any -- $transaction's overloads can't be spelled at a mock call site.
@@ -42,9 +40,9 @@ const mockScan = {
 };
 
 /**
- * The only user fields the scan endpoints may return. Asserted as an exact shape
- * rather than a "doesn't include email" spot check, so a field added to `User`
- * later can't quietly ride along to an organizer.
+ * The only user fields the scan endpoints may return. Asserted as an exact shape rather
+ * than a "doesn't include email" spot check, so a field added to `User` later cannot
+ * quietly ride along to an organizer.
  */
 const expectedUserSelect = {
 	uid: true,

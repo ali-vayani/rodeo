@@ -76,14 +76,12 @@
 	/**
 	 * Checked on submit only, never while typing.
 	 *
-	 * Every address is malformed halfway through being typed, so a live check spends
-	 * most of its time calling a half-finished address wrong — the person already
-	 * knows they aren't done. Pressing Add is the point at which they've said the
-	 * address is what they meant.
+	 * Every address is malformed halfway through being typed, so a live check spends most
+	 * of its time calling a half-finished address wrong.
 	 *
-	 * Deliberately loose — one @, something either side of it, a dot in the domain.
-	 * The server's zod schema is the authority on what gets stored; a stricter
-	 * pattern here would only invent rejections the server would have accepted.
+	 * Deliberately loose: one @, something either side, a dot in the domain. The server's
+	 * zod schema is the authority, and a stricter pattern here would only invent
+	 * rejections the server would have accepted.
 	 */
 	const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -158,9 +156,8 @@
 			inviteError = null;
 			inviteSuccess = null;
 			await refresh();
-			// The invite banner is rendered from the hacker layout's own load, which does
-			// not re-run for a mutation. Without this, leaving leaves that server data
-			// describing an account that is still on a team.
+			// The invite banner is rendered from the hacker layout's own load, which does not
+			// re-run for a mutation. Without this it keeps describing an account still on a team.
 			await invalidateAll();
 		} catch (e) {
 			leaveError = errorMessage(e, 'Failed to leave team.');

@@ -7,9 +7,9 @@
  */
 
 /**
- * `key` doubles as the `Settings` column prefix: `submit` → `submitTemplate` +
- * `submitSubject`. `label` is what admins see; it names the resulting UserStatus
- * or decision rather than the column, which is how organizers think about it.
+ * `key` doubles as the `Settings` column prefix: `submit` gives `submitTemplate` and
+ * `submitSubject`. `label` names the resulting UserStatus or decision rather than the
+ * column, which is how organizers think about it.
  */
 export const EMAIL_TEMPLATES = [
 	{

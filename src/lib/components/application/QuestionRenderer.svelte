@@ -12,9 +12,8 @@
 		onchange: (value: string) => void;
 		/**
 		 * Renders the answer read-only. Set when the application window is shut, where
-		 * every autosave behind these fields would be refused by the server — an
-		 * editable field that silently discards what you type is worse than a locked
-		 * one, because you only find out at submit.
+		 * every autosave would be refused by the server. An editable field that silently
+		 * discards what you type is worse than a locked one.
 		 */
 		disabled?: boolean;
 	}
@@ -32,9 +31,8 @@
 	/**
 	 * The choices for a dropdown, from the preset when there is one.
 	 *
-	 * A promise rather than resolved state because the university preset is a lazy
-	 * 650 KB import — see `$lib/data/universities`. A question with hand-authored
-	 * options resolves immediately and the `{#await}` never renders its pending arm.
+	 * A promise rather than resolved state because the university preset is a lazy 650 KB
+	 * import. Hand-authored options resolve immediately.
 	 */
 	const choices = $derived<Promise<ComboboxOption[]>>(
 		question.optionPreset !== null && hasPresetOptions(question)
@@ -46,11 +44,10 @@
 <div class="flex flex-col gap-1.5">
 	{#if question.type === QuestionType.CHECKBOX || question.type === QuestionType.MULTIPLE_CHOICE || question.type === QuestionType.DROPDOWN}
 		<!--
-			For checkbox/radio the label is rendered per-item below. A dropdown is here for
-			a different reason: `Combobox` owns its own input element and generates its own
-			id, so a `for` pointing at `inputId` would dangle. It takes the title as an
-			`ariaLabel` instead, and this is the visible half of that.
-		-->
+					For checkbox/radio the label is rendered per-item below. A dropdown is here
+					because `Combobox` owns its own input and generates its own id, so a `for`
+					pointing at `inputId` would dangle. It takes the title as an `ariaLabel` instead.
+				-->
 		<p class="text-sm font-medium text-primary">
 			{question.title}
 			{#if question.required}
@@ -136,16 +133,13 @@
 		</div>
 	{:else if question.type === QuestionType.DROPDOWN}
 		<!--
-			Every dropdown is searchable, whether it holds six options or 6,447. A
-			type-ahead over six costs nothing; a plain `<select>` over 6,447 is unusable.
-			Making that the control's problem rather than a second question type is what
-			stops an organizer from having to predict which one they'll need.
+					Every dropdown is searchable, whether it holds six options or 6,447. A type-ahead
+					over six costs nothing; a plain `<select>` over 6,447 is unusable.
 
-			`allowCustom` only for a preset-backed question, matching `acceptsWriteIn` on
-			the server: a preset is a vocabulary the applicant may step outside of, while
-			hand-authored options are the four choices an organizer meant. Offering a
-			write-in for the latter would produce answers the server then rejects.
-		-->
+					`allowCustom` only for a preset-backed question, matching `acceptsWriteIn` on the
+					server: a preset is a vocabulary the applicant may step outside of, while
+					hand-authored options are the four choices an organizer meant.
+				-->
 		{#await choices}
 			<div class={inputClass}>Loading options…</div>
 		{:then options}

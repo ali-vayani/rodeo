@@ -9,11 +9,9 @@ export const load: PageServerLoad = async (event) => {
 	const caller = createCaller(createContext(event));
 	const settings = await caller.settings.get();
 
-	// Straight off the session rather than through a `me` procedure: the hook has
-	// already resolved this row to decide the request was allowed in at all, so a
-	// round trip would re-read what is sitting in `locals`. Only the fields the
-	// card shows — not the whole user, which carries claim and decision state the
-	// page has no business with.
+	// Straight off the session rather than through a `me` procedure: the hook has already
+	// resolved this row to decide the request was allowed in. Only the fields the card
+	// shows, not the whole user, which carries claim and decision state.
 	const user = event.locals.user;
 	const me = user && {
 		name: user.name,

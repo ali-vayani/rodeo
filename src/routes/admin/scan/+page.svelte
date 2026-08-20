@@ -102,8 +102,8 @@
 
 	function onScanSuccess(decodedText: string) {
 		if (!html5QrCode) return;
-		// Must pause synchronously, before any await, or html5-qrcode keeps firing
-		// this callback every frame while the code stays in view.
+		// Must pause synchronously, before any await, or html5-qrcode keeps firing this
+		// callback every frame while the code stays in view.
 		html5QrCode.pause(true);
 		handleDetected(decodedText);
 	}

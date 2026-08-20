@@ -56,10 +56,9 @@ async function eventTimezone(prisma: { settings: { findFirst: () => Promise<unkn
 
 export const dashboardRouter = router({
 	/**
-	 * Organizers get the aggregates — counts and charts name nobody — but not
-	 * `recentActivity`, which is a log of named users. It comes back null for them
-	 * rather than being dropped, so the shape stays the same for every caller and the
-	 * dashboard can just check for it.
+	 * Organizers get the aggregates, which name nobody, but not `recentActivity`, which
+	 * is a log of named users. It comes back null for them rather than being dropped, so
+	 * the shape stays the same for every caller.
 	 */
 	stats: portalProcedure.query(async ({ ctx }) => {
 		const showActivity = isAdmin(ctx.user.role);
@@ -71,36 +70,28 @@ export const dashboardRouter = router({
 				_count: { status: true }
 			}),
 
-			// `_all`, not `_count: { activeDecision: true }`: a per-field count ignores nulls,
-			// so the "no decision yet" bucket would always read 0 no matter how many are
-			// undecided.
+			// `_all`, not `_count: { activeDecision: true }`. A per-field count ignores nulls, so
+			// the "no decision yet" bucket would always read 0.
 			ctx.prisma.user.groupBy({
 				by: ['activeDecision'],
 				_count: { _all: true }
 			}),
 
-			// A real `groupBy` now that a user holds one role. This used to select every
-			// user's role array and tally it in memory, because a user counted once per
-			// role they held and no SQL aggregate expresses that. One role each makes the
-			// count a plain GROUP BY, so the whole table stops crossing the wire on every
-			// dashboard load.
+			// A real `groupBy` now that a user holds one role, so the whole table stops crossing
+			// the wire on every dashboard load.
 			ctx.prisma.user.groupBy({
 				by: ['role'],
 				_count: { role: true }
 			}),
 
-			// Decision × role, bounded to the people who actually go through admissions.
-			// The `byDecision` tally above counts every user, which puts 60-odd staff
-			// accounts — who never apply and never hold a decision — into its null
-			// bucket. The stat cards read from this instead, so "Accepted" and
-			// "Awaiting" describe applicants rather than the whole table, and the role
-			// split each card shows on hover comes off the same rows as its number.
+			// Decision × role, bounded to the people who actually go through admissions. The
+			// `byDecision` tally above counts every user, which puts 60-odd staff accounts into
+			// its null bucket. The stat cards read from this instead, so each card's number and
+			// its hover breakdown come off the same rows.
 			//
-			// CREATED is excluded for the same reason the funnel excludes it, and the
-			// two must agree or the page contradicts itself: an account that has not
-			// submitted anything is not "awaiting a decision", it is not in the queue at
-			// all. Counting them inflated `awaiting` by every half-registered account and
-			// made the header's applicant count differ from this card's.
+			// CREATED is excluded for the same reason the funnel excludes it, and the two must
+			// agree or the page contradicts itself. An account that has submitted nothing is not
+			// awaiting a decision, it is not in the queue at all.
 			ctx.prisma.user.groupBy({
 				by: ['activeDecision', 'role'],
 				where: { role: { in: APPLICANT_ROLES }, status: { not: UserStatus.CREATED } },
@@ -135,8 +126,7 @@ export const dashboardRouter = router({
 
 		// One pass over the decision × role rows fills every stat card and its hover
 		// breakdown. `awaiting` collects both a null activeDecision and the PENDING
-		// placeholder: PENDING is a starting state rather than an outcome, so a user
-		// carrying it has not been decided either way.
+		// placeholder, since PENDING is a starting state rather than an outcome.
 		const applicants = {
 			total: 0,
 			accepted: emptyTally(),
@@ -181,9 +171,8 @@ export const dashboardRouter = router({
 				take: input.amount,
 				orderBy: { createdAt: 'desc' },
 				where: { status: { not: UserStatus.CREATED } },
-				// Just what a name card renders. An unprojected row would ship `score`,
-				// `notes`, `pendingDecision` and the claim columns to the dashboard to
-				// draw a name — see $lib/server/trpc/selects for the embargo this respects.
+				// Just what a name card renders. An unprojected row would ship `score`, `notes` and
+				// `pendingDecision` to the dashboard to draw a name. See ../selects.
 				select: {
 					uid: true,
 					name: true,
@@ -196,16 +185,14 @@ export const dashboardRouter = router({
 		}),
 
 	/**
-	 * The admissions pipeline: applied → decided → accepted → confirmed → checked in.
+	 * The admissions pipeline: applied, decided, accepted, confirmed, checked in.
 	 *
-	 * Deliberately NOT windowed, and the dashboard labels it "current". Every stage is
-	 * a question about present state ("how many are confirmed right now"), and three of
-	 * the five have no timestamp to filter on anyway — `UserStatus` records where
-	 * someone *is*, never when they got there. Offering a range control over it would
-	 * be a filter that silently does nothing to most of the chart.
+	 * Deliberately not windowed, and the dashboard labels it "current". Every stage asks
+	 * about present state, and three of the five have no timestamp to filter on anyway.
+	 * `UserStatus` records where someone is, never when they got there.
 	 *
-	 * One `groupBy` over (status × activeDecision) answers all five: they are five
-	 * different reads of the same rows, not five populations.
+	 * One `groupBy` over (status × activeDecision) answers all five: they are five reads
+	 * of the same rows, not five populations.
 	 */
 	funnel: portalProcedure.query(async ({ ctx }): Promise<FunnelStage[]> => {
 		const rows = await ctx.prisma.user.groupBy({
@@ -222,9 +209,8 @@ export const dashboardRouter = router({
 
 		for (const row of rows) {
 			const count = row._count._all;
-			// CREATED means the account exists but nothing was submitted — not an
-			// applicant yet, and counting them would make every conversion below look
-			// worse than it is.
+			// CREATED means the account exists but nothing was submitted. Not an applicant yet,
+			// and counting them would make every conversion below look worse than it is.
 			if (row.status === UserStatus.CREATED) continue;
 			applied += count;
 
@@ -289,15 +275,13 @@ export const dashboardRouter = router({
 	/**
 	 * Applications and decisions per day, as two series on one scale.
 	 *
-	 * Bucketed in the hackathon's timezone, not UTC — a Texas hackathon's 7pm
-	 * submissions are tomorrow's in UTC, which would shift a whole evening's traffic
-	 * onto the wrong bar every day.
+	 * Bucketed in the hackathon's timezone, not UTC. A Texas hackathon's 7pm submissions
+	 * are tomorrow's in UTC, which would shift a whole evening onto the wrong bar.
 	 *
-	 * Selects the two date columns and folds in JS rather than reaching for
-	 * `$queryRaw` with `date_trunc`. Both sets are bounded by the applicant pool —
-	 * low thousands, two columns wide — so this is a few hundred KB at the very
-	 * worst, against a raw query that would need its own timezone handling and could
-	 * not be exercised by the mocked-Prisma tests the rest of this router uses.
+	 * Selects the two date columns and folds in JS rather than reaching for `$queryRaw`
+	 * with `date_trunc`. Both sets are bounded by the applicant pool, so this is a few
+	 * hundred KB at worst, against a raw query that would need its own timezone handling
+	 * and could not be exercised by the mocked-Prisma tests.
 	 */
 	overTime: portalProcedure
 		.input(z.object({ window: windowInput }).default({ window: 'all' }))
@@ -367,20 +351,16 @@ export const dashboardRouter = router({
 	/**
 	 * The unified activity feed: staff actions and applicant actions in one stream.
 	 *
-	 * Two sources, because `Log` only ever records staff work — every slug in
-	 * `LOG_ACTIONS` is something an admin or organizer did. Applicant rows are
-	 * therefore *derived*: an application from `User.createdAt`, a check-in from
-	 * `Scan`. That is also what makes the source filter meaningful rather than
-	 * cosmetic.
+	 * Two sources, because `Log` only ever records staff work. Applicant rows are derived:
+	 * an application from `User.createdAt`, a check-in from `Scan`. That is also what
+	 * makes the source filter meaningful rather than cosmetic.
 	 *
-	 * Classification is by action slug, never by the actor's current role. An
-	 * organizer who is later demoted to hacker must not have their past decisions
-	 * reclassify — the slug records what was done, and that does not change.
+	 * Classification is by action slug, never by the actor's current role. An organizer
+	 * later demoted to hacker must not have their past decisions reclassify.
 	 *
-	 * Known gap: RSVP confirm/decline cannot appear here. `UserStatus` has no
-	 * timestamp, so there is no instant to sort those rows by. Adding one is a schema
-	 * change (`statusChangedAt`), not something this query can work around, and
-	 * inventing an order for them would be worse than their absence.
+	 * Known gap: RSVP confirm/decline cannot appear here. `UserStatus` has no timestamp,
+	 * so there is no instant to sort those rows by. Fixing it is a schema change
+	 * (`statusChangedAt`), and inventing an order would be worse than their absence.
 	 */
 	activity: adminProcedure
 		.input(
@@ -460,9 +440,8 @@ export const dashboardRouter = router({
 			}
 
 			for (const applicant of applicants) {
-				// createdAt, not a submission timestamp — the schema has no separate one, and
-				// an applicant-role account that is past CREATED has submitted. The two differ
-				// only for someone who registered and applied on different days.
+				// createdAt, not a submission timestamp. The schema has no separate one, and an
+				// applicant-role account past CREATED has submitted.
 				const detail = [applicant.university, applicant.year].filter(Boolean).join(' · ');
 				entries.push({
 					id: `applicant:${applicant.uid}`,
@@ -502,14 +481,12 @@ export const dashboardRouter = router({
 	/**
 	 * Where applicants come from and how far along they are.
 	 *
-	 * `adminProcedure` for the same reason as `filters.facets`: a list of every
-	 * university with exact headcounts is per-person data in aggregate clothing — at a
-	 * count of one it is literally per-person.
+	 * `adminProcedure` for the same reason as `filters.facets`: every university with
+	 * exact headcounts is per-person data in aggregate clothing.
 	 *
-	 * Reads the two linked columns directly rather than going through
-	 * `filters.facets`, which ships up to 500 options per facet because it is
-	 * building a filter vocabulary. A dashboard card wants the top handful and the size
-	 * of the tail.
+	 * Reads the two linked columns directly rather than going through `filters.facets`,
+	 * which ships up to 500 options per facet because it is building a filter vocabulary.
+	 * A dashboard card wants the top handful and the size of the tail.
 	 */
 	demographics: adminProcedure
 		.input(z.object({ top: z.number().int().min(3).max(20).default(7) }).default({ top: 7 }))
@@ -553,9 +530,8 @@ export const dashboardRouter = router({
 				questions.find((q) => isLinkedField(q.linkedField) && q.linkedField === field);
 			const yearQuestion = labelFor('YEAR');
 
-			// A declared option order beats popularity for an ordinal field: Freshman →
-			// Senior is the order the reader expects, and re-sorting it by headcount makes
-			// the shape of the cohort unreadable.
+			// A declared option order beats popularity for an ordinal field. Freshman to Senior
+			// is what the reader expects, and sorting by headcount makes the cohort unreadable.
 			const declared = yearQuestion?.options ?? [];
 			const years = declared.length
 				? [

@@ -50,25 +50,23 @@
 	}
 
 	// --- Filter state ---
-	// Vocabulary and the checkbox-state → tRPC-params translation are shared with the
-	// custom-email wizard, so a count here and a send there can't disagree.
+	// Vocabulary and the checkbox-state to tRPC-params translation are shared with the
+	// custom-email wizard, so a count here and a send there cannot disagree.
 	let roleFilter = $state(allChecked(ALL_ROLES));
 	let statusFilter = $state(allChecked(ALL_STATUSES));
 	let decisionFilter = $state(allChecked(DECISION_OPTIONS));
 	let search = $state('');
 
 	/**
-	 * The application-answer facets. Empty means "no filter" — the inverse of the three
+	 * The application-answer facets. Empty means "no filter", the inverse of the three
 	 * checkbox groups, which start fully checked. `buildRecipientParams` omits an empty
-	 * facet's key entirely rather than sending `[]`, which the server would read as
-	 * "match nobody"; see `facetParams`.
+	 * facet's key rather than sending `[]`, which the server reads as "match nobody".
 	 */
 	let facetSelection = $state<FacetState>({});
 
 	/**
-	 * The Name facet has no control of its own — it is one distinct value per person, so
-	 * a list of them is a directory — but the did-you-mean chips below the search box
-	 * drive it directly, which is why the key is spelled out here.
+	 * The Name facet has no control of its own, since it is one distinct value per person.
+	 * The did-you-mean chips below the search box drive it directly.
 	 */
 	const NAME_FACET = linkedFacetKey('NAME');
 
@@ -81,16 +79,14 @@
 	}
 
 	// --- Typo-tolerant search ---
-	// What the server fell back to when the typed term matched almost nothing. The
-	// rows themselves are `createdAt desc` under pagination and are NOT ranked; these
-	// names are. See the strip below the search box.
+	// What the server fell back to when the typed term matched almost nothing. The rows
+	// themselves are `createdAt desc` under pagination and are NOT ranked; these names are.
 	let expansion = $state(untrack(() => data.search));
 
 	/**
-	 * The strip's wording follows `exact` — how many rows the typed term matched on its
-	 * own — not `fuzzy`, which only says the fold ran. The fold runs below a floor of
-	 * five rather than at zero, so it fires on plenty of terms that did match, and
-	 * "No exact match" over a list of exact matches reads as a broken search.
+	 * The wording follows `exact`, how many rows the typed term matched on its own, not
+	 * `fuzzy`, which only says the fold ran. The fold runs below a floor of five, so
+	 * "No exact match" over a list of exact matches would read as a broken search.
 	 */
 	let suggestionsLabel = $derived(
 		expansion.exact > 0 ? 'Similar names:' : 'No exact match — did you mean:'
@@ -102,10 +98,9 @@
 	);
 
 	/**
-	 * Narrow to one suggested person — an exact `name` filter, so the result is that
-	 * person rather than a differently-ranked list of near-misses. The search term is
-	 * left in the box on purpose: the strip stays on screen, so a wrong guess is one
-	 * click away from the next candidate.
+	 * Narrow to one suggested person with an exact `name` filter. The search term is left
+	 * in the box on purpose, so the strip stays on screen and a wrong guess is one click
+	 * away from the next candidate.
 	 */
 	function pickSuggestion(name: string) {
 		facetSelection = {
@@ -115,7 +110,6 @@
 		loadPage(1);
 	}
 
-	// Checkbox toggles immediately re-fetch page 1 with new filters
 	function toggleRole(r: string) {
 		roleFilter = { ...roleFilter, [r]: !roleFilter[r] };
 		loadPage(1);
@@ -129,10 +123,9 @@
 		loadPage(1);
 	}
 
-	// `clear` resets a group to its all-ticked "no filter" default. Resetting rather
-	// than unticking keeps the boxes truthful: none ticked also means "no filter"
-	// (see `buildRecipientParams`), so clearing to empty would show every row above a
-	// panel claiming nothing is selected.
+	// `clear` resets a group to its all-ticked "no filter" default. None ticked also
+	// means "no filter", so clearing to empty would show every row above a panel
+	// claiming nothing is selected.
 	function clearRole() {
 		roleFilter = allChecked(ALL_ROLES);
 		loadPage(1);
@@ -146,7 +139,6 @@
 		loadPage(1);
 	}
 
-	// Search is debounced
 	let searchTimer: ReturnType<typeof setTimeout>;
 	function onSearchInput() {
 		clearTimeout(searchTimer);
@@ -185,36 +177,31 @@
 	// --- Modal state ---
 	let detailOpen = $state(false);
 	let selectedUser = $state<User | null>(null);
-	// Typed as the enums rather than plain strings; '' is the modal's own "unset"
-	// for the nullable pending decision and is mapped back to null on save.
+	// Typed as the enums rather than plain strings; '' is the modal's own "unset" for the
+	// nullable pending decision and is mapped back to null on save.
 	//
-	// There is no `editActive`: an active decision is one the applicant has already
-	// been emailed, so it is shown here but never edited. Changing a published
-	// outcome means setting a new pending decision and releasing it, which notifies
-	// them — see `user.updateDecisions`, which no longer accepts the field at all.
+	// There is no `editActive`: an active decision has already been emailed, so it is
+	// shown but never edited. Changing a published outcome means setting a new pending
+	// decision and releasing it.
 	let editRole = $state<Role>(Role.UNDECLARED);
 	let editStatus = $state<UserStatus>(UserStatus.CREATED);
 	let editPending = $state<DecisionStatus | ''>('');
 	let saving = $state(false);
 
 	/**
-	 * Released — the applicant has been emailed an outcome, so both decision
-	 * controls lock. `user.updateDecisions` enforces the same rule server-side.
+	 * Released means the applicant has been emailed an outcome, so both decision controls
+	 * lock. `user.updateDecisions` enforces the same rule server-side.
 	 *
-	 * Note this currently closes the last editing surface for a released decision:
-	 * /admin/admissions loads its queue with `noDecision: true`, which matches only
-	 * applicants whose pending AND active decisions are both null, so a released
-	 * one never appears there either. `admissions.setDecision` would still accept
-	 * the change, but nothing in the UI can reach it.
+	 * This currently closes the last editing surface for a released decision:
+	 * /admin/admissions loads its queue with `noDecision: true`, so a released one never
+	 * appears there either.
 	 */
 	const released = $derived(Boolean(selectedUser?.activeDecision));
 
 	// --- Full profile (user.getById) ---
-	// The list row carries only the seven columns the table shows. Everything the
-	// person actually submitted is a round trip, so the modal opens immediately on
-	// the row data and fills this half in when it lands — opening never waits on
-	// the network. `profileToken` is the guard against a slow response for a row
-	// you already navigated away from overwriting a fast one for the row you're on.
+	// The list row carries only the seven columns the table shows, so the modal opens
+	// immediately on row data and fills this half in when it lands. `profileToken` stops
+	// a slow response for an old row overwriting a fast one for the row you are on.
 	let profile = $state<ProfileData | null>(null);
 	let profileLoading = $state(false);
 	let profileError = $state<string | null>(null);
@@ -265,10 +252,9 @@
 		if (!selectedUser) return;
 		saving = true;
 		try {
-			// The decision call is skipped entirely for a released applicant rather than
-			// sent and allowed to fail: the server rejects it with a CONFLICT, which
-			// would sink the whole Promise.all and lose the role and status edits that
-			// were perfectly valid.
+			// The decision call is skipped entirely for a released applicant rather than sent
+			// and allowed to fail. The server rejects it with a CONFLICT, which would sink the
+			// whole Promise.all and lose the valid role and status edits.
 			const [roleResult, statusResult, decisionResult] = await Promise.all([
 				trpc.user.updateRole.mutate({ uid: selectedUser.uid, role: editRole }),
 				trpc.user.updateStatus.mutate({ uid: selectedUser.uid, status: editStatus }),
@@ -293,17 +279,15 @@
 	/**
 	 * Whole-row click, for pointer users only.
 	 *
-	 * The `<tr>` deliberately gets no `role="button"` and no `tabindex`: a row of
-	 * seven text cells is not a button, and forcing it to announce as one costs a
-	 * screen-reader user the column semantics that make the table readable. The
-	 * row's keyboard and assistive-tech path is the real `<button>` still sitting
-	 * in the last cell — one tab stop per row, exactly as before, now labelled
-	 * "Edit {name}" so fifty of them aren't all announced as a bare "Edit". The
-	 * label keeps the visible word so voice control ("click Edit") still hits it,
-	 * per WCAG 2.5.3. This handler is the pointer affordance layered on top.
+	 * The `<tr>` deliberately gets no `role="button"` and no `tabindex`. A row of seven
+	 * text cells is not a button, and forcing it to announce as one costs a screen-reader
+	 * user the column semantics that make the table readable. The keyboard path is the
+	 * real `<button>` in the last cell, labelled "Edit {name}" so fifty of them are not
+	 * all announced as a bare "Edit". The label keeps the visible word so voice control
+	 * still hits it, per WCAG 2.5.3.
 	 *
-	 * Clicks that finish a text selection are ignored, so highlighting an email
-	 * to copy it doesn't open a modal over the top of it.
+	 * Clicks that finish a text selection are ignored, so highlighting an email to copy
+	 * it does not open a modal over the top of it.
 	 */
 	function onRowClick(user: User) {
 		if (window.getSelection()?.toString()) return;
@@ -345,9 +329,9 @@
 	</button>
 </div>
 
-<!-- Layout: filters + results. Below md the filter rail becomes a collapsible
-     strip stacked on top and the table becomes a card list; from md up it is
-     the original sidebar + table. -->
+<!-- Layout: filters + results. Below md the filter rail becomes a collapsible strip
+     stacked on top and the table becomes a card list; from md up it is the original
+     sidebar + table. -->
 <div class="flex flex-col overflow-hidden rounded-md border border-border bg-white md:flex-row">
 	<UserFilters
 		collapsible
@@ -382,16 +366,13 @@
 		</div>
 
 		<!--
-			Suggestion strip. Shown only when the server has names to offer that the typed
-			term did not already select — see `suggestionsLabel` for why the wording
-			depends on how many rows it did select.
+			Suggestion strip, shown only when the server has names the typed term did not
+			already select.
 
 			These names are the one ranked thing on this screen. The rows below are
-			`createdAt desc` under pagination — a relevance score computed in application
-			memory cannot drive a SQL ORDER BY without breaking skip/take — so the table is
-			deliberately left in its own order and the ranking is offered here instead, in
-			the order the server sent. Clicking a name applies it as an exact filter, which
-			is how you get from "these 14 rows are near-misses" to one person.
+			`createdAt desc` under pagination, since a score computed in application memory
+			cannot drive a SQL ORDER BY without breaking skip/take. Clicking a name applies
+			it as an exact filter.
 		-->
 		{#if expansion.fuzzy && expansion.names.length > 0}
 			<div
@@ -412,10 +393,8 @@
 					</button>
 				{/each}
 				{#if expansion.capped}
-					<!--
-						The suggestion list hit its cap, so it is a sample of the close matches
-						rather than all of them. A truncated list is a different answer.
-					-->
+					<!-- The suggestion list hit its cap, so it is a sample of the close matches
+					     rather than all of them. A truncated list is a different answer. -->
 					<span class="text-xs text-foreground-tertiary">
 						showing the {expansion.names.length} closest
 					</span>
@@ -605,9 +584,8 @@
 	</div>
 {/if}
 
-<!-- User detail modal. The shared Modal supplies overlay, focus trap, Escape,
-     and a panel that fits a 320px viewport (modal-panel-w caps it below its
-     max width with a gutter). -->
+<!-- User detail modal. The shared Modal supplies overlay, focus trap, Escape, and a
+     panel that fits a 320px viewport. -->
 <Modal
 	bind:open={detailOpen}
 	onClose={clearSelection}
@@ -637,9 +615,8 @@
 			</div>
 		</div>
 
-		<!-- Role. Radios, not checkboxes: roles are mutually exclusive, so the control
-		     has to make picking a second one *replace* the first rather than add to it.
-		     A checkbox group is what let an account be ADMIN and HACKER at once. -->
+		<!-- Role. Radios, not checkboxes: roles are mutually exclusive, so picking a second
+		     one has to replace the first rather than add to it. -->
 		<div>
 			<div class="mb-2 text-2xs font-bold tracking-eyebrow text-muted-foreground uppercase">
 				Role
@@ -704,10 +681,8 @@
 					<div class="mt-1 text-2xs text-muted-foreground">Released</div>
 				{/if}
 			</div>
-			<!-- Read-only: this is the outcome the applicant has already been emailed.
-			     Editing it here would change the record without changing what they were
-			     told, so a published decision is altered by setting a new pending one
-			     and releasing it. -->
+			<!-- Read-only: this is the outcome the applicant has already been emailed. A
+			     published decision is altered by setting a new pending one and releasing it. -->
 			<div>
 				<div class="mb-1.5 text-2xs font-bold tracking-eyebrow text-muted-foreground uppercase">
 					Active Decision
@@ -721,9 +696,8 @@
 			</div>
 		</div>
 
-		<!-- Everything they submitted. Read-only, and below the editing controls on
-		     purpose: a triage edit stays one glance from the top of the panel
-		     rather than eleven essay answers down it. -->
+		<!-- Everything they submitted. Read-only, and below the editing controls so a triage
+		     edit stays one glance from the top rather than eleven essay answers down. -->
 		<UserProfile {profile} loading={profileLoading} error={profileError} />
 	{/if}
 

@@ -12,14 +12,12 @@ import { isApplicantRole } from '../src/lib/admissions/roles';
 // ---------------------------------------------------------------------------
 // Bulk test accounts
 //
-// Every account is derived from the index alone — no randomness — so the same
-// run produces the same database twice. That is what makes re-seeding safe:
-// hacker42@yopmail.com is always the same person in the same state, and a bug
-// you found on it yesterday is still reproducible today.
+// Every account is derived from the index alone, with no randomness, so the same run
+// produces the same database twice. hacker42@yopmail.com is always the same person in
+// the same state.
 //
-// Emails are `<role><n>@yopmail.com`, numbered from 1 with no gaps, because the
-// dev login (src/routes/login/+page.server.ts) accepts any @yopmail.com address
-// that exists in the User table — so a predictable address is a predictable login.
+// Emails are `<role><n>@yopmail.com`, numbered from 1 with no gaps, because the dev
+// login accepts any @yopmail.com address that exists in the User table.
 // ---------------------------------------------------------------------------
 
 const FIRST_NAMES = [
@@ -57,17 +55,14 @@ const LAST_NAMES = [
 const COMBOS = FIRST_NAMES.length * LAST_NAMES.length;
 
 /**
- * Spelled as `src/lib/data/universities.json` spells them, which is not how anyone
- * says them out loud — IPEDS files UT Austin under `The University of Texas…` and
- * Texas A&M under `Texas A & M University-College Station`.
+ * Spelled as `src/lib/data/universities.json` spells them, which is not how anyone says
+ * them out loud. IPEDS files UT Austin under `The University of Texas...`.
  *
  * They have to match, now that the seeded University question draws its choices from
- * that preset. A name the preset doesn't contain is a write-in, so the form reopens
- * as a text box and the filter facet fills with values no dropdown offers — which is
- * the free-text mess this feature exists to end, reproduced in the demo data.
+ * that preset. A name the preset does not contain is a write-in, which reproduces the
+ * free-text mess this feature exists to end.
  *
- * The last entry is off-list on purpose: one applicant at a school the dataset missed,
- * so the write-in path has a live example in every seeded database.
+ * The last entry is off-list on purpose, so the write-in path has a live example.
  */
 const UNIVERSITIES = [
 	'The University of Texas at Austin',
@@ -149,8 +144,7 @@ export type StatePlan = {
 
 /**
  * Hackers are spread across every state the admin UI can render, weighted so the
- * admissions queue (APPLIED + PENDING) stays the biggest bucket — that is the page
- * that needs volume to be worth testing.
+ * admissions queue (APPLIED + PENDING) stays the biggest bucket.
  */
 const HACKER_STATES: StatePlan[] = [
 	// Started an application, never submitted.
@@ -335,11 +329,10 @@ function countFor(plan: RolePlan): number {
 
 /**
  * Build every account up front. `seq` runs across roles rather than restarting per
- * role, so admin1 and hacker1 are different people — otherwise the same name would
- * show up once per role and make cross-role bugs hard to spot.
+ * role, so admin1 and hacker1 are different people.
  *
- * Pass a custom `rolePlans` array to override state distributions — used by the
- * scenario seed scripts (seedScenario1–3.ts) to simulate different admission phases.
+ * Pass a custom `rolePlans` array to override state distributions, as the scenario
+ * seed scripts do.
  */
 export function generateUsers(rolePlans: RolePlan[] = ROLE_PLANS): GeneratedUser[] {
 	const out: GeneratedUser[] = [];
@@ -372,7 +365,7 @@ export function generateUsers(rolePlans: RolePlan[] = ROLE_PLANS): GeneratedUser
 // Application responses
 //
 // Generated from whatever questions are in the database, so adding a question in
-// /admin/registration and re-seeding fills it in for everyone automatically.
+// /admin/registration and re-seeding fills it in for everyone.
 // ---------------------------------------------------------------------------
 
 function shortAnswer(title: string, user: GeneratedUser, seq: number): string {
@@ -442,8 +435,7 @@ export function generateResponses(
 
 	users.forEach((user, seq) => {
 		// Staff are provisioned directly and never apply. Generating responses for them
-		// would fabricate an application that production can't produce — and put an
-		// unreviewable row in the admissions queue.
+		// would put an unreviewable row in the admissions queue.
 		if (!isApplicantRole(user.role)) return;
 
 		const mine = ordered.filter((q) => appliesTo(q, user));
@@ -471,13 +463,11 @@ export function generateResponses(
 /**
  * Seed every generated account and rebuild its application responses.
  *
- * By default (flush = false) this upserts — idempotent by email, so re-running
- * moves an account back to its generated state without creating a second copy.
+ * By default this upserts, idempotent by email, so re-running moves an account back to
+ * its generated state without creating a second copy.
  *
  * With flush = true (used by scenario scripts) the generated accounts are deleted
- * first and then recreated from scratch, guaranteeing a fully clean state. This
- * clears review scores, claim locks, decision attribution, and any other admin
- * activity that a plain upsert would leave behind.
+ * first, which also clears review scores, claim locks and decision attribution.
  */
 export async function seedUsers(
 	prisma: PrismaClient,
@@ -525,10 +515,8 @@ export async function seedUsers(
 /**
  * Delete every @yopmail.com account this generator did not produce.
  *
- * Off by default and destructive — it removes the ad-hoc dev accounts that predate
- * the sequential scheme, along with any account you made by hand at the login page.
- * Opt in with SEED_PRUNE=1 (or `npm run db:seed:fresh`) when you want the dev
- * database to contain exactly the generated set and nothing else.
+ * Off by default and destructive. Opt in with SEED_PRUNE=1 (or `npm run db:seed:fresh`)
+ * when you want the dev database to contain exactly the generated set.
  */
 export async function pruneUnmanagedUsers(
 	prisma: PrismaClient,

@@ -16,8 +16,8 @@
 	const interactive = $derived(rows.length > 0);
 
 	/**
-	 * Screen readers never see the panel, so the same figures ride along on the
-	 * card's label. Without this the breakdown would be pointer-only information.
+	 * Screen readers never see the panel, so the same figures ride along on the card's
+	 * label. Without this the breakdown would be pointer-only information.
 	 */
 	const ariaSummary = $derived(
 		`${label}: ${value.toLocaleString()}. ` + rows.map((r) => `${r.label} ${r.value}`).join(', ')
@@ -38,8 +38,8 @@
 
 	function place(event: PointerEvent) {
 		if (!open || anchored) return;
-		// Flip back inside the viewport near the right and bottom edges, rather than
-		// letting the panel run off screen on the last card in the row.
+		// Flip back inside the viewport near the right and bottom edges, rather than letting
+		// the panel run off screen on the last card in the row.
 		x = Math.max(EDGE, Math.min(event.clientX + OFFSET, window.innerWidth - panelW - EDGE));
 		y = Math.max(EDGE, Math.min(event.clientY + OFFSET, window.innerHeight - panelH - EDGE));
 	}
@@ -62,8 +62,7 @@
 
 	/**
 	 * Only keyboard focus pins the panel. Clicking a button also focuses it, and
-	 * anchoring on that would drop a mouse user out of follow mode mid-hover —
-	 * `:focus-visible` is exactly the "arrived here by keyboard" signal.
+	 * anchoring on that would drop a mouse user out of follow mode mid-hover.
 	 */
 	function focus(event: FocusEvent) {
 		if (!interactive) return;
@@ -73,9 +72,8 @@
 	}
 
 	/**
-	 * Taps and keyboard activation toggle, because neither has a hover to govern
-	 * the panel. A mouse click is ignored — hover already decides what's shown, and
-	 * toggling under the pointer just makes the card feel broken.
+	 * Taps and keyboard activation toggle, because neither has a hover to govern the
+	 * panel. A mouse click is ignored, since hover already decides what is shown.
 	 */
 	function toggle(event: MouseEvent) {
 		const keyboard = event.detail === 0;
@@ -117,11 +115,10 @@
 
 {#if interactive}
 	<!--
-		A real <button>, not a div with a tabindex. The breakdown is information the
-		card only reveals on demand, so the thing revealing it has to be focusable
-		and operable — which also gives touch, where nothing hovers, a tap that
-		works. Styled flat so it still reads as a card.
-	-->
+			A real <button>, not a div with a tabindex. The breakdown is revealed on demand, so
+			the thing revealing it has to be focusable and operable, which also gives touch a
+			tap that works. Styled flat so it still reads as a card.
+		-->
 	<button
 		type="button"
 		class="relative block w-full min-w-0 cursor-default rounded-md border border-border bg-white px-5 py-4 text-left outline-none focus-visible:shadow-ring"
@@ -150,9 +147,8 @@
 {/if}
 
 {#if open && !anchored}
-	<!-- Fixed rather than absolute so the panel is positioned against the viewport
-	     and can't be clipped by the stat grid. No transformed ancestor exists on
-	     /admin, which is what makes `fixed` mean the viewport here. -->
+	<!-- Fixed rather than absolute so the panel is positioned against the viewport and
+		     cannot be clipped by the stat grid. No transformed ancestor exists on /admin. -->
 	<div
 		class="fixed z-50"
 		style="left: {x}px; top: {y}px"

@@ -6,13 +6,12 @@
 	/**
 	 * Applicants by decision, as one 100%-stacked bar.
 	 *
-	 * The form is the point. Four separate stat cards give four numbers and leave
-	 * the reader to work out the proportions; one bar gives the counts *and* the
-	 * shape in a single mark, which is the question the dashboard is actually
-	 * asked ("how is the pool splitting?").
+	 * The form is the point. Four separate stat cards give four numbers and leave the
+	 * reader to work out the proportions; one bar gives the counts and the shape in a
+	 * single mark.
 	 *
-	 * Segments are separated by a 2px surface gap, never a border — see
-	 * `decisionPalette` for why that gap is mandatory here rather than decorative.
+	 * Segments are separated by a 2px surface gap, never a border. See `decisionPalette`
+	 * for why that gap is mandatory rather than decorative.
 	 */
 	let {
 		counts,
@@ -40,9 +39,9 @@
 	);
 
 	/**
-	 * Only label inside a segment that can hold the text. A number crammed into a
-	 * 3% sliver either overflows its own fill or gets cropped, and a cropped label
-	 * is worse than none — the legend below carries every value regardless.
+	 * Only label inside a segment that can hold the text. A number crammed into a 3%
+	 * sliver either overflows its fill or gets cropped, and the legend below carries
+	 * every value regardless.
 	 */
 	const LABEL_MIN_SHARE = 9;
 
@@ -61,9 +60,8 @@
 		<p class="text-xs text-foreground-secondary">
 			{nf.format(total)} applicants · staff accounts excluded
 		</p>
-		<!-- The table view is an obligation, not a nicety: two of these fills sit
-		     below 3:1 against the card, so a non-colour route to the same numbers
-		     has to exist. -->
+		<!-- The table view is an obligation, not a nicety: two of these fills sit below
+				     3:1 against the card, so a non-colour route to the same numbers must exist. -->
 		<button
 			type="button"
 			aria-pressed={showTable}
@@ -123,10 +121,9 @@
 			{#each segments as segment (segment.key)}
 				<Tooltip content={tooltipFor(segment.key, segment.label, segment.hint, segment.count)}>
 					{#snippet children(props)}
-						<!-- A real <button>, not a div carrying a tabindex. The role split
-						     behind each segment is information, so it has to be reachable by
-						     keyboard, and only a natively focusable element makes that true
-						     for assistive tech as well as for the tooltip. -->
+						<!-- A real <button>, not a div carrying a tabindex. The role split behind each
+												     segment is information, so it has to be reachable by keyboard, and only a
+												     natively focusable element makes that true for assistive tech. -->
 						<button
 							{...props}
 							type="button"

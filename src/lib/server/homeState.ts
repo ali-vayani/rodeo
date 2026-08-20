@@ -6,36 +6,23 @@ import { INTERNATIONAL, NO_VALUE, OUT_OF_STATE, STATE_FACET_KEY, type Facet } fr
 /**
  * Where applicants are from, derived rather than asked.
  *
- * `User.university` already answers this: the university dataset carries a `region` per
- * institution, so "is this applicant from Texas" is a lookup, not a new question on the
- * form. That matters more than it sounds — a question added now is unanswered by every
- * applicant who already applied, whereas this works retroactively on the whole pool.
- *
- * The one module both the facet and the predicate go through, for the same reason
- * `$lib/server/recipients` is: a count an organizer reads and the rows a filter returns
- * have to be derived by the same code or they disagree, and "Texas: 214" above 190 rows
- * is the kind of disagreement nobody reports and everybody stops trusting.
+ * `User.university` already answers this through the dataset's `region`, and unlike a
+ * new question it works retroactively on the whole pool. The one module both the facet
+ * and the predicate go through, so a count and a filter cannot disagree.
  */
 
 /**
- * The bucket an applicant's university places them in.
- *
- * A US state code, `INTERNATIONAL` for an institution we can place outside the US, or
- * `null` for one we cannot place at all — a write-in, or a US row the dataset carries
- * no region for. `null` is folded into `NO_VALUE` where it surfaces, because "no state
- * on record" is honestly what we know about them; claiming a state would be worse.
+ * The bucket an applicant's university places them in: a US state code,
+ * `INTERNATIONAL`, or `null` for one we cannot place. `null` is folded into `NO_VALUE`,
+ * because "no state on record" is honestly what we know.
  */
 type Bucket = string | null;
 
 let universityBuckets: Promise<Map<string, Bucket>> | null = null;
 
 /**
- * Institution name → bucket, built once per process.
- *
- * Keyed on the plain institution name because that is exactly what `application.save`
- * writes into `User.university` — the preset deliberately stores the bare name, not the
- * decorated `Name — City, ST` label. Lowercased on both sides so a stored answer that
- * differs only in case still places.
+ * Institution name to bucket, built once per process. Keyed on the plain name because
+ * that is what `application.save` writes, and lowercased on both sides.
  */
 function loadBuckets(): Promise<Map<string, Bucket>> {
 	universityBuckets ??= loadUniversities().then(({ universities }) => {
@@ -71,15 +58,10 @@ interface Buckets {
 /**
  * Every university anyone actually holds, bucketed by state.
  *
- * Bucketed from the *observed* values rather than from the dataset, and that is the
- * whole trick: resolving "Texas" against the dataset would mean an `IN (...)` of the
- * ~200 Texan institutions, and "outside Texas" an `IN (...)` of the other 6,250 —
- * a query nobody wants to read or plan. Bucketing what the pool actually contains
- * bounds every list by the number of distinct universities among applicants, which is
- * a few hundred at most, and it makes the facet counts fall out of the same pass.
- *
- * The same resolve-to-explicit-values move `expandSearch` makes for fuzzy names, for
- * the same reason: the predicate stays exact, so preview and send cannot diverge.
+ * Bucketed from observed values rather than the dataset, which is the whole trick:
+ * resolving "Texas" against the dataset would mean an `IN (...)` of ~200 institutions
+ * and "outside Texas" one of 6,250. This bounds every list by the distinct universities
+ * among applicants and makes the facet counts fall out of the same pass.
  */
 export async function stateBuckets(prisma: Pick<PrismaClient, 'user'>): Promise<Buckets> {
 	const [placement, rows] = await Promise.all([
@@ -122,12 +104,9 @@ export async function stateBuckets(prisma: Pick<PrismaClient, 'user'>): Promise<
 }
 
 /**
- * The `university` values behind a selected bucket code.
- *
- * Still resolves a bare state code — `CA` — even though `stateFacet` no longer offers
- * one. That mirrors `FILTERABLE_LINKED_FIELDS`: the facet governs what an organizer is
- * *offered*, never what the predicate *accepts*. Costs one line, keeps a hand-built
- * query working, and means restoring a per-state control later is a UI change alone.
+ * The `university` values behind a selected bucket code. Still resolves a bare state
+ * code even though `stateFacet` no longer offers one: the facet governs what an
+ * organizer is offered, never what the predicate accepts.
  */
 function namesFor(buckets: Buckets, code: string, homeState: string | null): string[] {
 	if (code !== OUT_OF_STATE) return buckets.byCode.get(code)?.names ?? [];
@@ -143,19 +122,10 @@ function namesFor(buckets: Buckets, code: string, homeState: string | null): str
 /**
  * The state facet: home, and not home. Two rows, or `null`.
  *
- * Deliberately *not* a list of every state observed. The question an organizer actually
- * asks of a hackathon's applicant pool is "local or travelling" — that drives catering,
- * travel reimbursement and housing. A row per state answered a question nobody was
- * asking and buried the one they were: on the seeded pool the list read "Texas 96 /
- * Outside Texas 12 / Georgia 12", where the third row is the second row, re-stated.
- *
- * So this is a partition now, not a set of alternative cuts, and the two counts plus
- * `noneCount` sum to the whole table.
- *
- * `null` when no home state is configured, because without one there is no "home" and
- * no "outside" — the pair is the whole facet, so half of it missing means no facet. Also
- * `null` when nobody's university places anywhere, since an empty control invites an
- * organizer to filter on something the data cannot answer.
+ * Deliberately not a list of every state observed. "Local or travelling" drives
+ * catering, travel and housing, and a row per state buried it — the seeded pool read
+ * "Texas 96 / Outside Texas 12 / Georgia 12", where the third row is part of the
+ * second. `null` when no home state is configured, or when nobody's university places.
  */
 export async function stateFacet(
 	prisma: Pick<PrismaClient, 'user'>,
@@ -175,16 +145,14 @@ export async function stateFacet(
 		key: STATE_FACET_KEY,
 		label: 'State',
 		control: 'select',
-		// Both rows always, including a zero. A count of zero is an answer — "nobody is
-		// local" is worth seeing — and a pair that sometimes renders as one row makes the
-		// filter look like it is missing something.
+		// Both rows always, including a zero. "Nobody is local" is worth seeing, and a pair
+		// that sometimes renders as one row makes the filter look like it is missing something.
 		options: [
 			// Named, not "Home state". The Settings field exists so this row reads "Texas":
 			// an organizer filtering a Texan hackathon is thinking "Texas".
 			{ value: homeState, label: stateName(homeState), count: home },
-			// International is inside this row rather than beside it. "Not from Texas" is
-			// one question, and an applicant flying in from Toronto is no less not-from-Texas
-			// than one driving from Atlanta.
+			// International is inside this row rather than beside it. An applicant flying in
+			// from Toronto is no less not-from-Texas than one driving from Atlanta.
 			{ value: OUT_OF_STATE, label: `Outside ${stateName(homeState)}`, count: outside }
 		],
 		noneCount: buckets.none.count
@@ -192,11 +160,9 @@ export async function stateFacet(
 }
 
 /**
- * The predicate for a state selection, or `null` when nothing is selected.
- *
- * Follows the same engaged-but-empty rule as every other facet — but the *caller* owns
- * the `[]` case, because "match nothing" is spelled once in `$lib/server/recipients`
- * and importing it here would be a cycle.
+ * The predicate for a state selection, or `null` when nothing is selected. The caller
+ * owns the `[]` case, because "match nothing" is spelled once in
+ * `$lib/server/recipients` and importing it here would be a cycle.
  */
 export async function stateCondition(
 	prisma: Pick<PrismaClient, 'user'>,
@@ -222,9 +188,8 @@ export async function stateCondition(
 		if (buckets.none.names.length) or.push({ university: { in: buckets.none.names } });
 	}
 
-	// Nothing selected resolved to anybody — a state whose only holders have since been
-	// deleted, say. That is still a narrowing selection, so it must match nobody rather
-	// than dropping out and matching everybody.
+	// Nothing selected resolved to anybody. That is still a narrowing selection, so it
+	// must match nobody rather than dropping out and matching everybody.
 	if (or.length === 0) return { university: { in: [] } };
 	return or.length === 1 ? or[0] : { OR: or };
 }

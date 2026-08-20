@@ -151,15 +151,10 @@ describe('questions.delete', () => {
 });
 
 describe('nullable columns round-trip', () => {
-	// Regression: `placeholder`/`min`/`max`/`regex`/`linkedField` are nullable
-	// columns, so Prisma hands them back as `null`. The application editor loads a
-	// question, JSON-round-trips it untouched, and posts it back — but the input
-	// schema declared those fields `.optional()`, which in zod rejects `null`. Every
-	// save whose payload contained an added or modified question blew up with
-	// "expected string, received null" and surfaced as the generic
-	// "Failed to save changes. Please try again."
-	//
-	// `allRolesQuestion` already has exactly the shape Prisma returns.
+	// Regression: those fields are nullable columns, so Prisma hands them back as `null`.
+	// The editor JSON-round-trips a question and posts it back, but the input schema
+	// declared them `.optional()`, which in zod rejects `null`. Every save containing a
+	// modified question blew up with "expected string, received null".
 	const runInTransaction = () =>
 		db.$transaction.mockImplementation(((arg: unknown) =>
 			typeof arg === 'function'

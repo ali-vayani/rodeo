@@ -1,11 +1,7 @@
 /**
- * Shapes for the redesigned dashboard.
- *
- * Isomorphic on purpose, exactly like `$lib/stats`: the router builds these and
- * the chart components render them, so a component can name the type without
- * importing a server-only module.
- *
- * Keep it free of Prisma, `$env`, and node builtins.
+ * Shapes for the dashboard. Isomorphic like `$lib/stats`, so a chart component can
+ * name the type without importing a server-only module. Keep it free of Prisma,
+ * `$env` and node builtins.
  */
 
 /** One stage of the admissions pipeline, as the funnel draws it. */
@@ -16,13 +12,8 @@ export interface FunnelStage {
 	hint: string;
 	count: number;
 	/**
-	 * Share of the *previous* stage, 0–1, or null for the first stage which has
-	 * nothing to convert from.
-	 *
-	 * Stage-to-stage rather than share-of-applied on purpose: "46% of decided were
-	 * accepted" is the number an organizer acts on. Share-of-applied is recoverable
-	 * from the counts; the conversion is the thing that would otherwise need mental
-	 * arithmetic at every step.
+	 * Share of the *previous* stage, 0-1, or null for the first stage. Stage-to-stage
+	 * because "46% of decided were accepted" is the number an organizer acts on.
 	 */
 	conversion: number | null;
 	/** Label for what `conversion` is a share of, e.g. "of decided". */
@@ -41,20 +32,14 @@ export interface TrendSeries {
 	points: TrendPoint[];
 	/** IANA zone the days were bucketed in, so the axis can say so if it needs to. */
 	timezone: string;
-	/**
-	 * True when the window was clamped because the first application predates it.
-	 * The chart says "all time" rather than implying the range covers everything.
-	 */
+	/** True when the window was clamped because the first application predates it, so the
+	    chart says "all time" rather than implying the range covers everything. */
 	truncated: boolean;
 }
 
 /**
- * Which population an activity row came from.
- *
- * Derived from the action slug, never from the actor's current role: an organizer
- * who is later demoted must not have their past decisions silently reclassify as
- * hacker activity. The slug records what was done, which is the thing that doesn't
- * change.
+ * Which population an activity row came from. Derived from the action slug, never the
+ * actor's current role: a demoted organizer's past decisions must not reclassify.
  */
 export type ActivitySource = 'admin' | 'hacker';
 
@@ -84,10 +69,8 @@ export interface ValueCount {
 
 export interface Demographics {
 	/**
-	 * Top universities by headcount, already cut to `topUniversities.length`.
-	 * The tail is reported separately rather than appended as a bar — 800-odd
-	 * applicants across 400 schools drawn as one bar would out-length the largest
-	 * single university and read as if it were one.
+	 * Top universities by headcount. The tail is reported separately rather than appended
+	 * as a bar, which would out-length the largest single school.
 	 */
 	universities: ValueCount[];
 	tail: { schools: number; applicants: number; largest: number } | null;

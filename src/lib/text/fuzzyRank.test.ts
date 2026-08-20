@@ -138,11 +138,9 @@ describe('rankOptions — aliases', () => {
 });
 
 describe('rankOptions — the order the keyboard walks', () => {
-	// `Combobox` navigates its own `selectable` list, which is exactly this output, so
-	// this ordering is what ArrowDown steps through and what Enter commits. It was
-	// previously bits-ui's list that the arrows walked and this one that was drawn as
-	// active — on the query below they disagreed, and one ArrowDown from the top landed
-	// on `Freshman` rather than `Senior`.
+	// `Combobox` navigates its own `selectable` list, which is exactly this output, so this
+	// ordering is what ArrowDown steps through and what Enter commits. Previously bits-ui's
+	// list was walked while this one was drawn as active, and they disagreed.
 	const YEARS = [
 		{ value: 'Freshman' },
 		{ value: 'Sophomore' },

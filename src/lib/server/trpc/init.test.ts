@@ -5,10 +5,9 @@ import { formatTRPCError } from './init';
 /**
  * The formatter is what stands between a hacker and a wall of JSON.
  *
- * tRPC only runs it at the HTTP boundary, so the router tests — which call
- * procedures through `createCallerFactory` — never exercise it. Tested directly
- * against a real `ZodError` rather than a hand-built one, so a zod upgrade that
- * moves `issues` or `flatten` fails here rather than in production.
+ * tRPC only runs it at the HTTP boundary, so the router tests never exercise it. Tested
+ * against a real `ZodError` rather than a hand-built one, so a zod upgrade that moves
+ * `issues` or `flatten` fails here rather than in production.
  */
 
 /** The shape tRPC hands the formatter, reduced to the parts this reads. */

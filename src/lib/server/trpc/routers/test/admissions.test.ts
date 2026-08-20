@@ -29,10 +29,7 @@ const { prisma } = await import('$lib/server/db');
 const db = prisma as DeepMockProxy<PrismaClient>;
 const { sendTemplatedEmail } = await import('$lib/server/email');
 
-/**
- * Frozen clock. Nothing in the router uses timers — we only need Date.now() to be
- * deterministic so the exact staleThreshold Date can be asserted against the mock.
- */
+/** Frozen clock, so the exact staleThreshold Date can be asserted against the mock. */
 const NOW = new Date('2024-06-01T12:00:00Z');
 
 beforeEach(() => {
@@ -450,9 +447,8 @@ describe('admissions.setDecision', () => {
 			where: claimableWhere(hackerUser.uid, adminUser.uid),
 			data: {
 				pendingDecision: DecisionStatus.ACCEPTED,
-				// Attribution rides along in the same statement as the decision — the
-				// CAS above can miss, and an attribution that could land without its
-				// decision is exactly the drift this column exists to prevent.
+				// Attribution rides along in the same statement as the decision: the CAS above
+				// can miss, and it must never land without its decision.
 				decidedBy: adminUser.uid,
 				decidedAt: new Date(),
 				claimedBy: null,
@@ -605,9 +601,8 @@ describe('admissions.release', () => {
 	});
 
 	/**
-	 * Release publishes decisions other admins made. Crediting the releaser would
-	 * hand one person the entire batch and erase the reviewers who did the work —
-	 * so the attribution columns must survive the promotion untouched.
+	 * Release publishes decisions other admins made, so crediting the releaser would
+	 * hand one person the batch and erase the reviewers who did the work.
 	 */
 	it('leaves decision attribution with the original reviewer', async () => {
 		const caller = createTestCaller(db, adminUser);
@@ -770,9 +765,8 @@ describe('admissions.list — typo-tolerant search', () => {
 	});
 
 	it('reports no fallback for a term that matched exactly', async () => {
-		// The strip must stay hidden when the typed term was fine — `fuzzy` is what the
-		// UI gates on, so a productive search reporting anything else would show a
-		// "did you mean" over results the admin explicitly asked for.
+		// The strip must stay hidden when the typed term was fine, since `fuzzy` is what
+		// the UI gates on.
 		db.user.count.mockResolvedValue(EXACT_MATCH_FLOOR as never);
 		const result = await createTestCaller(db, adminUser).admissions.list({ search: 'Hacker' });
 		expect(result.search).toEqual({ ...NO_EXPANSION, exact: EXACT_MATCH_FLOOR });

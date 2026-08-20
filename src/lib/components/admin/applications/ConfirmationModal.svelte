@@ -241,12 +241,11 @@
 		gap: 14px;
 	}
 
-	/* The body is itself a column flex container, so its children are flex items
-	   and shrink by default. `.change-section` has `overflow: hidden`, which
-	   zeroes its automatic minimum size — so a long list was silently squashed
-	   and clipped inside the section instead of overflowing the body, which is
-	   why no scrollbar ever appeared. Pinning the children at their natural
-	   height is what makes the body a real overflow container. */
+	/* The body is itself a column flex container, so its children are flex items and
+		   shrink by default. `.change-section` has `overflow: hidden`, which zeroes its
+		   automatic minimum size, so a long list was squashed and clipped instead of
+		   overflowing the body. Pinning the children at their natural height is what makes
+		   the body a real overflow container. */
 	.modal-body > * {
 		flex-shrink: 0;
 	}

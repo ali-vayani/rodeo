@@ -4,13 +4,11 @@ import { router, authedProcedure, adminProcedure } from '../init';
 import { APPLICANT_ROLES } from '$lib/admissions/roles';
 import { logAction } from '$lib/server/log';
 
-// `placeholder`, `min`, `max`, `regex`, `linkedField` and `optionPreset` are nullable columns, so
-// Prisma hands them back as `null`. The application editor loads a question, round-
-// trips it through JSON untouched and posts it back — and zod's `.optional()` accepts
-// only `undefined`, so every save containing an added or modified question was
-// rejected with "expected string, received null". `.nullish()` accepts both, and
-// `null` is exactly what Prisma wants for "clear this column" on create and update
-// alike, so the parsed value can go straight through.
+// These are nullable columns, so Prisma hands them back as `null`. The application
+// editor round-trips a question through JSON untouched and posts it back, and zod's
+// `.optional()` accepts only `undefined`, so every save containing a modified question
+// was rejected with "expected string, received null". `.nullish()` accepts both, and
+// `null` is what Prisma wants for "clear this column".
 const questionInput = z.object({
 	title: z.string().min(1),
 	type: z.nativeEnum(QuestionType),
@@ -22,26 +20,22 @@ const questionInput = z.object({
 	min: z.number().nullish(),
 	max: z.number().nullish(),
 	regex: z.string().nullish(),
-	// Was `z.string()`, which accepted anything: the value is used as a computed key
-	// into a `User` update, so a typo produced a question that saved without complaint
-	// and wrote nowhere. The enum is the check that was missing.
+	// Was `z.string()`, which accepted anything. The value is used as a computed key into
+	// a `User` update, so a typo produced a question that saved but wrote nowhere.
 	linkedField: z.nativeEnum(LinkedField).nullish(),
 	optionPreset: z.nativeEnum(OptionPreset).nullish()
 });
 
 export const questionsRouter = router({
 	// The application form. `authedProcedure`, not public: with no role it used to return
-	// every Question to anyone — the same rows `listAll` guards behind admin — including
-	// `regex`/`linkedField` internals and staff-audience questions. Now it is gated, and
-	// bounded to applicant-audience (or untargeted) questions so a hacker can pick which
-	// role to apply as without ever seeing an ORGANIZER/ADMIN-only question.
+	// every Question to anyone, including `regex`/`linkedField` internals and
+	// staff-audience questions. Now bounded to applicant-audience questions.
 	list: authedProcedure
 		.input(z.object({ role: z.nativeEnum(Role).optional() }))
 		.query(async ({ ctx, input }) => {
-			// `input.role` lets an applicant preview a specific applicant audience, but it
-			// arrives from the client and `z.nativeEnum(Role)` accepts staff roles too — so
-			// it is clamped to APPLICANT_ROLES. Without the clamp, `list({ role: 'ADMIN' })`
-			// returned the staff-only questions this procedure exists to withhold.
+			// `input.role` lets an applicant preview a specific audience, but it arrives from the
+			// client and `z.nativeEnum(Role)` accepts staff roles too, so it is clamped. Without
+			// the clamp, `list({ role: 'ADMIN' })` returned the staff-only questions.
 			const audience =
 				input.role && APPLICANT_ROLES.includes(input.role) ? [input.role] : APPLICANT_ROLES;
 			return ctx.prisma.question.findMany({
@@ -138,9 +132,8 @@ export const questionsRouter = router({
 			})
 		)
 		.mutation(async ({ ctx, input }) => {
-			// Resolve the deleted titles before the transaction removes them — an
-			// audit row reading "deleted 2 questions" is far less useful than one
-			// naming them, and after the commit there is nothing left to name.
+			// Resolve the deleted titles before the transaction removes them. An audit row
+			// reading "deleted 2 questions" is far less useful than one naming them.
 			const deletedTitles =
 				input.deleted.length > 0
 					? (
@@ -170,9 +163,8 @@ export const questionsRouter = router({
 				}
 			});
 
-			// One entry per save, not one per question: the editor commits the whole
-			// form at once, and a trail of twelve rows for a single click buries
-			// everything else in the feed.
+			// One entry per save, not one per question. The editor commits the whole form at
+			// once, and twelve rows for a single click would bury everything else in the feed.
 			const parts = [
 				input.added.length && `${input.added.length} added`,
 				input.modified.length && `${input.modified.length} edited`,

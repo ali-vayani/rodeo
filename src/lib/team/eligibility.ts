@@ -1,24 +1,15 @@
 // The enums module, not the client barrel: this file is imported by a Svelte
 // component's props type as well as by the server, and the barrel drags in the
-// Node-only Prisma runtime. Same reason $lib/auth/permissions does it.
+// Node-only Prisma runtime.
 import { DecisionStatus, Role, UserStatus } from '$lib/generated/prisma/enums';
 
 /**
- * Who may be on a team.
+ * Who may be on a team: a HACKER (judges and mentors clear the same accept/confirm
+ * funnel, so status alone said yes to them), ACCEPTED (so a rejected applicant cannot
+ * use `inviteMember` as an existence oracle), and CONFIRMED or CHECKED_IN.
  *
- * Three conditions, and they are not the same condition:
- *
- *   - a HACKER, because teams are the thing hackers submit projects as. Judges,
- *     mentors and volunteers all reach /hacker/* (see `canAccessHackerPortal`) and
- *     all go through the same accept/confirm funnel the seed gives them, so status
- *     alone said yes to a judge holding a copied invite link.
- *   - ACCEPTED, so a rejected applicant can't open a team and use `inviteMember`
- *     as an existence oracle.
- *   - CONFIRMED or CHECKED_IN, so a team is made of people who are actually coming.
- *
- * One definition, enforced on every path that puts a person on a team — and read
- * by the layout that renders the invite banner, which used to keep its own copy of
- * the status half and therefore lit the Join button up for judges.
+ * One definition, enforced on every path that puts a person on a team and read by the
+ * layout that renders the invite banner.
  */
 export type TeamEligibilitySubject = {
 	role: Role;
@@ -43,11 +34,8 @@ export function isTeamEligible(user: TeamEligibilitySubject): boolean {
 }
 
 /**
- * What to tell the person about their own account.
- *
- * Only ever shown to the account it describes — `inviteMember` deliberately says
- * nothing at all about an invitee, since naming the reason would turn the endpoint
- * into a probe for who registered and who got in.
+ * What to tell the person about their own account. `inviteMember` deliberately says
+ * nothing about an invitee, since naming the reason would turn it into a probe.
  */
 export const TEAM_INELIGIBLE_MESSAGE: Record<TeamIneligibility, string> = {
 	NOT_HACKER: 'Teams are for hackers. This account is registered under a different role.',

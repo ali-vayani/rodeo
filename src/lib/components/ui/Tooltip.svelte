@@ -25,12 +25,11 @@
 </script>
 
 <!--
-	The trigger renders through bits-ui's `child` snippet rather than as its own
-	element. Left to itself Tooltip.Trigger emits a <button>, so wrapping an
-	IconButton in one nested a button inside a button — invalid HTML that the
-	browser silently repairs, shifting content and tripping a hydration
-	mismatch. Handing the props to the caller's element avoids the nesting and
-	keeps the tooltip's aria-describedby on the real control.
+	The trigger renders through bits-ui's `child` snippet rather than as its own element.
+	Left to itself Tooltip.Trigger emits a <button>, so wrapping an IconButton nested a
+	button inside a button, which the browser silently repairs while tripping a hydration
+	mismatch. Handing the props to the caller's element keeps aria-describedby on the
+	real control.
 -->
 <Tooltip.Provider>
 	<Tooltip.Root delayDuration={delay}>

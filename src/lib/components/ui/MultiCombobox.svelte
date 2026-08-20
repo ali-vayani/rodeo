@@ -39,8 +39,7 @@
 		invalid?: boolean;
 		/**
 		 * Cap on rendered rows. Every option is still ranked; this only limits how many
-		 * of them become DOM. Whatever is left over is counted in a trailing row, so a
-		 * short list never has to be mistaken for the whole vocabulary.
+		 * become DOM. The remainder is counted in a trailing row.
 		 */
 		maxVisible?: number;
 		class?: string;
@@ -48,9 +47,8 @@
 		/** For a combobox with no visible label — a filter rail, a toolbar. */
 		ariaLabel?: string;
 		/**
-		 * Fires only on user selection, unlike an `$effect` on `selected`, which also
-		 * runs when the parent resets the binding (a "clear filters" button) and would
-		 * turn that into a second round-trip.
+		 * Fires only on user selection, unlike an `$effect` on `selected`, which also runs
+		 * when the parent resets the binding and would turn that into a second round-trip.
 		 */
 		onChange?: (selected: string[]) => void;
 	} = $props();
@@ -64,12 +62,10 @@
 	/**
 	 * Which row Enter would take, and the only row drawn as active.
 	 *
-	 * bits-ui tracks its own highlight, but it moves that highlight *before* a
-	 * keystroke re-renders the filtered list, so straight after typing it points at
-	 * whatever was first a moment ago. Rather than paper over that, the highlight is
-	 * derived here from one rule: until the user has moved it with the keyboard, the
-	 * active row is the top-ranked match. `data-highlighted` is deliberately not
-	 * styled, so there is never a second row that looks selectable.
+	 * bits-ui tracks its own highlight, but moves it before a keystroke re-renders the
+	 * filtered list, so straight after typing it points at whatever was first a moment
+	 * ago. Derived here from one rule instead: until the user moves it with the keyboard,
+	 * the active row is the top-ranked match. `data-highlighted` is deliberately unstyled.
 	 */
 	let highlighted = $state<string | null>(null);
 	let navigated = $state(false);
@@ -114,18 +110,17 @@
 	}
 
 	/**
-	 * bits-ui opens the listbox on the trigger and on the first keystroke, but not on
-	 * the input itself — correct for a single-select, wrong here. This is a filter: the
-	 * first thing an organizer wants is to see what the vocabulary *is*, counts and
-	 * all, and clicking the box they are about to type in is how they ask for that.
+	 * bits-ui opens the listbox on the trigger and on the first keystroke, but not on the
+	 * input itself, which is correct for a single-select and wrong here. This is a filter,
+	 * and clicking the box you are about to type in is how you ask to see the vocabulary.
 	 */
 	function onClick() {
 		if (!disabled) open = true;
 	}
 
-	// Runs before bits-ui's own handler (svelte-toolbelt composes in prop order and
-	// stops at the first `preventDefault`), which is what lets these two keys mean
-	// something different here than they do in a single-select combobox.
+	// Runs before bits-ui's own handler, since svelte-toolbelt composes in prop order and
+	// stops at the first `preventDefault`. That is what lets these keys mean something
+	// different here than in a single-select combobox.
 	function onKeydown(event: KeyboardEvent) {
 		if (NAVIGATION_KEYS.includes(event.key)) {
 			navigated = true;
@@ -154,10 +149,10 @@
 		onValueChange={(value) => onChange?.(value)}
 	>
 		<!--
-			The whole shell is the anchor, not the input: the input is one flex child
-			among the chips and is often only a few characters wide, and a popover the
-			width of a half-typed word is unreadable.
-		-->
+					The whole shell is the anchor, not the input. The input is one flex child among
+					the chips and is often a few characters wide, and a popover that narrow is
+					unreadable.
+				-->
 		<div
 			bind:this={shellEl}
 			class={cn(
@@ -172,11 +167,10 @@
 		>
 			{#each selected as value (value)}
 				<!--
-					No `Badge` here: a badge is the eyebrow tier — mono, uppercase, 10px — which
-					is right for a status and wrong for a proper noun. A chip holding
-					`The University of Texas at Austin` is body text that happens to sit in a
-					box, so it takes the body font and the badge's radius and nothing else.
-				-->
+									No `Badge` here: a badge is the eyebrow tier (mono, uppercase, 10px), which is
+									right for a status and wrong for a proper noun. A chip holding a university
+									name is body text that happens to sit in a box.
+								-->
 				<span
 					class="inline-flex max-w-full items-center gap-1 rounded-sm border border-border
 					       bg-muted pr-0.5 pl-1.5 text-sm text-foreground"
@@ -232,12 +226,10 @@
 
 		<Combobox.Portal>
 			<!--
-				The popover is sized to its content, floored at the input's width and capped
-				at what the viewport actually leaves. Locked to the anchor width instead, a
-				narrow filter rail truncated every option to "The University of Tex…", which
-				made the three UT campuses indistinguishable and defeated the point of
-				listing near-duplicate values with their counts.
-			-->
+							Sized to its content, floored at the input's width and capped at what the
+							viewport leaves. Locked to the anchor width, a narrow filter rail truncated every
+							option and made the three UT campuses indistinguishable.
+						-->
 			<Combobox.Content
 				customAnchor={shellEl}
 				sideOffset={4}
@@ -270,10 +262,10 @@
 								</span>
 								{#if option.count !== undefined}
 									<!--
-										Right-aligned and de-emphasised, but never omitted: the count is
-										how an organizer notices that two spellings of one university are
-										two real populations, and that they need both.
-									-->
+																		Right-aligned and de-emphasised, but never omitted: the count is how an
+																		organizer notices that two spellings of one university are two real
+																		populations.
+																	-->
 									<span class="shrink-0 font-mono text-2xs text-foreground-tertiary tabular-nums">
 										{option.count}
 									</span>
@@ -286,11 +278,10 @@
 
 					{#if hidden > 0}
 						<!--
-							Not a `Combobox.Item`: it is a fact about the list, not a row in it, so
-							it must not be reachable with the arrow keys or selectable with Enter.
-							Saying how many were dropped is what stops a capped list from reading as
-							the whole vocabulary.
-						-->
+													Not a `Combobox.Item`: it is a fact about the list, not a row in it, so it
+													must not be reachable with the arrow keys. Saying how many were dropped is
+													what stops a capped list from reading as the whole vocabulary.
+												-->
 						<div class="border-t border-border-subtle px-2 py-1.5 text-xs text-foreground-tertiary">
 							{hidden} more — keep typing to narrow
 						</div>

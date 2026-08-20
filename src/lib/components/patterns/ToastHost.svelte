@@ -18,11 +18,9 @@
 </script>
 
 <!--
-	Mounted once from the root layout. Replaces eight per-page implementations
-	that had drifted to three different timeouts (3200 / 3500 / 3600ms).
-
-	aria-live so a toast is announced; the container is always present so
-	screen readers register the region before anything lands in it.
+	Mounted once from the root layout. Replaces eight per-page implementations that had
+	drifted to three different timeouts. aria-live so a toast is announced, and the
+	container is always present so screen readers register the region first.
 -->
 <div
 	class="pointer-events-none fixed right-7 bottom-7 z-toast flex flex-col items-end gap-2"

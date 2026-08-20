@@ -18,12 +18,12 @@
 	const trpc = createClient();
 
 	// --- State machine ---
-	// untrack, like `user` below: the initial state is a snapshot, and the
-	// mutations on this page advance it explicitly.
+	// untrack, like `user` below: the initial state is a snapshot, and the mutations on
+	// this page advance it explicitly.
 	let currentState = $state<ApplicationState>(untrack(() => computeApplicationState(data.user)));
 
-	// Mutable copy of user so we can update after mutations
-	// untrack: we intentionally snapshot the initial value; page data doesn't change
+	// Mutable copy of user so we can update after mutations. untrack because page data
+	// does not change.
 	let user = $state(untrack(() => ({ ...data.user })));
 
 	// --- Form state ---
@@ -63,8 +63,7 @@
 
 	// --- Application window ---
 	// `application.save` and `application.submit` are both gated on this window, so
-	// outside it the form was live but every keystroke it accepted was being thrown
-	// away by the server and reported as a bare "Save failed".
+	// outside it the form was live but every keystroke was thrown away by the server.
 	let windowState = $derived(applicationWindowState(data.settings));
 	let windowOpen = $derived(windowState === 'open');
 	let opensOn = $derived(formatDateLong(data.settings?.applicationOpen));
@@ -77,10 +76,8 @@
 	let saveTimers = $state<Record<string, ReturnType<typeof setTimeout>>>({});
 
 	async function handleQuestionChange(questionId: string, value: string) {
-		// Belt and braces: the fields are already disabled outside the window, so this
-		// is unreachable through the UI. It exists so a stale page that has been open
-		// since before the deadline can't fire a burst of writes the server will only
-		// refuse.
+		// Belt and braces: the fields are already disabled outside the window. This exists
+		// so a stale page open since before the deadline cannot fire a burst of writes.
 		if (!windowOpen) return;
 
 		responses[questionId] = value;
@@ -94,9 +91,8 @@
 				saveStatus = 'saved';
 				saveError = null;
 			} catch (e) {
-				// The reason, not just the fact. A save refused because the deadline passed
-				// while the tab sat open is the case worth naming — "Save failed" alone
-				// reads as a network blip and invites retrying forever.
+				// The reason, not just the fact. A save refused because the deadline passed while
+				// the tab sat open is worth naming: "Save failed" alone reads as a network blip.
 				saveStatus = 'error';
 				saveError = errorMessage(e, 'Save failed');
 			}
@@ -165,10 +161,9 @@
 		</div>
 
 		<!--
-			The window notice. Outside the window the form below is read-only, because
-			the server refuses both the autosave and the submission behind it — so the
-			only honest rendering is one that says so up front rather than at the end.
-		-->
+					The window notice. Outside the window the form below is read-only, because the
+					server refuses both the autosave and the submission behind it.
+				-->
 		{#if !windowOpen}
 			<div class="mb-6 rounded border border-border bg-white p-5">
 				<p class="mb-0.5 text-xs font-medium tracking-widest text-muted-foreground uppercase">

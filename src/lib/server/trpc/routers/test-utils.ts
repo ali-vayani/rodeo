@@ -14,13 +14,9 @@ export function createTestCaller(prisma: DeepMockProxy<PrismaClient>, user: User
 /**
  * Narrows a mocked `groupBy` to a plain vitest mock.
  *
- * Prisma 7 types `groupBy` as an overloaded generic whose return type is derived
- * from the `by` tuple. `DeepMockProxy` can't see through the overload, so
- * `db.user.groupBy.mockResolvedValue(...)` fails to typecheck even though the
- * mock works perfectly at runtime — and the result shape can't be spelled out at
- * the call site to satisfy it either.
- *
- *     mockGroupBy(db.user.groupBy).mockResolvedValueOnce([{ status, _count }]);
+ * Prisma 7 types `groupBy` as an overloaded generic whose return type is derived from
+ * the `by` tuple, which `DeepMockProxy` cannot see through. The result shape cannot be
+ * spelled at the call site either.
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- the point is to erase an unspellable type.
 export function mockGroupBy(method: unknown): Mock<(...args: any[]) => any> {

@@ -64,9 +64,8 @@ describe('email.sendCustom', () => {
 	});
 
 	it('substitutes {{name}} even when no settings row exists', async () => {
-		// What organizers actually received: with no Settings row this passed an empty
-		// var map, `substituteVariables` found no value for `name`, and the literal
-		// `{{name}}` went out in the subject and body of a real send.
+		// What organizers actually received: with no Settings row this passed an empty var
+		// map, so the literal `{{name}}` went out in the subject and body of a real send.
 		const caller = createTestCaller(db, adminUser);
 		db.user.findMany.mockResolvedValue([hackerUser] as never);
 		db.settings.findFirst.mockResolvedValue(null);
@@ -535,9 +534,8 @@ describe('email.eventVars', () => {
 	});
 
 	it('falls back to the defaults with no Settings row, matching what sendCustom substitutes', async () => {
-		// This used to return null, because sendCustom substituted an empty map there and
-		// the preview had to show the same. That agreement was honest and both halves were
-		// wrong: `{{name}}` reached real inboxes literal. Both sides use the defaults now.
+		// This used to return null so the preview matched sendCustom's empty map. The
+		// agreement was honest and both halves were wrong. Both sides use the defaults now.
 		const caller = createTestCaller(db, adminUser);
 		db.settings.findFirst.mockResolvedValue(null);
 
@@ -593,11 +591,9 @@ describe('email.sendTest', () => {
 	});
 
 	it('falls back to sample dates when no settings row exists, but never a sample name', async () => {
-		// The dates have no source without a Settings row, so the samples stand in and
-		// still demonstrate substitution. `name` does have a source — this mail goes to
-		// the admin's own inbox — so greeting them as "[hacker name]" (or, before that,
-		// as some invented person) would be the one misleading substitution in a message
-		// whose entire purpose is proofreading.
+		// The dates have no source without a Settings row, so the samples stand in. `name`
+		// does have one, since this goes to the admin's own inbox, and greeting them as a
+		// stand-in would be the one misleading substitution in a proofreading message.
 		const caller = createTestCaller(db, adminUser);
 		db.settings.findFirst.mockResolvedValue(null);
 
@@ -656,11 +652,9 @@ describe('email.getLogs', () => {
 /**
  * Preview and send must resolve the same people from the same input.
  *
- * This is the property the whole exact-first/fuzzy-fallback design exists to keep:
- * similarity is not expressible as a WHERE clause, so it is resolved to explicit names
- * by a resolver both procedures call. If only one of them expanded the search, the
- * expectedCount check would fire on a set nobody changed — or, worse, send to a
- * different set than the one an admin confirmed.
+ * Similarity is not expressible as a WHERE clause, so it is resolved to explicit names
+ * by a resolver both procedures call. If only one expanded the search, the
+ * expectedCount check would fire on a set nobody changed, or send to a different set.
  */
 describe('previewRecipients and sendCustom agree on the recipient set', () => {
 	const hackers = [
@@ -670,11 +664,11 @@ describe('previewRecipients and sendCustom agree on the recipient set', () => {
 	];
 
 	/**
-	 * Staff whose *addresses* contain "adm" — the shape of the live bug.
+	 * Staff whose addresses contain "adm", the shape of the live bug.
 	 *
 	 * Five of them is exactly `EXACT_MATCH_FLOOR`, so a probe counted across the whole
-	 * table calls `adm` productive and skips the fold, while the roles filter the caller
-	 * actually asked for selects none of them.
+	 * table calls `adm` productive and skips the fold, while the caller's roles filter
+	 * selects none of them.
 	 */
 	const staff = Array.from({ length: EXACT_MATCH_FLOOR }, (_, i) => ({
 		...adminUser,
@@ -688,9 +682,8 @@ describe('previewRecipients and sendCustom agree on the recipient set', () => {
 	/**
 	 * Enough of a Prisma `where` evaluator to answer the questions these procedures ask.
 	 *
-	 * A counter that returns a fixed number regardless of the predicate cannot tell a
-	 * globally-scoped probe from a caller-scoped one, which is the entire difference
-	 * under test — so the stub evaluates the predicate against the roster instead.
+	 * A counter returning a fixed number regardless of the predicate cannot tell a
+	 * globally-scoped probe from a caller-scoped one, which is the difference under test.
 	 */
 	function matches(user: (typeof roster)[number], where: unknown): boolean {
 		if (!where || typeof where !== 'object') return true;
@@ -716,9 +709,8 @@ describe('previewRecipients and sendCustom agree on the recipient set', () => {
 	 * Every distinct `where` a procedure asked the database, probe included.
 	 *
 	 * Deduplicated because preview counts and samples the same predicate while send only
-	 * lists it — the interesting comparison is *which* predicates each path used, not how
-	 * many times it reused one. The probe is deliberately kept: it is now part of what the
-	 * two paths have to agree on.
+	 * lists it. The interesting comparison is which predicates each path used. The probe
+	 * is deliberately kept, being part of what the two paths have to agree on.
 	 */
 	function selectionWheres() {
 		const seen = new Set<string>();

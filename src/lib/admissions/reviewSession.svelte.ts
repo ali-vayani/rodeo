@@ -2,10 +2,7 @@ import { createClient } from '$lib/trpc/client';
 import { HEARTBEAT_INTERVAL_MS, IDLE_GRACE_MS, IDLE_TIMEOUT_MS } from './lock';
 
 /**
- * Lifecycle of one admin's review session on one applicant.
- *
- * `warning` is the important one: the lock is STILL HELD and still heartbeating
- * while the countdown runs. It is released only if the countdown reaches zero.
+ * Lifecycle of one admin's review session on one applicant
  */
 export type ReviewPhase =
 	| 'idle' // nothing selected
@@ -16,20 +13,17 @@ export type ReviewPhase =
 	| 'locked' // another admin holds it
 	| 'error'; // the claim request itself failed
 
-/** Cheap poll while owned. Writes no reactive state unless it actually transitions. */
-const IDLE_CHECK_MS = 5_000;
+const IDLE_CHECK_MS = 5_000; // poll while open
 /** Only runs while the modal is up. */
 const COUNTDOWN_TICK_MS = 1_000;
 const ACTIVITY_THROTTLE_MS = 1_000;
-/** Collapses arrow-key/rapid-click walks through the queue into one claim. */
+
 const CLAIM_DEBOUNCE_MS = 250;
-/** Consecutive heartbeat network failures tolerated before giving up the session. */
 const HEARTBEAT_FAILURE_LIMIT = 2;
 
 const ACTIVITY_EVENTS = ['pointermove', 'pointerdown', 'keydown', 'wheel', 'scroll'] as const;
 
 export function formatCountdown(ms: number): string {
-	// ceil so the final partial second reads "1s" rather than "0s"
 	const total = Math.ceil(ms / 1000);
 	const minutes = Math.floor(total / 60);
 	const seconds = total % 60;
@@ -37,12 +31,7 @@ export function formatCountdown(ms: number): string {
 }
 
 /**
- * Next applicant nobody else is reviewing, scanning forward from `fromIndex` and
- * wrapping. Forward-first keeps the reviewer's place in the queue.
- *
- * Takes `presenceMap` rather than `applicant.claimedBy` on purpose — `list` ships
- * claimedBy in its payload, but that is a snapshot from fetch time and goes stale
- * within seconds. presenceMap is the polled, live view.
+ * Next applicant nobody else is reviewing
  */
 export function pickNextUnlocked(
 	applicants: readonly { uid: string }[],
@@ -63,16 +52,9 @@ export function pickNextUnlocked(
 }
 
 export type ReviewSessionOptions = {
-	/** Reactive read of the selected applicant — pass `() => selectedUid`. */
 	getUid: () => string | null;
-	/** Reactive read of who else holds locks — pass `() => presenceMap`. */
 	getPresence: () => Record<string, string>;
 	onToast: (message: string, type?: 'success' | 'error') => void;
-	/**
-	 * The admin confirmed they were still reviewing, but the applicant had already
-	 * been taken. Only fires on that path — a lock lost while they are actively
-	 * reading must not teleport them somewhere else.
-	 */
 	onRerollNeeded?: (uid: string, claimerName: string | null) => void;
 };
 
@@ -83,19 +65,13 @@ export function createReviewSession(options: ReviewSessionOptions) {
 	let claimerName = $state<string | null>(null);
 	let lockFreed = $state(false);
 	let graceDeadline = $state<number | null>(null);
-	/** The only reactive clock. Written solely while `warning` is up. */
 	let nowTick = $state(Date.now());
 
-	// Deliberately plain, NOT $state: written on every pointermove, read only by the
-	// 5s check. Making it reactive would invalidate derivations ~60x/second.
 	let lastActivityAt = Date.now();
 	let suppressActivity = false;
 
-	/** The applicant we actually hold a server-side claim for, or null. */
 	let heldUid: string | null = null;
-	/** Bumped on every claim attempt so superseded in-flight responses can be spotted. */
 	let generation = 0;
-	/** Set when a claim was triggered by the "I'm still reviewing" button. */
 	let rolling = false;
 	let heartbeatFailures = 0;
 
@@ -114,8 +90,6 @@ export function createReviewSession(options: ReviewSessionOptions) {
 			const result = await trpc.admissions.claim.mutate({ uid });
 
 			if (gen !== generation) {
-				// Superseded while in flight. If the server granted it anyway, hand it
-				// straight back — otherwise this applicant stays locked until the TTL.
 				if (result.claimed) releaseOnServer(uid);
 				return;
 			}
@@ -168,11 +142,6 @@ export function createReviewSession(options: ReviewSessionOptions) {
 		if (message) options.onToast(message, 'error');
 	}
 
-	/**
-	 * Recompute phase from wall-clock timestamps. Called on every tick and whenever
-	 * the tab becomes visible, which is what makes background throttling and laptop
-	 * sleep harmless — timers only control when we notice, never what is true.
-	 */
 	function reconcile() {
 		if (phase !== 'owned' && phase !== 'warning') return;
 		const elapsed = Date.now() - lastActivityAt;
@@ -187,8 +156,6 @@ export function createReviewSession(options: ReviewSessionOptions) {
 		const uid = heldUid;
 		if (!uid) return;
 
-		// Defence in depth: never renew a lock for a session that should already have
-		// ended, even if the modal somehow failed to render.
 		if (Date.now() - lastActivityAt > IDLE_TIMEOUT_MS + IDLE_GRACE_MS) return;
 
 		try {
@@ -196,8 +163,6 @@ export function createReviewSession(options: ReviewSessionOptions) {
 			if (uid !== heldUid) return;
 			heartbeatFailures = 0;
 			if (!result.refreshed) {
-				// Never guess a name here — the most common cause is this same admin
-				// opening another applicant in a second tab.
 				endSession(
 					'Your review session ended — this applicant may be open in another tab, or was taken by another admin'
 				);
@@ -214,7 +179,6 @@ export function createReviewSession(options: ReviewSessionOptions) {
 	function noteActivity() {
 		if (suppressActivity) return;
 		const now = Date.now();
-		// Timestamp-compare throttle: allocates nothing and needs no cleanup.
 		if (now - lastActivityAt < ACTIVITY_THROTTLE_MS) return;
 		lastActivityAt = now;
 	}
@@ -282,7 +246,6 @@ export function createReviewSession(options: ReviewSessionOptions) {
 	});
 
 	// Once the holder lets go, offer a one-click claim rather than grabbing it
-	// automatically — two admins parked on the same row would both auto-grab.
 	$effect(() => {
 		if (phase !== 'locked') {
 			lockFreed = false;
@@ -319,11 +282,6 @@ export function createReviewSession(options: ReviewSessionOptions) {
 			return formatCountdown(graceRemainingMs);
 		},
 
-		/**
-		 * Attach activity listeners to the review pane. Capture phase is required:
-		 * `scroll` does not bubble, so a capture listener on the pane is the only way
-		 * to see scrolling inside the detail pane's inner scroll container.
-		 */
 		observePane(el: HTMLElement) {
 			const opts = { capture: true, passive: true } as const;
 			for (const event of ACTIVITY_EVENTS) el.addEventListener(event, noteActivity, opts);
@@ -362,11 +320,6 @@ export function createReviewSession(options: ReviewSessionOptions) {
 			void acquire(uid, ++generation);
 		},
 
-		/**
-		 * The server already cleared the claim as part of the write — `setScore` and
-		 * `setDecision` both do — so skip the teardown release that would otherwise
-		 * fire when the selection moves on.
-		 */
 		markClaimCleared(uid: string) {
 			if (heldUid === uid) heldUid = null;
 		}

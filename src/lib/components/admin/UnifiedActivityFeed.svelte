@@ -6,14 +6,12 @@
 	/**
 	 * Staff work and applicant activity in one stream.
 	 *
-	 * This replaces the old split between "Recent activity" (the audit log) and
-	 * "Recent applicants" (a table). They were two views of the same question —
-	 * what has happened lately — and keeping them apart meant reading two panels
-	 * to answer it. An application arriving is an event like any other.
+	 * This replaces the old split between "Recent activity" and "Recent applicants". They
+	 * were two views of the same question, and keeping them apart meant reading two panels
+	 * to answer it.
 	 *
-	 * The source filter is only meaningful because the two streams come from
-	 * genuinely different places: see `dashboard.activity` for why applicant rows
-	 * are derived rather than logged, and which applicant events are still missing.
+	 * The source filter is meaningful because the two streams come from genuinely
+	 * different places. See `dashboard.activity` for why applicant rows are derived.
 	 */
 	let {
 		entries,

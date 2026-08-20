@@ -53,23 +53,20 @@
 	const hackathonStart = $derived(formatDate(settings?.hackathonStartDate));
 
 	/**
-	 * Whether `application.rsvp` would refuse on the deadline alone.
-	 *
-	 * Decline is deliberately left enabled either way: the server accepts a late
-	 * decline on purpose, since it only shrinks the confirmed headcount.
+	 * Whether `application.rsvp` would refuse on the deadline alone. Decline stays
+	 * enabled either way, since the server accepts a late one on purpose.
 	 */
 	const rsvpClosed = $derived(isRsvpClosed(settings));
 
 	/**
 	 * The event links shown to a confirmed hacker.
 	 *
-	 * Both were `href=""` placeholders, which is not an inert link — it navigates
-	 * to the current URL, so a confirmed hacker clicking "schedule" got a page
-	 * reload. Null renders the words as plain text instead, and the anchors come
-	 * back the moment there is somewhere to point them.
+	 * Both were `href=""` placeholders, which is not an inert link: it navigates to the
+	 * current URL, so clicking "schedule" reloaded the page. Null renders the words as
+	 * plain text instead.
 	 *
-	 * TODO: there is no hacker-facing schedule route yet (only /admin/schedule),
-	 * and no Settings column for a Discord invite. Both need to exist first.
+	 * TODO: there is no hacker-facing schedule route yet, and no Settings column for a
+	 * Discord invite. Both need to exist first.
 	 */
 	const scheduleUrl: string | null = null;
 	const discordUrl: string | null = null;

@@ -28,9 +28,8 @@
 
 	/**
 	 * The two passes, in the order they happen: score the whole queue, then work the
-	 * ranking. They are tabs rather than pages because they share the release action
-	 * and the counts above them, and because moving between them mid-pass — to check
-	 * where a borderline applicant landed — is normal, not a navigation.
+	 * ranking. Tabs rather than pages because they share the release action and the counts
+	 * above them, and moving between them mid-pass is normal.
 	 */
 	let tab = $state<'review' | 'decide' | 'stats' | 'reconsider'>('review');
 
@@ -41,10 +40,8 @@
 	let scoreFilter = $state<ScoreFilter>('unscored');
 	let stats = $state(untrack(() => data.stats));
 
-	// The ranked list is fetched on arrival at the Decide tab, never eagerly: it
-	// carries every scored applicant's answers, and scores keep moving while the
-	// decision pass is open, so a copy loaded with the page would be stale by the
-	// time anyone looked at it.
+	// Fetched on arrival at the Decide tab, never eagerly. It carries every scored
+	// applicant's answers, and scores keep moving while the decision pass is open.
 	let ranked = $state<Applicant[]>([]);
 	let rankedLoading = $state(false);
 	let deciding = $state(false);
@@ -74,9 +71,9 @@
 	 * Whether the current `name` selection came from a suggestion chip rather than the
 	 * filter panel.
 	 *
-	 * A chip sets a filter the organizer can't see without opening the panel, so typing
-	 * a fresh search term while one is active would silently intersect the new term with
-	 * the old name and return nothing. Panel selections are visible and are left alone.
+	 * A chip sets a filter the organizer cannot see without opening the panel, so typing a
+	 * fresh search term while one is active would silently intersect the two and return
+	 * nothing. Panel selections are visible and are left alone.
 	 */
 	let nameFromSuggestion = $state(false);
 
@@ -109,10 +106,8 @@
 
 	let selectedIndex = $derived(applicants.findIndex((a) => a.uid === selectedUid));
 	let selected = $derived(selectedIndex >= 0 ? applicants[selectedIndex] : null);
-	// From the server rather than counted off the list: neither tab holds every
-	// applicant with a pending decision — the review queue shows the undecided and
-	// the ranked list only the scored — so a local count would understate what
-	// Release is about to send.
+	// From the server rather than counted off the list. Neither tab holds every applicant
+	// with a pending decision, so a local count would understate what Release will send.
 	let pendingCount = $derived(stats.pending);
 	let hasPrev = $derived(selectedIndex > 0);
 	let hasNext = $derived(selectedIndex >= 0 && selectedIndex < applicants.length - 1);
@@ -216,12 +211,10 @@
 				scored: scoreFilter === 'all' ? undefined : scoreFilter === 'scored',
 				roles: roleTab !== 'ALL' ? [roleTab] : undefined,
 				search: search.trim() || undefined,
-				// `facetParams` omits an untouched — or cleared — facet's key entirely rather
-				// than sending `[]`. The predicate reads an omitted key as "no filter" and an
-				// empty array as "match nobody" (the engaged-but-empty rule
-				// `linkedFieldConditions` shares with the send path), so forwarding the panel's
-				// `{ values: [] }` verbatim would empty the queue the moment someone ticked a
-				// box and unticked it again.
+				// `facetParams` omits an untouched or cleared facet's key rather than sending `[]`.
+				// The predicate reads an omitted key as "no filter" and an empty array as "match
+				// nobody", so forwarding `{ values: [] }` verbatim would empty the queue the moment
+				// someone ticked a box and unticked it again.
 				...facetParams(facetSelection)
 			});
 			applicants = result.applicants;
@@ -326,19 +319,17 @@
 
 	function onScoreFilterChange(next: ScoreFilter) {
 		scoreFilter = next;
-		// The selected applicant is very likely about to leave the list — drop the
-		// selection rather than leaving the detail pane showing someone the queue no
-		// longer contains, which would strand their claim until it went stale.
+		// The selected applicant is very likely about to leave the list, and leaving the
+		// detail pane on them would strand their claim until it went stale.
 		selectedUid = null;
 		loadApplicants();
 	}
 
 	/**
-	 * Narrow to one suggested name — or, clicking the active chip, back out of it.
+	 * Narrow to one suggested name, or click the active chip to back out of it.
 	 *
-	 * Sets the `names` filter rather than rewriting the search box: the typed term is
-	 * what produced the suggestions, so replacing it would delete the strip that offered
-	 * the alternatives and leave no way to try the next one.
+	 * Sets the `names` filter rather than rewriting the search box. The typed term is what
+	 * produced the suggestions, so replacing it would delete the strip that offered them.
 	 */
 	function onSuggestionSelect(name: string) {
 		const next = facetSelection[NAME_FACET]?.values?.includes(name) ? [] : [name];
@@ -365,9 +356,8 @@
 			if (selectedUid !== uid) return;
 
 			if (scoreFilter === 'unscored') {
-				// Scoring is what takes an applicant out of this view, so the row leaves
-				// and the queue closes up behind it — same index, next person, skipping
-				// anyone another admin holds.
+				// Scoring is what takes an applicant out of this view, so the row leaves and the
+				// queue closes up behind it, skipping anyone another admin holds.
 				applicants = applicants.filter((a) => a.uid !== uid);
 				rollToNextUnlocked(idx, uid);
 			} else {
@@ -402,11 +392,9 @@
 	/**
 	 * Apply a pending decision from the ranked list, one row or a selection.
 	 *
-	 * A single applicant goes through `setDecision` rather than the bulk path even
-	 * though the bulk path would handle it: only `setDecision` can name the admin
-	 * whose lock blocked it, and only it writes the blocked-decision audit row. The
-	 * bulk mutation can report a count of skipped rows and nothing more, which is
-	 * the right answer for two hundred and the wrong one for one.
+	 * A single applicant goes through `setDecision` rather than the bulk path, because only
+	 * `setDecision` can name the admin whose lock blocked it and write the blocked-decision
+	 * audit row. A count of skipped rows is the right answer for two hundred, not for one.
 	 */
 	async function handleDecide(uids: string[], decision: DecisionStatus) {
 		if (decision === 'PENDING' || uids.length === 0) return;
@@ -426,9 +414,8 @@
 			}
 
 			if (skipped > 0) {
-				// Which rows were skipped isn't in the response, so the list is refetched
-				// rather than guessed at — a decision chip that says ACCEPTED next to
-				// someone who wasn't is worse than a second round trip.
+				// Which rows were skipped isn't in the response, so the list is refetched rather
+				// than guessed at.
 				await loadRanked();
 			} else {
 				const applied = new Set(uids);
@@ -589,15 +576,12 @@
 </div>
 
 <!--
-	The tabs are a fixed-size row of a column that is itself exactly one workspace
-	tall, and the pane below takes whatever is left. Stacking them above a
-	`workspace-h` pane instead would push the pane's own bottom edge — and with it
-	the score field, the thing the reviewer is here to use — off the screen.
+	The tabs are a fixed-size row of a column exactly one workspace tall, and the pane
+	below takes whatever is left. Stacking them above a `workspace-h` pane instead
+	would push the score field off the screen.
 
-	The counts that used to sit here as four tiles now live on one line under the
-	page title: they were costing 118px of the reviewing surface to say what fits
-	in a sentence, and being pinned above a scrolling pane made them read as
-	chrome that would not go away.
+	The counts that used to sit here as four tiles now live on one line under the page
+	title. They cost 118px of reviewing surface to say what fits in a sentence.
 -->
 <div class="flex flex-col md:workspace-h md:overflow-hidden">
 	<Tabs
@@ -639,9 +623,8 @@
 				selfClaimUid={session.phase === 'owned' || session.phase === 'warning' ? selectedUid : null}
 			/>
 
-			<!-- Right detail pane. Below md it replaces the list when an applicant is
-		     selected, and disappears entirely (no room for an empty-state pane)
-		     when none is. -->
+			<!-- Right detail pane. Below md it replaces the list when an applicant is selected,
+					     and disappears entirely when none is. -->
 			<div
 				bind:this={paneEl}
 				class="min-w-0 flex-1 flex-col md:flex md:overflow-hidden {selected ? 'flex' : 'hidden'}"

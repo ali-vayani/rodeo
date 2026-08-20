@@ -1,10 +1,9 @@
 /**
- * The shell every form control shares — input, textarea, select trigger.
+ * The shell every form control shares: input, textarea, select trigger.
  *
- * Kept here rather than in one of the components so a select and a text input
- * are provably the same height and share one focus treatment. The audit found
- * 46 inputs, 5 textareas and 11 selects each with their own hand-written
- * border, padding, and focus state.
+ * Kept here rather than in one of the components so a select and a text input are
+ * provably the same height and share one focus treatment. The audit found 46 inputs,
+ * 5 textareas and 11 selects each with their own border, padding and focus state.
  */
 
 import { cn } from '$lib/utils';

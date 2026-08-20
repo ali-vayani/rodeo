@@ -40,13 +40,12 @@
 
 	function handleScroll() {
 		if (!scrollContainer) return;
-		// From md up the sections scroll inside the container, so its top edge is
-		// the reading line. Below md the frame is auto-height and the page itself
-		// scrolls, so the container top goes negative — clamp the reading line to
-		// just below the fixed 48px top bar instead.
+		// From md up the sections scroll inside the container, so its top edge is the reading
+		// line. Below md the page itself scrolls and the container top goes negative, so clamp
+		// the reading line to just below the fixed 48px top bar.
 		const containerTop = Math.max(scrollContainer.getBoundingClientRect().top, 48);
-		// The last section is shorter than the scroll area, so it can never climb
-		// to the reading line on its own — snap to it once scrolled to the end.
+		// The last section is shorter than the scroll area, so it can never climb to the
+		// reading line on its own.
 		const atContainerBottom =
 			scrollContainer.scrollTop + scrollContainer.clientHeight >= scrollContainer.scrollHeight - 2;
 		const atPageBottom =
@@ -121,9 +120,9 @@
 	<h1 class="text-[22px] font-bold text-primary">Settings</h1>
 </div>
 
-<!-- Main card: sidebar + scrollable content. Below md the vertical Tabs rail
-     flattens into a horizontal strip on top and the frame takes its natural
-     height (workspace-h is auto below md), so the page itself scrolls. -->
+<!-- Main card: sidebar + scrollable content. Below md the vertical Tabs rail flattens
+     into a horizontal strip on top and the frame takes its natural height, so the page
+     itself scrolls. -->
 <div
 	class="flex workspace-h flex-col overflow-hidden rounded-md border border-border bg-white md:flex-row"
 >
@@ -215,8 +214,8 @@
 			</div>
 		</div>
 
-		<!-- Data Export section. Above the danger zone rather than inside it: taking
-		     a backup is routine, and the wipe that lives below is what is not. -->
+		<!-- Data Export section. Above the danger zone rather than inside it: taking a
+				     backup is routine, and the wipe below is what is not. -->
 		<div
 			id="section-data"
 			class="scroll-mt-topbar overflow-hidden rounded-md border border-border md:scroll-mt-0"

@@ -1,19 +1,14 @@
 /**
  * The registry of audit-log action slugs.
  *
- * Isomorphic on purpose: the routers import `LogAction` to type their writes and
- * `/admin/logs` imports `LOG_ACTION_GROUPS` to build its filter. One list means a
- * slug can't be written by a router that the filter has never heard of — the
- * `LogAction` union is derived from this array, so an unregistered slug is a type
- * error at the call site rather than a row nobody can find later.
- *
- * Keep it free of Prisma, `$env`, and node builtins.
+ * Isomorphic: the routers import `LogAction` to type their writes and /admin/logs
+ * imports `LOG_ACTION_GROUPS` to build its filter. The union is derived from this
+ * array, so an unregistered slug is a type error rather than an unfindable row.
  */
 
 /**
- * `key` is what lands in `Log.action` and is never rendered raw. `label` is the
- * filter's option text. `group` is the optgroup heading — it mirrors the admin
- * sidebar, which is how organizers navigate to the thing being logged.
+ * `key` lands in `Log.action` and is never rendered raw. `label` is the filter's option
+ * text, and `group` is the optgroup heading, mirroring the admin sidebar.
  */
 export const LOG_ACTIONS = [
 	// Admissions
@@ -26,8 +21,7 @@ export const LOG_ACTIONS = [
 
 	// Users
 	// Slug stays plural though a user now holds one role: it is what existing Log rows
-	// were written with, and renaming it would orphan every historical entry from the
-	// logs-page filter. Only the label follows the schema.
+	// were written with, and renaming it would orphan every historical entry.
 	{ key: 'user.roles.update', label: 'Role changed', group: 'Users' },
 	{ key: 'user.status.update', label: 'Status changed', group: 'Users' },
 	{ key: 'user.decision.override', label: 'Decision overridden', group: 'Users' },
@@ -72,11 +66,8 @@ export const LOG_ACTIONS = [
 		group: 'Settings'
 	},
 
-	/**
-	 * Rows written before the audit-record migration, whose sentence was moved
-	 * into `summary` verbatim. Nothing writes this slug; it exists so old history
-	 * still renders a label instead of falling through to the raw key.
-	 */
+	/** Rows written before the audit-record migration. Nothing writes this slug; it exists
+	    so old history renders a label instead of the raw key. */
 	{ key: 'legacy', label: 'Legacy entry', group: 'Other' }
 ] as const;
 
@@ -86,10 +77,8 @@ export type LogActionGroup = (typeof LOG_ACTIONS)[number]['group'];
 
 const LABELS: Record<string, string> = Object.fromEntries(LOG_ACTIONS.map((a) => [a.key, a.label]));
 
-/**
- * Human label for a slug. Falls back to the slug itself so a row written by a
- * future version of the app — or restored from a backup — still renders.
- */
+/** Human label for a slug, falling back to the slug itself so a row written by a
+    future version still renders. */
 export function actionLabel(action: string): string {
 	return LABELS[action] ?? action;
 }

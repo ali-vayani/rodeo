@@ -6,22 +6,19 @@ import type { AdminStats } from '$lib/stats';
 /**
  * Per-admin activity stats for the dashboard.
  *
- * Two different kinds of number live here, and they come from two different
- * places on purpose:
+ * Two kinds of number, from two different places on purpose.
  *
- *   - **Decisions are state.** "How many applicants sit at ACCEPTED because of
- *     Ali" is a question about the present, so it is answered by grouping
- *     `User.decidedBy` — the column written by the same UPDATE as the decision
- *     itself. Reattributing an applicant moves them between buckets, so there
- *     is no decrement to compute and nothing that can drift.
- *   - **Emails and scans are events.** They accumulate and are never undone, so
- *     they are counted from the audit trail, which already carries
- *     `@@index([action, timestamp])` for exactly this shape.
+ * Decisions are state. "How many applicants sit at ACCEPTED because of Ali" is a
+ * question about the present, answered by grouping `User.decidedBy`, the column
+ * written by the same UPDATE as the decision. Reattributing moves them between
+ * buckets, so there is no decrement to compute.
  *
- * Both are plain aggregates over a few thousand rows — low single-digit
- * milliseconds, well under the round trip to the database. A denormalised
- * counter table was considered and rejected: it would save ~1ms while adding a
- * decrement that cannot be computed without consulting the log anyway.
+ * Emails and scans are events. They accumulate and are never undone, so they are
+ * counted from the audit trail, which already carries `@@index([action, timestamp])`.
+ *
+ * Both are plain aggregates over a few thousand rows, well under the round trip to the
+ * database. A denormalised counter table would save ~1ms while adding a decrement that
+ * cannot be computed without consulting the log anyway.
  */
 
 /** Nothing outside these can be a decision bucket the chart draws. */
@@ -48,11 +45,9 @@ export const statsRouter = router({
 	/**
 	 * `adminProcedure`, not `portalProcedure`, despite being an aggregate.
 	 *
-	 * The dashboard's other aggregates are organizer-visible because they name
-	 * nobody. This one names staff and ranks them against each other, which is
-	 * per-person data about colleagues — the fail-closed rule in `../init`
-	 * applies. The dashboard skips the call for organizers, mirroring how it
-	 * already handles `dashboard.recentApplicants`.
+	 * The dashboard's other aggregates are organizer-visible because they name nobody.
+	 * This one names staff and ranks them against each other, which is per-person data
+	 * about colleagues. The dashboard skips the call for organizers.
 	 *
 	 * @param from - inclusive lower bound; omitted means all time
 	 * @param to - inclusive upper bound; omitted means up to now
@@ -71,23 +66,19 @@ export const statsRouter = router({
 			const range = from || to ? { ...(from && { gte: from }), ...(to && { lte: to }) } : undefined;
 
 			const [decisionRows, emailRows, scanRows] = await Promise.all([
-				// Not filtered on `decidedBy: { not: null }` — the null bucket is real
-				// (history from before attribution existed, and the blacklist auto-reject
-				// in `application.submit`, where no admin acted) and is reported
-				// separately rather than silently dropped.
-				//
-				// `_all`, not a per-field count: a per-field count ignores nulls, and
-				// every group here has a null in it somewhere.
+				// Not filtered on `decidedBy: { not: null }`. The null bucket is real (history from
+				// before attribution existed, and the blacklist auto-reject) and is reported
+				// separately rather than silently dropped. `_all`, not a per-field count, because a
+				// per-field count ignores nulls and every group here has one.
 				ctx.prisma.user.groupBy({
 					by: ['decidedBy', 'pendingDecision', 'activeDecision'],
 					where: range ? { decidedAt: range } : undefined,
 					_count: { _all: true }
 				}),
 
-				// Campaign count and audience size come off the same rows, but the
-				// audience lives in `metadata` where `groupBy` can't reach it, so this
-				// one selects and folds in JS. It is bounded by the number of sends an
-				// admin has ever made — hundreds at most, not thousands.
+				// Campaign count and audience size come off the same rows, but the audience lives in
+				// `metadata` where `groupBy` cannot reach it. Bounded by the number of sends an admin
+				// has ever made, so folding in JS is fine.
 				ctx.prisma.log.findMany({
 					where: {
 						action: 'email.custom.send',
@@ -110,9 +101,8 @@ export const statsRouter = router({
 				})
 			]);
 
-			// Fold decisions to the one that currently stands. Pending is what an
-			// applicant sits at during review; active is what they sit at once released.
-			// Counting both would double-count the instant between the two.
+			// Fold decisions to the one that currently stands. Counting pending and active both
+			// would double-count the instant between the two.
 			const decisions = new Map<string, Record<RankedDecision, number>>();
 			const unattributed: Record<RankedDecision, number> = {
 				ACCEPTED: 0,
@@ -156,10 +146,9 @@ export const statsRouter = router({
 				if (row.actorId) scans.set(row.actorId, row._count._all);
 			}
 
-			// Resolve names in one query: the current staff roster (so an admin with no
-			// activity still appears at zero) plus anyone who has activity but is no
-			// longer staff — a demoted organizer's past work shouldn't vanish from the
-			// record just because their role changed.
+			// Resolve names in one query: the current staff roster, so an admin with no activity
+			// still appears at zero, plus anyone with activity who is no longer staff, so a
+			// demoted organizer's past work does not vanish.
 			const seen = new Set([...decisions.keys(), ...emails.keys(), ...scans.keys()]);
 			const people = await ctx.prisma.user.findMany({
 				where: {

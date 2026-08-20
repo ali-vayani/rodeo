@@ -43,17 +43,15 @@
 		/** Standalone invalid state, for use without a Field. */
 		invalid?: boolean;
 		/**
-		 * Cap on rendered rows. Every option is still ranked; this only limits how many
-		 * become DOM, and the remainder is counted in a trailing row so a capped list is
-		 * never mistaken for the whole vocabulary.
+		 * Cap on rendered rows. Every option is still ranked; this limits how many become
+		 * DOM, and the remainder is counted in a trailing row.
 		 */
 		maxVisible?: number;
 		/**
 		 * Offer a row that swaps the list for a plain text box.
 		 *
 		 * For a list that is long but not exhaustive. The university preset is 6,447
-		 * institutions and still misses schools; without this, an applicant at one of
-		 * them cannot submit an application at all.
+		 * institutions and still misses schools.
 		 */
 		allowCustom?: boolean;
 		customLabel?: string;
@@ -62,16 +60,14 @@
 		/**
 		 * Offer an "everything" row that sets the value back to `''`.
 		 *
-		 * Filter bars need it. A `Select` showed its placeholder as an unselectable
-		 * first row, so "All admins" was reachable only by reloading; typing to search
-		 * makes the absence of that row more obvious, not less.
+		 * Filter bars need it. A `Select` showed its placeholder as an unselectable first
+		 * row, so "All admins" was reachable only by reloading.
 		 */
 		clearable?: boolean;
 		/**
 		 * Id for the input, so an external `<label for>` reaches it.
 		 *
-		 * Ignored when `label` is set — `Field` generates and wires one itself, and two
-		 * ids competing for the same control is how a label ends up pointing at nothing.
+		 * Ignored when `label` is set, since `Field` generates and wires one itself.
 		 */
 		id?: string;
 		class?: string;
@@ -103,11 +99,9 @@
 	/**
 	 * Whether the control is currently a text box rather than a list.
 	 *
-	 * Initialised from the value it was handed, so a saved write-in reopens as a write-in
-	 * rather than appearing to be an unrecognised selection. `untrack` states the intent
-	 * the warning would otherwise flag: this is a starting position, not a derivation. As
-	 * a `$derived` it would drag the control back to the list on the first keystroke,
-	 * since a half-typed school name is not yet an option either.
+	 * Initialised from the value it was handed, so a saved write-in reopens as a write-in.
+	 * `untrack` states the intent: this is a starting position, not a derivation. As a
+	 * `$derived` it would drag the control back to the list on the first keystroke.
 	 */
 	let custom = $state(
 		untrack(() => allowCustom && value !== '' && !options.some((o) => o.value === value))
@@ -116,11 +110,9 @@
 	/**
 	 * Which row Enter would take, as an index into `selectable`.
 	 *
-	 * Owned here rather than read back from bits-ui's highlight. Deferring to it put the
-	 * two orderings in conflict: bits-ui walks its own list, which knows nothing about
-	 * the ranking, so on a query of "s" — ranked `Sophomore, Senior, Freshman` — one
-	 * ArrowDown from the top landed on Freshman and Enter committed it. Whatever is drawn
-	 * as active has to be what Enter takes, and only one of the two can decide that.
+	 * Owned here rather than read back from bits-ui's highlight, which walks its own list
+	 * and knows nothing about the ranking. On a query of "s", ranked `Sophomore, Senior,
+	 * Freshman`, one ArrowDown landed on Freshman and Enter committed it.
 	 */
 	let activeIndex = $state(0);
 
@@ -144,9 +136,8 @@
 	/**
 	 * Keep the active row on screen.
 	 *
-	 * bits-ui scrolled its own highlight into view; now that the highlight is ours, so
-	 * is the scrolling. Without it, arrowing down a 6,447-row list moves an indicator
-	 * nobody can see.
+	 * bits-ui scrolled its own highlight into view; now that the highlight is ours, so is
+	 * the scrolling. Without it, arrowing down a 6,447-row list moves nothing visible.
 	 */
 	$effect(() => {
 		if (!open || activeValue === null) return;
@@ -161,9 +152,7 @@
 
 	/**
 	 * The typed query while the list is open, the chosen option's label once it is shut.
-	 *
-	 * Without the second half the box empties itself the moment it loses focus, and the
-	 * form reads as having lost the answer it just saved.
+	 * Without the second half the box empties itself the moment it loses focus.
 	 */
 	const inputText = $derived(open ? query : value === '' ? '' : display(value));
 
@@ -177,10 +166,9 @@
 			custom = true;
 			open = false;
 			query = '';
-			// Start the box empty. Carrying the previous pick over meant the first
-			// keystroke appended to it — "…at AustinRiverbend College" — and choosing
-			// "Not listed" is precisely the act of saying the previous pick was wrong,
-			// so the old answer has to go rather than linger as a prefix.
+			// Start the box empty. Carrying the previous pick over meant the first keystroke
+			// appended to it, and choosing "Not listed" is precisely the act of saying the
+			// previous pick was wrong.
 			commit('');
 			// The point of the row is to type in the box it reveals.
 			queueMicrotask(() => customEl?.focus());
@@ -208,9 +196,9 @@
 	/**
 	 * Arrow keys, Home/End and Enter, all handled here and none passed on.
 	 *
-	 * This runs before bits-ui's own handler — svelte-toolbelt composes in prop order and
-	 * stops at the first `preventDefault` — so preventing every one of these is what
-	 * keeps bits-ui's highlight from moving independently of the row drawn as active.
+	 * This runs before bits-ui's own handler, since svelte-toolbelt composes in prop order
+	 * and stops at the first `preventDefault`. That is what keeps bits-ui's highlight from
+	 * moving independently of the row drawn as active.
 	 */
 	function onKeydown(event: KeyboardEvent) {
 		const last = selectable.length - 1;
@@ -284,27 +272,18 @@
 		</div>
 	{:else}
 		<!--
-			Selection goes through bits-ui's own `value`/`onValueChange`, not through a
-			click handler on each row.
+					Selection goes through bits-ui's own `value`/`onValueChange`, not a click handler
+					on each row. bits-ui closes the popover on `pointerup`, which unmounts the row
+					before `click` can fire, so the handler never ran while bits-ui's internal
+					selection did. It took a second click to catch up, one row behind forever.
 
-			It was the latter, and the first click on any row did nothing: bits-ui closes
-			the popover on `pointerup`, which unmounts the row before the browser can
-			dispatch `click` — an event that only fires if pointerdown and pointerup land
-			on the same still-attached element. So the handler never ran, while bits-ui's
-			internal selection did, leaving the input showing an answer the form had not
-			stored. It took a second click to catch up, one row behind forever.
+					Controlled rather than `bind:value`: choosing "Not listed" momentarily makes the
+					sentinel the selected value, and a binding would write that out to the caller.
 
-			Controlled rather than `bind:value`: choosing "Not listed" momentarily makes
-			the sentinel the selected value, and a binding would write that straight out
-			to the caller.
-
-			`allowDeselect={false}` because bits-ui otherwise treats a click on the current
-			row as "unselect", which on a required question silently blanks an answer the
-			applicant was only re-confirming. A native `<select>` — which this replaced
-			everywhere — has no such gesture. Clearing is the `clearable` row's job, where
-			it is a labelled choice rather than a side effect of clicking the same thing
-			twice.
-		-->
+					`allowDeselect={false}` because bits-ui otherwise treats a click on the current
+					row as "unselect", which on a required question silently blanks an answer the
+					applicant was only re-confirming. Clearing is the `clearable` row's job.
+				-->
 		<Bits.Root
 			type="single"
 			value={value === WRITE_IN ? '' : value}
@@ -313,10 +292,8 @@
 			{disabled}
 			bind:open
 		>
-			<!--
-				The shell is the anchor rather than the input, so the popover is measured
-				against the control an organizer sees rather than against a bare text field.
-			-->
+			<!-- The shell is the anchor rather than the input, so the popover is measured
+						     against the control an organizer sees rather than a bare text field. -->
 			<div
 				bind:this={shellEl}
 				class={cn(
@@ -368,10 +345,10 @@
 
 			<Bits.Portal>
 				<!--
-					Sized to its content, floored at the control's width and capped at what the
-					viewport leaves. Locked to the anchor width instead, every row truncated to
-					"The University of Tex…" and the three UT campuses became indistinguishable.
-				-->
+									Sized to its content, floored at the control's width and capped at what the
+									viewport leaves. Locked to the anchor width, the three UT campuses all
+									truncated to "The University of Tex..." and became indistinguishable.
+								-->
 				<Bits.Content
 					customAnchor={shellEl}
 					sideOffset={4}
@@ -381,10 +358,8 @@
 				>
 					<Bits.Viewport>
 						{#if showClear}
-							<!--
-								"All admins" / "All actions": the row that clears the filter. Only on an
-								unfiltered list, because it is not a match for anything anyone typed.
-							-->
+							<!-- "All admins" / "All actions": the row that clears the filter. Only on an
+														     unfiltered list, because it is not a match for anything anyone typed. -->
 							<Bits.Item
 								value=""
 								label={placeholder}
@@ -428,10 +403,9 @@
 
 						{#if allowCustom}
 							<!--
-								Always offered, not only when the search comes up empty: someone whose
-								school is missing usually finds a near-miss rather than nothing, and a
-								row that appears only on zero results is a row they never see.
-							-->
+															Always offered, not only when the search comes up empty. Someone whose
+															school is missing usually finds a near-miss rather than nothing.
+														-->
 							<Bits.Item
 								value={WRITE_IN}
 								label={customLabel}
@@ -451,10 +425,10 @@
 
 						{#if hidden > 0}
 							<!--
-								A fact about the list, not a row in it — so not a `Bits.Item`, and not
-								reachable with the arrow keys. Saying how many were dropped is what stops
-								a capped list from reading as the whole vocabulary.
-							-->
+															A fact about the list, not a row in it, so not a `Bits.Item` and not
+															reachable with the arrow keys. Stops a capped list reading as the whole
+															vocabulary.
+														-->
 							<div
 								class="border-t border-border-subtle px-2 py-1.5 text-xs text-foreground-tertiary"
 							>

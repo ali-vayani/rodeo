@@ -23,23 +23,16 @@ import {
 } from '$lib/server/recipients';
 
 /**
- * Rows this admin is allowed to claim or act on: unclaimed, already theirs (at any
- * age), or expired.
+ * Rows this admin may claim or act on: unclaimed, already theirs (at any age), or
+ * expired. Fails in exactly one case: someone else holds a fresh lock.
  *
- * Deliberately lenient. Requiring "mine AND fresh" would reject an admin whose own
- * lock aged out by milliseconds mid-review, for no safety gain — this predicate
- * fails in exactly one case: someone else holds a fresh lock.
- *
- * Shared by `claim` and `setDecision` so the two can't drift apart on what
- * "claimable" means.
+ * Shared by `claim` and `setDecision` so the two can't drift on what "claimable" means.
  */
 function claimableBy(uid: string, adminUid: string) {
 	return {
 		uid,
-		// Never a staff account: an ADMIN/ORGANIZER has no application, so a claim, score
-		// or decision on one is meaningless — and the uid can arrive from a hand-edited
-		// request. Bounded here rather than trusting the caller, the same guard
-		// `setDecisions` spells out inline. Shared by claim/setDecision/setScore.
+		// Never a staff account: an ADMIN/ORGANIZER has no application, and the uid can
+		// arrive from a hand-edited request.
 		role: { in: APPLICANT_ROLES },
 		OR: [
 			{ claimedBy: null },
@@ -59,15 +52,9 @@ function isRecordNotFound(e: unknown): boolean {
 /**
  * Applicants nobody has decided on yet — the population both passes work through.
  *
- * One predicate rather than three inlined copies, because `stats` reports the
- * scoring queue's size and `list` selects its rows: a tab badge counting a
- * different set than the list under it shows is worse than no badge.
- *
- * A literal `PENDING` is read as no decision, not as one. It is the enum's
- * starting value — `setDecision` refuses to write it, `release` emails nothing
- * for it, and the seed writes it to mean "in the queue, untouched". Matching
- * only on NULL hid every such applicant from the queue while still counting
- * them somewhere, which is the exact drift this constant exists to prevent.
+ * One predicate rather than three copies, so `stats` and `list` cannot count
+ * different sets. A literal `PENDING` reads as no decision: it is the enum's
+ * starting value, and `setDecision` refuses to write it.
  */
 const UNDECIDED: Prisma.UserWhereInput = {
 	OR: [{ pendingDecision: null }, { pendingDecision: DecisionStatus.PENDING }],
@@ -78,25 +65,16 @@ export const admissionsRouter = router({
 	/**
 	 * List applicants with optional filters.
 	 *
-	 * Scoped to APPLICANT_ROLES — never staff. An ADMIN or ORGANIZER has no application
-	 * to review, so returning one here would put a row in the queue that a reviewer can
-	 * neither judge nor clear.
+	 * Scoped to APPLICANT_ROLES — never staff. Each row carries a `blacklistMatch`,
+	 * computed here rather than stored, so entries added after someone applied still
+	 * show up against them.
 	 *
-	 * Each row carries a `blacklistMatch`, computed here rather than stored, so that entries
-	 * added after someone applied still show up against them.
+	 * This router's predicate matches `pendingDecision` OR `activeDecision`, where
+	 * `buildRecipientWhere` reads only the released `activeDecision`; the parts that
+	 * must be identical (search clause, linked-field filters) are imported, not restated.
 	 *
-	 * The predicate is this router's own — it matches `pendingDecision` OR
-	 * `activeDecision`, where `buildRecipientWhere` deliberately reads only the released
-	 * `activeDecision` — but the parts that are supposed to be identical (the search
-	 * clause and the linked-field filters) are imported rather than restated. Those two
-	 * had already drifted once as copy-pasted literals.
-	 *
-	 * Returns `{ applicants, search }` rather than a bare array, matching `user.list` and
-	 * `email.previewRecipients`. The extra key is the search expansion: whether the typed
-	 * term fell back to close names, which names those were (ranked), and whether that
-	 * list hit its cap. A bare array could not report any of it, so the queue had no way
-	 * to say "no exact match — did you mean" and a misspelled search looked like an empty
-	 * queue instead of a near miss.
+	 * Returns `{ applicants, search }` so the queue can report a typo-tolerant fallback
+	 * rather than looking like an empty queue on a misspelled search.
 	 *
 	 * @param roles - narrow further within the applicant roles; staff roles match nothing
 	 * @param decision - filter by decision (pending & active)
@@ -122,18 +100,13 @@ export const admissionsRouter = router({
 		.query(async ({ ctx, input }) => {
 			const { roles, decision, noDecision, scored, sort, search } = input;
 
-			// Always bounded to roles that actually apply, so staff accounts stay out of the
-			// queue even on the "All" tab, which sends no role filter of its own.
+			// Always bounded to applicant roles, so staff stay out of the queue even on the
+			// "All" tab, which sends no role filter of its own.
 			const applicantRoles = narrowToApplicants(roles);
-			// No expansion reported, because none was computed — the term was never
-			// resolved against the database, so claiming `fuzzy: false` about it here is
-			// the honest answer rather than a guess.
 			if (applicantRoles.length === 0) return { applicants: [], search: NO_EXPANSION };
 
-			// Stacked under AND: the decision filter and the search filter each contribute an
-			// `OR` clause, and spreading both into one object literal silently dropped the
-			// decision `OR` (the later key wins) — so searching on the "Accepted" tab returned
-			// every match regardless of decision. Separate array entries can't collide.
+			// Stacked under AND: the decision and search filters each contribute an `OR`, and
+			// spreading both into one object literal silently drops the first.
 			const conditions: Prisma.UserWhereInput[] = [{ role: { in: applicantRoles } }];
 			if (noDecision) conditions.push(UNDECIDED);
 			if (scored !== undefined) conditions.push({ score: scored ? { not: null } : null });
@@ -141,23 +114,13 @@ export const admissionsRouter = router({
 				conditions.push({ OR: [{ pendingDecision: decision }, { activeDecision: decision }] });
 			}
 			conditions.push(...linkedFieldConditions(input));
-			// Answers that live in `ApplicationResponse`, plus the derived state filter. Async
-			// because a numeric range and a state both resolve to explicit values first — see
-			// `resolveAnswerConditions`. Pushed before the search probe below, like every other
-			// condition here, so the probe counts inside the queue the reviewer is looking at.
+			// Answers living in `ApplicationResponse`, plus the derived state filter. Pushed
+			// before the search probe so the probe counts inside the queue being shown.
 			conditions.push(...(await resolveAnswerConditions(ctx.prisma, input)));
 
-			// Every condition above is in place before the probe runs, and that ordering is
-			// the point: `expandSearch` counts exact hits *inside this queue* rather than
-			// across the whole User table. A global count let `adm` clear the floor on five
-			// staff addresses and three undeclared accounts — none of them applicants — so
-			// the queue came back empty with the fold suppressed and never offered
-			// `Adam Hmaidan`. The search clause is appended after, because it is built from
-			// the expansion the probe decides.
-			//
-			// Kept in a local rather than inlined: it is both half of the predicate and
-			// half of the response, and the UI's "did you mean" strip has to be describing
-			// the same expansion the rows were actually selected with.
+			// Runs after every other condition so it counts exact hits *inside this queue*
+			// rather than across the whole User table. The search clause is appended after,
+			// because it is built from the expansion this probe decides.
 			const expansion = await expandSearch(ctx.prisma, search, conditions);
 			const searchClause = searchCondition(search, expansion);
 			if (searchClause) conditions.push(searchClause);
@@ -166,13 +129,11 @@ export const admissionsRouter = router({
 				where: { AND: conditions },
 				include: {
 					application: { include: { question: true } },
-					// Notes are read by whoever runs the decision pass, not by their author,
-					// so an unattributed note is a note nobody can follow up on.
+					// An unattributed note is a note nobody can follow up on.
 					scorer: { select: { name: true } }
 				},
-				// Ties break on earliest applied rather than falling to whatever order the
-				// planner returns: the ranked list is worked top-down and accepted in
-				// batches, so two applicants on 17 must not swap places between reloads.
+				// Ties break on earliest applied rather than planner order: the ranked list is
+				// worked top-down, so two applicants on 17 must not swap places between reloads.
 				orderBy:
 					sort === 'score'
 						? [{ score: { sort: 'desc', nulls: 'last' } }, { createdAt: 'asc' }]
@@ -180,9 +141,7 @@ export const admissionsRouter = router({
 			});
 
 			// Fuzzy name matching can't be expressed as a WHERE clause, so the blacklist is
-			// pulled in full and folded once, then compared against this page of applicants in
-			// memory. The table is small by nature -- a few hundred entries at most -- and this
-			// keeps the matching rules in one tested module instead of split across SQL.
+			// pulled in full and folded once. The table is a few hundred entries at most.
 			const blacklist = prepareBlacklist(
 				await ctx.prisma.blacklist.findMany({
 					select: { firstName: true, lastName: true, email: true }
@@ -198,10 +157,7 @@ export const admissionsRouter = router({
 			};
 		}),
 
-	/**
-	 * Lightweight presence query — returns all fresh claims (not stale).
-	 * Used by clients to poll who is reviewing what.
-	 */
+	/** All fresh (non-stale) claims — clients poll this to see who is reviewing what. */
 	presence: adminProcedure.query(async ({ ctx }) => {
 		const now = Date.now();
 		const staleThreshold = new Date(now - CLAIM_TTL_MS);
@@ -229,12 +185,10 @@ export const admissionsRouter = router({
 	/**
 	 * Attempt to claim an applicant for review.
 	 * Succeeds if unclaimed, stale, or already claimed by this admin.
-	 * Returns { claimed: true } on success or { claimed: false, claimerName } if another admin holds it.
+	 * Returns { claimed: true }, or { claimed: false, claimerName } if someone else holds it.
 	 *
-	 * Deliberately unaudited, as are `releaseClaim` and `heartbeat`: a reviewer
-	 * generates one of these every few seconds just by scrolling the list, and
-	 * that volume would bury the decisions in the feed. What matters — a decision
-	 * a lock actually stopped — is logged from `setDecision`'s conflict path.
+	 * Deliberately unaudited, as are `releaseClaim` and `heartbeat` — a reviewer
+	 * generates these every few seconds, and the volume would bury real decisions.
 	 */
 	claim: adminProcedure.input(z.object({ uid: z.string() })).mutation(async ({ ctx, input }) => {
 		const now = new Date();
@@ -296,12 +250,10 @@ export const admissionsRouter = router({
 		}),
 
 	/**
-	 * set a decision for a user and release their claim
+	 * Set a decision for a user and release their claim.
 	 *
-	 * Rejects with CONFLICT if another admin currently holds a fresh claim — this is
-	 * what actually prevents two reviewers from overwriting each other. The guard and
-	 * the write are a single conditional UPDATE (a compare-and-swap), so there is no
-	 * window between checking the lock and taking the decision.
+	 * Rejects with CONFLICT if another admin holds a fresh claim. The guard and the write
+	 * are a single conditional UPDATE, so there is no window between the two.
 	 *
 	 * @param uid - the user's uid
 	 * @param decision - the decision to set
@@ -310,8 +262,8 @@ export const admissionsRouter = router({
 		.input(
 			z.object({
 				uid: z.string(),
-				// PENDING is a starting state, not a decision anyone reviews toward. Allowing
-				// it here let `release` promote `activeDecision: PENDING` and email nothing.
+				// PENDING is a starting state, not a decision anyone reviews toward. Allowing it
+				// let `release` promote `activeDecision: PENDING` and email nothing.
 				decision: z.enum([
 					DecisionStatus.ACCEPTED,
 					DecisionStatus.REJECTED,
@@ -325,10 +277,8 @@ export const admissionsRouter = router({
 					where: claimableBy(input.uid, ctx.user.uid),
 					data: {
 						pendingDecision: input.decision,
-						// Set in the same statement as the decision, never as a follow-up
-						// write: the CAS above can miss, and an attribution that could
-						// land without its decision is exactly the drift this column
-						// exists to make impossible.
+						// Set in the same statement as the decision: the CAS above can miss, and
+						// attribution must never land without its decision.
 						decidedBy: ctx.user.uid,
 						decidedAt: new Date(),
 						claimedBy: null,
@@ -338,8 +288,8 @@ export const admissionsRouter = router({
 
 				await logAction(ctx, {
 					action: 'admissions.decision.set',
-					// "Set a pending decision", not "accepted" — nothing reaches the
-					// applicant until release, and the trail shouldn't imply it did.
+					// "Set a pending decision", not "accepted" — nothing reaches the applicant
+					// until release.
 					summary: `Set ${applicant.name}'s pending decision to ${input.decision}`,
 					target: { id: applicant.uid, label: applicant.name },
 					metadata: { decision: input.decision }
@@ -349,8 +299,8 @@ export const admissionsRouter = router({
 			} catch (e) {
 				if (!isRecordNotFound(e)) throw e;
 
-				// The predicate missed. Disambiguate "no such applicant" from "locked",
-				// and name the holder — this only runs on the failure path.
+				// The predicate missed. Disambiguate "no such applicant" from "locked" and
+				// name the holder — this only runs on the failure path.
 				const target = await ctx.prisma.user.findUnique({
 					where: { uid: input.uid },
 					select: { name: true, claimer: { select: { name: true } } }
@@ -376,12 +326,8 @@ export const admissionsRouter = router({
 	/**
 	 * Clear a pending decision, returning the applicant to the undecided queue.
 	 *
-	 * The inverse of `setDecision`. Only affects `pendingDecision` — a released
-	 * `activeDecision` is permanent and cannot be undone here.
-	 *
-	 * Uses the same claim CAS as `setDecision` so two admins can't race on the
-	 * same row. Attribution is cleared alongside the decision: there is no pending
-	 * decision to credit anyone with.
+	 * Only affects `pendingDecision` — a released `activeDecision` is permanent. Uses
+	 * the same claim CAS as `setDecision`, and clears attribution alongside the decision.
 	 */
 	clearDecision: adminProcedure
 		.input(z.object({ uid: z.string() }))
@@ -425,16 +371,10 @@ export const admissionsRouter = router({
 	/**
 	 * Score an applicant 0–20 and save the reviewer's notes.
 	 *
-	 * The first of the two passes. Scoring deliberately sets no decision: the whole
-	 * point of splitting the workflow is that nobody is accepted or rejected until
-	 * the queue has been scored and can be ranked against itself.
-	 *
-	 * Guarded by the same claim CAS as `setDecision`, and releases the claim on
-	 * success for the same reason — the reviewer is done with this applicant and is
-	 * about to be handed the next one.
-	 *
-	 * Re-scoring is allowed and simply overwrites, including the attribution: the
-	 * reviewer who last touched the score is the one who owns it.
+	 * Scoring deliberately sets no decision: nobody is accepted or rejected until the
+	 * queue has been scored and can be ranked against itself. Guarded by the same claim
+	 * CAS as `setDecision`, and releases the claim on success. Re-scoring overwrites,
+	 * including the attribution.
 	 *
 	 * @param uid - the applicant
 	 * @param score - whole number within the shared scale
@@ -445,9 +385,8 @@ export const admissionsRouter = router({
 			z.object({
 				uid: z.string(),
 				score: z.number().int().min(MIN_SCORE).max(MAX_SCORE),
-				// Always sent by the review pane, blank included — that is what makes
-				// deleting a note possible. An omitted field would be indistinguishable
-				// from an emptied one.
+				// Always sent by the review pane, blank included — that is what makes deleting
+				// a note possible.
 				notes: z.string().max(5000).optional()
 			})
 		)
@@ -485,10 +424,6 @@ export const admissionsRouter = router({
 					throw new TRPCError({ code: 'NOT_FOUND', message: 'Applicant not found.' });
 				}
 
-				// No `admissions.score.blocked` counterpart to the decision path's audit
-				// row. A blocked decision is worth a permanent record because the thing
-				// it stopped is irreversible once released; a blocked score costs the
-				// reviewer one re-entry and would only add noise to the feed.
 				throw new TRPCError({
 					code: 'CONFLICT',
 					message: `${target.claimer?.name ?? 'Another admin'} is reviewing this applicant. Your score was not saved.`
@@ -500,14 +435,9 @@ export const admissionsRouter = router({
 	 * Set the same pending decision on many applicants at once — the decision pass
 	 * working down the ranked list, or taking everyone above a score cutoff.
 	 *
-	 * One statement rather than a loop over `setDecision`: a hundred sequential
-	 * round trips is the difference between a click and a progress bar, and a
-	 * partial failure halfway down would leave the operator with no idea which half
-	 * landed.
-	 *
-	 * Rows another admin holds a fresh claim on are skipped, not overwritten — the
-	 * same rule `setDecision` enforces one row at a time. They come back as
-	 * `skipped` so the caller can say so rather than silently reporting fewer.
+	 * One statement rather than a loop over `setDecision`, so a partial failure can't
+	 * leave the operator guessing which half landed. Rows another admin holds a fresh
+	 * claim on come back as `skipped` rather than being overwritten.
 	 *
 	 * @param uids - applicants to decide; non-applicants are ignored
 	 * @param decision - the pending decision to apply to all of them
@@ -527,8 +457,8 @@ export const admissionsRouter = router({
 			const result = await ctx.prisma.user.updateMany({
 				where: {
 					uid: { in: input.uids },
-					// A uid list arrives from the client, so the role guard is what keeps a
-					// stale or hand-edited selection from putting a decision on staff.
+					// A uid list arrives from the client, so the role guard is what keeps a stale
+					// or hand-edited selection from putting a decision on staff.
 					role: { in: APPLICANT_ROLES },
 					OR: [
 						{ claimedBy: null },
@@ -561,10 +491,8 @@ export const admissionsRouter = router({
 	/**
 	 * Headline counts for the admissions page.
 	 *
-	 * Decisions are counted at their *effective* value — the pending one if there is
-	 * one, otherwise the released one. That is what the page's own list shows, and
-	 * counting only released decisions would leave the strip reading all zeros
-	 * through the entire decision pass, which is exactly when it is being watched.
+	 * Decisions are counted at their *effective* value — pending if there is one,
+	 * otherwise released — which is what the page's own list shows.
 	 */
 	stats: adminProcedure.query(async ({ ctx }) => {
 		const applicants = { role: { in: APPLICANT_ROLES } };
@@ -588,25 +516,21 @@ export const admissionsRouter = router({
 			else if (effective === DecisionStatus.WAITLISTED) tally.waitlisted += count;
 			else tally.undecided += count;
 
-			// Cuts across the three above rather than being one of them: `pending`
-			// counts decisions that exist but haven't been emailed, which is what the
-			// release gate acts on. An accepted applicant is in `accepted` whether or
-			// not they have been told.
+			// Cuts across the three above: `pending` counts decisions that exist but haven't
+			// been emailed, which is what the release gate acts on.
 			if (row.pendingDecision !== null && row.pendingDecision !== DecisionStatus.PENDING) {
 				tally.pending += count;
 			}
 		}
 
-		// Both halves of the scoring queue, which together are `undecided`. Reported
-		// separately because the decision pass only ever sees the scored half, and
-		// the unscored count is the one number that says how much it can't see.
+		// Both halves of the scoring queue, which together are `undecided`. The decision
+		// pass only sees the scored half, so the unscored count says how much it can't see.
 		return { ...tally, scored, unscored };
 	}),
 
 	/**
-	 * Richer stats for the Stats tab: per-role decision breakdown and score
-	 * aggregates. Kept separate from `stats` so the header counts never pay for
-	 * this heavier query.
+	 * Per-role decision breakdown and score aggregates for the Stats tab. Kept separate
+	 * from `stats` so the header counts never pay for this heavier query.
 	 */
 	decisionStats: adminProcedure.query(async ({ ctx }) => {
 		const [roleGroups, scoreAgg] = await Promise.all([
@@ -661,10 +585,8 @@ export const admissionsRouter = router({
 	/**
 	 * Applicants who already have a released decision and may need reconsidering.
 	 *
-	 * Sorted by actionability: waitlisted first (most likely to be promoted to
-	 * accepted), then rejected, then accepted last. Sort is done in application
-	 * code because Prisma has no enum-priority ORDER BY — the set is small enough
-	 * that a single in-memory sort is cheaper than a raw query.
+	 * Sorted by actionability — waitlisted, then rejected, then accepted. Sorted in
+	 * application code because Prisma has no enum-priority ORDER BY.
 	 */
 	reconsidering: adminProcedure.query(async ({ ctx }) => {
 		const users = await ctx.prisma.user.findMany({
@@ -693,11 +615,8 @@ export const admissionsRouter = router({
 	}),
 
 	/**
-	 * Per-reviewer scoring activity — who scored how many applicants and when they
-	 * last did so. Used by the Stats tab to give admins visibility into review coverage.
-	 *
-	 * Grouped in the DB rather than loaded and counted in app code: the applicant
-	 * table can be large, and a groupBy is a single scan rather than N rows in memory.
+	 * Per-reviewer scoring activity — who scored how many applicants and when they last
+	 * did so. Grouped in the DB rather than counted in app code: one scan, not N rows.
 	 */
 	reviewerStats: adminProcedure.query(async ({ ctx }) => {
 		const groups = await ctx.prisma.user.groupBy({
@@ -740,8 +659,8 @@ export const admissionsRouter = router({
 			const users = await ctx.prisma.user.findMany({
 				where: {
 					pendingDecision: { not: null },
-					// Applicants only, mirroring `setDecisions`: a stale or hand-edited uid
-					// list must not promote and email a decision onto a staff account.
+					// Applicants only, mirroring `setDecisions`: a stale or hand-edited uid list must
+					// not promote and email a decision onto a staff account.
 					role: { in: APPLICANT_ROLES },
 					...(restrictToUids && { uid: { in: input.uids } })
 				}
@@ -756,14 +675,11 @@ export const admissionsRouter = router({
 				});
 			}
 
-			// Fetch settings for email templates
 			const settings = await ctx.prisma.settings.findFirst();
 
-			// Apply each pending decision as a compare-and-swap keyed on the exact value we
-			// read. Keying on `uid` alone would let a `setDecision`/`updateDecisions` change
-			// that landed between the read and here be silently overwritten with the stale
-			// value — and, worse, email the applicant that stale (irreversible) outcome. A
-			// row whose pendingDecision moved matches nothing and is dropped from this batch.
+			// Compare-and-swap keyed on the exact value we read. Keying on `uid` alone would
+			// let a change landing between the read and here be overwritten — and email the
+			// applicant that stale, irreversible outcome. A moved row is dropped from the batch.
 			const swaps = await ctx.prisma.$transaction(
 				users.map((u) =>
 					ctx.prisma.user.updateMany({
@@ -771,13 +687,8 @@ export const admissionsRouter = router({
 						data: {
 							activeDecision: u.pendingDecision,
 							pendingDecision: null,
-							// `decidedBy`/`decidedAt` are deliberately untouched. Release
-							// publishes decisions other admins made; crediting the releaser
-							// would hand one person the entire batch and erase the reviewers
-							// who actually did the work.
-							//
-							// Published decisions end any review session — don't leave the
-							// applicant showing as "being reviewed" until the claim goes stale.
+							// `decidedBy`/`decidedAt` are deliberately untouched: release publishes
+							// decisions other admins made. Clearing the claim ends the review session.
 							claimedBy: null,
 							claimedAt: null
 						}
@@ -788,10 +699,8 @@ export const admissionsRouter = router({
 			// Only users whose swap actually took are released — and get mailed.
 			const releasedUsers = users.filter((_, i) => swaps[i].count === 1);
 
-			// Send emails per decision type. Defaults when no Settings row exists: gating
-			// this on the row meant a release on an unconfigured install decided every
-			// applicant's fate and told none of them, reporting 0 attempted as if that
-			// were the correct count rather than the symptom.
+			// Defaults when no Settings row exists: gating on the row meant a release on an
+			// unconfigured install decided every applicant's fate and told none of them.
 			const mail = emailSettings(settings);
 			const templateMap: Record<string, { subject: string; body: string }> = {
 				[DecisionStatus.ACCEPTED]: {
@@ -824,17 +733,16 @@ export const admissionsRouter = router({
 			);
 			const emailsFailed = results.filter((r) => r.status === 'rejected').length;
 
-			// Release is the one irreversible batch action in the app, so its entry
-			// carries the full breakdown: who was affected, what each decision was,
-			// and how many notifications actually made it out.
+			// Release is the one irreversible batch action, so its entry carries the full
+			// breakdown: who was affected, what each decision was, and how many were notified.
 			const byDecision: Record<string, number> = {};
 			for (const u of releasedUsers) {
 				const key = u.pendingDecision ?? 'none';
 				byDecision[key] = (byDecision[key] ?? 0) + 1;
 			}
 
-			// A row can be skipped if its pending decision moved between the read and the
-			// swap — surface that rather than silently reporting fewer released.
+			// A row can be skipped if its pending decision moved between read and swap —
+			// surface that rather than silently reporting fewer released.
 			const skipped = users.length - releasedUsers.length;
 
 			await logAction(ctx, {

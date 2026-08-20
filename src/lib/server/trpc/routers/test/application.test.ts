@@ -57,9 +57,8 @@ const ahead = (ms: number) => new Date(Date.now() + ms);
 
 /**
  * `mockSettings` is pinned to 2024 dates, so every window it defines is already behind
- * us — which is exactly what the guards now reject. Anything asserting a *successful*
- * write re-bases the three dates onto the current clock through these, so the tests keep
- * testing what they were written to test rather than the deadline.
+ * us. Anything asserting a successful write re-bases the three dates onto the current
+ * clock through these, so the tests keep testing what they were written to test.
  */
 const openWindow = {
 	...mockSettings,
@@ -471,10 +470,9 @@ describe('application.rsvpDecline', () => {
 	});
 
 	it('still sends, from the defaults, when no settings row exists', async () => {
-		// Production ran with no Settings row for weeks: `settings.get` served
-		// DEFAULT_SETTINGS so the editor looked configured, while every sender read the
-		// row directly, found null, and skipped silently. Both sides resolve the same
-		// values now — an unconfigured install mails the default copy rather than nothing.
+		// Production ran with no Settings row for weeks: `settings.get` served DEFAULT_SETTINGS
+		// so the editor looked configured, while every sender read the row directly, found null,
+		// and skipped silently. Both sides resolve the same values now.
 		const caller = createTestCaller(db, acceptedHacker);
 		db.user.findUniqueOrThrow.mockResolvedValue(acceptedHacker as never);
 		db.user.update.mockResolvedValue({
@@ -617,9 +615,8 @@ describe('application.submit', () => {
 	});
 
 	it('treats a required question answered only with whitespace as unanswered', async () => {
-		// A response row exists for the required question, but its value is blank — autosave
-		// fires on the keystroke that clears the field too, so row existence alone must not
-		// satisfy the requirement.
+		// A response row exists for the required question, but its value is blank. Autosave
+		// fires on the keystroke that clears the field, so row existence must not satisfy it.
 		const caller = createTestCaller(db, hackerUser);
 		db.user.findUniqueOrThrow.mockResolvedValue(hackerUser as never);
 		db.settings.findFirst.mockResolvedValue(openWindow);

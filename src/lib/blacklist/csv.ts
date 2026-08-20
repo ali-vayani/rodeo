@@ -1,10 +1,10 @@
 /**
  * CSV reading for blacklist import.
  *
- * Deliberately a real parser rather than `split(',')`. The files organizers actually
- * upload come out of Excel and Google Sheets, which means quoted fields, embedded commas
- * in the reason column, CRLF line endings, and a UTF-8 BOM -- every one of which a naive
- * split turns into silently wrong data rather than a visible error.
+ * Deliberately a real parser rather than `split(',')`. The files organizers upload come
+ * out of Excel and Google Sheets, so they carry quoted fields, embedded commas in the
+ * reason column, CRLF endings and a UTF-8 BOM. A naive split turns each of those into
+ * silently wrong data rather than a visible error.
  */
 
 export interface BlacklistCsvRow {
@@ -43,8 +43,7 @@ const headerKey = (value: string) =>
 /**
  * Split CSV text into rows of raw fields, per RFC 4180.
  *
- * Exported for its own tests: the quoting rules are where CSV parsers usually go wrong,
- * and they are much easier to pin down in isolation than through the import flow.
+ * Exported for its own tests: the quoting rules are where CSV parsers usually go wrong.
  */
 export function parseCsv(text: string): string[][] {
 	// A BOM would otherwise ride along on the first header cell and defeat column matching.
@@ -118,12 +117,11 @@ export function parseCsv(text: string): string[][] {
 /**
  * Read blacklist rows out of CSV text.
  *
- * A header is detected rather than assumed. Blindly dropping the first line -- the usual
- * shortcut -- silently eats a real entry whenever someone exports without headers, and
- * that loss is invisible at every later step.
+ * A header is detected rather than assumed. Blindly dropping the first line silently
+ * eats a real entry whenever someone exports without headers.
  *
  * Validation deliberately does not happen here: the server checks each row and reports
- * which ones failed, so parsing only has to answer "what did the file say".
+ * which failed, so parsing only has to answer "what did the file say".
  */
 export function parseBlacklistCsv(text: string): BlacklistCsvRow[] {
 	const rows = parseCsv(text);

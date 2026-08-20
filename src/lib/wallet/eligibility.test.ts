@@ -51,14 +51,9 @@ describe('walletPassIneligibility', () => {
 	// ---------------------------------------------------------------------------
 	// Polarity pins. See the long comment in ./eligibility.ts.
 	//
-	// These two assert that a *missing* or *broken* deadline yields no pass. That
-	// falls out of `isRsvpClosed` returning false for both, which `window.ts`
-	// describes as "unconfigured reads as open" — generous for the application
-	// form, restrictive here, purely because this gate wants the opposite answer.
-	//
-	// If either of these fails, someone changed `isRsvpClosed`'s degenerate cases
-	// and this gate has silently become fail-open: every account in the database
-	// with the right status can now mint a pass. Fix the gate. Do not fix the test.
+	// These assert that a missing or broken deadline yields no pass. If either fails,
+	// someone changed `isRsvpClosed`'s degenerate cases and this gate has silently become
+	// fail-open. Fix the gate. Do not fix the test.
 	// ---------------------------------------------------------------------------
 
 	it('is unavailable when Settings is missing', () => {

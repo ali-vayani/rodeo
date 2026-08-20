@@ -1,21 +1,13 @@
 /**
- * Outbound email.
+ * Outbound email. Templates are authored as markdown, so every body is rendered to
+ * HTML on the way out.
  *
- * Templates are authored as markdown at `/admin/email-templates` — organizers
- * write prose, not HTML — so every body is rendered to HTML on the way out.
+ * Production is the only environment that sends; development and preview print the
+ * message and return. Preview used to send for real, fenced to `@yopmail.com`, which
+ * was one predicate standing between a branch deploy and four hundred applicants.
  *
- * **Production is the only environment that sends.** Development and preview both
- * print the message and return.
- *
- * Preview used to send for real, fenced to `@yopmail.com` recipients. That fence
- * was one predicate standing between a branch deploy and four hundred applicants,
- * on deploys that run a production build against the production database — and it
- * only held as long as nobody widened it. Not sending at all is the same guarantee
- * without the predicate, so it is not a capability worth keeping.
- *
- * Failures throw. Callers that send in bulk wrap each recipient in
- * `Promise.allSettled` and record the rejection count in the audit trail, which
- * only works if a failure is actually distinguishable from a success.
+ * Failures throw. Bulk callers wrap each recipient in `Promise.allSettled` and record
+ * the rejection count, which only works if a failure is distinguishable from a success.
  */
 
 import { Resend } from 'resend';
@@ -25,12 +17,9 @@ import { substituteVariables } from '$lib/email/variables';
 import { deployEnv, emailFrom, resendConfigured, NO_EMAIL_MESSAGE } from './env';
 
 /**
- * A file carried inside the message.
- *
- * Exists for inline images — the check-in QR referenced from the body as
- * `cid:<contentId>`, rather than hosted at a URL where a proxy could cache it.
- * This is a transport-neutral shape; `sendEmail` translates it to Resend's
- * spelling.
+ * A file carried inside the message. Exists for inline images: the check-in QR
+ * referenced as `cid:<contentId>` rather than hosted where a proxy could cache it.
+ * Transport-neutral; `sendEmail` translates it to Resend's spelling.
  */
 export interface EmailAttachment {
 	filename: string;
@@ -60,9 +49,8 @@ function resendClient(): Resend {
 
 export async function sendEmail(payload: EmailPayload): Promise<void> {
 	const where = deployEnv();
-	// Everything that is not production prints and returns. Not an error, and not
-	// conditional on configuration: a preview deploy with a key present must still
-	// send nothing, so this is the environment check and nothing else.
+	// Everything that is not production prints and returns. Not conditional on
+	// configuration: a preview deploy with a key present must still send nothing.
 	if (where !== 'production') {
 		console.log(`[email] not sent — ${where} does not deliver mail`);
 		console.log(`[email] To: ${payload.to}`);
@@ -101,9 +89,8 @@ export async function sendEmail(payload: EmailPayload): Promise<void> {
 			: {})
 	});
 
-	// The SDK reports delivery failures in the response rather than by throwing, so
-	// an unchecked call silently "succeeds" on a rejected send — and the bulk
-	// callers would record that as delivered in the audit trail.
+	// The SDK reports delivery failures in the response rather than by throwing, so an
+	// unchecked call silently "succeeds" on a rejected send.
 	if (error) throw new Error(`Resend rejected the message: ${error.message}`);
 }
 
@@ -116,9 +103,8 @@ export async function sendTemplatedEmail(
 ): Promise<void> {
 	await sendEmail({
 		to,
-		// `dropRawValues` because a subject is plain text and the editor's chips can
-		// insert into it — `{{hacker_qr_code}}` up here would otherwise mail out a
-		// subject line of raw `<table>` markup.
+		// `dropRawValues` because a subject is plain text and the editor's chips can insert
+		// into it. `{{hacker_qr_code}}` up here would mail a subject of raw `<table>` markup.
 		subject: substituteVariables(template.subject, vars, { dropRawValues: true }),
 		// Body becomes HTML via `marked` — escape user-controlled variable values.
 		body: substituteVariables(template.body, vars, { escapeValues: true }),

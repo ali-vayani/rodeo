@@ -1,29 +1,18 @@
 /**
- * String similarity primitives.
+ * String similarity primitives. Nothing here knows what it is comparing.
  *
- * Nothing here knows what it is comparing. These were extracted from
- * `$lib/blacklist/match` once a second caller appeared — typo-tolerant search over
- * user names (`$lib/server/recipients`) — and the extraction is deliberately narrow:
- * the *algorithm* moved, every *policy* stayed behind.
- *
- * So `NAME_SIMILARITY_THRESHOLD` is still a blacklist constant and the search
- * threshold is still a recipients constant, because "how similar is similar enough"
- * is a question about consequences, not about strings. A blacklist hit accuses
- * someone and is set high; a search fallback merely offers a suggestion and is set
- * lower. A shared default here would quietly average the two.
- *
- * Isomorphic and dependency-free — safe to import from either side of the wire.
+ * The algorithm moved out of `$lib/blacklist/match`; every policy stayed behind,
+ * because "how similar is similar enough" is a question about consequences. Isomorphic
+ * and dependency-free.
  */
 
 /** Jaro score below which Winkler's prefix bonus is not applied, per the standard definition. */
 const WINKLER_BOOST_THRESHOLD = 0.7;
 
 /**
- * Fold a name to a comparable form.
- *
- * This step, not the edit-distance below, does most of the real work: it collapses
- * `José`/`Jose`, `O'Brien`/`O’Brien`/`OBrien`, `Smith-Jones`/`SmithJones` and
- * `JAY PATIL`/`Jay Patil` to identical strings for free, before any fuzziness is needed.
+ * Fold a name to a comparable form. This step, not the edit distance below, does most
+ * of the work: it collapses `José`/`Jose`, `O'Brien`/`OBrien` and `JAY PATIL`/`Jay
+ * Patil` before any fuzziness is needed.
  */
 export function normalizeName(value: string): string {
 	return (
@@ -48,9 +37,8 @@ export function jaro(a: string, b: string): number {
 	if (a === b) return 1;
 	if (!a.length || !b.length) return 0;
 
-	// Two characters count as matching only if they sit within this many positions of
-	// each other, which is what keeps the metric sensitive to position rather than
-	// degenerating into a bag-of-characters comparison.
+	// Two characters match only if they sit within this many positions of each other,
+	// which keeps the metric from degenerating into a bag-of-characters comparison.
 	const window = Math.max(0, Math.floor(Math.max(a.length, b.length) / 2) - 1);
 	const aMatched = new Array<boolean>(a.length).fill(false);
 	const bMatched = new Array<boolean>(b.length).fill(false);
@@ -85,12 +73,9 @@ export function jaro(a: string, b: string): number {
 }
 
 /**
- * Jaro-Winkler: Jaro, with a bonus for a shared prefix.
- *
- * Preferred over raw edit distance for names because it is length-normalized -- one wrong
- * character matters far more in `Ann` than in `Bartholomew`, which a flat "distance <= 2"
- * rule cannot express -- and because names are misspelled toward their ends far more
- * often than their beginnings.
+ * Jaro-Winkler: Jaro, with a bonus for a shared prefix. Preferred over raw edit
+ * distance because it is length-normalized — one wrong character matters far more in
+ * `Ann` than in `Bartholomew` — and names are misspelled toward their ends.
  */
 export function jaroWinkler(a: string, b: string): number {
 	const score = jaro(a, b);
@@ -107,29 +92,14 @@ export function jaroWinkler(a: string, b: string): number {
 /**
  * How well a multi-word query matches a multi-word value, token by token.
  *
- * Comparing the two strings whole does not work in either direction. A search box is
- * typed a word at a time — `sarh` for `Sarah Chen` — and `jaroWinkler('sarh', 'sarah
- * chen')` is dragged down by the half of the string the typist never meant to type.
- * Comparing the query whole against each name token is no better: `jaroWinkler('sarh
- * chn', 'harsh')` is .808 while `jaroWinkler('sarh chn', 'chen')` is near zero, so a
- * two-token query scored that way ranks anagrams of its *first* token above genuine
- * matches on its second. That is exactly how `Sarh Chn` surfaced eleven `Harsh *`
- * users and no `Chen` at all.
+ * Comparing the strings whole fails both ways. `jaroWinkler('sarh', 'sarah chen')` is
+ * dragged down by the half the typist never meant to type, while comparing the query
+ * whole against each name token scores `harsh` at .808 and `chen` near zero, which is
+ * how `Sarh Chn` surfaced eleven `Harsh *` users and no `Chen`.
  *
- * So each query token is matched independently against the value's tokens (and against
- * the whole value, so a query typed without spaces still lands), and the per-token
- * bests are combined:
- *
- *   - `best`  — the strongest single token match. This is the *recall* signal: one
- *     token being a convincing typo of one name token is enough to be worth showing,
- *     which is what lets `sarh chn` reach `Zhizhen Chen` on the strength of `chn`
- *     alone.
- *   - `score` — the mean of the per-token bests. This is the *relevance* signal, used
- *     only to rank. A mean rather than a sum so it stays in [0,1] and a three-word
- *     query cannot outscore a two-word one just by being longer. A name matching every
- *     token beats a name matching one, which is what puts a real `Sarah Chen` on top.
- *
- * Both sides are assumed already normalized by `normalizeName`.
+ * So each query token is matched independently against the value's tokens, and against
+ * the whole value so a query typed without spaces still lands. Both sides are assumed
+ * already normalized by `normalizeName`.
  */
 export interface TokenMatch {
 	/** Mean of the per-query-token bests. Ranks candidates; do not threshold on it. */
@@ -161,13 +131,8 @@ export function tokenMatch(query: string, value: string): TokenMatch {
 }
 
 /**
- * Best match between a single-word query and any part of a multi-word value.
- *
- * Exactly `tokenMatch(...).best`, kept as a named export because that is the whole
- * question a one-word query asks, and `$lib/text/fuzzyRank` (the combobox type-ahead)
- * calls it per token. Multi-word callers want `tokenMatch` — its `score` already means
- * what `fuzzyRank` builds by hand, and its `best` is the recall signal that a mean
- * cannot give you.
+ * Best match between a single-word query and any part of a multi-word value. Exactly
+ * `tokenMatch(...).best`; multi-word callers want `tokenMatch`.
  */
 export function bestTokenScore(query: string, value: string): number {
 	return tokenMatch(query, value).best;

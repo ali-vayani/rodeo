@@ -17,16 +17,9 @@ const passwordInput = { password: z.string().min(1) };
  * Reject unless `ADMIN_DATA_PASSWORD` is set and matches.
  *
  * The three failures are told apart on purpose. "Not configured" is an operator
- * problem — the deploy is missing a variable, and saying so is what stops
- * someone concluding their password is wrong and trying variations.
- *
- * A wrong password is UNAUTHORIZED, never FORBIDDEN. FORBIDDEN is what
- * `adminProcedure` returns for "your account may not do this at all", and the
- * two must stay distinguishable: an organizer and an admin who fat-fingered the
- * password have entirely different problems, and collapsing both into one code
- * means neither the UI nor the permission tests can tell which gate rejected the
- * call. The message says only that the password was wrong — never echoing what
- * was submitted, nor hinting at its length.
+ * problem, and a wrong password is UNAUTHORIZED rather than FORBIDDEN, which
+ * `adminProcedure` uses for "your account may not do this at all". The message never
+ * echoes what was submitted, nor hints at its length.
  */
 function requirePassword(password: string) {
 	if (!dataPasswordConfigured()) {
@@ -46,14 +39,8 @@ export const dataRouter = router({
 	/**
 	 * Every table, as a JSON string ready to be written to a file.
 	 *
-	 * A mutation rather than a query even though it only reads: tRPC puts query
-	 * input in the request URL, which would write the password into browser
-	 * history, proxy logs and any error reporter in the path. It also writes an
-	 * audit entry, which queries are not supposed to do.
-	 *
-	 * Serialised here rather than in the browser so the client never has to
-	 * reassemble the object — and so the bytes that land in the file are the
-	 * bytes the server produced.
+	 * A mutation rather than a query even though it only reads: tRPC puts query input in
+	 * the request URL, which would write the password into browser history and proxy logs.
 	 */
 	exportAll: adminProcedure
 		.input(z.object({ ...passwordInput }))
@@ -62,9 +49,8 @@ export const dataRouter = router({
 
 			const data = await buildExport(ctx.prisma);
 
-			// The single most sensitive read in the app: one file with every
-			// applicant's name, email and answers. "Who took a copy, and when" is
-			// exactly what an audit trail is for.
+			// The single most sensitive read in the app: one file with every applicant's name,
+			// email and answers.
 			await logAction(ctx, {
 				action: 'data.export',
 				summary: `Exported the full database (${data.counts.user} users across ${Object.keys(data.tables).length} tables)`,
@@ -77,15 +63,10 @@ export const dataRouter = router({
 	/**
 	 * Empty the database, keeping staff accounts and the blacklist.
 	 *
-	 * Deliberately does NOT build its own export. The caller exports first and
-	 * writes the file to disk, then calls this — so the copy exists before
-	 * anything is destroyed. Doing both server-side in one call would put the
-	 * only copy of the data in an HTTP response body that is sent *after* the
-	 * delete, where a dropped connection loses it for good.
-	 *
-	 * The audit entry is written after the delete, not before: `Log` is one of
-	 * the tables emptied, so an entry written first would erase itself. Writing
-	 * it afterwards leaves the wipe as the first row of the new trail.
+	 * Deliberately does NOT build its own export. The caller exports and writes the file
+	 * first, so the copy exists before anything is destroyed; doing both in one call would
+	 * put the only copy in a response body sent after the delete. The audit entry is
+	 * written afterwards, since `Log` is one of the tables emptied.
 	 */
 	wipe: adminProcedure
 		.input(

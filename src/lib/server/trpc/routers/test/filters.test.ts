@@ -15,9 +15,8 @@ const db = prisma as DeepMockProxy<PrismaClient>;
 
 beforeEach(() => {
 	mockReset(db);
-	// The facet query reads more than the one column each test is exercising. Defaults
-	// here rather than in every test: an unmocked `mockDeep` method resolves to
-	// `undefined`, which the builder cannot iterate.
+	// The facet query reads more than the one column each test exercises. An unmocked
+	// `mockDeep` method resolves to `undefined`, which the builder cannot iterate.
 	db.user.count.mockResolvedValue(0);
 	db.settings.findFirst.mockResolvedValue(null);
 	mockGroupBy(db.applicationResponse.groupBy).mockResolvedValue([]);
@@ -31,8 +30,7 @@ type GroupRow = { _count: { _all: number } } & Record<string, unknown>;
  * Every `user.groupBy` the facet builder makes, from one list of rows.
  *
  * It groups by `role` for the audience counts and by a linked column per facet, so a
- * single `mockResolvedValue` would hand the role query a list of universities. Rows are
- * dispatched on which column they carry instead.
+ * single `mockResolvedValue` would hand the role query a list of universities.
  */
 function mockUserGroups(rows: GroupRow[]) {
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any -- the `by` tuple is unspellable here.
@@ -340,9 +338,8 @@ describe('filters.facets — questions that write no User column', () => {
 	});
 
 	it('counts "no answer" against the roles the question targets', async () => {
-		// A question aimed at hackers is unanswered by every judge and admin in the
-		// table. Folding those in would put a noneCount of 700 beside a filter that can
-		// only ever surface applicants.
+		// A question aimed at hackers is unanswered by every judge and admin in the table.
+		// Folding those in would put a noneCount of 700 beside an applicant-only filter.
 		db.question.findMany.mockResolvedValue([{ ...dropdown, targetRole: [Role.HACKER] }] as never);
 		db.user.count.mockResolvedValue(900);
 		mockUserGroups([
@@ -478,9 +475,8 @@ describe('filters.facets — the state facet', () => {
 
 describe('filters.facets — permissions', () => {
 	it('is refused to an organizer, like every other per-person surface', async () => {
-		// Aggregate counts of a named applicant pool are still applicant data — at a
-		// count of one, literally so. None of the pages that use this are in
-		// ORGANIZER_SECTIONS either.
+		// Aggregate counts of a named applicant pool are still applicant data, and at a count
+		// of one, literally so. None of the pages that use this are in ORGANIZER_SECTIONS.
 		await expect(createTestCaller(db, organizerUser).filters.facets()).rejects.toMatchObject({
 			code: 'FORBIDDEN'
 		});

@@ -28,10 +28,8 @@ type QuestionInput = {
 /**
  * Turn whatever `questions.change` threw into one sentence the organizer can act on.
  *
- * The old blanket "Please try again" hid the actual cause — a save could fail the
- * same way forever and the toast would keep suggesting a retry. Only text we author
- * (zod field paths, tRPC messages) reaches the client; the full error, stack
- * included, stays in `console.error`.
+ * A blanket "Please try again" hid the actual cause. Only text we author reaches the
+ * client; the full error, stack included, stays in `console.error`.
  */
 function describeSaveFailure(error: unknown): string {
 	const zodError =

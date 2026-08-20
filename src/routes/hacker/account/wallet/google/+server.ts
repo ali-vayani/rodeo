@@ -1,17 +1,13 @@
 /**
  * The Google Wallet handoff.
  *
- * Google's save flow is a URL, not a file, so this is a redirect. Making it an
- * endpoint rather than a tRPC call is what lets the card render both providers as
- * plain `<a href>` elements — no client, no loading state, no error handling in
- * the component — and puts both behind the same eligibility check.
+ * Google's save flow is a URL, not a file, so this is a redirect. As an endpoint it
+ * lets the card render both providers as plain `<a href>` elements behind the same
+ * eligibility check. The save link is minted per request rather than embedded in the
+ * page, because it is a bearer token for this hacker's pass.
  *
- * The save link is minted per request rather than embedded in the page, because it
- * is a bearer token for this hacker's pass: it should not sit in the HTML of a page
- * that might be screenshotted, cached, or viewed over someone's shoulder.
- *
- * Kept thin on purpose: this repo has no `+server.ts` handler tests, so everything
- * with a decision in it lives in `$lib/server/wallet` where it is covered.
+ * Kept thin: this repo has no `+server.ts` handler tests, so anything with a decision
+ * in it lives in `$lib/server/wallet`.
  */
 
 import { error, redirect } from '@sveltejs/kit';
@@ -38,9 +34,9 @@ export const GET: RequestHandler = async ({ locals }) => {
 			group: group?.name ?? null
 		});
 	} catch (cause) {
-		// Google was configured but refused us — a revoked key, an issuer that lost
-		// the Wallet Object Issuer role, an outage. Say so rather than redirecting to
-		// a page that renders its own generic failure.
+		// Google was configured but refused us: a revoked key, an issuer that lost the
+		// Wallet Object Issuer role, an outage. Say so rather than redirecting to a page
+		// that renders its own generic failure.
 		error(502, `Google Wallet could not issue this pass: ${(cause as Error).message}`);
 	}
 

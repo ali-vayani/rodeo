@@ -1,21 +1,14 @@
 /**
  * Apple's Worldwide Developer Relations intermediate certificate, G4.
  *
- * Vendored as a TypeScript constant rather than a `.pem` file for two reasons.
- * The repository's push rules reject `*.pem` outright — a good default, since
- * that extension usually means somebody is about to commit a private key — and
- * this certificate is the opposite of a secret: it is public, downloadable from
- * https://www.apple.com/certificateauthority/AppleWWDRCAG4.cer, byte-identical
- * for every Apple developer, and valid until 2030. Nothing is hidden by storing
- * it here; the full text is in the diff.
+ * A TypeScript constant rather than a `.pem` file: the repository's push rules reject
+ * `*.pem`, and this certificate is the opposite of a secret — public, byte-identical
+ * for every Apple developer, and valid until 2030. As a module it is part of the
+ * bundle, where a `?url` import would mean resolving a traced asset per request.
  *
- * It also removes a runtime read. As a module it is simply part of the bundle,
- * where a `?url` import would have meant resolving a traced asset per request.
- *
- * It belongs in the repo at all because the previous Rodeo made this an
- * environment variable and filled it with a copy of its own *signer* cert — so
- * that deployment could never have produced a pass iOS would install. The one
- * certificate nobody should ever have to rotate should not be configurable.
+ * It is in the repo rather than configurable because making it an environment variable
+ * invites filling it with a copy of the signer cert, which can never produce an
+ * installable pass.
  *
  * Regenerate with:
  *   curl -fsSL https://www.apple.com/certificateauthority/AppleWWDRCAG4.cer \

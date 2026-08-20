@@ -2,21 +2,16 @@
 	/**
 	 * "Add to wallet" beneath the check-in QR code.
 	 *
-	 * Both buttons are plain links to `+server.ts` endpoints — no tRPC client, no
-	 * loading state, no error handling here. Apple's endpoint returns the signed
-	 * `.pkpass` with the MIME type that makes Mobile Safari open the Add Pass sheet;
-	 * Google's redirects to a freshly minted `pay.google.com` save link. Both re-check
-	 * eligibility server-side, so nothing here is load-bearing for access.
+	 * Both buttons are plain links to `+server.ts` endpoints, with no tRPC client and no
+	 * error handling here. Both endpoints re-check eligibility server-side, so nothing here
+	 * is load-bearing for access.
 	 *
-	 * ## Why the ineligible state is visible rather than absent
+	 * The ineligible state is visible rather than absent: a confirmed hacker who has heard
+	 * about wallet passes and finds nothing files a bug, while one who sees a greyed
+	 * control and the date it unlocks does not. Same reasoning as the application window.
 	 *
-	 * A confirmed hacker who has heard about wallet passes and finds nothing on this
-	 * page files a bug. One who sees a greyed control and the date it unlocks does
-	 * not. Same reasoning as the application window in `$lib/application/window.ts`:
-	 * a closed deadline should not be indistinguishable from a broken page.
-	 *
-	 * When *neither* provider is configured this renders nothing at all — that is a
-	 * deployment without wallet passes, not a hacker waiting for one.
+	 * When neither provider is configured this renders nothing at all, since that is a
+	 * deployment without wallet passes rather than a hacker waiting for one.
 	 */
 	import { Wallet } from 'lucide-svelte';
 	import { resolve } from '$app/paths';
