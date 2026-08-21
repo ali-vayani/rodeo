@@ -6,7 +6,7 @@ vi.mock('$app/environment', () => ({ dev: true }));
 
 // The S3 backend is stubbed; `s3.test.ts` covers the SDK itself.
 const s3Calls: string[] = [];
-const S3_VARS = ['S3_REGION', 'S3_BUCKET', 'S3_ACCESS_KEY_ID', 'S3_SECRET_ACCESS_KEY'];
+const S3_VARS = ['AWS_REGION', 'S3_BUCKET', 'AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY'];
 vi.mock('./s3', () => ({
 	s3Configured: () => S3_VARS.every((name) => Boolean(env[name])),
 	missingS3Vars: () => S3_VARS.filter((name) => !env[name]),
@@ -53,10 +53,10 @@ const {
 
 /** All four set is what `s3Configured` keys on, in the stub above as in the module. */
 function withBucket() {
-	env.S3_REGION = 'us-east-1';
+	env.AWS_REGION = 'us-east-1';
 	env.S3_BUCKET = 'rodeo-v2-uploads';
-	env.S3_ACCESS_KEY_ID = 'AKIAEXAMPLE';
-	env.S3_SECRET_ACCESS_KEY = 'secret';
+	env.AWS_ACCESS_KEY_ID = 'AKIAEXAMPLE';
+	env.AWS_SECRET_ACCESS_KEY = 'secret';
 }
 
 beforeEach(() => {
@@ -102,7 +102,7 @@ describe('storageBackend', () => {
 
 	it('treats a half-configured bucket on a deploy as no storage', () => {
 		env.VERCEL_ENV = 'production';
-		env.S3_REGION = 'us-east-1';
+		env.AWS_REGION = 'us-east-1';
 		expect(storageBackend()).toBe('none');
 	});
 });
@@ -173,16 +173,28 @@ describe('storageUnavailableReason', () => {
 	it('names every variable a deploy is missing', () => {
 		env.VERCEL_ENV = 'production';
 		expect(storageUnavailableReason()).toBe(
-			'S3_REGION, S3_BUCKET, S3_ACCESS_KEY_ID, S3_SECRET_ACCESS_KEY not set'
+			'AWS_REGION, S3_BUCKET, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY not set'
 		);
+	});
+
+	it("is unconfigured when only the platform's own AWS_* variables are present", () => {
+		// Every Vercel Lambda carries these for its own execution role, so S3_BUCKET is
+		// the one of the four that says a bucket was actually set up.
+		env.VERCEL_ENV = 'production';
+		env.AWS_REGION = 'us-east-1';
+		env.AWS_ACCESS_KEY_ID = 'ASIAPLATFORMROLE';
+		env.AWS_SECRET_ACCESS_KEY = 'platform-secret';
+
+		expect(storageBackend()).toBe('none');
+		expect(storageUnavailableReason()).toBe('S3_BUCKET not set');
 	});
 
 	it('names only the one that is missing when the rest are set', () => {
 		// The case a generic message hides: three of four is a typo, not an off switch.
 		withBucket();
-		delete env.S3_SECRET_ACCESS_KEY;
+		delete env.AWS_SECRET_ACCESS_KEY;
 		env.VERCEL_ENV = 'preview';
-		expect(storageUnavailableReason()).toBe('S3_SECRET_ACCESS_KEY not set');
+		expect(storageUnavailableReason()).toBe('AWS_SECRET_ACCESS_KEY not set');
 	});
 });
 

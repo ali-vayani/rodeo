@@ -19,18 +19,20 @@ import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { env } from '$env/dynamic/private';
 
 /**
- * The four variables that decide whether uploads exist.
+ * The four variables that decide whether uploads exist. These are the names the deploy
+ * already carries.
  *
- * Deliberately not the bare `AWS_*` names: Vercel's runtime sets `AWS_REGION` and the
- * Lambda credentials for the function itself, so an SDK left to its default chain
- * silently authenticates as the platform's execution role, without erroring. The
- * credentials are therefore also passed to the client explicitly below.
+ * `S3_BUCKET` is what makes this list mean anything: Vercel's runtime sets `AWS_REGION`
+ * and the Lambda credentials for the function itself, so the three `AWS_*` are present
+ * whether or not anyone configured a bucket. The credentials are passed to the client
+ * explicitly below for the same reason — an SDK left to its default chain would
+ * authenticate as the platform's execution role rather than erroring.
  */
 const REQUIRED_VARS = [
-	'S3_REGION',
+	'AWS_REGION',
 	'S3_BUCKET',
-	'S3_ACCESS_KEY_ID',
-	'S3_SECRET_ACCESS_KEY'
+	'AWS_ACCESS_KEY_ID',
+	'AWS_SECRET_ACCESS_KEY'
 ] as const;
 
 export type S3Config = {
@@ -72,7 +74,7 @@ export function s3Configured(): boolean {
 }
 
 /**
- * Lists the `S3_*` variables this deploy has not set.
+ * Lists the storage variables this deploy has not set.
  *
  * Inputs:
  * - None
@@ -119,8 +121,8 @@ export function resetS3Client(): void {
  * mysteriously do not work.
  */
 export const NO_STORAGE_MESSAGE =
-	'No file storage configured. Set S3_REGION, S3_BUCKET, S3_ACCESS_KEY_ID and ' +
-	'S3_SECRET_ACCESS_KEY (see .env.example for the IAM policy the key needs).';
+	'No file storage configured. Set AWS_REGION, S3_BUCKET, AWS_ACCESS_KEY_ID and ' +
+	'AWS_SECRET_ACCESS_KEY (see .env.example for the IAM policy the key needs).';
 
 /**
  * Config for an operation that cannot proceed without it. `s3Configured` decides
@@ -138,11 +140,16 @@ function requireConfig(): S3Config {
  * gives them.
  */
 const FAILURE_CAUSES: Record<string, string> = {
-	InvalidAccessKeyId: 'S3_ACCESS_KEY_ID is not an access key this account knows',
-	SignatureDoesNotMatch: 'S3_SECRET_ACCESS_KEY does not match S3_ACCESS_KEY_ID',
+	InvalidAccessKeyId: 'AWS_ACCESS_KEY_ID is not an access key this account knows',
+	SignatureDoesNotMatch: 'AWS_SECRET_ACCESS_KEY does not match AWS_ACCESS_KEY_ID',
 	NoSuchBucket: 'S3_BUCKET names a bucket that does not exist',
-	PermanentRedirect: 'S3_REGION is not the region S3_BUCKET is in',
-	AccessDenied: 'the S3 key is not allowed this operation — check its IAM policy and S3_BUCKET'
+	PermanentRedirect: 'AWS_REGION is not the region S3_BUCKET is in',
+	AccessDenied: 'the S3 key is not allowed this operation — check its IAM policy and S3_BUCKET',
+	// Temporary credentials without their session token: the function is holding the
+	// Lambda execution role's key, so this environment has no AWS_ACCESS_KEY_ID of its own.
+	InvalidClientTokenId:
+		'AWS_ACCESS_KEY_ID is unset on this environment, leaving the ' +
+		"platform's own Lambda credentials in its place"
 };
 
 /**

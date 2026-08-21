@@ -4,7 +4,7 @@
  * Two backends behind one call, as `wallet/model.ts` picks between bundled and remote
  * pass artwork: `./s3` for anything deployed, `./storage-local` for development.
  * Which one is decided by whether a bucket is configured, with no variable of its own —
- * set the `S3_*` four and you get the bucket, don't and you get the disk.
+ * set the four `./s3` requires and you get the bucket, don't and you get the disk.
  *
  * The local backend never runs on a deploy. Serverless filesystems are per-instance and
  * ephemeral, so a deploy that lost its bucket must refuse uploads rather than quietly
@@ -44,11 +44,11 @@ export function storageConfigured(): boolean {
  * - None
  *
  * Outputs:
- * - string | null — e.g. `'S3_BUCKET, S3_REGION not set'`, or null when uploads work.
+ * - string | null — e.g. `'S3_BUCKET, AWS_REGION not set'`, or null when uploads work.
  *   For a log line or a non-production response — see `withStorageDetail`.
  */
 export function storageUnavailableReason(): string | null {
-	// Reaching here means the S3 four are not all set: that is the only way past
+	// Reaching here means the four are not all set: that is the only way past
 	// `storageBackend`, since development falls back to the disk.
 	return storageConfigured() ? null : `${missingS3Vars().join(', ')} not set`;
 }
@@ -87,8 +87,8 @@ export function withStorageDetail(message: string, reason: string): string {
 }
 
 export const NO_STORAGE_MESSAGE =
-	'File storage is not configured on this deployment. Set S3_REGION, S3_BUCKET, ' +
-	'S3_ACCESS_KEY_ID and S3_SECRET_ACCESS_KEY (see .env.example).';
+	'File storage is not configured on this deployment. Set AWS_REGION, S3_BUCKET, ' +
+	'AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY (see .env.example).';
 
 function backendOrThrow(): 's3' | 'local' {
 	const backend = storageBackend();
@@ -133,8 +133,8 @@ export async function downloadResponse(key: string, filename: string): Promise<R
 
 /**
  * Say at boot which backend is in play, when it isn't a bucket. A developer who set
- * three of the four `S3_*` variables would otherwise see uploads apparently working and
- * never learn they went to disk.
+ * three of the four variables would otherwise see uploads apparently working and never
+ * learn they went to disk.
  */
 export function reportStorageBackend(): void {
 	const backend = storageBackend();

@@ -63,10 +63,10 @@ const {
 } = await import('./s3');
 
 function configure() {
-	env.S3_REGION = 'us-east-1';
+	env.AWS_REGION = 'us-east-1';
 	env.S3_BUCKET = 'rodeo-v2-uploads';
-	env.S3_ACCESS_KEY_ID = 'AKIAEXAMPLE';
-	env.S3_SECRET_ACCESS_KEY = 'secret';
+	env.AWS_ACCESS_KEY_ID = 'AKIAEXAMPLE';
+	env.AWS_SECRET_ACCESS_KEY = 'secret';
 }
 
 beforeEach(() => {
@@ -85,7 +85,7 @@ describe('s3Config', () => {
 	});
 
 	it('is null when only some variables are set', () => {
-		env.S3_REGION = 'us-east-1';
+		env.AWS_REGION = 'us-east-1';
 		env.S3_BUCKET = 'rodeo-v2-uploads';
 		expect(s3Config()).toBeNull();
 	});
@@ -112,14 +112,12 @@ describe('s3Config', () => {
 });
 
 describe('the client is never left to the default credential chain', () => {
-	it('takes its region and credentials from the S3_* variables', async () => {
-		// The whole reason these are not called AWS_*. Vercel's Node runtime sets
-		// AWS_REGION and the Lambda credential variables for the function itself, so
-		// an SDK left to resolve them would authenticate as the platform's execution
-		// role against the platform's region — silently, and against the wrong bucket.
+	it('passes the region and credentials explicitly', async () => {
+		// These share their names with the Lambda execution role's own variables, so
+		// passing them is what separates our key from the platform's: an SDK left to
+		// resolve credentials itself would sooner or later authenticate as the function
+		// against the wrong bucket, silently rather than erroring.
 		configure();
-		env.AWS_REGION = 'eu-west-3';
-		env.AWS_ACCESS_KEY_ID = 'platform-key';
 
 		await deleteObject('applications/user/question');
 
@@ -286,23 +284,23 @@ describe('s3ConfigWarnings', () => {
 
 	it('names the missing variables when half-configured', () => {
 		configure();
-		delete env.S3_SECRET_ACCESS_KEY;
+		delete env.AWS_SECRET_ACCESS_KEY;
 		delete env.S3_BUCKET;
 
 		const [warning] = s3ConfigWarnings();
 		expect(warning).toContain('S3_BUCKET');
-		expect(warning).toContain('S3_SECRET_ACCESS_KEY');
-		expect(warning).not.toContain('S3_REGION,');
+		expect(warning).toContain('AWS_SECRET_ACCESS_KEY');
+		expect(warning).not.toContain('AWS_REGION,');
 	});
 });
 
 describe('missingS3Vars', () => {
 	it('is all four when nothing is set', () => {
 		expect(missingS3Vars()).toEqual([
-			'S3_REGION',
+			'AWS_REGION',
 			'S3_BUCKET',
-			'S3_ACCESS_KEY_ID',
-			'S3_SECRET_ACCESS_KEY'
+			'AWS_ACCESS_KEY_ID',
+			'AWS_SECRET_ACCESS_KEY'
 		]);
 	});
 
@@ -313,8 +311,8 @@ describe('missingS3Vars', () => {
 
 	it('names only what is actually missing', () => {
 		configure();
-		delete env.S3_REGION;
-		expect(missingS3Vars()).toEqual(['S3_REGION']);
+		delete env.AWS_REGION;
+		expect(missingS3Vars()).toEqual(['AWS_REGION']);
 	});
 });
 
@@ -327,17 +325,25 @@ describe('describeS3Failure', () => {
 	}
 
 	it('points a bad key at the variable holding it', () => {
-		expect(describeS3Failure(rejection('InvalidAccessKeyId'))).toContain('S3_ACCESS_KEY_ID');
-		expect(describeS3Failure(rejection('SignatureDoesNotMatch'))).toContain('S3_SECRET_ACCESS_KEY');
+		expect(describeS3Failure(rejection('InvalidAccessKeyId'))).toContain('AWS_ACCESS_KEY_ID');
+		expect(describeS3Failure(rejection('SignatureDoesNotMatch'))).toContain(
+			'AWS_SECRET_ACCESS_KEY'
+		);
 	});
 
 	it('points a missing bucket and a wrong region at theirs', () => {
 		expect(describeS3Failure(rejection('NoSuchBucket'))).toContain('S3_BUCKET');
-		expect(describeS3Failure(rejection('PermanentRedirect'))).toContain('S3_REGION');
+		expect(describeS3Failure(rejection('PermanentRedirect'))).toContain('AWS_REGION');
 	});
 
 	it('names the SDK error alongside the cause, so the mapping can be checked', () => {
 		expect(describeS3Failure(rejection('AccessDenied'))).toContain('(AccessDenied)');
+	});
+
+	it("reads the platform's own Lambda credentials as a missing key", () => {
+		// Those are temporary and rejected without a session token, which is what a
+		// deploy that never set AWS_ACCESS_KEY_ID ends up sending.
+		expect(describeS3Failure(rejection('InvalidClientTokenId'))).toContain('AWS_ACCESS_KEY_ID');
 	});
 
 	it('passes an unrecognised failure through rather than guessing', () => {
