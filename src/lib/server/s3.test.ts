@@ -51,6 +51,8 @@ const {
 	MAX_UPLOAD_BYTES,
 	NO_STORAGE_MESSAGE,
 	deleteObject,
+	describeS3Failure,
+	missingS3Vars,
 	getObject,
 	putObject,
 	resetS3Client,
@@ -291,6 +293,60 @@ describe('s3ConfigWarnings', () => {
 		expect(warning).toContain('S3_BUCKET');
 		expect(warning).toContain('S3_SECRET_ACCESS_KEY');
 		expect(warning).not.toContain('S3_REGION,');
+	});
+});
+
+describe('missingS3Vars', () => {
+	it('is all four when nothing is set', () => {
+		expect(missingS3Vars()).toEqual([
+			'S3_REGION',
+			'S3_BUCKET',
+			'S3_ACCESS_KEY_ID',
+			'S3_SECRET_ACCESS_KEY'
+		]);
+	});
+
+	it('is empty once the bucket is configured', () => {
+		configure();
+		expect(missingS3Vars()).toEqual([]);
+	});
+
+	it('names only what is actually missing', () => {
+		configure();
+		delete env.S3_REGION;
+		expect(missingS3Vars()).toEqual(['S3_REGION']);
+	});
+});
+
+describe('describeS3Failure', () => {
+	/** The SDK reports a rejection by `name`; these are the ones with one cause each. */
+	function rejection(name: string): Error {
+		const error = new Error('The request signature we calculated does not match.');
+		error.name = name;
+		return error;
+	}
+
+	it('points a bad key at the variable holding it', () => {
+		expect(describeS3Failure(rejection('InvalidAccessKeyId'))).toContain('S3_ACCESS_KEY_ID');
+		expect(describeS3Failure(rejection('SignatureDoesNotMatch'))).toContain('S3_SECRET_ACCESS_KEY');
+	});
+
+	it('points a missing bucket and a wrong region at theirs', () => {
+		expect(describeS3Failure(rejection('NoSuchBucket'))).toContain('S3_BUCKET');
+		expect(describeS3Failure(rejection('PermanentRedirect'))).toContain('S3_REGION');
+	});
+
+	it('names the SDK error alongside the cause, so the mapping can be checked', () => {
+		expect(describeS3Failure(rejection('AccessDenied'))).toContain('(AccessDenied)');
+	});
+
+	it('passes an unrecognised failure through rather than guessing', () => {
+		const unknown = rejection('TimeoutError');
+		expect(describeS3Failure(unknown)).toBe(`TimeoutError: ${unknown.message}`);
+	});
+
+	it('survives something that is not an Error', () => {
+		expect(describeS3Failure('socket hang up')).toBe('socket hang up');
 	});
 });
 

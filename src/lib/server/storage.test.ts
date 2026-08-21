@@ -6,8 +6,11 @@ vi.mock('$app/environment', () => ({ dev: true }));
 
 // The S3 backend is stubbed; `s3.test.ts` covers the SDK itself.
 const s3Calls: string[] = [];
+const S3_VARS = ['S3_REGION', 'S3_BUCKET', 'S3_ACCESS_KEY_ID', 'S3_SECRET_ACCESS_KEY'];
 vi.mock('./s3', () => ({
-	s3Configured: () => Boolean(env.S3_BUCKET),
+	s3Configured: () => S3_VARS.every((name) => Boolean(env[name])),
+	missingS3Vars: () => S3_VARS.filter((name) => !env[name]),
+	describeS3Failure: (error: unknown) => `s3: ${(error as Error).message}`,
 	putObject: async () => void s3Calls.push('put'),
 	getObject: async () => {
 		s3Calls.push('get');
@@ -42,10 +45,13 @@ const {
 	getObject,
 	putObject,
 	storageBackend,
-	storageConfigured
+	storageConfigured,
+	storageFailureReason,
+	storageUnavailableReason,
+	withStorageDetail
 } = await import('./storage');
 
-/** All four set is what `s3Configured` keys on; the stub above uses S3_BUCKET. */
+/** All four set is what `s3Configured` keys on, in the stub above as in the module. */
 function withBucket() {
 	env.S3_REGION = 'us-east-1';
 	env.S3_BUCKET = 'rodeo-v2-uploads';
@@ -151,5 +157,60 @@ describe('downloadResponse', () => {
 		expect(response.status).toBe(200);
 		expect(await response.text()).toBe('bytes');
 		expect(localCalls).toEqual(['download']);
+	});
+});
+
+describe('storageUnavailableReason', () => {
+	it('is null wherever uploads work', () => {
+		// Development, on disk...
+		expect(storageUnavailableReason()).toBeNull();
+		// ...and a deploy with a bucket.
+		withBucket();
+		env.VERCEL_ENV = 'production';
+		expect(storageUnavailableReason()).toBeNull();
+	});
+
+	it('names every variable a deploy is missing', () => {
+		env.VERCEL_ENV = 'production';
+		expect(storageUnavailableReason()).toBe(
+			'S3_REGION, S3_BUCKET, S3_ACCESS_KEY_ID, S3_SECRET_ACCESS_KEY not set'
+		);
+	});
+
+	it('names only the one that is missing when the rest are set', () => {
+		// The case a generic message hides: three of four is a typo, not an off switch.
+		withBucket();
+		delete env.S3_SECRET_ACCESS_KEY;
+		env.VERCEL_ENV = 'preview';
+		expect(storageUnavailableReason()).toBe('S3_SECRET_ACCESS_KEY not set');
+	});
+});
+
+describe('storageFailureReason', () => {
+	it('reads an S3 rejection through the S3 backend', () => {
+		withBucket();
+		expect(storageFailureReason(new Error('denied'))).toBe('s3: denied');
+	});
+
+	it('is the plain message on disk', () => {
+		expect(storageFailureReason(new Error('ENOENT'))).toBe('ENOENT');
+	});
+});
+
+describe('withStorageDetail', () => {
+	it('tells preview and development what is wrong', () => {
+		// Whoever reads this response is the person who can fix the deploy.
+		for (const vercelEnv of ['preview', 'development']) {
+			env.VERCEL_ENV = vercelEnv;
+			expect(withStorageDetail('Uploads are off.', 'S3_BUCKET not set')).toBe(
+				'Uploads are off. (S3_BUCKET not set)'
+			);
+		}
+	});
+
+	it('tells production nothing about the environment', () => {
+		// An applicant cannot act on a variable name and should not be handed one.
+		env.VERCEL_ENV = 'production';
+		expect(withStorageDetail('Uploads are off.', 'S3_BUCKET not set')).toBe('Uploads are off.');
 	});
 });

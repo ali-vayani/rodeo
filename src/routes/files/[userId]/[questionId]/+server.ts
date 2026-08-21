@@ -11,7 +11,12 @@ import type { RequestHandler } from './$types';
 import { QuestionType } from '$lib/generated/prisma/client';
 import { prisma } from '$lib/server/db';
 import { applicationFileKey, canDownloadApplicationFile } from '$lib/server/applicationFiles';
-import { downloadResponse, storageConfigured } from '$lib/server/storage';
+import {
+	downloadResponse,
+	storageFailureReason,
+	storageUnavailableReason,
+	withStorageDetail
+} from '$lib/server/storage';
 
 export const GET: RequestHandler = async ({ params, locals }) => {
 	const viewer = locals.user;
@@ -23,7 +28,11 @@ export const GET: RequestHandler = async ({ params, locals }) => {
 		error(403, 'You do not have access to this file.');
 	}
 
-	if (!storageConfigured()) error(503, 'File storage is not available on this deployment.');
+	const unavailable = storageUnavailableReason();
+	if (unavailable) {
+		console.error(`[storage] Download refused for ${key(params)}: ${unavailable}.`);
+		error(503, withStorageDetail('File storage is not available on this deployment.', unavailable));
+	}
 
 	// The row is what says a file was uploaded, and carries the name to serve it under.
 	const response = await prisma.applicationResponse.findUnique({
@@ -36,5 +45,17 @@ export const GET: RequestHandler = async ({ params, locals }) => {
 	}
 
 	// A 302 to a presigned link, or the bytes — `$lib/server/storage` decides which.
-	return downloadResponse(applicationFileKey(params.userId, params.questionId), response.value);
+	try {
+		return await downloadResponse(key(params), response.value);
+	} catch (e) {
+		// The row says there is a file and the backend disagrees: wrong credentials, wrong
+		// region, or an object that is gone.
+		const reason = storageFailureReason(e);
+		console.error(`[storage] Download failed for ${key(params)}: ${reason}`);
+		error(502, withStorageDetail('That file could not be downloaded.', reason));
+	}
 };
+
+function key(params: { userId: string; questionId: string }): string {
+	return applicationFileKey(params.userId, params.questionId);
+}

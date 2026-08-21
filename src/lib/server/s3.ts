@@ -72,6 +72,20 @@ export function s3Configured(): boolean {
 }
 
 /**
+ * Lists the `S3_*` variables this deploy has not set.
+ *
+ * Inputs:
+ * - None
+ *
+ * Outputs:
+ * - string[] — the unset names, in `REQUIRED_VARS` order. Empty once the bucket is
+ *   fully configured.
+ */
+export function missingS3Vars(): string[] {
+	return REQUIRED_VARS.filter((name) => !env[name]);
+}
+
+/**
  * The client, built on first use and reused after. Memoized because a warm instance
  * serves many requests and each client sets up its own pool, but built lazily so the
  * environment is read at runtime, and keyed on the config so tests see their own values.
@@ -117,6 +131,39 @@ function requireConfig(): S3Config {
 	const config = s3Config();
 	if (!config) throw new Error(NO_STORAGE_MESSAGE);
 	return config;
+}
+
+/**
+ * The rejections that have exactly one cause in the environment, by the name the SDK
+ * gives them.
+ */
+const FAILURE_CAUSES: Record<string, string> = {
+	InvalidAccessKeyId: 'S3_ACCESS_KEY_ID is not an access key this account knows',
+	SignatureDoesNotMatch: 'S3_SECRET_ACCESS_KEY does not match S3_ACCESS_KEY_ID',
+	NoSuchBucket: 'S3_BUCKET names a bucket that does not exist',
+	PermanentRedirect: 'S3_REGION is not the region S3_BUCKET is in',
+	AccessDenied: 'the S3 key is not allowed this operation — check its IAM policy and S3_BUCKET'
+};
+
+/**
+ * Reads a rejection from S3 back as the thing that is wrong with the configuration.
+ *
+ * Inputs:
+ * - error: unknown — whatever a `send` rejected with; an SDK error carries the `name`
+ *   this matches on
+ *
+ * Outputs:
+ * - string — the cause and the SDK's name for it, or `Name: message` when the name is
+ *   not one with a single cause. Anything unrecognised passes through rather than
+ *   being guessed at.
+ *
+ * Never throws: this runs on a path that is already failing, and is safe to log.
+ */
+export function describeS3Failure(error: unknown): string {
+	if (!(error instanceof Error)) return String(error);
+	return FAILURE_CAUSES[error.name]
+		? `${FAILURE_CAUSES[error.name]} (${error.name})`
+		: `${error.name}: ${error.message}`;
 }
 
 /**
@@ -206,7 +253,7 @@ export function warnIncompleteS3Config(): void {
 
 /** The warnings `warnIncompleteS3Config` prints. Separated out to be testable. */
 export function s3ConfigWarnings(): string[] {
-	const missing = REQUIRED_VARS.filter((name) => !env[name]);
+	const missing = missingS3Vars();
 
 	// All present, or all absent — both are coherent states.
 	if (missing.length === 0 || missing.length === REQUIRED_VARS.length) return [];

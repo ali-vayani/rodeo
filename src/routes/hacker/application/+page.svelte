@@ -78,7 +78,10 @@
 	async function handleQuestionChange(questionId: string, value: string) {
 		// Belt and braces: the fields are already disabled outside the window. This exists
 		// so a stale page open since before the deadline cannot fire a burst of writes.
-		if (!windowOpen) return;
+		if (!windowOpen) {
+			console.error(`[application] Not saving ${questionId}: applications are ${windowState}.`);
+			return;
+		}
 
 		responses[questionId] = value;
 
@@ -105,7 +108,12 @@
 	 * there is no `application.save` call: that procedure refuses FILE questions.
 	 */
 	async function handleFileUpload(questionId: string, file: File) {
-		if (!windowOpen) return;
+		// Dropping this silently is why an upload outside the window looks like a dead
+		// button. Naming it is a stopgap for a page that should say so on screen.
+		if (!windowOpen) {
+			console.error(`[application] Not uploading ${file.name}: applications are ${windowState}.`);
+			return;
+		}
 
 		saveStatus = 'saving';
 		try {

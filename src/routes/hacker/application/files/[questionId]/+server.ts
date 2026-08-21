@@ -17,7 +17,12 @@ import { QuestionType } from '$lib/generated/prisma/client';
 import { prisma } from '$lib/server/db';
 import { applicationWindowState } from '$lib/application/window';
 import { applicationFileKey, checkUpload, uploadRefusal } from '$lib/server/applicationFiles';
-import { putObject, storageConfigured } from '$lib/server/storage';
+import {
+	putObject,
+	storageFailureReason,
+	storageUnavailableReason,
+	withStorageDetail
+} from '$lib/server/storage';
 
 export const POST: RequestHandler = async ({ params, locals, request }) => {
 	// `hooks.server.ts` has established who this is and that they may reach
@@ -25,8 +30,13 @@ export const POST: RequestHandler = async ({ params, locals, request }) => {
 	const user = locals.user;
 	if (!user) error(401, 'Sign in to upload a file.');
 
-	if (!storageConfigured()) {
-		error(503, 'File uploads are not available on this deployment.');
+	const unavailable = storageUnavailableReason();
+	if (unavailable) {
+		console.error(`[storage] Upload refused for question ${params.questionId}: ${unavailable}.`);
+		error(
+			503,
+			withStorageDetail('File uploads are not available on this deployment.', unavailable)
+		);
 	}
 
 	const [question, settings] = await Promise.all([
@@ -43,7 +53,14 @@ export const POST: RequestHandler = async ({ params, locals, request }) => {
 	if (question.type !== QuestionType.FILE) error(400, 'That question does not take a file.');
 
 	// The same function the form renders from, so the two cannot drift.
-	if (applicationWindowState(settings) !== 'open') {
+	const windowState = applicationWindowState(settings);
+	if (windowState !== 'open') {
+		// Logged rather than merely refused: the form disables itself in this window, so a
+		// request that arrives anyway means a stale tab or a client-side gate that failed.
+		console.error(
+			`[application] Upload refused for question ${question.id}: the application window is ` +
+				`'${windowState}' (deadline ${settings?.applicationDeadline.toISOString() ?? 'unset'}).`
+		);
 		error(403, 'Applications are closed. Contact the organizers if you believe this is a mistake.');
 	}
 
@@ -59,11 +76,26 @@ export const POST: RequestHandler = async ({ params, locals, request }) => {
 
 	// Bytes first: a row written before a failed upload would claim an answer the
 	// bucket cannot serve, and the admissions pane would link to a 404.
-	await putObject(
-		applicationFileKey(user.uid, question.id),
-		Buffer.from(await file.arrayBuffer()),
-		file.type || 'application/octet-stream'
-	);
+	const key = applicationFileKey(user.uid, question.id);
+	try {
+		await putObject(
+			key,
+			Buffer.from(await file.arrayBuffer()),
+			file.type || 'application/octet-stream'
+		);
+	} catch (e) {
+		// Configured but refusing — a wrong key, a bucket in another region, a policy without
+		// PutObject. Uncaught this is a bare 500, which an applicant reads as their own fault.
+		const reason = storageFailureReason(e);
+		console.error(`[storage] Upload failed for ${key}: ${reason}`);
+		error(
+			502,
+			withStorageDetail(
+				'The file could not be stored. Try again, or contact the organizers.',
+				reason
+			)
+		);
+	}
 
 	// The filename is the answer; the key is derived.
 	await prisma.applicationResponse.upsert({
