@@ -23,7 +23,12 @@
 		pendingDecision: string | null;
 		activeDecision: string | null;
 		blacklistMatch: BlacklistMatch | null;
-		application: Array<{ value: string; question: { title: string; order: number } }>;
+		application: Array<{
+			value: string;
+			userId: string;
+			questionId: string;
+			question: { title: string; order: number; type: string };
+		}>;
 	};
 
 	let {

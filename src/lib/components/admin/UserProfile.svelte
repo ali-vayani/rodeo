@@ -5,7 +5,13 @@
 	 * free of server imports, and the responses use the same shape `ApplicantDetail` takes.
 	 */
 	export type ProfileData = {
-		application: Array<{ id: string; value: string; question: { title: string; order: number } }>;
+		application: Array<{
+			id: string;
+			value: string;
+			userId: string;
+			questionId: string;
+			question: { title: string; order: number; type: string };
+		}>;
 		team: { teamName: string; members: Array<{ uid: string; name: string }> } | null;
 		scans: Array<{ id: string; action: string; timestamp: Date | string }>;
 	};
@@ -13,6 +19,7 @@
 
 <script lang="ts">
 	import { Eyebrow, Spinner } from '$lib/components/ui';
+	import { resolve } from '$app/paths';
 	import { formatDateTime, humanizeEnum, pluralize } from '$lib/format';
 
 	let {
@@ -80,7 +87,16 @@
 							class="m-0 max-h-40 overflow-y-auto rounded-md border border-border bg-muted px-3 py-2.5
 							       text-base leading-relaxed break-words whitespace-pre-wrap text-foreground"
 						>
-							{#if response.value.trim()}
+							{#if response.question.type === 'FILE' && response.value.trim()}
+								<!-- A link, not text: the value is a filename. -->
+								<a
+									href={resolve('/files/[userId]/[questionId]', {
+										userId: response.userId,
+										questionId: response.questionId
+									})}
+									class="underline underline-offset-2">{response.value}</a
+								>
+							{:else if response.value.trim()}
 								{response.value}
 							{:else}
 								<!-- Answered with nothing is not the same as never asked. -->

@@ -144,8 +144,20 @@ describe('questions.update', () => {
 describe('questions.delete', () => {
 	it('deletes by id', async () => {
 		const caller = createTestCaller(db, adminUser);
+		db.applicationResponse.findMany.mockResolvedValue([]);
 		db.question.delete.mockResolvedValue(hackerQuestion);
 		await caller.questions.delete({ id: 'q-hacker' });
+		expect(db.question.delete).toHaveBeenCalledWith({ where: { id: 'q-hacker' } });
+	});
+
+	it('still deletes the question when the file cleanup fails', async () => {
+		// Best-effort by contract: a bucket that is down must not leave an organizer
+		// unable to edit the form.
+		const caller = createTestCaller(db, adminUser);
+		db.applicationResponse.findMany.mockRejectedValue(new Error('storage is down'));
+		db.question.delete.mockResolvedValue(hackerQuestion);
+
+		await expect(caller.questions.delete({ id: 'q-hacker' })).resolves.toBeTruthy();
 		expect(db.question.delete).toHaveBeenCalledWith({ where: { id: 'q-hacker' } });
 	});
 });

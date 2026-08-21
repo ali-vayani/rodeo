@@ -66,6 +66,10 @@
 									{#if q.min == null && q.max != null}Maximum: {q.max}{/if}
 								</p>
 							{/if}
+						{:else if q.type === 'FILE'}
+							<input type="file" disabled />
+							<!-- No size stated: the limit lives in a server module, and a copy here would drift. -->
+							<p class="field-hint">Applicants upload one file</p>
 						{:else if q.type === 'CHECKBOX'}
 							<label class="checkbox-label">
 								<input type="checkbox" disabled />

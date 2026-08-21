@@ -11,6 +11,12 @@
 		value: string;
 		onchange: (value: string) => void;
 		/**
+		 * Receives the chosen file for a FILE question, instead of `onchange`. Separate
+		 * because this one has bytes to send to a different endpoint before there is any
+		 * answer to record, where the others round-trip a string the page autosaves.
+		 */
+		onfile?: (file: File) => void;
+		/**
 		 * Renders the answer read-only. Set when the application window is shut, where
 		 * every autosave would be refused by the server. An editable field that silently
 		 * discards what you type is worse than a locked one.
@@ -18,7 +24,7 @@
 		disabled?: boolean;
 	}
 
-	let { question, value, onchange, disabled = false }: Props = $props();
+	let { question, value, onchange, onfile, disabled = false }: Props = $props();
 
 	const inputClass = $derived(
 		'w-full rounded border border-border px-3 py-2 text-sm text-primary bg-white outline-none transition-colors focus:border-primary' +
@@ -154,5 +160,28 @@
 				onChange={onchange}
 			/>
 		{/await}
+	{:else if question.type === QuestionType.FILE}
+		<!-- `value` is the uploaded file's name, not a path. Picking a new one replaces it. -->
+		{#if value}
+			<p class="text-sm text-muted-foreground">
+				Uploaded: <span class="font-medium text-primary">{value}</span>
+			</p>
+		{/if}
+		<input
+			id={inputId}
+			type="file"
+			class="w-full text-sm text-primary file:mr-3 file:rounded file:border file:border-border file:bg-white file:px-3 file:py-1.5 file:text-sm file:text-primary {disabled
+				? 'cursor-not-allowed text-muted-foreground'
+				: 'file:cursor-pointer'}"
+			{disabled}
+			onchange={(e) => {
+				const input = e.target as HTMLInputElement;
+				const file = input.files?.[0];
+				if (file) onfile?.(file);
+				// Clear it so re-picking the same file fires `change` again, letting a
+				// failed upload be retried.
+				input.value = '';
+			}}
+		/>
 	{/if}
 </div>

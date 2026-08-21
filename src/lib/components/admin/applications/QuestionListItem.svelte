@@ -90,7 +90,8 @@
 		NUMBER: 'Number',
 		CHECKBOX: 'Checkbox',
 		SHORT_TEXT: 'Short Text',
-		LONG_TEXT: 'Long Text'
+		LONG_TEXT: 'Long Text',
+		FILE: 'File Upload'
 	};
 
 	const TYPE_COLORS: Record<QuestionType, string> = {
@@ -99,7 +100,8 @@
 		NUMBER: '#b45309',
 		CHECKBOX: '#047857',
 		SHORT_TEXT: '#374151',
-		LONG_TEXT: '#1d4ed8'
+		LONG_TEXT: '#1d4ed8',
+		FILE: '#be185d'
 	};
 </script>
 

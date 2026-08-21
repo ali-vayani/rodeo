@@ -45,6 +45,10 @@ enum QuestionType {
   CHECKBOX
   SHORT_TEXT
   LONG_TEXT
+  /// An uploaded file. The answer is the original filename, not a key — the key is
+  /// derived from userId/questionId. Not writable through `application.save`, which
+  /// takes a string; uploads go through their own endpoint.
+  FILE
 }
 
 /// The `User` column a question's answer writes through to, on every autosave.

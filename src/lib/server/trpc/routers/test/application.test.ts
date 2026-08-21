@@ -195,6 +195,29 @@ describe('application.save', () => {
 		expect(db.applicationResponse.upsert).not.toHaveBeenCalled();
 	});
 
+	it('refuses to save a FILE question as text', async () => {
+		// `submit` only checks that a value is non-blank, so accepting a string here
+		// would let an applicant satisfy a required resume question without uploading.
+		const caller = createTestCaller(db, hackerUser);
+		db.user.findUniqueOrThrow.mockResolvedValue(hackerUser as never);
+		db.settings.findFirst.mockResolvedValue(openWindow);
+		db.question.findUnique.mockResolvedValue({
+			linkedField: null,
+			targetRole: [],
+			type: QuestionType.FILE,
+			options: [],
+			min: null,
+			max: null,
+			regex: null,
+			optionPreset: null
+		} as never);
+
+		await expect(
+			caller.application.save({ questionId: 'q-1', value: 'resume.pdf' })
+		).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+		expect(db.applicationResponse.upsert).not.toHaveBeenCalled();
+	});
+
 	it('rejects a non-numeric answer to a NUMBER question', async () => {
 		const caller = createTestCaller(db, hackerUser);
 		db.user.findUniqueOrThrow.mockResolvedValue(hackerUser as never);

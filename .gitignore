@@ -20,6 +20,9 @@ Thumbs.db
 .env.*
 !.env.example
 
+# Local file uploads (development storage backend — see src/lib/server/storage.ts)
+.uploads
+
 # Vite
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*

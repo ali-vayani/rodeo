@@ -35,7 +35,12 @@
 			scorer: { name: string } | null;
 			blacklistMatch: BlacklistMatch | null;
 			createdAt: Date | string;
-			application: Array<{ value: string; question: { title: string; order: number } }>;
+			application: Array<{
+				value: string;
+				userId: string;
+				questionId: string;
+				question: { title: string; order: number; type: string };
+			}>;
 		};
 		onSaveScore: (score: number, notes: string) => void;
 		scoreLoading: boolean;

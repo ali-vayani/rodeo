@@ -35,7 +35,8 @@
 		{ value: 'MULTIPLE_CHOICE', label: 'Multiple Choice' },
 		{ value: 'DROPDOWN', label: 'Dropdown' },
 		{ value: 'NUMBER', label: 'Number' },
-		{ value: 'CHECKBOX', label: 'Checkbox' }
+		{ value: 'CHECKBOX', label: 'Checkbox' },
+		{ value: 'FILE', label: 'File Upload' }
 	];
 
 	const ALL_ROLES: Role[] = [

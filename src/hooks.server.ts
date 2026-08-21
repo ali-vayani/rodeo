@@ -4,6 +4,7 @@ import { getSession } from '$lib/server/auth';
 import { validateEnv } from '$lib/server/env';
 import { warnIncompleteWalletConfig } from '$lib/server/wallet/config';
 import { warnIncompleteS3Config } from '$lib/server/s3';
+import { reportStorageBackend } from '$lib/server/storage';
 import {
 	canAccess,
 	canAccessHackerPortal,
@@ -17,6 +18,9 @@ validateEnv();
 
 warnIncompleteWalletConfig();
 warnIncompleteS3Config();
+
+// Which backend uploads are going to, when it isn't a bucket.
+reportStorageBackend();
 
 /**
  * The path SvelteKit will actually route on.

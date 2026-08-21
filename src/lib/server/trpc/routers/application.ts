@@ -220,6 +220,15 @@ export const applicationRouter = router({
 				throw new TRPCError({ code: 'FORBIDDEN', message: 'This question was not asked of you.' });
 			}
 
+			// Accepting a string here would let a caller satisfy a required file question by
+			// naming a file, with nothing in the bucket. Uploads have their own endpoint.
+			if (question.type === QuestionType.FILE) {
+				throw new TRPCError({
+					code: 'BAD_REQUEST',
+					message: 'File answers are uploaded, not saved as text.'
+				});
+			}
+
 			// Constraints apply to real answers only — a blank draft field is allowed.
 			if (input.value.trim() !== '') {
 				assertAnswerValid(question, input.value);

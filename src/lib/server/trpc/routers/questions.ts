@@ -1,8 +1,47 @@
 import { z } from 'zod';
 import { Role, QuestionType, LinkedField, OptionPreset } from '$lib/generated/prisma/client';
+import type { PrismaClient } from '$lib/generated/prisma/client';
 import { router, authedProcedure, adminProcedure } from '../init';
 import { APPLICANT_ROLES } from '$lib/admissions/roles';
 import { logAction } from '$lib/server/log';
+import { applicationFileKey } from '$lib/server/applicationFiles';
+import { deleteObject, storageConfigured } from '$lib/server/storage';
+
+/**
+ * Remove the uploaded files belonging to questions about to be deleted.
+ *
+ * Deleting a question cascades its responses and the audit entry says so, but the bytes
+ * live in a bucket the database knows nothing about — so without this the rows vanish
+ * and the resumes stay. Best-effort throughout: a bucket that is down must not leave an
+ * organizer unable to edit the form.
+ */
+async function deleteFilesForQuestions(prisma: PrismaClient, questionIds: string[]): Promise<void> {
+	if (questionIds.length === 0 || !storageConfigured()) return;
+
+	try {
+		const responses = await prisma.applicationResponse.findMany({
+			where: { questionId: { in: questionIds }, question: { type: QuestionType.FILE } },
+			select: { userId: true, questionId: true }
+		});
+
+		await Promise.all(
+			responses.map((response) => {
+				const key = applicationFileKey(response.userId, response.questionId);
+				return deleteObject(key).catch((error: unknown) =>
+					console.error(
+						`[storage] Orphaned ${key} — the question was deleted but the file ` +
+							`could not be: ${(error as Error).message}`
+					)
+				);
+			})
+		);
+	} catch (error) {
+		console.error(
+			`[storage] Could not clean up files for deleted question(s) ${questionIds.join(', ')}: ` +
+				`${(error as Error).message}`
+		);
+	}
+}
 
 // These are nullable columns, so Prisma hands them back as `null`. The application
 // editor round-trips a question through JSON untouched and posts it back, and zod's
@@ -87,6 +126,9 @@ export const questionsRouter = router({
 		}),
 
 	delete: adminProcedure.input(z.object({ id: z.string() })).mutation(async ({ ctx, input }) => {
+		// Before the delete — the responses naming the files are cascaded away with it.
+		await deleteFilesForQuestions(ctx.prisma, [input.id]);
+
 		const question = await ctx.prisma.question.delete({ where: { id: input.id } });
 
 		await logAction(ctx, {
@@ -143,6 +185,13 @@ export const questionsRouter = router({
 							})
 						).map((q) => q.title)
 					: [];
+
+			// Outside the transaction: S3 has no rollback, so a delete inside one that
+			// later aborts would leave the question standing with its file gone.
+			await deleteFilesForQuestions(
+				ctx.prisma,
+				input.deleted.map((q) => q.id)
+			);
 
 			await ctx.prisma.$transaction(async (tx) => {
 				for (const q of input.deleted) {

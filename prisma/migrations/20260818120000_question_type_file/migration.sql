@@ -1,0 +1,11 @@
+-- A FILE question type, for resumes and anything else an applicant uploads.
+--
+-- Additive: an added enum member cannot invalidate an existing row, so no
+-- backfill and no rewrite of the Question table. Postgres cannot add a value to
+-- an enum inside a transaction block that later uses it, but nothing here uses
+-- it, so this is a single safe statement.
+--
+-- The answer for such a question is stored in ApplicationResponse.value as the
+-- uploaded file's original name; the S3 key is derived from userId/questionId.
+-- That is why no column is added anywhere.
+ALTER TYPE "QuestionType" ADD VALUE 'FILE';

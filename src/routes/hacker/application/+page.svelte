@@ -99,6 +99,40 @@
 		}, 800);
 	}
 
+	/**
+	 * Upload a file answer. Not debounced — picking a file is one deliberate act, not a
+	 * burst of keystrokes. The endpoint writes the response row alongside the bytes, so
+	 * there is no `application.save` call: that procedure refuses FILE questions.
+	 */
+	async function handleFileUpload(questionId: string, file: File) {
+		if (!windowOpen) return;
+
+		saveStatus = 'saving';
+		try {
+			const body = new FormData();
+			body.append('file', file);
+			const res = await fetch(`/hacker/application/files/${questionId}`, { method: 'POST', body });
+
+			if (!res.ok) {
+				// SvelteKit's `error()` returns `{ message }`; a platform-level 413 returns
+				// neither JSON nor that shape.
+				const reason = await res
+					.json()
+					.then((b) => b?.message)
+					.catch(() => null);
+				throw new Error(reason ?? `Upload failed (${res.status})`);
+			}
+
+			const { filename } = await res.json();
+			responses[questionId] = filename;
+			saveStatus = 'saved';
+			saveError = null;
+		} catch (e) {
+			saveStatus = 'error';
+			saveError = errorMessage(e, 'Upload failed');
+		}
+	}
+
 	// --- Submit ---
 	let submitting = $state(false);
 	let submitError = $state<string | null>(null);
@@ -206,6 +240,7 @@
 							{question}
 							value={responses[question.id] ?? ''}
 							onchange={(v) => handleQuestionChange(question.id, v)}
+							onfile={(f) => handleFileUpload(question.id, f)}
 							disabled={!windowOpen}
 						/>
 					{/each}

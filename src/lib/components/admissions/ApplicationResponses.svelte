@@ -1,8 +1,16 @@
 <script lang="ts">
+	import { QuestionType } from '$lib/generated/prisma/enums';
+	import { resolve } from '$app/paths';
+
 	let {
 		responses
 	}: {
-		responses: Array<{ value: string; question: { title: string; order: number } }>;
+		responses: Array<{
+			value: string;
+			userId: string;
+			questionId: string;
+			question: { title: string; order: number; type: string };
+		}>;
 	} = $props();
 
 	// Sorted here rather than at each call site: the review pane and the ranked
@@ -21,11 +29,24 @@
 				<div class="mb-1.5 text-xs font-semibold text-[#555]">
 					{response.question.title}
 				</div>
-				<div
-					class="rounded border border-border bg-[#f9f9f9] px-3 py-[10px] text-[13px] leading-[1.5] break-words whitespace-pre-wrap text-primary"
-				>
-					{response.value || '—'}
-				</div>
+				{#if response.question.type === QuestionType.FILE && response.value.trim() !== ''}
+					<!-- A link, not text: the value is a filename, and the route re-checks access. -->
+					<a
+						href={resolve('/files/[userId]/[questionId]', {
+							userId: response.userId,
+							questionId: response.questionId
+						})}
+						class="inline-block rounded border border-border bg-[#f9f9f9] px-3 py-[10px] text-[13px] leading-[1.5] text-primary underline underline-offset-2 hover:bg-white"
+					>
+						{response.value}
+					</a>
+				{:else}
+					<div
+						class="rounded border border-border bg-[#f9f9f9] px-3 py-[10px] text-[13px] leading-[1.5] break-words whitespace-pre-wrap text-primary"
+					>
+						{response.value || '—'}
+					</div>
+				{/if}
 			</div>
 		{/each}
 	</div>
