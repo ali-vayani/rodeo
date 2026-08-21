@@ -219,6 +219,8 @@ model Scan {
 
 model Log {
   id        String   @id @default(cuid())
+  /// Stable dot-slug — `admissions.decision.set`. `LOG_ACTIONS` maps it to a label.
+  action    String
   summary   String
   timestamp DateTime @default(now())
 
