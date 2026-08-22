@@ -3,7 +3,7 @@
 	import { Dialog } from 'bits-ui';
 	import { cn } from '$lib/utils';
 
-	type Size = 'sm' | 'md' | 'lg' | 'xl';
+	type Size = 'sm' | 'md' | 'lg' | 'xl' | '2xl';
 
 	let {
 		open = $bindable(false),
@@ -44,7 +44,8 @@
 		sm: 'max-w-modal-sm',
 		md: 'max-w-modal-md',
 		lg: 'max-w-modal-lg',
-		xl: 'max-w-modal-xl'
+		xl: 'max-w-modal-xl',
+		'2xl': 'max-w-modal-2xl'
 	};
 </script>
 

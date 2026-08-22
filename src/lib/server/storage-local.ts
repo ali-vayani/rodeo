@@ -57,13 +57,22 @@ export async function exists(key: string): Promise<boolean> {
  * The bytes, as a download. `attachment` and a non-renderable type for the same reason
  * S3 gets `ResponseContentDisposition`: these are arbitrary bytes from an applicant and
  * this is our own origin.
+ *
+ * `inline` relaxes that for the PDF viewer, and the origin matters here in a way it does
+ * not for S3: these bytes come from ours. Stating the type and forbidding sniffing is
+ * what makes a `.pdf` that is really HTML a broken PDF and not a script running as us.
  */
-export async function downloadResponse(key: string, filename: string): Promise<Response> {
+export async function downloadResponse(
+	key: string,
+	filename: string,
+	options: { inline?: boolean } = {}
+): Promise<Response> {
 	const body = await getObject(key);
 	return new Response(new Uint8Array(body), {
 		headers: {
-			'Content-Type': 'application/octet-stream',
-			'Content-Disposition': `attachment; filename="${sanitiseFilename(filename)}"`,
+			'Content-Type': options.inline ? 'application/pdf' : 'application/octet-stream',
+			'Content-Disposition': `${options.inline ? 'inline' : 'attachment'}; filename="${sanitiseFilename(filename)}"`,
+			'X-Content-Type-Options': 'nosniff',
 			'Cache-Control': 'private, no-store'
 		}
 	});

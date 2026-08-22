@@ -64,13 +64,30 @@ describe('downloadResponse', () => {
 		);
 	});
 
-	it('never renders an uploaded file inline', async () => {
+	it('does not render an uploaded file inline by default', async () => {
 		// Keeps an uploaded .html from being stored XSS in the admin's browser.
 		await putObject(key('sneaky.html'), Buffer.from('<script>alert(1)</script>'));
 		const response = await downloadResponse(key('sneaky.html'), 'sneaky.html');
 
 		expect(response.headers.get('content-type')).toBe('application/octet-stream');
 		expect(response.headers.get('content-disposition')).toMatch(/^attachment;/);
+	});
+
+	it('renders inline as a PDF when asked, whatever was uploaded', async () => {
+		// The route only asks for a `.pdf`, but the name is the applicant's to choose.
+		// This HTML has to arrive as a corrupt PDF, not as a script on our origin.
+		await putObject(key('liar.pdf'), Buffer.from('<script>alert(1)</script>'));
+		const response = await downloadResponse(key('liar.pdf'), 'liar.pdf', { inline: true });
+
+		expect(response.headers.get('content-type')).toBe('application/pdf');
+		expect(response.headers.get('content-disposition')).toBe('inline; filename="liar.pdf"');
+		expect(response.headers.get('x-content-type-options')).toBe('nosniff');
+	});
+
+	it('forbids sniffing on an ordinary download too', async () => {
+		await putObject(key('cv2.pdf'), Buffer.from('x'));
+		const response = await downloadResponse(key('cv2.pdf'), 'cv2.pdf');
+		expect(response.headers.get('x-content-type-options')).toBe('nosniff');
 	});
 
 	it('strips quotes and newlines from the filename', async () => {

@@ -2,6 +2,7 @@
 	import { QuestionType } from '$lib/generated/prisma/enums';
 	import type { QuestionModel } from '$lib/generated/prisma/models/Question';
 	import { Combobox } from '$lib/components/ui';
+	import FileAnswer from '$lib/components/files/FileAnswer.svelte';
 	import type { ComboboxOption } from '$lib/components/ui/types';
 	import { loadPresetOptions } from '$lib/questions/presetOptions';
 	import { hasPresetOptions } from '$lib/questions/options';
@@ -17,6 +18,11 @@
 		 */
 		onfile?: (file: File) => void;
 		/**
+		 * Whose application this is. Only a FILE question uses it, to link the answer —
+		 * `value` holds the uploaded file's name, not the file.
+		 */
+		ownerId: string;
+		/**
 		 * Renders the answer read-only. Set when the application window is shut, where
 		 * every autosave would be refused by the server. An editable field that silently
 		 * discards what you type is worse than a locked one.
@@ -24,7 +30,7 @@
 		disabled?: boolean;
 	}
 
-	let { question, value, onchange, onfile, disabled = false }: Props = $props();
+	let { question, value, onchange, onfile, ownerId, disabled = false }: Props = $props();
 
 	const inputClass = $derived(
 		'w-full rounded border border-border px-3 py-2 text-sm text-primary bg-white outline-none transition-colors focus:border-primary' +
@@ -164,7 +170,13 @@
 		<!-- `value` is the uploaded file's name, not a path. Picking a new one replaces it. -->
 		{#if value}
 			<p class="text-sm text-muted-foreground">
-				Uploaded: <span class="font-medium text-primary">{value}</span>
+				Uploaded:
+				<FileAnswer
+					userId={ownerId}
+					questionId={question.id}
+					filename={value}
+					class="font-medium text-primary underline underline-offset-2"
+				/>
 			</p>
 		{/if}
 		<input

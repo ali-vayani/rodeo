@@ -247,6 +247,27 @@ describe('signedDownloadUrl', () => {
 		expect(presigned[0].command.input).not.toHaveProperty('ResponseContentDisposition');
 	});
 
+	it('renders in place when asked, rather than saving', async () => {
+		configure();
+		await signedDownloadUrl('k', { filename: 'resume.pdf', inline: true });
+		expect(presigned[0].command.input.ResponseContentDisposition).toBe(
+			'inline; filename="resume.pdf"'
+		);
+	});
+
+	it('pins the type of an inline download to PDF', async () => {
+		// The stored type came from the applicant's browser, so the caller's promise wins.
+		configure();
+		await signedDownloadUrl('k', { filename: 'resume.pdf', inline: true });
+		expect(presigned[0].command.input.ResponseContentType).toBe('application/pdf');
+	});
+
+	it('leaves the type alone for an ordinary download', async () => {
+		configure();
+		await signedDownloadUrl('k', { filename: 'resume.pdf' });
+		expect(presigned[0].command.input).not.toHaveProperty('ResponseContentType');
+	});
+
 	it('strips quotes, newlines and separators from the filename', async () => {
 		// The name comes from a user-supplied upload and is interpolated into an HTTP
 		// header: a quote ends the parameter early, a CRLF ends the header itself.

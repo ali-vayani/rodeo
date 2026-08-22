@@ -72,7 +72,11 @@ export const handle: Handle = async ({ event, resolve }) => {
 
 	const response = await resolve(event);
 
-	response.headers.set('X-Frame-Options', 'DENY');
+	// A response that already carries a frame policy has chosen one — today only the
+	// inline PDF the viewer frames from this same origin.
+	if (!response.headers.has('X-Frame-Options')) {
+		response.headers.set('X-Frame-Options', 'DENY');
+	}
 	response.headers.set('X-Content-Type-Options', 'nosniff');
 	response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
 	return response;

@@ -249,6 +249,7 @@
 							value={responses[question.id] ?? ''}
 							onchange={(v) => handleQuestionChange(question.id, v)}
 							onfile={(f) => handleFileUpload(question.id, f)}
+							ownerId={user.uid}
 							disabled={!windowOpen}
 						/>
 					{/each}

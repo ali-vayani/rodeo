@@ -1,5 +1,5 @@
 /**
- * Download for a FILE answer.
+ * Download for a FILE answer, and — with `?inline` — the source the PDF viewer frames.
  *
  * Top-level rather than under /admin or /hacker because `hooks.server.ts` partitions
  * those two prefixes exactly, and this route serves both populations. Being outside
@@ -10,6 +10,7 @@ import { error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { QuestionType } from '$lib/generated/prisma/client';
 import { prisma } from '$lib/server/db';
+import { isPdfFilename } from '$lib/application/files';
 import { applicationFileKey, canDownloadApplicationFile } from '$lib/server/applicationFiles';
 import {
 	downloadResponse,
@@ -18,7 +19,7 @@ import {
 	withStorageDetail
 } from '$lib/server/storage';
 
-export const GET: RequestHandler = async ({ params, locals }) => {
+export const GET: RequestHandler = async ({ params, locals, url }) => {
 	const viewer = locals.user;
 	if (!viewer) error(401, 'Sign in to download this file.');
 
@@ -44,9 +45,20 @@ export const GET: RequestHandler = async ({ params, locals }) => {
 		error(404, 'No file has been uploaded for this question.');
 	}
 
+	// Rendering arbitrary uploads in place is how a `.html` "resume" becomes a script on
+	// our own origin.
+	const inline = url.searchParams.has('inline');
+	if (inline && !isPdfFilename(response.value)) {
+		error(400, 'Only PDF files can be viewed in the browser.');
+	}
+
 	// A 302 to a presigned link, or the bytes — `$lib/server/storage` decides which.
 	try {
-		return await downloadResponse(key(params), response.value);
+		const file = await downloadResponse(key(params), response.value, { inline });
+		// `hooks.server.ts` denies framing to anything that does not say otherwise, and the
+		// viewer frames this.
+		if (inline) file.headers.set('X-Frame-Options', 'SAMEORIGIN');
+		return file;
 	} catch (e) {
 		// The row says there is a file and the backend disagrees: wrong credentials, wrong
 		// region, or an object that is gone.

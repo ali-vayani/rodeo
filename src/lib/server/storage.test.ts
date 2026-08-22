@@ -6,6 +6,8 @@ vi.mock('$app/environment', () => ({ dev: true }));
 
 // The S3 backend is stubbed; `s3.test.ts` covers the SDK itself.
 const s3Calls: string[] = [];
+/** The options each backend was handed, for the `inline` hand-off. */
+const backendOptions: Array<Record<string, unknown>> = [];
 const S3_VARS = ['AWS_REGION', 'S3_BUCKET', 'AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY'];
 vi.mock('./s3', () => ({
 	s3Configured: () => S3_VARS.every((name) => Boolean(env[name])),
@@ -17,8 +19,9 @@ vi.mock('./s3', () => ({
 		return Buffer.from('from-s3');
 	},
 	deleteObject: async () => void s3Calls.push('delete'),
-	signedDownloadUrl: async () => {
+	signedDownloadUrl: async (_key: string, options: Record<string, unknown> = {}) => {
 		s3Calls.push('sign');
+		backendOptions.push(options);
 		return 'https://bucket.s3.amazonaws.com/signed';
 	}
 }));
@@ -32,8 +35,13 @@ vi.mock('./storage-local', () => ({
 		return Buffer.from('from-disk');
 	},
 	deleteObject: async () => void localCalls.push('delete'),
-	downloadResponse: async () => {
+	downloadResponse: async (
+		_key: string,
+		_filename: string,
+		options: Record<string, unknown> = {}
+	) => {
 		localCalls.push('download');
+		backendOptions.push(options);
 		return new Response('bytes');
 	}
 }));
@@ -63,6 +71,7 @@ beforeEach(() => {
 	for (const key of Object.keys(env)) delete env[key];
 	s3Calls.length = 0;
 	localCalls.length = 0;
+	backendOptions.length = 0;
 	vi.stubEnv('NODE_ENV', 'development');
 });
 
@@ -157,6 +166,25 @@ describe('downloadResponse', () => {
 		expect(response.status).toBe(200);
 		expect(await response.text()).toBe('bytes');
 		expect(localCalls).toEqual(['download']);
+	});
+
+	it('asks for an attachment unless told otherwise', async () => {
+		withBucket();
+		await downloadResponse('k', 'resume.pdf');
+		expect(backendOptions[0].inline).toBeFalsy();
+	});
+
+	it('carries inline through to the bucket', async () => {
+		withBucket();
+		await downloadResponse('k', 'resume.pdf', { inline: true });
+		expect(backendOptions[0].inline).toBe(true);
+	});
+
+	it('carries inline through to the disk', async () => {
+		// Both backends have to honour it, or the viewer works in development and
+		// downloads a file on a deploy.
+		await downloadResponse('k', 'resume.pdf', { inline: true });
+		expect(backendOptions[0].inline).toBe(true);
 	});
 });
 

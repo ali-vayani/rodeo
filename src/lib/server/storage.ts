@@ -115,20 +115,28 @@ export async function deleteObject(key: string): Promise<void> {
  * A response that downloads the object. A `Response` rather than a URL because only one
  * backend has a URL to give: S3 redirects to a presigned link so the bytes never pass
  * through a function, while local has nothing to presign and serves the file itself.
+ *
+ * `inline` renders in place instead of saving, for the PDF viewer. Both backends answer
+ * it by pinning the type to `application/pdf`, so only a caller that has established the
+ * object is a PDF should pass it.
  */
-export async function downloadResponse(key: string, filename: string): Promise<Response> {
+export async function downloadResponse(
+	key: string,
+	filename: string,
+	options: { inline?: boolean } = {}
+): Promise<Response> {
 	if (backendOrThrow() === 's3') {
 		return new Response(null, {
 			status: 302,
 			headers: {
-				location: await signedDownloadUrl(key, { filename }),
+				location: await signedDownloadUrl(key, { filename, inline: options.inline }),
 				// That URL is a bearer credential for the next minute.
 				'Cache-Control': 'private, no-store'
 			}
 		});
 	}
 
-	return local.downloadResponse(key, filename);
+	return local.downloadResponse(key, filename, options);
 }
 
 /**

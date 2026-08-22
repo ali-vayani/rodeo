@@ -217,18 +217,23 @@ export async function deleteObject(key: string): Promise<void> {
  * after the key, and our keys are ids, so a resume arrives as a bare cuid. The name is
  * quoted and stripped of quotes and newlines, being user-supplied data going into an
  * HTTP header. The bucket stays private, and this is the only way anything leaves it.
+ *
+ * `inline` renders in the browser instead of saving, for the PDF viewer. It also pins
+ * the content type: what comes back is what the caller promised, not what the upload
+ * carried.
  */
 export async function signedDownloadUrl(
 	key: string,
-	options: { filename?: string; expiresIn?: number } = {}
+	options: { filename?: string; expiresIn?: number; inline?: boolean } = {}
 ): Promise<string> {
 	const config = requireConfig();
 	const command = new GetObjectCommand({
 		Bucket: config.bucket,
 		Key: key,
 		...(options.filename && {
-			ResponseContentDisposition: `attachment; filename="${sanitiseFilename(options.filename)}"`
-		})
+			ResponseContentDisposition: `${options.inline ? 'inline' : 'attachment'}; filename="${sanitiseFilename(options.filename)}"`
+		}),
+		...(options.inline && { ResponseContentType: 'application/pdf' })
 	});
 
 	return getSignedUrl(client(config), command, {

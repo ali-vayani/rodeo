@@ -156,6 +156,7 @@
 	--container-modal-md: 480px;
 	--container-modal-lg: 560px;
 	--container-modal-xl: 720px;
+	--container-modal-2xl: 960px;
 
 	--container-sidebar: 210px; /* both app layouts */
 	--container-prose: 640px; /* email previews, long-form hacker copy */
@@ -218,6 +219,11 @@ body {
 @utility panel-scroll {
 	max-height: 70dvh;
 	overflow-y: auto;
+}
+
+/* Matches `panel-scroll`'s cap exactly, so the PDF's own scrollbar is the only one. */
+@utility pdf-frame {
+	height: 70dvh;
 }
 
 /* Modal panel width: fill the viewport minus a gutter, up to its max-w token.

@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { QuestionType } from '$lib/generated/prisma/enums';
-	import { resolve } from '$app/paths';
+	import FileAnswer from '$lib/components/files/FileAnswer.svelte';
 
 	let {
 		responses
@@ -31,15 +31,12 @@
 				</div>
 				{#if response.question.type === QuestionType.FILE && response.value.trim() !== ''}
 					<!-- A link, not text: the value is a filename, and the route re-checks access. -->
-					<a
-						href={resolve('/files/[userId]/[questionId]', {
-							userId: response.userId,
-							questionId: response.questionId
-						})}
+					<FileAnswer
+						userId={response.userId}
+						questionId={response.questionId}
+						filename={response.value}
 						class="inline-block rounded border border-border bg-[#f9f9f9] px-3 py-[10px] text-[13px] leading-[1.5] text-primary underline underline-offset-2 hover:bg-white"
-					>
-						{response.value}
-					</a>
+					/>
 				{:else}
 					<div
 						class="rounded border border-border bg-[#f9f9f9] px-3 py-[10px] text-[13px] leading-[1.5] break-words whitespace-pre-wrap text-primary"

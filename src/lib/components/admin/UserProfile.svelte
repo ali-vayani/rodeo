@@ -19,7 +19,7 @@
 
 <script lang="ts">
 	import { Eyebrow, Spinner } from '$lib/components/ui';
-	import { resolve } from '$app/paths';
+	import FileAnswer from '$lib/components/files/FileAnswer.svelte';
 	import { formatDateTime, humanizeEnum, pluralize } from '$lib/format';
 
 	let {
@@ -89,13 +89,12 @@
 						>
 							{#if response.question.type === 'FILE' && response.value.trim()}
 								<!-- A link, not text: the value is a filename. -->
-								<a
-									href={resolve('/files/[userId]/[questionId]', {
-										userId: response.userId,
-										questionId: response.questionId
-									})}
-									class="underline underline-offset-2">{response.value}</a
-								>
+								<FileAnswer
+									userId={response.userId}
+									questionId={response.questionId}
+									filename={response.value}
+									class="underline underline-offset-2"
+								/>
 							{:else if response.value.trim()}
 								{response.value}
 							{:else}
