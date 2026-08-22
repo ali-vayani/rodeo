@@ -5,6 +5,7 @@ import { LINKED_FIELD_COLUMN, type LinkedField } from '$lib/linkedFields';
 import { splitNoValue } from '$lib/facets';
 import { stateCondition } from '$lib/server/homeState';
 import { tokenMatch, normalizeName } from '$lib/text/similarity';
+import { isValidEmail } from '$lib/email/address';
 
 /**
  * Filters over the `User` columns an application question writes through to. Shared
@@ -89,12 +90,6 @@ const MATCH_NOTHING = 'IMPOSSIBLE_NO_MATCH';
     external recipient has no uid. A cuid can never contain a colon. */
 export const EXTERNAL_RECIPIENT_PREFIX = 'external:';
 
-/**
- * Server-side address validation for the external-send path, re-checked rather than
- * trusted because with the toggle on this list becomes envelope addresses.
- */
-const externalEmailSchema = z.string().email();
-
 /** Same normalisation `buildRecipientWhere` applies, so lookups and sends agree. */
 function normalize(email: string): string {
 	return email.trim().toLowerCase();
@@ -122,7 +117,7 @@ export function splitExplicitEmails(
 		const email = normalize(raw);
 		if (!email || found.has(email) || seen.has(email)) continue;
 		seen.add(email);
-		if (externalEmailSchema.safeParse(email).success) external.push(email);
+		if (isValidEmail(email)) external.push(email);
 		else invalid.push(email);
 	}
 

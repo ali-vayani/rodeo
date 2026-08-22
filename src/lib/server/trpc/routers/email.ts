@@ -10,6 +10,7 @@ import {
 	EXTERNAL_RECIPIENT_PREFIX
 } from '$lib/server/recipients';
 import { TEMPLATE_KEYS } from '$lib/email/templates';
+import { malformedEmails } from '$lib/email/address';
 import {
 	buildEventVars,
 	buildExternalTemplateVars,
@@ -62,30 +63,40 @@ export const emailRouter = router({
 
 			// When targeting an explicit list, tell the admin which addresses don't
 			// correspond to a user rather than silently dropping them.
-			let matched: { email: string }[] = [];
 			let unknownEmails: string[] = [];
+			let externalEmails: string[] = [];
+			let invalidEmails: string[] = [];
 			if (filters.emails?.length) {
-				matched = await ctx.prisma.user.findMany({
+				const matched = await ctx.prisma.user.findMany({
 					where: { email: { in: filters.emails.map((e) => e.trim().toLowerCase()) } },
 					select: { email: true }
 				});
+
+				// `allowExternal` governs whether an unmatched address is mailed, not whether
+				// the list is checked: a typo must surface while it can still be fixed.
+				const split = splitExplicitEmails(filters.emails, matched);
+				invalidEmails = split.invalid;
+				// With the toggle on, misses become recipients and must be counted: an
+				// uncounted recipient would trip the drift check in `sendCustom`.
+				if (allowExternal) externalEmails = split.external;
+
 				const found = new Set(matched.map((u) => u.email.toLowerCase()));
-				unknownEmails = filters.emails.filter((e) => !found.has(e.trim().toLowerCase()));
+				const bad = new Set(invalidEmails);
+				// One classification per address: an unreadable entry is not also reported as
+				// "matched no user", which would list it twice.
+				unknownEmails = filters.emails.filter((e) => {
+					const email = e.trim().toLowerCase();
+					return !found.has(email) && !bad.has(email);
+				});
 			}
 
-			// With the toggle on those same misses stop being errors and start being recipients,
-			// so they are counted here. An uncounted recipient would trip the drift check.
-			const { external, invalid } = allowExternal
-				? splitExplicitEmails(filters.emails, matched)
-				: { external: [] as string[], invalid: [] as string[] };
-
 			return {
-				count: userCount + external.length,
+				count: userCount + externalEmails.length,
 				userCount,
 				sample,
 				unknownEmails,
-				externalEmails: external,
-				invalidEmails: invalid,
+				externalEmails,
+				invalidEmails,
 				// Which names a typo'd search fell back to, so the confirm step can say
 				// "no exact match — these 3 look close" before anything is sent.
 				search: expansion
@@ -111,6 +122,10 @@ export const emailRouter = router({
 	 * capability `sendTest` had its `to` field removed for. What makes it acceptable here
 	 * is that the send is written to EmailLog with every address it reached and the audit
 	 * entry names the external count. That relay was dangerous because it was untraceable.
+	 *
+	 * Throws:
+	 * - TRPCError BAD_REQUEST — an explicit address is malformed; the whole send is refused
+	 * - TRPCError CONFLICT — the recipient set no longer matches `expectedCount`
 	 */
 	sendCustom: adminProcedure
 		.input(
@@ -127,6 +142,16 @@ export const emailRouter = router({
 		)
 		.mutation(async ({ ctx, input }) => {
 			const { subject, body, filters, expectedCount, allowExternal } = input;
+
+			// Before any query, and whatever the toggle says. The page strips malformed entries,
+			// so reaching this means a caller bypassed it — refuse rather than mail the rest.
+			const malformed = malformedEmails(filters.emails ?? []);
+			if (malformed.length) {
+				throw new TRPCError({
+					code: 'BAD_REQUEST',
+					message: `Not valid email addresses: ${malformed.join(', ')}`
+				});
+			}
 
 			// Same resolver as previewRecipients, including the fuzzy-search expansion, so the
 			// drift check below only ever fires on a set that genuinely changed.

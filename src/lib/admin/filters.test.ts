@@ -17,9 +17,10 @@ import {
 	allChecked,
 	buildRecipientParams,
 	facetParams,
-	malformedEmails,
+	parseEmailCsv,
 	parseEmailList
 } from './filters';
+import { malformedEmails } from '$lib/email/address';
 
 const NAME = linkedFacetKey('NAME');
 const UNIVERSITY = linkedFacetKey('UNIVERSITY');
@@ -296,5 +297,38 @@ describe('parseEmailList / malformedEmails', () => {
 
 	it('flags entries that are not shaped like an address', () => {
 		expect(malformedEmails(['a@x.com', 'nope', 'b@x'])).toEqual(['nope', 'b@x']);
+	});
+});
+
+describe('parseEmailCsv', () => {
+	it('reads one address per row, lowercasing and deduplicating', () => {
+		expect(parseEmailCsv('A@x.com\r\nb@x.com\r\na@X.com')).toEqual({
+			emails: ['a@x.com', 'b@x.com'],
+			invalid: []
+		});
+	});
+
+	it('skips a header cell', () => {
+		expect(parseEmailCsv('Email\na@x.com').emails).toEqual(['a@x.com']);
+	});
+
+	it('reads every column, and several addresses inside one quoted cell', () => {
+		expect(parseEmailCsv('a@x.com,b@x.com\n"c@x.com, d@x.com"').emails).toEqual([
+			'a@x.com',
+			'b@x.com',
+			'c@x.com',
+			'd@x.com'
+		]);
+	});
+
+	it('reports cells that are not addresses instead of dropping them', () => {
+		expect(parseEmailCsv('a@x.com\nnope\nb@x\nc@x.com')).toEqual({
+			emails: ['a@x.com', 'c@x.com'],
+			invalid: ['nope', 'b@x']
+		});
+	});
+
+	it('returns nothing for an empty file', () => {
+		expect(parseEmailCsv('')).toEqual({ emails: [], invalid: [] });
 	});
 });

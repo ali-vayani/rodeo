@@ -18,7 +18,8 @@ import {
 	SEARCH_SIMILARITY_THRESHOLD
 } from './recipients';
 import { NO_VALUE } from '$lib/facets';
-import { parseEmailList, malformedEmails } from '$lib/admin/filters';
+import { parseEmailList } from '$lib/admin/filters';
+import { malformedEmails } from '$lib/email/address';
 
 /** The AND conditions, or [] when the predicate is match-everyone. */
 function conditions(where: ReturnType<typeof buildRecipientWhere>) {

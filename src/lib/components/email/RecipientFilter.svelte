@@ -1,7 +1,7 @@
 <script lang="ts">
 	import UserFilters from '$lib/components/admin/UserFilters.svelte';
-	import { Checkbox } from '$lib/components/ui';
-	import type { FilterState } from '$lib/admin/filters';
+	import { Button, Checkbox } from '$lib/components/ui';
+	import { parseEmailCsv, type FilterState } from '$lib/admin/filters';
 	import type { Facet, FacetState } from '$lib/facets';
 
 	type Sample = { uid: string; name: string; email: string };
@@ -77,6 +77,29 @@
 	]);
 	let hidden = $derived(count !== null ? Math.max(0, count - examples.length) : 0);
 
+	// --- CSV import ---
+	let fileInput = $state<HTMLInputElement | null>(null);
+	/** Cells of the last uploaded file that were not addresses. Replaced by the next import. */
+	let csvErrors = $state<string[]>([]);
+	let csvImportedNothing = $state(false);
+
+	async function onFileSelected(event: Event) {
+		const input = event.currentTarget as HTMLInputElement;
+		const file = input.files?.[0];
+		// Reset immediately so re-picking the same file after a fix still fires a change event.
+		input.value = '';
+		if (!file) return;
+
+		const { emails, invalid } = parseEmailCsv(await file.text());
+		csvErrors = invalid;
+		csvImportedNothing = emails.length === 0;
+		if (!emails.length) return;
+
+		// Appended, not replacing, so an upload adds to whatever is already typed.
+		emailText = emailText.trim() ? `${emailText.trim()}\n${emails.join('\n')}` : emails.join('\n');
+		onChange();
+	}
+
 	// With the toggle off an address that matched nobody is a mistake and is skipped,
 	// which is what the existing warning says. With it on the same address is a
 	// recipient, so only the genuinely unparseable ones are skipped.
@@ -149,12 +172,22 @@
 		</p>
 	{:else}
 		<div class="flex flex-col gap-2 rounded-md border border-border bg-card p-5">
-			<label
-				for="recipient-emails"
-				class="font-mono text-2xs font-medium tracking-eyebrow text-foreground-tertiary uppercase"
-			>
-				Email addresses
-			</label>
+			<div class="flex items-center justify-between gap-3">
+				<label
+					for="recipient-emails"
+					class="font-mono text-2xs font-medium tracking-eyebrow text-foreground-tertiary uppercase"
+				>
+					Email addresses
+				</label>
+				<input
+					bind:this={fileInput}
+					type="file"
+					accept=".csv,text/csv"
+					onchange={onFileSelected}
+					class="hidden"
+				/>
+				<Button onclick={() => fileInput?.click()}>Import CSV</Button>
+			</div>
 			<textarea
 				id="recipient-emails"
 				bind:value={emailText}
@@ -164,13 +197,33 @@
 				class="w-full resize-y rounded-md border border-border bg-card px-3 py-2 font-mono text-base text-foreground outline-none focus:border-primary"
 			></textarea>
 			<p class="text-xs text-foreground-secondary">
-				Separate with commas, semicolons, or new lines.
+				Separate with commas, semicolons, or new lines, or import a CSV of addresses.
 				{#if allowExternal}
 					Addresses that don't match a user are emailed anyway.
 				{:else}
 					Addresses that don't match a user are flagged below and skipped.
 				{/if}
 			</p>
+
+			<!-- Import failures, kept apart from the warning below about addresses that
+			     parsed but matched nobody. -->
+			{#if csvImportedNothing || csvErrors.length > 0}
+				<div class="mt-1 rounded-md border border-danger-200 bg-danger-50 px-3 py-2">
+					<div class="text-xs font-semibold text-destructive">
+						{#if csvErrors.length === 0}
+							No email addresses found in that file
+						{:else}
+							{csvErrors.length} entr{csvErrors.length === 1 ? 'y' : 'ies'} in that file could not be
+							read as an email address{csvImportedNothing ? ' — nothing was imported' : ''}
+						{/if}
+					</div>
+					{#if csvErrors.length > 0}
+						<div class="mt-1 font-mono text-xs break-all text-foreground">
+							{csvErrors.join(', ')}
+						</div>
+					{/if}
+				</div>
+			{/if}
 
 			<!-- The one control that lets this page mail outside the portal. Labelled in
 			     full, off by default, and echoed again on the confirm step. -->

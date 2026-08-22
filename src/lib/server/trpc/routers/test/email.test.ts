@@ -298,6 +298,40 @@ describe('email.sendCustom — external recipients', () => {
 		);
 	});
 
+	it('refuses a malformed address with the toggle off, before touching the database', async () => {
+		const caller = createTestCaller(db, adminUser);
+		db.user.findMany.mockResolvedValue([hackerUser] as never);
+
+		await expect(
+			caller.email.sendCustom({
+				...listInput,
+				filters: { emails: [hackerUser.email, 'nope', 'no@domain'] },
+				expectedCount: 1
+			})
+		).rejects.toMatchObject({
+			code: 'BAD_REQUEST',
+			message: expect.stringContaining('nope, no@domain')
+		});
+		expect(sendEmail).not.toHaveBeenCalled();
+		// Bad input is refused before the recipient query runs, not after.
+		expect(db.user.findMany).not.toHaveBeenCalled();
+	});
+
+	it('refuses a malformed address with the toggle on too', async () => {
+		const caller = createTestCaller(db, adminUser);
+		mockList([hackerUser], [{ email: hackerUser.email }]);
+
+		await expect(
+			caller.email.sendCustom({
+				...listInput,
+				filters: { emails: ['nope'] },
+				expectedCount: 1,
+				allowExternal: true
+			})
+		).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+		expect(sendEmail).not.toHaveBeenCalled();
+	});
+
 	it('counts externals into the drift check and refuses a changed set', async () => {
 		const caller = createTestCaller(db, adminUser);
 		mockList([hackerUser], [{ email: hackerUser.email }]);
@@ -459,6 +493,23 @@ describe('email.previewRecipients', () => {
 		const result = await caller.email.previewRecipients({ emails: [hackerUser.email] });
 
 		expect(result.unknownEmails).toEqual([]);
+	});
+
+	it('reports malformed entries whatever the toggle says', async () => {
+		const caller = createTestCaller(db, adminUser);
+		db.user.count.mockResolvedValue(1 as never);
+		db.user.findMany
+			.mockResolvedValueOnce([hackerUser] as never)
+			.mockResolvedValueOnce([{ email: hackerUser.email }] as never);
+
+		const result = await caller.email.previewRecipients({
+			emails: [hackerUser.email, 'nope']
+		});
+
+		expect(result.invalidEmails).toEqual(['nope']);
+		// Classified once: not an address, so not also reported as "matched no user".
+		expect(result.unknownEmails).toEqual([]);
+		expect(result.count).toBe(1);
 	});
 
 	it('leaves unmatched addresses out of the count when the toggle is off', async () => {

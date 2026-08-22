@@ -1,6 +1,8 @@
 import { Role, UserStatus, DecisionStatus } from '$lib/generated/prisma/enums';
 import type { LinkedField } from '$lib/linkedFields';
 import { isEngaged, parseFacetKey, type FacetState } from '$lib/facets';
+import { parseCsv } from '$lib/csv';
+import { isValidEmail } from '$lib/email/address';
 
 export const ALL_ROLES: Role[] = Object.values(Role);
 export const ALL_STATUSES: UserStatus[] = Object.values(UserStatus);
@@ -101,11 +103,46 @@ export function parseEmailList(raw: string): string[] {
 	return [...seen];
 }
 
-const EMAIL_SHAPE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+/** Header cells skipped rather than reported as unreadable. */
+const EMAIL_HEADERS = new Set([
+	'email',
+	'emails',
+	'e-mail',
+	'email address',
+	'emailaddress',
+	'mail'
+]);
 
-/** Entries that aren't shaped like an address at all — caught before hitting the DB. */
-export function malformedEmails(emails: string[]): string[] {
-	return emails.filter((e) => !EMAIL_SHAPE.test(e));
+/**
+ * Reads addresses out of an uploaded CSV.
+ *
+ * Every cell is a candidate, so a file exported with a stray second column still yields
+ * its addresses.
+ *
+ * Inputs:
+ * - text: string — CSV text, with or without a header row
+ *
+ * Outputs:
+ * - { emails: string[]; invalid: string[] } — the addresses, lowercased and
+ *   deduplicated, and the cells that were not addresses
+ */
+export function parseEmailCsv(text: string): { emails: string[]; invalid: string[] } {
+	const emails = new Set<string>();
+	const invalid = new Set<string>();
+
+	parseCsv(text).forEach((row, rowIndex) => {
+		for (const cell of row) {
+			if (rowIndex === 0 && EMAIL_HEADERS.has(cell.trim().toLowerCase())) continue;
+			// Shredded per cell, so a cell holding several comma-joined addresses reads the
+			// same way as that text pasted into the textarea.
+			for (const email of parseEmailList(cell)) {
+				if (isValidEmail(email)) emails.add(email);
+				else invalid.add(email);
+			}
+		}
+	});
+
+	return { emails: [...emails], invalid: [...invalid] };
 }
 
 /**

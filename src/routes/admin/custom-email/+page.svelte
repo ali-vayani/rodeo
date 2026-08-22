@@ -8,9 +8,9 @@
 		DECISION_OPTIONS,
 		allChecked,
 		buildRecipientParams,
-		parseEmailList,
-		malformedEmails
+		parseEmailList
 	} from '$lib/admin/filters';
+	import { malformedEmails } from '$lib/email/address';
 	import type { FacetState } from '$lib/facets';
 	import RecipientFilter from '$lib/components/email/RecipientFilter.svelte';
 	import RecipientListModal from '$lib/components/email/RecipientListModal.svelte';
