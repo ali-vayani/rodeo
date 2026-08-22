@@ -1,11 +1,6 @@
-/**
- * CSV reading for blacklist import.
- *
- * Deliberately a real parser rather than `split(',')`. The files organizers upload come
- * out of Excel and Google Sheets, so they carry quoted fields, embedded commas in the
- * reason column, CRLF endings and a UTF-8 BOM. A naive split turns each of those into
- * silently wrong data rather than a visible error.
- */
+/** Column mapping for blacklist import, over the shared CSV reader. */
+
+import { parseCsv } from '$lib/csv';
 
 export interface BlacklistCsvRow {
 	firstName: string;
@@ -39,80 +34,6 @@ const headerKey = (value: string) =>
 		.trim()
 		.toLowerCase()
 		.replace(/[\s_-]/g, '');
-
-/**
- * Split CSV text into rows of raw fields, per RFC 4180.
- *
- * Exported for its own tests: the quoting rules are where CSV parsers usually go wrong.
- */
-export function parseCsv(text: string): string[][] {
-	// A BOM would otherwise ride along on the first header cell and defeat column matching.
-	const input = text.replace(/^\uFEFF/, '');
-
-	const rows: string[][] = [];
-	let row: string[] = [];
-	let field = '';
-	let quoted = false;
-	let i = 0;
-
-	/** A row is only recorded if it holds something; blank lines are structural noise. */
-	const endRow = () => {
-		row.push(field);
-		field = '';
-		if (row.some((cell) => cell.trim() !== '')) rows.push(row);
-		row = [];
-	};
-
-	while (i < input.length) {
-		const char = input[i];
-
-		if (quoted) {
-			if (char === '"') {
-				// A doubled quote inside a quoted field is an escaped literal quote.
-				if (input[i + 1] === '"') {
-					field += '"';
-					i += 2;
-					continue;
-				}
-				quoted = false;
-				i++;
-				continue;
-			}
-			field += char;
-			i++;
-			continue;
-		}
-
-		if (char === '"') {
-			quoted = true;
-			i++;
-			continue;
-		}
-
-		if (char === ',') {
-			row.push(field);
-			field = '';
-			i++;
-			continue;
-		}
-
-		if (char === '\r' || char === '\n') {
-			endRow();
-			// Consume CRLF as one terminator rather than two, which would otherwise produce a
-			// phantom blank row between every real one.
-			i += char === '\r' && input[i + 1] === '\n' ? 2 : 1;
-			continue;
-		}
-
-		field += char;
-		i++;
-	}
-
-	// A file not ending in a newline still has one last row pending.
-	if (field !== '' || row.length) endRow();
-
-	return rows;
-}
 
 /**
  * Read blacklist rows out of CSV text.
