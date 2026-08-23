@@ -179,64 +179,52 @@
 	}
 
 	// --- Helpers ---
-	function initials(name: string): string {
-		const parts = name.trim().split(/\s+/);
-		if (parts.length >= 2) return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
-		return name.slice(0, 2).toUpperCase();
-	}
-
 	const memberCount = $derived(team?.members.length ?? 0);
 	const teamFull = $derived(memberCount >= 4);
 </script>
 
-<div class="rounded border border-border bg-white p-6">
-	<p class="mb-4 text-xs font-medium tracking-widest text-muted-foreground uppercase">TEAM</p>
+<div class=" bg-card px-6 py-6 shadow-float">
+	<h2 class="mb-4 text-lg font-bold text-foreground">Your team</h2>
 
 	{#if team}
 		<!-- Team name -->
-		<p class="mb-4 text-sm font-semibold break-words text-primary">{team.teamName}</p>
+		<p class="mb-4 text-md font-semibold break-words text-foreground">{team.teamName}</p>
 
 		<!-- Member list -->
 		<div class="mb-4 flex flex-col gap-3">
 			{#each team.members as member (member.uid)}
-				<div class="flex items-center gap-3">
-					<!-- Avatar -->
-					<div
-						class="flex h-8 w-8 shrink-0 items-center justify-center text-xs font-semibold {member.uid ===
-						uid
-							? 'bg-primary text-white'
-							: 'border border-border bg-muted text-primary'}"
-					>
-						{initials(member.name)}
-					</div>
-					<!-- Name + email -->
-					<div class="min-w-0 flex-1">
-						<p class="truncate text-sm font-medium text-primary">
-							{member.name}
-							{#if member.uid === uid}
-								<span class="ml-1 text-xs font-normal text-muted-foreground">(you)</span>
-							{/if}
-						</p>
-						<p class="truncate text-xs text-muted-foreground">{member.email}</p>
-					</div>
+				<!--
+					A rule down the left instead of an initials tile: it marks the row as
+					yours without pretending to be a profile picture.
+				-->
+				<div
+					class="min-w-0 border-l-2 pl-3 {member.uid === uid
+						? 'border-brand-purple'
+						: 'border-brand-line'}"
+				>
+					<p class="truncate text-base font-semibold text-foreground">
+						{member.name}
+						{#if member.uid === uid}
+							<span class="ml-1 text-xs font-normal text-muted-foreground">(you)</span>
+						{/if}
+					</p>
+					<p class="truncate text-xs text-muted-foreground">{member.email}</p>
 				</div>
 			{/each}
 		</div>
 
 		<!-- Pending outgoing invitations -->
 		{#if team.invitations.length > 0}
-			<div class="mb-4 border-t border-border pt-4">
+			<div class="mb-4 border-t border-brand-line-subtle pt-4">
 				<p class="mb-2 text-xs text-muted-foreground">Pending invitations</p>
 				{#each team.invitations as inv (inv.id)}
 					<div class="flex items-center gap-2 py-1">
-						<div
-							class="flex h-6 w-6 shrink-0 items-center justify-center border border-border bg-muted text-[10px] font-semibold text-muted-foreground"
-						>
-							{inv.user ? initials(inv.user.name) : '?'}
-						</div>
-						<span class="truncate text-xs text-muted-foreground">{inv.email}</span>
 						<span
-							class="ml-auto shrink-0 rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground"
+							class="truncate border-l-2 border-dashed border-brand-line pl-3 text-xs
+							text-muted-foreground">{inv.email}</span
+						>
+						<span
+							class="ml-auto shrink-0 bg-muted px-1.5 py-0.5 font-mono text-2xs text-foreground-tertiary"
 						>
 							invited
 						</span>
@@ -246,7 +234,7 @@
 		{/if}
 
 		<!-- Member count + invite form -->
-		<div class="border-t border-border pt-4">
+		<div class="border-t border-brand-line-subtle pt-4">
 			<p class="mb-3 text-xs text-muted-foreground">
 				{memberCount}/4 members · Invite by email
 			</p>
@@ -259,13 +247,13 @@
 						placeholder="teammate@example.com"
 						aria-describedby="invite-email-message"
 						onkeydown={(e) => e.key === 'Enter' && inviteMember()}
-						class="min-w-0 flex-1 rounded border border-border px-3 py-1.5 text-sm text-primary outline-none focus:ring-1 focus:ring-primary"
+						class="min-w-0 flex-1 border border-border px-3 py-2 text-base text-foreground transition-colors duration-150 outline-none focus:border-brand-purple focus-visible:shadow-ring"
 					/>
 					<button
 						type="button"
 						onclick={inviteMember}
 						disabled={inviting || !inviteEmail.trim()}
-						class="rounded bg-primary px-4 py-1.5 text-sm font-medium text-white transition-opacity disabled:opacity-40"
+						class="cursor-pointer bg-brand-purple px-4 py-2 font-display text-base font-semibold text-white transition-colors duration-150 hover:bg-brand-purple-hover focus-visible:shadow-ring disabled:opacity-40"
 					>
 						{inviting ? '…' : 'Add'}
 					</button>
@@ -276,7 +264,7 @@
 					{#if inviteError}
 						<p class="mt-2 text-xs break-words text-destructive">{inviteError}</p>
 					{:else if inviteSuccess}
-						<p class="mt-2 text-xs break-words text-primary">{inviteSuccess}</p>
+						<p class="mt-2 text-xs break-words text-success-700">{inviteSuccess}</p>
 					{/if}
 				</div>
 			{:else}
@@ -286,12 +274,12 @@
 
 		<!-- Invite link -->
 		{#if team.inviteCode}
-			<div class="mt-4 border-t border-border pt-4">
+			<div class="mt-4 border-t border-brand-line-subtle pt-4">
 				<p class="mb-2 text-xs text-muted-foreground">Or share an invite link</p>
 				<button
 					type="button"
 					onclick={copyInviteLink}
-					class="w-full rounded border border-border px-3 py-1.5 text-left font-mono text-xs text-primary transition-colors hover:bg-[#f4f4f4]"
+					class="w-full cursor-pointer border border-border px-3 py-2 text-left font-mono text-xs text-foreground transition-colors duration-150 hover:bg-muted focus-visible:shadow-ring"
 				>
 					{linkCopied ? '✓ Copied!' : 'Copy invite link'}
 				</button>
@@ -299,9 +287,9 @@
 		{/if}
 
 		<!-- Leave team -->
-		<div class="mt-4 border-t border-border pt-4">
+		<div class="mt-4 border-t border-brand-line-subtle pt-4">
 			{#if showLeaveConfirm}
-				<p class="mb-2 text-xs break-words text-primary">
+				<p class="mb-2 text-xs break-words text-foreground">
 					Are you sure you want to leave <strong>{team.teamName}</strong>?
 					{#if memberCount === 1}
 						The team will be deleted.
@@ -315,14 +303,14 @@
 						type="button"
 						onclick={leaveTeam}
 						disabled={leaving}
-						class="rounded bg-destructive px-3 py-1.5 text-xs font-medium text-white transition-opacity disabled:opacity-40"
+						class="cursor-pointer bg-destructive px-3 py-2 text-xs font-semibold text-destructive-foreground transition-colors duration-150 hover:bg-destructive-hover focus-visible:shadow-ring-danger disabled:opacity-40"
 					>
 						{leaving ? 'Leaving…' : 'Yes, leave'}
 					</button>
 					<button
 						type="button"
 						onclick={() => (showLeaveConfirm = false)}
-						class="rounded border border-border px-3 py-1.5 text-xs text-primary transition-colors hover:bg-[#f4f4f4]"
+						class="cursor-pointer border border-border px-3 py-2 text-xs text-foreground transition-colors duration-150 hover:bg-muted focus-visible:shadow-ring"
 					>
 						Cancel
 					</button>
@@ -331,7 +319,7 @@
 				<button
 					type="button"
 					onclick={() => (showLeaveConfirm = true)}
-					class="text-xs text-muted-foreground transition-colors hover:underline"
+					class="cursor-pointer text-xs text-foreground-tertiary transition-colors hover:text-foreground hover:underline"
 				>
 					Leave team
 				</button>
@@ -348,7 +336,7 @@
 						bind:value={teamNameInput}
 						placeholder="Team name"
 						onkeydown={(e) => e.key === 'Enter' && createTeam()}
-						class="rounded border border-border px-3 py-2 text-sm text-primary outline-none focus:ring-1 focus:ring-primary"
+						class=" border border-border px-3.5 py-2.5 text-base text-foreground transition-colors duration-150 outline-none focus:border-brand-purple focus-visible:shadow-ring"
 					/>
 					{#if createError}
 						<p class="text-xs text-destructive">{createError}</p>
@@ -358,7 +346,7 @@
 							type="button"
 							onclick={createTeam}
 							disabled={creating || !teamNameInput.trim()}
-							class="rounded bg-primary px-4 py-2 text-sm font-medium text-white transition-opacity disabled:opacity-40"
+							class="cursor-pointer bg-brand-purple px-4 py-2.5 font-display text-md font-semibold text-white transition-colors duration-150 hover:bg-brand-purple-hover focus-visible:shadow-ring disabled:opacity-40"
 						>
 							{creating ? 'Creating…' : 'Create team'}
 						</button>
@@ -369,7 +357,7 @@
 								createError = null;
 								teamNameInput = '';
 							}}
-							class="rounded border border-border px-4 py-2 text-sm text-primary transition-colors hover:bg-[#f4f4f4]"
+							class="cursor-pointer border border-border px-4 py-2.5 font-display text-md font-semibold text-foreground transition-colors duration-150 hover:bg-muted focus-visible:shadow-ring disabled:opacity-40"
 						>
 							Cancel
 						</button>
@@ -382,7 +370,7 @@
 				<button
 					type="button"
 					onclick={() => (showCreateForm = true)}
-					class="rounded bg-primary px-4 py-2 text-sm font-medium text-white"
+					class="cursor-pointer bg-brand-purple px-4 py-2.5 font-display text-md font-semibold text-white transition-colors duration-150 hover:bg-brand-purple-hover focus-visible:shadow-ring disabled:opacity-40"
 				>
 					Create team
 				</button>
@@ -392,7 +380,7 @@
 
 	<!-- Pending received invitations -->
 	{#if pendingInvitations.length > 0}
-		<div class={team ? 'mt-5 border-t border-border pt-4' : ''}>
+		<div class={team ? 'mt-5 border-t border-brand-line-subtle pt-4' : ''}>
 			<p class="mb-3 text-xs font-medium tracking-widest text-muted-foreground uppercase">
 				Team Invitations
 			</p>
@@ -400,18 +388,18 @@
 				<p class="mb-2 text-xs text-destructive">{respondError}</p>
 			{/if}
 			{#each pendingInvitations as inv (inv.id)}
-				<div class="mb-3 rounded border border-border bg-muted p-3 last:mb-0">
-					<p class="mb-0.5 text-sm font-medium text-primary">{inv.team.teamName}</p>
+				<div class="mb-3 bg-muted p-4 last:mb-0">
+					<p class="mb-0.5 text-base font-semibold text-foreground">{inv.team.teamName}</p>
 					<p class="mb-3 text-xs text-muted-foreground">
 						{inv.team.members.length} member{inv.team.members.length === 1 ? '' : 's'} ·
-						{inv.team.members.map((m) => m.name.split(' ')[0]).join(', ')}
+						{inv.team.members.map((m) => m.name.split('')[0]).join(',')}
 					</p>
 					<div class="flex gap-2">
 						<button
 							type="button"
 							onclick={() => acceptInvite(inv.id)}
 							disabled={respondingTo === inv.id}
-							class="rounded bg-primary px-3 py-1.5 text-xs font-medium text-white transition-opacity disabled:opacity-40"
+							class="cursor-pointer bg-brand-purple px-3 py-2 font-display text-xs font-semibold text-white transition-colors duration-150 hover:bg-brand-purple-hover focus-visible:shadow-ring disabled:opacity-40"
 						>
 							{respondingTo === inv.id ? '…' : 'Accept'}
 						</button>
@@ -419,7 +407,7 @@
 							type="button"
 							onclick={() => declineInvite(inv.id)}
 							disabled={respondingTo === inv.id}
-							class="rounded border border-border px-3 py-1.5 text-xs text-primary transition-colors hover:bg-white disabled:opacity-40"
+							class="cursor-pointer border border-border px-3 py-2 font-display text-xs font-semibold text-foreground transition-colors duration-150 hover:bg-muted focus-visible:shadow-ring disabled:opacity-40"
 						>
 							Decline
 						</button>
@@ -428,16 +416,16 @@
 			{/each}
 
 			{#if !team && pendingInvitations.length > 0}
-				<div class="mt-4 border-t border-border pt-4">
+				<div class="mt-4 border-t border-brand-line-subtle pt-4">
 					{#if showCreateForm}
-						<p class="mb-2 text-xs font-medium text-primary">Create your own team instead:</p>
+						<p class="mb-2 text-xs font-semibold text-foreground">Create your own team instead:</p>
 						<div class="flex flex-col gap-2">
 							<input
 								type="text"
 								bind:value={teamNameInput}
 								placeholder="Team name"
 								onkeydown={(e) => e.key === 'Enter' && createTeam()}
-								class="rounded border border-border px-3 py-2 text-sm text-primary outline-none"
+								class=" border border-border px-3.5 py-2.5 text-base text-foreground transition-colors duration-150 outline-none focus:border-brand-purple focus-visible:shadow-ring"
 							/>
 							{#if createError}
 								<p class="text-xs text-destructive">{createError}</p>
@@ -447,7 +435,7 @@
 									type="button"
 									onclick={createTeam}
 									disabled={creating || !teamNameInput.trim()}
-									class="rounded bg-primary px-4 py-1.5 text-xs font-medium text-white transition-opacity disabled:opacity-40"
+									class="cursor-pointer bg-brand-purple px-4 py-2 font-display text-xs font-semibold text-white transition-colors duration-150 hover:bg-brand-purple-hover focus-visible:shadow-ring disabled:opacity-40"
 								>
 									{creating ? 'Creating…' : 'Create team'}
 								</button>
@@ -457,7 +445,7 @@
 										showCreateForm = false;
 										createError = null;
 									}}
-									class="rounded border border-border px-4 py-1.5 text-xs text-primary transition-colors hover:bg-[#f4f4f4]"
+									class="cursor-pointer border border-border px-4 py-2 font-display text-xs font-semibold text-foreground transition-colors duration-150 hover:bg-muted focus-visible:shadow-ring disabled:opacity-40"
 								>
 									Cancel
 								</button>
@@ -467,7 +455,7 @@
 						<button
 							type="button"
 							onclick={() => (showCreateForm = true)}
-							class="text-xs text-muted-foreground transition-colors hover:underline"
+							class="cursor-pointer text-xs text-foreground-tertiary transition-colors hover:text-foreground hover:underline"
 						>
 							Or create your own team instead
 						</button>

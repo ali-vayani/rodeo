@@ -7,6 +7,7 @@
 	import { errorMessage } from '$lib/ui/errors';
 	import { createClient } from '$lib/trpc/client';
 	import { untrack } from 'svelte';
+	import { TriangleAlert } from 'lucide-svelte';
 	import RoleSelector from '$lib/components/application/RoleSelector.svelte';
 	import QuestionRenderer from '$lib/components/application/QuestionRenderer.svelte';
 	import ApplicationStateView from '$lib/components/application/ApplicationStateView.svelte';
@@ -182,134 +183,160 @@
 	// `$lib/server/invite.ts`.
 </script>
 
-<div class="mx-auto max-w-2xl">
+{#snippet pageHeading(title: string, sub: string | null)}
+	<header class="mb-6">
+		<h1 class="font-display text-display font-extrabold tracking-wide text-white uppercase">
+			{title}
+		</h1>
+		{#if sub}
+			<p class="mt-1 text-md text-white/80">{sub}</p>
+		{/if}
+	</header>
+{/snippet}
+
+<div class="mx-auto max-w-3xl">
 	{#if currentState === 'filling'}
-		<!-- Header -->
-		<div class="mb-6">
-			<h1 class="text-2xl font-semibold text-primary">Application</h1>
-			<p class="mt-1 text-sm text-muted-foreground">
-				{#if windowState === 'closed'}
-					Applications closed on {closesOn}.
-				{:else if windowState === 'before'}
-					Applications open on {opensOn}.
-				{:else}
-					Fill out the form below and submit when you're ready.
-					<!-- The deadline while it still matters, not only once it's too late. -->
-					{#if data.settings}
-						Applications close on {closesOn}.
-					{/if}
-				{/if}
-			</p>
-		</div>
+		{@render pageHeading(
+			'Application',
+			windowState === 'open'
+				? "Answers save as you type. Submit once everything's filled in."
+				: null
+		)}
 
 		<!--
-					The window notice. Outside the window the form below is read-only, because the
-					server refuses both the autosave and the submission behind it.
-				-->
-		{#if !windowOpen}
-			<div class="mb-6 rounded border border-border bg-white p-5">
-				<p class="mb-0.5 text-xs font-medium tracking-widest text-muted-foreground uppercase">
-					{windowState === 'closed' ? 'Applications closed' : 'Applications not open yet'}
-				</p>
-				{#if windowState === 'closed'}
-					<p class="text-sm leading-relaxed text-primary">
-						The deadline was <strong>{closesOn}</strong>. Your answers are shown below but can no
-						longer be changed or submitted. Contact the organizers if you believe this is a mistake.
-					</p>
-				{:else}
-					<p class="text-sm leading-relaxed text-primary">
-						Applications open on <strong>{opensOn}</strong>. You can read through the questions now
-						— you'll be able to answer them once the form opens.
-					</p>
-				{/if}
-			</div>
+			The window notice. Outside the window the form below is read-only, because the
+			server refuses both the autosave and the submission behind it.
+		-->
+		{#if windowState === 'closed'}
+			<p
+				class="mb-6 flex flex-wrap items-center gap-2 bg-warning-50 px-4 py-3 text-base
+				 font-medium text-warning-700"
+				role="status"
+			>
+				<TriangleAlert class="size-4 shrink-0" aria-hidden="true" />
+				Applications closed on {closesOn}. Your answers are shown below but can no longer be
+				changed.
+			</p>
+		{:else if windowState === 'before'}
+			<p
+				class="mb-6 flex flex-wrap items-center gap-2 bg-info-50 px-4 py-3 text-base
+				 font-medium text-info-700"
+				role="status"
+			>
+				<TriangleAlert class="size-4 shrink-0" aria-hidden="true" />
+				Applications open on {opensOn}. You can read the questions now and answer them once the form
+				opens.
+			</p>
+		{:else if data.settings}
+			<p
+				class="mb-6 flex flex-wrap items-center gap-2 bg-warning-50 px-4 py-3 text-base
+				 font-medium text-warning-700"
+				role="status"
+			>
+				<TriangleAlert class="size-4 shrink-0" aria-hidden="true" />
+				Applications close on {closesOn}.
+			</p>
 		{/if}
 
-		<!-- Form card -->
-		<div class="rounded border border-border bg-white p-6">
-			<!-- Role selector -->
-			<div class="mb-6">
+		<div class=" bg-card shadow-float">
+			<div
+				class="flex flex-wrap items-center justify-between gap-3 border-b border-brand-line-subtle
+				 px-7 py-5"
+			>
+				<h2 class="text-lg font-bold text-foreground">Apply as</h2>
+				<!-- The autosave state, said once, next to the thing it describes. -->
+				<span class="font-mono text-2xs tracking-eyebrow text-foreground-tertiary uppercase">
+					{#if !windowOpen}
+						Read-only
+					{:else if saveStatus === 'saving'}
+						Saving…
+					{:else if saveStatus === 'saved'}
+						Saved
+					{:else if saveStatus === 'error'}
+						<span class="text-destructive">{saveError ?? 'Save failed'}</span>
+					{:else}
+						Autosaves
+					{/if}
+				</span>
+			</div>
+
+			<div class="px-7 py-7">
 				<RoleSelector
 					selected={selectedRole}
 					onselect={(r) => (selectedRole = r)}
 					disabled={!windowOpen}
 				/>
+
+				{#if filteredQuestions.length === 0}
+					<p class="mt-7 border-t border-brand-line-subtle pt-7 text-md text-muted-foreground">
+						No questions yet — check back soon.
+					</p>
+				{:else}
+					<div class="mt-7 flex flex-col gap-6 border-t border-brand-line-subtle pt-7">
+						{#each filteredQuestions as question (question.id)}
+							<QuestionRenderer
+								{question}
+								value={responses[question.id] ?? ''}
+								onchange={(v) => handleQuestionChange(question.id, v)}
+								onfile={(f) => handleFileUpload(question.id, f)}
+								ownerId={user.uid}
+								disabled={!windowOpen}
+							/>
+						{/each}
+					</div>
+				{/if}
 			</div>
 
-			<div class="mb-6 border-t border-border"></div>
-
-			<!-- Questions -->
-			{#if filteredQuestions.length === 0}
-				<p class="text-sm text-muted-foreground">No questions yet — check back soon.</p>
-			{:else}
-				<div class="flex flex-col gap-5">
-					{#each filteredQuestions as question (question.id)}
-						<QuestionRenderer
-							{question}
-							value={responses[question.id] ?? ''}
-							onchange={(v) => handleQuestionChange(question.id, v)}
-							onfile={(f) => handleFileUpload(question.id, f)}
-							ownerId={user.uid}
-							disabled={!windowOpen}
-						/>
-					{/each}
-				</div>
-			{/if}
-
-			<!-- Footer row -->
 			<div
-				class="mt-8 flex flex-col gap-3 border-t border-border pt-5 sm:flex-row sm:items-center sm:justify-between"
+				class="flex flex-col gap-4 border-t border-brand-line-subtle bg-brand-well
+				 px-7 py-5 sm:flex-row sm:items-center sm:justify-between"
 			>
-				<!-- Progress + save status -->
-				<div class="flex flex-col gap-0.5">
+				<div class="flex flex-col gap-1.5">
 					{#if requiredQuestions.length > 0}
-						<span class="font-mono text-xs text-muted-foreground">
+						<span class="font-mono text-xs text-foreground-secondary">
 							{answeredRequiredCount} / {requiredQuestions.length} required
 						</span>
-					{/if}
-					{#if !windowOpen}
-						<span class="font-mono text-xs text-muted-foreground">Read-only</span>
-					{:else if saveStatus === 'saving'}
-						<span class="font-mono text-xs text-muted-foreground">Saving…</span>
-					{:else if saveStatus === 'saved'}
-						<span class="font-mono text-xs text-muted-foreground">Saved</span>
-					{:else if saveStatus === 'error'}
-						<span class="font-mono text-xs text-destructive">{saveError ?? 'Save failed'}</span>
+						<!-- The same count as a bar, so progress reads at a glance. -->
+						<span class="block h-1 w-40 overflow-hidden bg-neutral-200" role="presentation">
+							<span
+								class="block h-full brand-rule transition-[width] duration-200"
+								style="width: {(answeredRequiredCount / requiredQuestions.length) * 100}%"
+							></span>
+						</span>
 					{/if}
 				</div>
 
-				<!-- Submit button -->
-				<div class="flex flex-col gap-1 sm:items-end">
+				<div class="flex flex-col gap-1.5 sm:items-end">
 					<button
 						type="button"
 						onclick={handleSubmit}
 						disabled={submitting || !canSubmit || !windowOpen}
 						title={windowOpen ? undefined : `Applications closed on ${closesOn}.`}
-						class="w-full rounded bg-primary px-5 py-2 text-sm font-medium text-white transition-opacity disabled:cursor-not-allowed disabled:opacity-40 sm:w-auto"
+						class="w-full cursor-pointer bg-brand-purple px-6 py-2.5 font-display
+						 text-md font-semibold text-white transition-colors duration-150
+						 hover:bg-brand-purple-hover focus-visible:shadow-ring
+						 disabled:cursor-not-allowed disabled:opacity-40 sm:w-auto"
 					>
-						{submitting ? 'Submitting…' : 'Submit Application'}
+						{submitting ? 'Submitting…' : 'Submit application'}
 					</button>
 					{#if windowState === 'closed'}
-						<span class="text-xs text-muted-foreground">The deadline has passed</span>
+						<span class="text-xs text-foreground-secondary">The deadline has passed</span>
 					{:else if windowState === 'before'}
-						<span class="text-xs text-muted-foreground">Opens {opensOn}</span>
+						<span class="text-xs text-foreground-secondary">Opens {opensOn}</span>
 					{:else if !canSubmit && requiredQuestions.length > 0}
-						<span class="text-xs text-muted-foreground"
-							>Answer all required questions to submit</span
-						>
+						<span class="text-xs text-foreground-secondary">
+							Answer all required questions to submit
+						</span>
 					{/if}
 				</div>
 			</div>
 
 			{#if submitError}
-				<p class="mt-3 text-sm text-destructive">{submitError}</p>
+				<p class="px-7 pb-5 text-md text-destructive" role="alert">{submitError}</p>
 			{/if}
 		</div>
 	{:else}
-		<!-- Non-filling states -->
-		<div class="mb-6">
-			<h1 class="text-2xl font-semibold text-primary">Application</h1>
-		</div>
+		{@render pageHeading('Application', null)}
 		<ApplicationStateView
 			{user}
 			settings={data.settings}

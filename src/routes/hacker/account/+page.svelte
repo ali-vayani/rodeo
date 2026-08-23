@@ -16,12 +16,6 @@
 	const { user: initialUser, settings } = untrack(() => data);
 	let user = $state({ ...initialUser });
 
-	function initials(name: string): string {
-		const parts = name.trim().split(/\s+/);
-		if (parts.length >= 2) return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
-		return name.slice(0, 2).toUpperCase();
-	}
-
 	const decisionLabel = $derived(getApplicationStateLabel(user));
 
 	const showRsvp = $derived(
@@ -40,79 +34,88 @@
 	const { rsvping, handleRsvp } = createRsvpHandler({ user });
 	const { declining, handleDecline } = createDeclineHandler({ user });
 
-	function statusClass(label: string): string {
-		if (label === 'Confirmed' || label === 'Checked In') return 'bg-primary text-white';
-		if (label === 'Accepted') return 'bg-muted text-primary border border-primary';
-		return 'bg-muted text-muted-foreground';
+	/** Which status ramp a decision label reads on. Accepted and beyond are good news. */
+	function statusTone(label: string): string {
+		if (label === 'Confirmed' || label === 'Checked In' || label === 'Accepted')
+			return 'bg-success-50 text-success-700';
+		if (label === 'Waitlisted') return 'bg-warning-50 text-warning-700';
+		if (label === 'Rejected' || label === 'Declined') return 'bg-danger-50 text-danger-700';
+		return 'bg-muted text-brand-purple';
 	}
 </script>
 
 <div>
-	<div class="mb-6">
-		<h1 class="text-2xl font-semibold text-primary">My Account</h1>
-	</div>
+	<header class="mb-6">
+		<h1 class="font-display text-display font-extrabold tracking-wide text-white uppercase">
+			Account
+		</h1>
+		<p class="mt-1 text-md text-white/80">
+			Your profile{showEventContent ? ', your check-in code, and your team' : ''}.
+		</p>
+	</header>
 
-	<div class="grid grid-cols-1 gap-4 {twoColumn ? 'lg:grid-cols-2' : 'max-w-md'}">
+	<div class="grid grid-cols-1 gap-5 {twoColumn ? 'lg:grid-cols-2' : 'max-w-lg'}">
 		<!-- Left column: profile + QR (QR only when confirmed/checked in) -->
-		<div class="flex flex-col gap-4">
-			<div class="rounded border border-border bg-white p-6">
-				<p class="mb-4 text-xs font-medium tracking-widest text-muted-foreground uppercase">
-					PROFILE
-				</p>
-
-				<div class="mb-5 flex items-start gap-4">
-					<div
-						class="flex h-14 w-14 shrink-0 items-center justify-center bg-primary text-base font-semibold text-white"
-					>
-						{initials(user.name)}
-					</div>
-					<div class="min-w-0">
-						<p class="text-base leading-tight font-bold break-words text-primary">{user.name}</p>
-						<p class="mb-2 text-xs break-words text-muted-foreground">{user.email}</p>
+		<div class="flex flex-col gap-5">
+			<div class=" bg-card shadow-float">
+				<div
+					class="flex flex-wrap items-center justify-between gap-3 border-b border-brand-line-subtle
+					 px-6 py-4"
+				>
+					<h2 class="text-lg font-bold text-foreground">Profile</h2>
+					{#if decisionLabel}
 						<span
-							class="rounded border border-primary px-2 py-0.5 font-mono text-xs font-medium tracking-wide text-primary uppercase"
+							class=" px-2.5 py-1 font-mono text-2xs font-medium tracking-eyebrow
+							 uppercase {statusTone(decisionLabel)}"
 						>
-							{user.role}
+							{decisionLabel}
 						</span>
-					</div>
+					{/if}
 				</div>
 
-				<div class="border-t border-border">
-					{#if user.university}
-						<div class="flex justify-between gap-3 border-b border-border py-2.5 text-sm">
-							<span class="shrink-0 text-muted-foreground">School</span>
-							<span class="min-w-0 text-right font-medium break-words text-primary"
-								>{user.university}</span
-							>
+				<div class="px-6 py-6">
+					<!--
+						No avatar. There is no photo to show and initials in a tinted square were
+						decoration standing in for information — the name is the identity here.
+					-->
+					<div class="mb-5 min-w-0">
+						<p class="text-2xl leading-tight font-extrabold break-words text-foreground">
+							{user.name}
+						</p>
+						<p class="mt-1 text-base break-words text-foreground-secondary">{user.email}</p>
+					</div>
+
+					<dl class="border-t border-brand-line-subtle">
+						<div
+							class="flex justify-between gap-3 border-b border-brand-line-subtle py-2.5 text-base"
+						>
+							<dt class="shrink-0 text-foreground-secondary">Role</dt>
+							<dd class="m-0 text-right font-semibold text-foreground">{user.role}</dd>
 						</div>
-					{/if}
-					{#if user.year}
-						<div class="flex justify-between gap-3 border-b border-border py-2.5 text-sm">
-							<span class="shrink-0 text-muted-foreground">Grad Year</span>
-							<span class="min-w-0 text-right font-medium break-words text-primary"
-								>{user.year}</span
+						{#if user.university}
+							<div
+								class="flex justify-between gap-3 border-b border-brand-line-subtle py-2.5 text-base"
 							>
-						</div>
-					{/if}
-					{#if decisionLabel}
-						<div class="flex justify-between py-2.5 text-sm">
-							<span class="text-muted-foreground">Status</span>
-							<span
-								class="rounded px-2 py-0.5 font-mono text-xs font-semibold tracking-wide uppercase {statusClass(
-									decisionLabel
-								)}"
-							>
-								{decisionLabel}
-							</span>
-						</div>
-					{/if}
+								<dt class="shrink-0 text-foreground-secondary">School</dt>
+								<dd class="m-0 min-w-0 text-right font-semibold break-words text-foreground">
+									{user.university}
+								</dd>
+							</div>
+						{/if}
+						{#if user.year}
+							<div class="flex justify-between gap-3 py-2.5 text-base">
+								<dt class="shrink-0 text-foreground-secondary">Grad year</dt>
+								<dd class="m-0 text-right font-semibold text-foreground">{user.year}</dd>
+							</div>
+						{/if}
+					</dl>
 				</div>
 			</div>
 
 			{#if showEventContent}
 				<QRCard uid={user.uid} />
 				<!-- Below the QR, not inside it: QRCard is the fallback for anyone
-				     without a smartphone wallet and stays single-purpose. -->
+				 without a smartphone wallet and stays single-purpose. -->
 				<WalletPassCard availability={data.wallet} rsvpDeadline={settings?.RSVPDeadline} />
 			{/if}
 		</div>

@@ -29,7 +29,17 @@ const SCOPES = [
 	'src/routes/admin/custom-email',
 	'src/routes/admin/logs',
 	'src/routes/admin/dashboard',
-	'src/lib/components/admin/charts'
+	'src/lib/components/admin/charts',
+	// The hacker portal, migrated onto the brand layer in app.css.
+	//
+	// `components/account` and `routes/login` are deliberately absent: QRCard renders
+	// to a canvas via the qrcode library and `routes/login` draws Google's own logo,
+	// so both carry hex that is not ours to tokenize.
+	'src/routes/hacker',
+	'src/lib/components/hacker',
+	'src/lib/components/brand',
+	'src/lib/components/application',
+	'src/routes/reset-password'
 	// Pages are appended here as they migrate. Everything not listed still predates the
 	// design system; see docs/component-library-plan.md for the remaining queue.
 ];

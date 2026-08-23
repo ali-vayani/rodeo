@@ -30,30 +30,38 @@
 	}
 </script>
 
-<div class="rounded border border-border bg-white p-6">
-	<p class="mb-4 text-xs font-medium tracking-widest text-muted-foreground uppercase">
-		CHECK-IN QR CODE
-	</p>
-
-	<div class="mb-4 flex justify-center">
-		{#if qrDataUrl}
-			<img src={qrDataUrl} alt="Check-in QR code" class="h-[200px] w-[200px]" />
-		{:else}
-			<div class="h-[200px] w-[200px] bg-muted"></div>
-		{/if}
-	</div>
-
-	<div class="mb-1 text-center">
-		<span class="font-mono text-sm font-semibold text-primary">{displayCode}</span>
-	</div>
-	<p class="mb-5 text-center text-xs text-muted-foreground">Show at check-in</p>
-
-	<button
-		type="button"
-		onclick={downloadQR}
-		disabled={!qrDataUrl}
-		class="w-full rounded border border-border px-4 py-2 text-sm text-primary transition-colors hover:bg-[#f4f4f4] disabled:opacity-40"
+<div class=" bg-card shadow-float">
+	<div
+		class="flex flex-wrap items-center justify-between gap-3 border-b border-brand-line-subtle
+		 px-6 py-4"
 	>
-		Download PDF
-	</button>
+		<h2 class="text-lg font-bold text-foreground">Check-in code</h2>
+		<span class="font-mono text-2xs tracking-eyebrow text-foreground-tertiary uppercase">
+			Scan at the door
+		</span>
+	</div>
+
+	<div class="px-6 py-6">
+		<div class="flex justify-center">
+			{#if qrDataUrl}
+				<img src={qrDataUrl} alt="Check-in QR code" class="size-50" />
+			{:else}
+				<div class="size-50 animate-pulse bg-muted"></div>
+			{/if}
+		</div>
+
+		<p class="mt-4 text-center font-mono text-md font-medium text-foreground">{displayCode}</p>
+
+		<button
+			type="button"
+			onclick={downloadQR}
+			disabled={!qrDataUrl}
+			class="mt-5 w-full cursor-pointer border border-border px-4 py-2.5 font-display
+			 text-md font-semibold text-foreground transition-colors duration-150
+			 hover:border-brand-ink focus-visible:shadow-ring disabled:cursor-not-allowed
+			 disabled:opacity-40"
+		>
+			Download code
+		</button>
+	</div>
 </div>

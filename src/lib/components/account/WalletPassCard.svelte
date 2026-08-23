@@ -36,18 +36,17 @@
 </script>
 
 {#if availability.configured && (offered || waitingMessage)}
-	<div class="rounded border border-border bg-white p-6">
-		<p class="mb-4 text-xs font-medium tracking-widest text-muted-foreground uppercase">
-			ADD TO WALLET
-		</p>
+	<div class=" bg-card px-6 py-6 shadow-float">
+		<h2 class="mb-4 text-lg font-bold text-foreground">Add to wallet</h2>
 
 		{#if offered}
 			<div class="flex flex-col gap-2">
 				{#if availability.apple}
 					<a
 						href={resolve('/hacker/account/wallet/apple')}
-						class="flex h-11 items-center justify-center gap-2 rounded border border-primary bg-primary
-							text-sm font-medium text-white transition-opacity hover:opacity-90"
+						class="flex h-11 items-center justify-center gap-2 bg-brand-ink font-display
+							text-md font-semibold text-white no-underline transition-colors duration-150
+							hover:bg-primary-hover focus-visible:shadow-ring"
 					>
 						<Wallet size={18} aria-hidden="true" />
 						Add to Apple Wallet
@@ -57,8 +56,9 @@
 				{#if availability.google}
 					<a
 						href={resolve('/hacker/account/wallet/google')}
-						class="flex h-11 items-center justify-center gap-2 rounded border border-border
-							text-sm font-medium text-primary transition-colors hover:bg-muted"
+						class="flex h-11 items-center justify-center gap-2 border border-border
+							font-display text-md font-semibold text-foreground no-underline transition-colors
+							duration-150 hover:border-brand-ink focus-visible:shadow-ring"
 					>
 						<Wallet size={18} aria-hidden="true" />
 						Add to Google Wallet
@@ -66,21 +66,21 @@
 				{/if}
 			</div>
 
-			<p class="mt-3 text-center text-xs text-muted-foreground">
+			<p class="mt-3 text-center text-xs text-foreground-tertiary">
 				Same code as above — either one scans at check-in.
 			</p>
 		{:else}
 			<!-- Eligible one day, but not today. Show the control and say when. -->
 			<div class="flex flex-col gap-2" aria-hidden="true">
 				<div
-					class="flex h-11 items-center justify-center gap-2 rounded border border-border
-						text-sm font-medium text-muted-foreground opacity-40"
+					class="flex h-11 items-center justify-center gap-2 border border-border
+						font-display text-md font-semibold text-muted-foreground opacity-40"
 				>
 					<Wallet size={18} />
 					Add to Wallet
 				</div>
 			</div>
-			<p class="mt-3 text-center text-xs text-muted-foreground">{waitingMessage}</p>
+			<p class="mt-3 text-center text-xs text-foreground-tertiary">{waitingMessage}</p>
 		{/if}
 	</div>
 {/if}

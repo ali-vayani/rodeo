@@ -1,5 +1,7 @@
 <script lang="ts">
 	import { computeApplicationState } from '$lib/application/state';
+	import BatLogo from '$lib/components/brand/BatLogo.svelte';
+	import BracketFrame from '$lib/components/brand/BracketFrame.svelte';
 	import { isRsvpClosed } from '$lib/application/window';
 	import type { UserStatus, DecisionStatus } from '$lib/generated/prisma/enums';
 	import type { SettingsModel } from '$lib/generated/prisma/models/Settings';
@@ -72,273 +74,246 @@
 	const discordUrl: string | null = null;
 </script>
 
-{#if appState === 'submitted'}
-	<!-- Submitted / Pending Review -->
-	<div class="mx-auto max-w-md rounded border border-border bg-white p-8">
-		<div class="mb-6 flex items-center gap-3">
+<!--
+	One card shape for every decision state, so the portal doesn't change its manners
+	between "under review" and "you're in": a status badge, a headline, a short
+	explanation, then the facts. Only the accepted state carries actions.
+-->
+{#snippet card(children: import('svelte').Snippet)}
+	<!--
+		The one card on the screen that the screen is about, so it gets the brackets.
+		Padding is generous enough that the corners never collide with the content.
+	-->
+	<div class="relative mx-auto max-w-lg bg-card p-10 shadow-float">
+		<BracketFrame class="inset-3.5 text-brand-ink" arm="size-5" />
+		{@render children()}
+	</div>
+{/snippet}
+
+{#snippet badge(label: string, tone: 'ok' | 'warn' | 'bad' | 'wait')}
+	<span
+		class="inline-flex items-center px-2.5 py-1 font-mono text-2xs font-medium
+		 tracking-eyebrow uppercase {tone === 'ok'
+			? 'bg-success-50 text-success-700'
+			: tone === 'warn'
+				? 'bg-warning-50 text-warning-700'
+				: tone === 'bad'
+					? 'bg-danger-50 text-danger-700'
+					: 'bg-muted text-brand-purple'}"
+	>
+		{label}
+	</span>
+{/snippet}
+
+{#snippet facts(rows: { label: string; value: string }[])}
+	<dl class="mt-7 border-t border-brand-line-subtle">
+		{#each rows as row (row.label)}
 			<div
-				class="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full border border-primary text-sm text-primary"
+				class="flex justify-between gap-3 border-b border-brand-line-subtle py-2.5 text-base
+				 last:border-b-0"
 			>
-				✓
+				<dt class="shrink-0 text-foreground-secondary">{row.label}</dt>
+				<dd class="m-0 min-w-0 text-right font-semibold break-words text-foreground">
+					{row.value}
+				</dd>
 			</div>
-			<span class="text-sm font-medium text-primary">Application submitted</span>
+		{/each}
+	</dl>
+{/snippet}
+
+{#if appState === 'submitted'}
+	{#snippet submitted()}
+		<div class="text-center">
+			<BatLogo class="mx-auto mb-4 w-16 text-brand-ink" />
+			{@render badge('Under review', 'wait')}
+			<h2 class="mt-3 mb-2 text-2xl font-extrabold text-foreground">We've got your application.</h2>
+			<p class="mx-auto max-w-prose text-md leading-relaxed text-foreground-secondary">
+				Decisions go out on a rolling basis, so this can take a couple of weeks. We'll email you the
+				moment yours is ready — there's nothing left for you to do.
+			</p>
 		</div>
-		<h2 class="mb-2 text-xl leading-snug font-light tracking-[-0.02em] text-primary">
-			We've received<br />your application.
-		</h2>
-		<p class="mb-6 text-sm leading-relaxed text-muted-foreground">
-			Decisions are sent on a rolling basis. You'll hear from us soon.
-		</p>
-		<div class="border-t border-border pt-5">
-			<div class="mb-2 flex justify-between gap-3 text-sm">
-				<span class="text-muted-foreground">Name</span>
-				<span class="min-w-0 text-right font-medium break-words text-primary">{user.name}</span>
-			</div>
-			<div class="mb-2 flex justify-between gap-3 text-sm">
-				<span class="text-muted-foreground">Email</span>
-				<span class="min-w-0 text-right font-medium break-words text-primary">{user.email}</span>
-			</div>
-			<div class="flex justify-between gap-3 text-sm">
-				<span class="text-muted-foreground">Status</span>
-				<span
-					class="rounded bg-muted px-2 py-0.5 font-mono text-xs font-medium text-muted-foreground"
-				>
-					UNDER REVIEW
-				</span>
-			</div>
-		</div>
-	</div>
+		{@render facts([
+			{ label: 'Applicant', value: user.name },
+			{ label: 'Email', value: user.email },
+			{ label: 'Status', value: 'Under review' }
+		])}
+	{/snippet}
+	{@render card(submitted)}
 {:else if appState === 'waitlisted'}
-	<!-- Waitlisted -->
-	<div class="mx-auto max-w-md rounded border border-border bg-white p-8">
-		<div class="mb-4 flex flex-wrap items-center justify-between gap-2">
-			<h2 class="text-base font-semibold text-primary">Application Status</h2>
-			<span
-				class="rounded border border-primary bg-muted px-2.5 py-0.5 font-mono text-xs font-medium tracking-wide text-primary uppercase"
-			>
-				Waitlisted
-			</span>
-		</div>
-		<div class="border-t border-border">
-			<div class="flex justify-between gap-3 border-b border-border py-2.5 text-sm">
-				<span class="text-muted-foreground">Applicant</span>
-				<span class="min-w-0 text-right font-medium break-words text-primary">{user.name}</span>
-			</div>
-			<div class="flex justify-between gap-3 border-b border-border py-2.5 text-sm">
-				<span class="text-muted-foreground">Email</span>
-				<span class="min-w-0 text-right font-medium break-words text-primary">{user.email}</span>
-			</div>
-			<div class="flex justify-between gap-3 py-2.5 text-sm">
-				<span class="text-muted-foreground">Decision</span>
-				<span class="font-medium text-primary">Waitlisted</span>
-			</div>
-		</div>
-		<div class="mt-4 rounded border border-border bg-muted p-4">
-			<p class="mb-1 text-xs font-medium tracking-widest text-muted-foreground uppercase">
-				What's next
-			</p>
-			<p class="text-sm leading-relaxed text-primary">
-				You're on the waitlist. If spots open up, we'll notify you by email. Keep an eye on your
-				inbox!
+	{#snippet waitlisted()}
+		<div class="text-center">
+			{@render badge('Waitlisted', 'warn')}
+			<h2 class="mt-3 mb-2 text-2xl font-extrabold text-foreground">You're on the waitlist.</h2>
+			<p class="mx-auto max-w-prose text-md leading-relaxed text-foreground-secondary">
+				Spots open up every year as accepted hackers drop. If one comes free we'll email you right
+				away — nothing to do in the meantime.
 			</p>
 		</div>
-	</div>
+		{@render facts([
+			{ label: 'Applicant', value: user.name },
+			{ label: 'Email', value: user.email }
+		])}
+	{/snippet}
+	{@render card(waitlisted)}
 {:else if appState === 'rejected'}
-	<!-- Rejected -->
-	<div class="mx-auto max-w-md rounded border border-border bg-white p-8">
-		<div class="mb-4 flex flex-wrap items-center justify-between gap-2">
-			<h2 class="text-base font-semibold text-primary">Application Status</h2>
-			<span
-				class="rounded border border-border bg-muted px-2.5 py-0.5 font-mono text-xs font-medium tracking-wide text-muted-foreground uppercase"
-			>
-				Not accepted
-			</span>
-		</div>
-		<div class="border-t border-border">
-			<div class="flex justify-between gap-3 border-b border-border py-2.5 text-sm">
-				<span class="text-muted-foreground">Applicant</span>
-				<span class="min-w-0 text-right font-medium break-words text-primary">{user.name}</span>
-			</div>
-			<div class="flex justify-between gap-3 py-2.5 text-sm">
-				<span class="text-muted-foreground">Email</span>
-				<span class="min-w-0 text-right font-medium break-words text-primary">{user.email}</span>
-			</div>
-		</div>
-		<div class="mt-4 rounded border border-border bg-muted p-4">
-			<p class="mb-1 text-xs font-medium tracking-widest text-muted-foreground uppercase">
-				A note from us
-			</p>
-			<p class="text-sm leading-relaxed text-primary">
-				Thank you for applying. Unfortunately we weren't able to offer you a spot this event. We
-				hope to see you next time.
+	{#snippet rejected()}
+		<div class="text-center">
+			{@render badge('Not accepted', 'bad')}
+			<h2 class="mt-3 mb-2 text-2xl font-extrabold text-foreground">Not this time.</h2>
+			<p class="mx-auto max-w-prose text-md leading-relaxed text-foreground-secondary">
+				Thank you for applying. We had far more applications than spots and couldn't offer you one
+				this year. We'd genuinely like to see you apply again.
 			</p>
 		</div>
-	</div>
+		{@render facts([
+			{ label: 'Applicant', value: user.name },
+			{ label: 'Email', value: user.email }
+		])}
+	{/snippet}
+	{@render card(rejected)}
 {:else if appState === 'accepted'}
-	<!-- Accepted — RSVP prompt -->
-	<div class="mx-auto max-w-md rounded border border-border bg-white p-8">
-		<div class="mb-2">
-			<span
-				class="rounded bg-primary px-2.5 py-0.5 font-mono text-xs font-semibold tracking-wide text-white uppercase"
-			>
-				Accepted
-			</span>
-		</div>
-		<h2 class="mt-3 mb-2 text-xl leading-snug font-semibold tracking-[-0.01em] text-primary">
-			You're in, {user.name.split(' ')[0]}!
-		</h2>
-		<p class="mb-6 text-sm leading-relaxed text-muted-foreground">
-			{#if rsvpClosed}
-				The deadline to confirm your spot has passed. Contact the organizers if you still plan to
-				attend.
-			{:else}
-				Confirm your spot before the deadline to secure your place at the hackathon.
-			{/if}
-		</p>
-		<div class="mb-4 flex flex-wrap gap-3">
-			<button
-				type="button"
-				onclick={onrsvp}
-				disabled={rsvping || rsvpClosed}
-				title={rsvpClosed ? `The RSVP deadline passed on ${rsvpDeadline}.` : undefined}
-				class="rounded bg-primary px-5 py-2 text-sm font-medium text-white transition-opacity disabled:cursor-not-allowed disabled:opacity-40"
-			>
-				{rsvping ? 'Confirming…' : 'RSVP Yes'}
-			</button>
-			{#if ondecline}
+	{#snippet accepted()}
+		<div class="text-center">
+			<BatLogo class="mx-auto mb-4 w-16 text-brand-ink" />
+			{@render badge('Accepted', 'ok')}
+			<h2 class="mt-3 mb-2 text-2xl font-extrabold text-foreground">
+				You're in, {user.name.split('')[0]}!
+			</h2>
+			<p class="mx-auto mb-6 max-w-prose text-md leading-relaxed text-foreground-secondary">
+				{#if rsvpClosed}
+					The deadline to confirm your spot has passed. Contact the organizers if you still plan to
+					attend.
+				{:else}
+					Confirm your spot before the deadline to secure your place at the hackathon.
+				{/if}
+			</p>
+
+			<div class="flex flex-wrap justify-center gap-3">
 				<button
 					type="button"
-					onclick={() => (showDeclineConfirm = true)}
-					disabled={rsvping}
-					class="rounded border border-border px-5 py-2 text-sm text-primary transition-colors hover:bg-[--color-muted] disabled:opacity-40"
+					onclick={onrsvp}
+					disabled={rsvping || rsvpClosed}
+					title={rsvpClosed ? `The RSVP deadline passed on ${rsvpDeadline}.` : undefined}
+					class="cursor-pointer bg-brand-purple px-6 py-2.5 font-display text-md
+					 font-semibold text-white transition-colors duration-150
+					 hover:bg-brand-purple-hover focus-visible:shadow-ring
+					 disabled:cursor-not-allowed disabled:opacity-40"
 				>
-					Decline
+					{rsvping ? 'Confirming…' : 'Confirm my spot'}
 				</button>
+				{#if ondecline}
+					<button
+						type="button"
+						onclick={() => (showDeclineConfirm = true)}
+						disabled={rsvping}
+						class="cursor-pointer border border-border px-6 py-2.5 font-display text-md
+						 font-semibold text-foreground transition-colors duration-150
+						 hover:border-brand-ink focus-visible:shadow-ring disabled:opacity-40"
+					>
+						Decline
+					</button>
+				{/if}
+			</div>
+
+			{#if rsvpError}
+				<p class="mt-4 text-base text-destructive" role="alert">{rsvpError}</p>
+			{/if}
+			{#if settings?.RSVPDeadline}
+				<p class="mt-4 font-mono text-xs text-foreground-tertiary">
+					{rsvpClosed ? 'Deadline passed:' : 'Deadline:'}
+					{rsvpDeadline}
+				</p>
 			{/if}
 		</div>
-		{#if rsvpError}
-			<p class="mb-3 text-sm text-destructive" role="alert">{rsvpError}</p>
-		{/if}
-		{#if settings?.RSVPDeadline}
-			<p class="text-xs text-muted-foreground">
-				{rsvpClosed ? 'Deadline passed:' : 'Deadline:'}
-				{rsvpDeadline}
-			</p>
-		{/if}
-	</div>
+	{/snippet}
+	{@render card(accepted)}
 {:else if appState === 'checked-in'}
-	<!-- Checked in -->
-	<div class="mx-auto max-w-md rounded border border-border bg-white p-8">
-		<div class="mb-4 flex flex-wrap items-center justify-between gap-2">
-			<h2 class="text-base font-semibold text-primary">Application Status</h2>
-			<span
-				class="rounded border border-primary bg-muted px-2.5 py-0.5 font-mono text-xs font-medium tracking-wide text-muted-foreground uppercase"
-			>
-				Checked in
-			</span>
-		</div>
-		<div class="border-t border-border">
-			<div class="flex justify-between gap-3 border-b border-border py-2.5 text-sm">
-				<span class="text-muted-foreground">Applicant</span>
-				<span class="min-w-0 text-right font-medium break-words text-primary">{user.name}</span>
-			</div>
-			<div class="flex justify-between gap-3 py-2.5 text-sm">
-				<span class="text-muted-foreground">Email</span>
-				<span class="min-w-0 text-right font-medium break-words text-primary">{user.email}</span>
-			</div>
-		</div>
-		<div class="mt-4 rounded border border-border bg-muted p-4">
-			<p class="text-sm leading-relaxed text-primary">
+	{#snippet checkedIn()}
+		<div class="text-center">
+			{@render badge('Checked in', 'ok')}
+			<h2 class="mt-3 mb-2 text-2xl font-extrabold text-foreground">You're here. Go build.</h2>
+			<p class="mx-auto max-w-prose text-md leading-relaxed text-foreground-secondary">
 				Hope you have a good time! Take a look at our
 				{#if scheduleUrl}
-					<a href={scheduleUrl} class="text-primary underline">schedule</a>
+					<a href={scheduleUrl} class="font-medium text-brand-purple underline">schedule</a>
 				{:else}
 					schedule
 				{/if}
 				and make sure to join the
 				{#if discordUrl}
-					<a href={discordUrl} class="text-primary underline">Discord</a>.
+					<a href={discordUrl} class="font-medium text-brand-purple underline">Discord</a>.
 				{:else}
 					Discord.
 				{/if}
 			</p>
 		</div>
-	</div>
+		{@render facts([
+			{ label: 'Applicant', value: user.name },
+			{ label: 'Email', value: user.email }
+		])}
+	{/snippet}
+	{@render card(checkedIn)}
 {:else if appState === 'rsvpd'}
-	<!-- RSVP confirmed -->
-	<div class="mx-auto max-w-md rounded border border-border bg-white p-8 text-center">
-		<div class="mb-4 text-3xl grayscale">★</div>
-		<p class="mb-1 font-mono text-xs tracking-widest text-muted-foreground uppercase">
-			RSVP Confirmed
-		</p>
-		<h2 class="mt-2 mb-3 text-xl leading-snug font-light tracking-[-0.02em] text-primary">
-			See you at the hackathon.
-		</h2>
-		<p class="mb-6 text-sm leading-relaxed text-muted-foreground">
-			Your spot is confirmed. We'll send event details to {user.email} closer to the date.
-		</p>
+	{#snippet confirmed()}
+		<div class="text-center">
+			<BatLogo class="mx-auto mb-4 w-16 text-brand-ink" />
+			{@render badge('Confirmed', 'ok')}
+			<h2 class="mt-3 mb-2 text-2xl font-extrabold text-foreground">See you at the hackathon.</h2>
+			<p class="mx-auto max-w-prose text-md leading-relaxed text-foreground-secondary">
+				Your spot is locked in. We'll send event details to {user.email} closer to the date, and your
+				check-in code is on the Account page.
+			</p>
+		</div>
 		{#if settings?.hackathonStartDate}
-			<div class="flex justify-center gap-2">
-				<span class="rounded border border-primary px-3 py-1 font-mono text-xs text-primary">
-					{hackathonStart}
-				</span>
-			</div>
+			{@render facts([{ label: 'Hackathon starts', value: hackathonStart }])}
 		{/if}
-	</div>
+	{/snippet}
+	{@render card(confirmed)}
 {:else if appState === 'declined'}
-	<!-- Declined -->
-	<div class="mx-auto max-w-md rounded border border-border bg-white p-8">
-		<div class="mb-4 flex flex-wrap items-center justify-between gap-2">
-			<h2 class="text-base font-semibold text-primary">Invitation Declined</h2>
-			<span
-				class="rounded border border-border bg-muted px-2.5 py-0.5 font-mono text-xs font-medium tracking-wide text-muted-foreground uppercase"
-			>
-				Declined
-			</span>
-		</div>
-		<div class="border-t border-border">
-			<div class="flex justify-between gap-3 border-b border-border py-2.5 text-sm">
-				<span class="text-muted-foreground">Applicant</span>
-				<span class="min-w-0 text-right font-medium break-words text-primary">{user.name}</span>
-			</div>
-			<div class="flex justify-between gap-3 py-2.5 text-sm">
-				<span class="text-muted-foreground">Email</span>
-				<span class="min-w-0 text-right font-medium break-words text-primary">{user.email}</span>
-			</div>
-		</div>
-		<div class="mt-4 rounded border border-border bg-muted p-4">
-			<p class="mb-1 text-xs font-medium tracking-widest text-muted-foreground uppercase">
-				What's next
-			</p>
-			<p class="text-sm leading-relaxed text-primary">
-				You've declined your invitation. Your spot has been released. We hope to see you at a future
-				event!
+	{#snippet declined()}
+		<div class="text-center">
+			{@render badge('Declined', 'bad')}
+			<h2 class="mt-3 mb-2 text-2xl font-extrabold text-foreground">Invitation declined.</h2>
+			<p class="mx-auto max-w-prose text-md leading-relaxed text-foreground-secondary">
+				You've declined your invitation and your spot has been released. We hope to see you at a
+				future event.
 			</p>
 		</div>
-	</div>
+		{@render facts([
+			{ label: 'Applicant', value: user.name },
+			{ label: 'Email', value: user.email }
+		])}
+	{/snippet}
+	{@render card(declined)}
 {/if}
 
-<!-- Decline confirmation modal -->
+<!--
+	Decline confirmation. Releasing a spot is irreversible and the button that opens
+	this sits next to the one that confirms, so it asks first.
+-->
 {#if showDeclineConfirm}
 	<div
-		class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+		class="fixed inset-0 z-50 flex items-center justify-center bg-overlay p-4"
 		role="dialog"
 		aria-modal="true"
+		aria-labelledby="decline-title"
 	>
-		<div class="w-full max-w-80 rounded border border-border bg-white p-6 shadow-lg">
-			<h3 class="mb-2 text-base font-semibold text-primary">Decline your spot?</h3>
-			<p class="mb-5 text-sm leading-relaxed text-muted-foreground">
-				This will permanently release your spot and cannot be undone.
+		<div class="modal-panel-w max-w-modal-sm bg-card p-7 shadow-lg">
+			<h3 id="decline-title" class="mb-2 text-xl font-bold text-foreground">Decline your spot?</h3>
+			<p class="mb-6 text-md leading-relaxed text-foreground-secondary">
+				This permanently releases your spot at the hackathon and cannot be undone.
 			</p>
 			{#if declineError}
-				<p class="mb-4 text-sm text-destructive" role="alert">{declineError}</p>
+				<p class="mb-4 text-base text-destructive" role="alert">{declineError}</p>
 			{/if}
-			<div class="flex gap-2">
+			<div class="flex flex-wrap gap-2">
 				<button
 					type="button"
 					onclick={ondecline}
 					disabled={declining}
-					class="rounded bg-destructive px-4 py-2 text-sm font-medium text-white transition-opacity disabled:opacity-60"
+					class="cursor-pointer bg-destructive px-5 py-2.5 font-display text-md
+					 font-semibold text-destructive-foreground transition-colors duration-150
+					 hover:bg-destructive-hover focus-visible:shadow-ring-danger disabled:opacity-60"
 				>
 					{declining ? 'Declining…' : 'Yes, decline'}
 				</button>
@@ -346,7 +321,9 @@
 					type="button"
 					onclick={() => (showDeclineConfirm = false)}
 					disabled={declining}
-					class="rounded border border-border px-4 py-2 text-sm text-primary transition-colors hover:bg-[#f4f4f4] disabled:opacity-40"
+					class="cursor-pointer border border-border px-5 py-2.5 font-display text-md
+					 font-semibold text-foreground transition-colors duration-150
+					 hover:border-brand-ink focus-visible:shadow-ring disabled:opacity-40"
 				>
 					Cancel
 				</button>

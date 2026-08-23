@@ -81,21 +81,21 @@
 </script>
 
 {#if !dismissed}
-	<div class="mb-6 rounded border border-border bg-white p-5">
+	<div class="mb-6 bg-card px-6 py-5 shadow-float">
 		{#if joined}
-			<p class="text-sm font-medium break-words text-primary">
+			<p class="text-md font-medium break-words text-foreground">
 				You joined <strong>{invite.teamName}</strong>.
-				<a href={resolve('/hacker/account')} class="ml-1 text-muted-foreground underline">
+				<a href={resolve('/hacker/account')} class="ml-1 font-medium text-brand-purple underline">
 					Go to your account →
 				</a>
 			</p>
 		{:else}
-			<p class="mb-0.5 text-xs font-medium tracking-widest text-muted-foreground uppercase">
-				Team Invitation
+			<p class="mb-1 font-mono text-2xs tracking-eyebrow text-foreground-tertiary uppercase">
+				Team invitation
 			</p>
-			<p class="mb-3 text-base font-semibold break-words text-primary">
+			<p class="mb-3 text-lg font-bold break-words text-foreground">
 				Join <span class="font-bold">{invite.teamName}</span>
-				<span class="ml-1 text-sm font-normal text-muted-foreground">
+				<span class="ml-1 text-base font-normal text-foreground-secondary">
 					({invite.memberCount}/{MAX_TEAM_SIZE} members)
 				</span>
 			</p>
@@ -106,16 +106,16 @@
 							frees a seat, or an RSVP that lands later, resolves itself with no second link.
 						-->
 			{#if full}
-				<p class="mb-3 text-sm text-muted-foreground">
+				<p class="mb-3 text-base text-foreground-secondary">
 					This team is full. Ask them to free up a spot, or start your own team from your account
 					page.
 				</p>
 			{:else if blockedReason}
-				<p class="mb-3 text-sm text-muted-foreground">{blockedReason}</p>
+				<p class="mb-3 text-base text-foreground-secondary">{blockedReason}</p>
 			{/if}
 
 			{#if joinError}
-				<p class="mb-3 text-sm text-destructive" role="alert">{joinError}</p>
+				<p class="mb-3 text-base text-destructive" role="alert">{joinError}</p>
 			{/if}
 
 			<div class="flex flex-wrap gap-2">
@@ -123,14 +123,14 @@
 					type="button"
 					onclick={handleJoin}
 					disabled={joining || full || invite.ineligibility !== null}
-					class="rounded bg-primary px-4 py-2 text-sm font-medium text-white transition-opacity disabled:cursor-not-allowed disabled:opacity-40"
+					class="cursor-pointer bg-brand-purple px-5 py-2.5 font-display text-md font-semibold text-white transition-colors duration-150 hover:bg-brand-purple-hover focus-visible:shadow-ring disabled:cursor-not-allowed disabled:opacity-40"
 				>
 					{joining ? 'Joining…' : 'Join team'}
 				</button>
 				<button
 					type="button"
 					onclick={handleDismiss}
-					class="rounded border border-border px-4 py-2 text-sm text-primary transition-colors hover:bg-[--color-muted]"
+					class="cursor-pointer border border-border px-5 py-2.5 font-display text-md font-semibold text-foreground transition-colors duration-150 hover:bg-muted focus-visible:shadow-ring"
 				>
 					Dismiss
 				</button>

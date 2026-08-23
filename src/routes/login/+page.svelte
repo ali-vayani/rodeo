@@ -1,6 +1,8 @@
 <script lang="ts">
 	import { createBrowserClient } from '@supabase/ssr';
 	import type { ActionData, PageData } from './$types';
+	import BatLogo from '$lib/components/brand/BatLogo.svelte';
+	import BracketFrame from '$lib/components/brand/BracketFrame.svelte';
 
 	let { form, data }: { form: ActionData; data: PageData } = $props();
 
@@ -48,22 +50,19 @@
 	}
 </script>
 
-<div class="flex min-h-screen items-center justify-center bg-white px-6">
-	<div class="w-full max-w-sm">
-		<div class="mb-8 text-center">
-			<p class="font-mono text-xs tracking-widest text-muted-foreground uppercase">
-				Hackathon Management
-			</p>
-			<h1 class="mt-1 font-mono text-3xl font-bold tracking-widest text-primary uppercase">
-				RODEO
-			</h1>
-			<p class="mt-2 text-sm text-muted-foreground">
+<div class="flex min-h-screen items-center justify-center brand-canvas p-6 font-display">
+	<div class="relative w-full max-w-modal-md bg-card px-11 py-11 shadow-panel">
+		<BracketFrame class="inset-4 text-brand-ink" arm="size-5" />
+		<div class="mb-7 text-center">
+			<BatLogo class="mx-auto mb-2 w-21 text-brand-ink" />
+			<h1 class="text-3xl font-extrabold tracking-wide text-brand-ink">RODEO</h1>
+			<p class="mt-2 text-md text-foreground-secondary">
 				{data.supabaseAuth ? 'Sign in to continue' : 'Dev login — enter your yopmail address'}
 			</p>
 		</div>
 
 		{#if data.oauthError}
-			<p class="mb-4 text-sm text-destructive">
+			<p class="mb-4 text-base text-destructive" role="alert">
 				{data.oauthError === 'reset_expired'
 					? 'That password reset link is invalid or has expired. Request a new one below.'
 					: 'Sign-in failed. Please try again.'}
@@ -79,7 +78,7 @@
 			<button
 				onclick={signInWithGoogle}
 				disabled={signingIn}
-				class="flex w-full items-center justify-center gap-3 rounded border border-border px-4 py-2 text-sm font-medium text-primary transition-colors hover:bg-muted disabled:opacity-60"
+				class="flex w-full cursor-pointer items-center justify-center gap-3 border border-border px-4 py-3 font-display text-md font-semibold text-foreground transition-colors duration-150 hover:bg-muted focus-visible:shadow-ring disabled:opacity-60"
 			>
 				<svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
 					<path
@@ -103,23 +102,25 @@
 			</button>
 
 			{#if form?.error && !data.yopmailLogin}
-				<p class="mt-3 text-sm text-destructive">{form.error}</p>
+				<p class="mt-3 text-base text-destructive" role="alert">{form.error}</p>
 			{/if}
 
 			<div class="my-6 flex items-center gap-3">
 				<div class="h-px flex-1 bg-border"></div>
-				<span class="font-mono text-xs text-muted-foreground uppercase">or</span>
+				<span class="font-mono text-2xs tracking-eyebrow text-foreground-tertiary uppercase"
+					>or</span
+				>
 				<div class="h-px flex-1 bg-border"></div>
 			</div>
 
 			{#if form?.signupPending}
-				<p class="mb-3 text-sm text-muted-foreground">
+				<p class="mb-3 text-base text-foreground-secondary">
 					Check your email for a confirmation link, then sign in.
 				</p>
 			{/if}
 
 			{#if form?.resetSent}
-				<p class="mb-3 text-sm text-muted-foreground">
+				<p class="mb-3 text-base text-foreground-secondary">
 					Check your email for a password reset link.
 				</p>
 			{/if}
@@ -140,7 +141,7 @@
 						placeholder="Full name"
 						required
 						autocomplete="name"
-						class="w-full rounded border border-border px-3 py-2 text-sm outline-none focus:border-primary"
+						class="w-full border border-border bg-card px-3.5 py-2.5 text-md text-foreground transition-colors duration-150 outline-none focus:border-brand-purple focus-visible:shadow-ring"
 					/>
 				{/if}
 
@@ -150,7 +151,7 @@
 					placeholder="you@example.com"
 					required
 					autocomplete="email"
-					class="w-full rounded border border-border px-3 py-2 text-sm outline-none focus:border-primary"
+					class="w-full border border-border bg-card px-3.5 py-2.5 text-md text-foreground transition-colors duration-150 outline-none focus:border-brand-purple focus-visible:shadow-ring"
 				/>
 
 				{#if mode !== 'forgot'}
@@ -160,17 +161,17 @@
 						placeholder="Password"
 						required
 						autocomplete={mode === 'signup' ? 'new-password' : 'current-password'}
-						class="w-full rounded border border-border px-3 py-2 text-sm outline-none focus:border-primary"
+						class="w-full border border-border bg-card px-3.5 py-2.5 text-md text-foreground transition-colors duration-150 outline-none focus:border-brand-purple focus-visible:shadow-ring"
 					/>
 				{/if}
 
 				{#if formError}
-					<p class="text-sm text-destructive">{formError}</p>
+					<p class="text-base text-destructive" role="alert">{formError}</p>
 				{/if}
 
 				<button
 					type="submit"
-					class="w-full rounded bg-primary px-4 py-2 text-sm font-medium text-white transition-opacity hover:opacity-85"
+					class="w-full cursor-pointer bg-brand-ink px-4 py-3 font-display text-md font-semibold text-white transition-colors duration-150 hover:bg-primary-hover focus-visible:shadow-ring"
 				>
 					{mode === 'signup' ? 'Create account' : mode === 'forgot' ? 'Send reset link' : 'Sign in'} →
 				</button>
@@ -180,7 +181,7 @@
 				<button
 					type="button"
 					onclick={() => (mode = 'forgot')}
-					class="mt-3 w-full text-center text-sm text-muted-foreground hover:text-primary"
+					class="mt-4 w-full cursor-pointer text-center text-base text-foreground-secondary transition-colors duration-150 hover:text-foreground hover:underline"
 				>
 					Forgot password?
 				</button>
@@ -189,7 +190,7 @@
 			<button
 				type="button"
 				onclick={() => (mode = mode === 'signin' ? 'signup' : 'signin')}
-				class="mt-3 w-full text-center text-sm text-muted-foreground hover:text-primary"
+				class="mt-4 w-full cursor-pointer text-center text-base text-foreground-secondary transition-colors duration-150 hover:text-foreground hover:underline"
 			>
 				{mode === 'signin'
 					? 'New here? Create an account'
@@ -202,7 +203,9 @@
 		{#if data.supabaseAuth && data.yopmailLogin}
 			<div class="my-6 flex items-center gap-3">
 				<div class="h-px flex-1 bg-border"></div>
-				<span class="font-mono text-xs text-muted-foreground uppercase">or test account</span>
+				<span class="font-mono text-2xs tracking-eyebrow text-foreground-tertiary uppercase"
+					>or test account</span
+				>
 				<div class="h-px flex-1 bg-border"></div>
 			</div>
 		{/if}
@@ -218,24 +221,26 @@
 					placeholder="you@yopmail.com"
 					required
 					autocomplete="email"
-					class="w-full rounded border border-border px-3 py-2 text-sm outline-none focus:border-primary"
+					class="w-full border border-border bg-card px-3.5 py-2.5 text-md text-foreground transition-colors duration-150 outline-none focus:border-brand-purple focus-visible:shadow-ring"
 				/>
 
 				{#if form?.error}
-					<p class="text-sm text-destructive">{form.error}</p>
+					<p class="text-base text-destructive" role="alert">{form.error}</p>
 				{/if}
 
 				<button
 					type="submit"
-					class="w-full rounded bg-primary px-4 py-2 text-sm font-medium text-white transition-opacity hover:opacity-85"
+					class="w-full cursor-pointer bg-brand-ink px-4 py-3 font-display text-md font-semibold text-white transition-colors duration-150 hover:bg-primary-hover focus-visible:shadow-ring"
 				>
 					Sign in →
 				</button>
 			</form>
 		{/if}
 
-		<p class="mt-8 text-center font-mono text-xs text-muted-foreground">
-			RODEO · Hackathon Management Platform
+		<p
+			class="mt-8 text-center font-mono text-2xs tracking-eyebrow text-foreground-tertiary uppercase"
+		>
+			Freetail Hackers
 		</p>
 	</div>
 </div>

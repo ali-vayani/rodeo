@@ -18,20 +18,25 @@
 	];
 </script>
 
-<div>
-	<p class="mb-2 text-xs font-medium tracking-widest text-muted-foreground uppercase">
-		I am applying as
-	</p>
-	<div class="flex flex-wrap gap-2">
+<fieldset class="border-0 p-0">
+	<legend class="mb-3 p-0 text-base font-semibold text-foreground"> I am applying as </legend>
+	<!--
+		A four-up grid rather than a wrapping row: the four roles are a fixed set, and
+		an even grid stops "Volunteer" from orphaning onto its own line at odd widths.
+	-->
+	<div class="grid grid-cols-2 gap-2 sm:grid-cols-4">
 		{#each roles as role (role)}
 			<button
 				type="button"
 				onclick={() => onselect(role.value)}
 				{disabled}
-				class="rounded border px-4 py-1.5 text-sm font-medium transition-colors disabled:cursor-not-allowed {selected ===
-				role.value
-					? 'border-primary bg-primary text-white'
-					: 'border-border bg-white text-primary'} {disabled && selected !== role.value
+				aria-pressed={selected === role.value}
+				class="cursor-pointer border px-3 py-3 font-display text-base font-semibold
+				 transition-colors duration-150 focus-visible:shadow-ring
+				 disabled:cursor-not-allowed {selected === role.value
+					? 'border-brand-ink bg-brand-ink text-white'
+					: 'border-border bg-card text-foreground-secondary hover:border-brand-ink hover:text-foreground'} {disabled &&
+				selected !== role.value
 					? 'opacity-50'
 					: ''}"
 			>
@@ -39,4 +44,4 @@
 			</button>
 		{/each}
 	</div>
-</div>
+</fieldset>
