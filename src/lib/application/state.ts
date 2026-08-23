@@ -15,6 +15,12 @@ export type ApplicationUser = {
 	activeDecision: DecisionStatus | null;
 };
 
+/**
+ * Where an applicant is in the funnel, for the portal's status banner.
+ *
+ * Post-RSVP status outranks the decision: a CONFIRMED or DECLINED user still holds an
+ * ACCEPTED decision, and what they did with it is the more recent fact.
+ */
 export function computeApplicationState(user: ApplicationUser): ApplicationState {
 	if (user.status === UserStatus.CONFIRMED) return 'rsvpd';
 	if (user.status === UserStatus.CHECKED_IN) return 'checked-in';

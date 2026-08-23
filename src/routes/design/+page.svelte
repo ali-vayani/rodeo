@@ -31,7 +31,6 @@
 	import { toast } from '$lib/ui/toast.svelte';
 	import { formatDate } from '$lib/format';
 
-	// ── Live state for the interactive specimens ────────────────────────────
 	let text = $state('');
 	let broken = $state('not-an-email');
 	let notes = $state('');
@@ -89,7 +88,6 @@
 		{ value: 'CHECKED_IN', label: 'Checked in' }
 	];
 
-	// ── Table specimen ──────────────────────────────────────────────────────
 	interface Applicant {
 		uid: string;
 		name: string;
@@ -188,7 +186,6 @@
 	</p>
 
 	<div class="flex flex-col gap-10">
-		<!-- ── Buttons ──────────────────────────────────────────────────── -->
 		<Card title="Button">
 			<div class="flex flex-col gap-6">
 				<div class="flex flex-col gap-2.5">
@@ -240,7 +237,6 @@
 			</div>
 		</Card>
 
-		<!-- ── Badges ───────────────────────────────────────────────────── -->
 		<Card title="Badge">
 			<div class="flex flex-col gap-6">
 				{#each ['subtle', 'solid', 'outline'] as const as variant (variant)}
@@ -267,7 +263,6 @@
 			</div>
 		</Card>
 
-		<!-- ── Form controls ────────────────────────────────────────────── -->
 		<Card title="Field & controls">
 			<div class="flex flex-col gap-6">
 				<div class="grid gap-5 sm:grid-cols-2">
@@ -293,9 +288,8 @@
 				<Divider label="Combobox — the only single-select control" />
 
 				<!--
-									There was briefly a second one, `Select`, a plain listbox for short lists. It
-									went because the choice between them depends on how long the list grows, which
-									is a runtime fact.
+									A separate `Select` for short lists was removed: how long a list grows is a
+									runtime fact, so the choice between the two could not be made at design time.
 
 									`allowCustom` is what a long-but-incomplete list needs: pick "Not listed" and
 									the control becomes a text box. `clearable` offers the placeholder as a real
@@ -344,7 +338,6 @@
 			</div>
 		</Card>
 
-		<!-- ── Data display ─────────────────────────────────────────────── -->
 		<Card title="StatCard" padding="md">
 			<div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
 				<StatCard label="Applied" value={248} />
@@ -398,7 +391,6 @@
 			</div>
 		</div>
 
-		<!-- ── Navigation ───────────────────────────────────────────────── -->
 		<Card title="Tabs">
 			<div class="flex flex-col gap-6">
 				<div class="flex flex-col gap-2.5">
@@ -419,7 +411,6 @@
 			</div>
 		</Card>
 
-		<!-- ── Overlays & feedback ──────────────────────────────────────── -->
 		<Card title="Overlays & feedback">
 			<div class="flex flex-col gap-6">
 				<div class="flex flex-col gap-2.5">

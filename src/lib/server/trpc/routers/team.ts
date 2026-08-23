@@ -15,9 +15,8 @@ const MAX_TEAM_SIZE = 4;
 const MAX_TEAM_NAME_LENGTH = 64;
 
 /**
- * Refuses the caller with the reason that actually applies to them — a judge told
- * "you must be a confirmed attendee" would confirm and still be refused. See
- * $lib/team/eligibility, shared with the layout that renders the invite banner.
+ * Refuses with the reason that applies: a judge told "you must be a confirmed
+ * attendee" would confirm and still be refused. See $lib/team/eligibility.
  */
 function assertTeamEligible(user: TeamEligibilitySubject): void {
 	const reason = teamIneligibility(user);
@@ -27,10 +26,8 @@ function assertTeamEligible(user: TeamEligibilitySubject): void {
 }
 
 /**
- * Did this write lose a serialization race?
- *
- * Postgres aborts one side of a detected conflict and Prisma surfaces it as P2034.
- * Matched structurally rather than by `instanceof` so it survives client regeneration.
+ * P2034: Prisma's code for a serialization conflict. Matched structurally rather than
+ * by `instanceof` so it survives client regeneration.
  */
 function isWriteConflict(error: unknown): boolean {
 	return (
@@ -42,14 +39,25 @@ function isWriteConflict(error: unknown): boolean {
 }
 
 /**
- * Adds a member to a team, refusing if the team filled up in the meantime.
+ * Adds a member to a team. Count and write share one serializable transaction:
+ * as two statements that is write skew, where three invitees accepting at once each
+ * see three members and the team lands at six. Callers still pre-check so an
+ * already-full team gets the specific message.
  *
- * The count and the write happen inside one serializable transaction. Reading the
- * size and then writing as two statements is write skew: three invitees accepting at
- * once each see three members, every write succeeds, and the team lands at six.
+ * Inputs:
+ * - uid: string — the joiner
+ * - teamId: string — the team
  *
- * Callers still pre-check, because a team that was already full deserves the specific
- * message; this covers the fraction of a second the pre-check can't.
+ * Outputs:
+ * - { uid, teamId } — projected, never the bare row; see ../selects
+ *
+ * Side effects:
+ * - Settles every PENDING invitation addressed to the joiner: this team's to ACCEPTED,
+ *   any other team's to DECLINED.
+ *
+ * Throws:
+ * - TRPCError BAD_REQUEST — already on a team, or the team is full (including a lost
+ *   serialization race, which looks the same from the hacker's side)
  */
 async function addMemberToTeam(
 	prisma: PrismaClient,
@@ -58,8 +66,8 @@ async function addMemberToTeam(
 	try {
 		return await prisma.$transaction(
 			async (tx) => {
-				// Re-read the joiner *inside* the transaction: the caller checked teamId was
-				// null when the request arrived, but a concurrent join could have set it since.
+				// Re-read inside the transaction: a concurrent join may have set teamId since
+				// the caller checked.
 				const joiner = await tx.user.findUniqueOrThrow({
 					where: { uid },
 					select: { teamId: true, email: true }
@@ -73,17 +81,9 @@ async function addMemberToTeam(
 					throw new TRPCError({ code: 'BAD_REQUEST', message: 'Team is already full.' });
 				}
 
-				/**
-				 * Landing on a team settles every invitation addressed to this person,
-				 * whichever door they came through.
-				 *
-				 * Updating only the one invitation `acceptInvite` held left the link path
-				 * writing nothing, so a joiner stayed PENDING forever — listed under their
-				 * own team's "Pending invitations" and un-re-invitable.
-				 *
-				 * Matched on uid *or* address, so an invitation written before the account
-				 * existed (userId null) is caught by the address it was sent to.
-				 */
+				// Settled whichever door the joiner came through (accept or link), else a
+				// PENDING row lingers under their own team's "Pending invitations". Matched on
+				// uid or address so an invitation written before the account existed is caught.
 				const addressedToJoiner = {
 					OR: [{ userId: uid }, { email: joiner.email }],
 					status: InvitationStatus.PENDING
@@ -94,15 +94,12 @@ async function addMemberToTeam(
 					data: { status: InvitationStatus.ACCEPTED }
 				});
 
-				// You can only be on one team, so an invitation from anyone else is spent too —
-				// otherwise it offers a join that `addMemberToTeam` would refuse.
+				// One team only, so other teams' invitations are spent too.
 				await tx.invitation.updateMany({
 					where: { ...addressedToJoiner, teamId: { not: teamId } },
 					data: { status: InvitationStatus.DECLINED }
 				});
 
-				// Projected, never the bare row: `joinByCode` returns this straight to the caller,
-				// and a full `User` would leak their embargoed decision. See ../selects.
 				return tx.user.update({
 					where: { uid },
 					data: { teamId },
@@ -112,8 +109,6 @@ async function addMemberToTeam(
 			{ isolationLevel: 'Serializable' }
 		);
 	} catch (error) {
-		// Losing the race and losing the count check are the same outcome from the hacker's
-		// side — someone else took the last seat — so it isn't surfaced as a 500.
 		if (isWriteConflict(error)) {
 			throw new TRPCError({ code: 'BAD_REQUEST', message: 'Team is already full.' });
 		}
@@ -123,8 +118,7 @@ async function addMemberToTeam(
 
 export const teamRouter = router({
 	getMyTeam: authedProcedure.query(async ({ ctx }) => {
-		// Explicit `select`, never `include`: teammates and invitees are other people, and
-		// `include` would return their embargoed `pendingDecision`. See ../selects.
+		// `select`, never `include`: teammates and invitees are other people. See ../selects.
 		const user = await ctx.prisma.user.findUniqueOrThrow({
 			where: { uid: ctx.user.uid },
 			select: {
@@ -138,14 +132,9 @@ export const teamRouter = router({
 						invitations: {
 							where: {
 								status: InvitationStatus.PENDING,
-								/**
-								 * PENDING is not enough on its own: rows written before `addMemberToTeam`
-								 * settled them are still in the database, and they render as a team listing
-								 * one of its own members under "Pending invitations". Filtered on what's
-								 * true rather than migrated away.
-								 *
-								 * The `userId: null` arm keeps invitations to an address with no account yet.
-								 */
+								// PENDING rows predating `addMemberToTeam`'s settling still exist and would
+								// list a member under "Pending invitations". The `userId: null` arm keeps
+								// invitations to an address with no account yet.
 								OR: [{ userId: null }, { user: { is: { teamId: null } } }]
 							},
 							select: { id: true, email: true, user: { select: TEAM_MEMBER_SELECT } }
@@ -165,14 +154,12 @@ export const teamRouter = router({
 			}
 		});
 
-		// The receiving side of the same thing: you are on a team, so every invitation
-		// addressed to you is spent, whether or not the row says so.
+		// On a team, every invitation addressed to you is spent whether or not the row says so.
 		return { team: user.team, pendingInvitations: user.teamId ? [] : user.invitations };
 	}),
 
 	createTeam: authedProcedure
-		// Spelled out because these reach the hacker through the errorFormatter in ../init,
-		// and zod's defaults describe a schema rather than the box they just typed in.
+		// Messages reach the hacker verbatim via the errorFormatter in ../init.
 		.input(
 			z.object({
 				teamName: z
@@ -190,8 +177,8 @@ export const teamRouter = router({
 				where: { uid: ctx.user.uid }
 			});
 
-			// Teams are for confirmed hackers. Without this a rejected applicant — or a
-			// staff account — could open a team and use inviteMember as an existence oracle.
+			// Without this a rejected applicant or staff account could open a team and use
+			// inviteMember as an existence oracle.
 			assertTeamEligible(user);
 
 			if (user.teamId) {
@@ -206,8 +193,7 @@ export const teamRouter = router({
 					teamName: input.teamName,
 					members: { connect: { uid: ctx.user.uid } }
 				},
-				// Projected, never `include`: the sole member is the caller, and a full row would
-				// return their own embargoed decision. See ../selects.
+				// Projected, never `include`. See ../selects.
 				select: {
 					id: true,
 					teamName: true,
@@ -218,12 +204,8 @@ export const teamRouter = router({
 		}),
 
 	inviteMember: authedProcedure
-		// Normalized in the schema so the lookup, the duplicate check and the stored row all
-		// see the same form. Accounts are written lowercased everywhere, so an invite typed
-		// as "Teammate@Example.com" would otherwise match nothing.
-		//
-		// The message is spelled out because zod's default reaches the inviter as the raw
-		// issue array — see the errorFormatter in ../init.
+		// Lowercased in the schema so the lookup, duplicate check and stored row agree;
+		// accounts are written lowercased. The message reaches the inviter verbatim.
 		.input(
 			z.object({
 				email: z.string().trim().toLowerCase().email('Enter a valid email address.')
@@ -235,17 +217,15 @@ export const teamRouter = router({
 				include: { team: { include: { members: true } } }
 			});
 
-			// The inviter must themselves be a confirmed hacker — mirrors createTeam so a
-			// rejected/staff account can't drive this endpoint at all.
+			// Mirrors createTeam so a rejected/staff account can't drive this endpoint.
 			assertTeamEligible(inviter);
 
 			if (!inviter.team) {
 				throw new TRPCError({ code: 'BAD_REQUEST', message: 'You are not on a team.' });
 			}
 
-			// Ahead of the size check, so re-adding an existing teammate to a full team gets the
-			// reason that's actually about them. Named rather than swallowed by the generic reply
-			// below, since it reveals nothing they can't read off their own member list.
+			// Before the size check so the reason is about them. Safe to name: it reveals
+			// nothing they can't read off their own member list.
 			if (inviter.team.members.some((member) => member.email === input.email)) {
 				throw new TRPCError({
 					code: 'BAD_REQUEST',
@@ -260,13 +240,10 @@ export const teamRouter = router({
 				});
 			}
 
-			// One deliberately generic outcome for "not a valid invitee".
-			//
-			// Distinguishing "no such account" from "not a hacker" from "not confirmed" turned
-			// this into an oracle: any confirmed hacker could probe an arbitrary email and learn
-			// whether it registered, what role it holds, and whether it was accepted. The invite
-			// is created only for an eligible, unteamed user and reports "invitation sent" either
-			// way. Duplicate invites are the one case worth naming.
+			// One generic outcome for "not a valid invitee". Distinguishing "no account" from
+			// "not a hacker" from "not confirmed" is an oracle: any hacker could probe an
+			// email and learn whether it registered, its role, and whether it was accepted.
+			// Duplicate invites are the one case worth naming.
 			const invitee = await ctx.prisma.user.findUnique({ where: { email: input.email } });
 
 			const inviteeEligible =
@@ -313,16 +290,14 @@ export const teamRouter = router({
 				throw new TRPCError({ code: 'BAD_REQUEST', message: 'Invitation is no longer pending.' });
 			}
 
-			// Re-checked at accept time, not just invite time: a user invited while CONFIRMED
-			// could have declined their RSVP since.
+			// Re-checked at accept time: they may have declined their RSVP since the invite.
 			assertTeamEligible(accepter);
 
 			if (invitation.team.members.length >= MAX_TEAM_SIZE) {
 				throw new TRPCError({ code: 'BAD_REQUEST', message: 'Team is already full.' });
 			}
 
-			// No invitation id to pass: `addMemberToTeam` settles every invitation this
-			// account holds, which is the same write on both the accept and the link path.
+			// No invitation id: `addMemberToTeam` settles every invitation this account holds.
 			await addMemberToTeam(ctx.prisma, {
 				uid: ctx.user.uid,
 				teamId: invitation.teamId
@@ -342,8 +317,8 @@ export const teamRouter = router({
 				throw new TRPCError({ code: 'FORBIDDEN' });
 			}
 
-			// Only a pending invite can be declined. Without this, replaying decline on an
-			// already-accepted invite flips it to DECLINED while the user stays on the team.
+			// Replaying decline on an accepted invite would flip it to DECLINED while the
+			// user stays on the team.
 			if (invitation.status !== InvitationStatus.PENDING) {
 				throw new TRPCError({ code: 'BAD_REQUEST', message: 'Invitation is no longer pending.' });
 			}
@@ -361,8 +336,8 @@ export const teamRouter = router({
 				where: { uid: ctx.user.uid }
 			});
 
-			// The gate a copied invite link runs into. A judge or mentor holding the URL reaches
-			// this endpoint exactly like a hacker does, so the check can't live only in the banner.
+			// A judge holding a copied invite URL reaches this endpoint like a hacker does,
+			// so the check can't live only in the banner.
 			assertTeamEligible(user);
 
 			if (user.teamId) {
@@ -413,20 +388,13 @@ export const teamRouter = router({
 
 		const teamId = user.teamId;
 
-		// One transaction: drop the membership, then delete the team only if no members
-		// remain. Reading members.length outside a transaction let two members leaving at
-		// once each see two, so neither deleted and an empty team survived with a live code.
+		// One transaction: two members leaving at once outside one each see two remaining,
+		// so neither deletes and an empty team survives with a live invite code.
 		await ctx.prisma.$transaction(async (tx) => {
 			await tx.user.update({ where: { uid: ctx.user.uid }, data: { teamId: null } });
 
-			/**
-			 * Leaving puts the account back where it started, so the invitation history
-			 * binding it to this team goes too.
-			 *
-			 * `teamId = null` alone left the ACCEPTED row behind, and a former member is the
-			 * one person a team is most likely to re-invite. Any row still addressed to
-			 * someone who is no longer here is a claim about the team that isn't true.
-			 */
+			// Clear the invitation history too: a former member is the person a team is most
+			// likely to re-invite, and a leftover ACCEPTED row blocks that.
 			await tx.invitation.deleteMany({
 				where: { teamId, OR: [{ userId: ctx.user.uid }, { email: user.email }] }
 			});

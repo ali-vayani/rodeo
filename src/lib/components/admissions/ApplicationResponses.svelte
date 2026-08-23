@@ -13,10 +13,7 @@
 		}>;
 	} = $props();
 
-	// Sorted here rather than at each call site: the review pane and the ranked
-	// list's read-only view show the same application, and an answer order that
-	// differed between the scoring pass and the decision pass would read as two
-	// different applications.
+	// Sorted here, not per call site, so the scoring and decision passes show the same order.
 	let sorted = $derived([...responses].sort((a, b) => a.question.order - b.question.order));
 </script>
 

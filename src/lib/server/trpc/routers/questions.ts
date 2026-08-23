@@ -8,12 +8,16 @@ import { applicationFileKey } from '$lib/server/applicationFiles';
 import { deleteObject, storageConfigured } from '$lib/server/storage';
 
 /**
- * Remove the uploaded files belonging to questions about to be deleted.
+ * Removes the uploaded files for questions about to be deleted. The DB cascade drops
+ * the response rows but knows nothing about the bucket.
  *
- * Deleting a question cascades its responses and the audit entry says so, but the bytes
- * live in a bucket the database knows nothing about — so without this the rows vanish
- * and the resumes stay. Best-effort throughout: a bucket that is down must not leave an
- * organizer unable to edit the form.
+ * Inputs:
+ * - prisma: PrismaClient
+ * - questionIds: string[] — questions whose FILE responses should be cleared
+ *
+ * Side effects:
+ * - Deletes objects from storage. Best-effort: failures are logged, never thrown, so a
+ *   bucket outage can't block editing the form.
  */
 async function deleteFilesForQuestions(prisma: PrismaClient, questionIds: string[]): Promise<void> {
 	if (questionIds.length === 0 || !storageConfigured()) return;
@@ -43,11 +47,8 @@ async function deleteFilesForQuestions(prisma: PrismaClient, questionIds: string
 	}
 }
 
-// These are nullable columns, so Prisma hands them back as `null`. The application
-// editor round-trips a question through JSON untouched and posts it back, and zod's
-// `.optional()` accepts only `undefined`, so every save containing a modified question
-// was rejected with "expected string, received null". `.nullish()` accepts both, and
-// `null` is what Prisma wants for "clear this column".
+// `.nullish()`, not `.optional()`: the editor posts back rows as Prisma returned them,
+// with `null` in the nullable columns, and `null` is also what clears a column.
 const questionInput = z.object({
 	title: z.string().min(1),
 	type: z.nativeEnum(QuestionType),
@@ -59,22 +60,20 @@ const questionInput = z.object({
 	min: z.number().nullish(),
 	max: z.number().nullish(),
 	regex: z.string().nullish(),
-	// Was `z.string()`, which accepted anything. The value is used as a computed key into
-	// a `User` update, so a typo produced a question that saved but wrote nowhere.
+	// Used as a computed key into a `User` update; a free-form string would let a typo
+	// save a question that writes nowhere.
 	linkedField: z.nativeEnum(LinkedField).nullish(),
 	optionPreset: z.nativeEnum(OptionPreset).nullish()
 });
 
 export const questionsRouter = router({
-	// The application form. `authedProcedure`, not public: with no role it used to return
-	// every Question to anyone, including `regex`/`linkedField` internals and
-	// staff-audience questions. Now bounded to applicant-audience questions.
+	// The application form. Authed and bounded to applicant audiences so `regex` /
+	// `linkedField` internals and staff-only questions never reach the public.
 	list: authedProcedure
 		.input(z.object({ role: z.nativeEnum(Role).optional() }))
 		.query(async ({ ctx, input }) => {
-			// `input.role` lets an applicant preview a specific audience, but it arrives from the
-			// client and `z.nativeEnum(Role)` accepts staff roles too, so it is clamped. Without
-			// the clamp, `list({ role: 'ADMIN' })` returned the staff-only questions.
+			// `role` comes from the client and the enum includes staff roles, so clamp it;
+			// otherwise `list({ role: 'ADMIN' })` returns the staff-only questions.
 			const audience =
 				input.role && APPLICANT_ROLES.includes(input.role) ? [input.role] : APPLICANT_ROLES;
 			return ctx.prisma.question.findMany({
@@ -117,8 +116,7 @@ export const questionsRouter = router({
 				action: 'question.update',
 				summary: `Edited the question "${question.title}"`,
 				target: { id: question.id, label: question.title },
-				// Renames are the edit that makes old responses hard to interpret, so
-				// the previous title is worth keeping even when nothing else changed.
+				// Renames make old responses hard to interpret, so keep the previous title.
 				metadata: { titleFrom: before.title, type: question.type }
 			});
 
@@ -126,15 +124,14 @@ export const questionsRouter = router({
 		}),
 
 	delete: adminProcedure.input(z.object({ id: z.string() })).mutation(async ({ ctx, input }) => {
-		// Before the delete — the responses naming the files are cascaded away with it.
+		// Before the delete: the responses naming the files cascade away with it.
 		await deleteFilesForQuestions(ctx.prisma, [input.id]);
 
 		const question = await ctx.prisma.question.delete({ where: { id: input.id } });
 
 		await logAction(ctx, {
 			action: 'question.delete',
-			// Deleting a question cascades its responses. Say so in the trail —
-			// this is the entry someone reads when applicant answers go missing.
+			// This is the entry someone reads when applicant answers go missing.
 			summary: `Deleted the question "${question.title}" and its responses`,
 			target: { id: question.id, label: question.title },
 			metadata: { type: question.type }
@@ -174,8 +171,7 @@ export const questionsRouter = router({
 			})
 		)
 		.mutation(async ({ ctx, input }) => {
-			// Resolve the deleted titles before the transaction removes them. An audit row
-			// reading "deleted 2 questions" is far less useful than one naming them.
+			// Resolved before the transaction removes them, so the audit row can name them.
 			const deletedTitles =
 				input.deleted.length > 0
 					? (
@@ -186,8 +182,8 @@ export const questionsRouter = router({
 						).map((q) => q.title)
 					: [];
 
-			// Outside the transaction: S3 has no rollback, so a delete inside one that
-			// later aborts would leave the question standing with its file gone.
+			// Outside the transaction: S3 has no rollback, so an aborted transaction would
+			// leave the question standing with its file gone.
 			await deleteFilesForQuestions(
 				ctx.prisma,
 				input.deleted.map((q) => q.id)
@@ -212,8 +208,7 @@ export const questionsRouter = router({
 				}
 			});
 
-			// One entry per save, not one per question. The editor commits the whole form at
-			// once, and twelve rows for a single click would bury everything else in the feed.
+			// One entry per save, not per question, or a single click buries the feed.
 			const parts = [
 				input.added.length && `${input.added.length} added`,
 				input.modified.length && `${input.modified.length} edited`,

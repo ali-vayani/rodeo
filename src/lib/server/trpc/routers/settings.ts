@@ -6,9 +6,8 @@ import { DEFAULT_SETTINGS } from '$lib/server/settings';
 import { US_STATES } from '$lib/data/states';
 import { logAction, listOrNone } from '$lib/server/log';
 
-// Same bounds `updateTemplates` enforces. This full-object PUT is the other write path
-// to those columns, and leaving it unbounded let it store an empty subject or a
-// multi-megabyte template that `admissions.release` mails.
+// Same bounds as `updateTemplates`; `update` is the other write path to these columns
+// and `admissions.release` mails whatever is stored.
 const subject = z.string().min(1).max(200);
 const templateBody = z.string().max(20000);
 
@@ -33,16 +32,15 @@ const settingsInput = z
 		waitlistTemplate: templateBody,
 		waitlistSubject: subject,
 		timezone: z.string().min(1),
-		// A US postal code or nothing. Validated against the list rather than as "two
-		// letters" so a typo can't quietly become a state that filters to zero rows.
+		// Checked against the list, not "two letters", so a typo can't become a state
+		// that filters to zero rows.
 		homeState: z
 			.string()
 			.refine((code) => code in US_STATES, { message: 'Not a US state.' })
 			.nullable()
 			.optional()
 	})
-	// Applications must open before they close, and RSVP can't fall before the deadline —
-	// otherwise the window guards lock every applicant out with a nonsensical message.
+	// Out-of-order dates make the window guards lock every applicant out.
 	.refine((s) => s.applicationOpen <= s.applicationDeadline, {
 		message: 'Applications must open before they close.',
 		path: ['applicationDeadline']
@@ -52,23 +50,17 @@ const settingsInput = z
 		path: ['RSVPDeadline']
 	});
 
-// Lives in `$lib/server/settings` so the senders resolve the same values this router
-// serves the editor. Re-exported because this was its home.
+// Re-exported for existing importers; lives in `$lib/server/settings` so the senders
+// resolve the same values the editor sees.
 export { DEFAULT_SETTINGS };
 
 type TemplateColumns = Record<`${TemplateKey}Template` | `${TemplateKey}Subject`, string>;
 
 /**
- * The lifecycle template and subject columns, emptied.
- *
- * `settings.get` is `authedProcedure` because non-admins need parts of this row: the
- * RSVP deadline, the start date, `scanActions`, the timezone. The six templates and
- * their subjects are internal copy that none of those callers asked for.
- *
- * Emptied rather than omitted, because the same payload feeds components typed against
- * the full `Settings` row. Every caller keeps the fields; only an admin gets contents.
- *
- * Derived from `TEMPLATE_KEYS` so a seventh template is covered the day it lands.
+ * Template and subject columns blanked for non-admin `settings.get` callers, who need
+ * the deadlines and `scanActions` but not internal email copy. Emptied rather than
+ * omitted because the payload feeds components typed against the full `Settings` row.
+ * Derived from `TEMPLATE_KEYS` so a new template is covered automatically.
  */
 const REDACTED_TEMPLATES = Object.fromEntries(
 	TEMPLATE_KEYS.flatMap((key) => [
@@ -110,8 +102,7 @@ export const settingsRouter = router({
 	update: adminProcedure.input(settingsInput).mutation(async ({ ctx, input }) => {
 		const existing = await ctx.prisma.settings.findFirst();
 
-		// The page is a full-object PUT, so every save sends all nineteen columns. Logging
-		// "updated settings" would be true of every entry and useful in none.
+		// Every save sends all columns, so diff to find what actually changed.
 		const changed = existing ? changedFields(existing, input) : Object.keys(input);
 
 		const settings = existing
@@ -136,8 +127,7 @@ export const settingsRouter = router({
 	updateTemplates: adminProcedure
 		.input(
 			z.object({
-				// partialRecord, not record: the page sends only the templates the
-				// admin actually edited, so requiring all six keys would reject it.
+				// partialRecord: the page sends only the templates the admin edited.
 				templates: z.partialRecord(
 					z.enum(TEMPLATE_KEYS),
 					z.object({
@@ -157,16 +147,14 @@ export const settingsRouter = router({
 			const existing = await ctx.prisma.settings.findFirst();
 			const settings = existing
 				? await ctx.prisma.settings.update({ where: { id: existing.id }, data })
-				: // Fresh install: seed.ts doesn't create a Settings row, so `get` served
-					// DEFAULT_SETTINGS and there is nothing to update yet. Materialise it.
+				: // Fresh install: seed.ts creates no Settings row, so materialise one.
 					await ctx.prisma.settings.create({ data: { ...DEFAULT_SETTINGS, ...data } });
 
 			const edited = Object.keys(input.templates);
 			await logAction(ctx, {
 				action: 'settings.templates.update',
 				summary: `Updated the ${listOrNone(edited)} email ${edited.length === 1 ? 'template' : 'templates'}`,
-				// Bodies are not stored here — they can run to 20k characters each, and
-				// the trail records that they changed, not what they said.
+				// Bodies run to 20k characters each; the trail records that they changed.
 				metadata: { templates: edited }
 			});
 

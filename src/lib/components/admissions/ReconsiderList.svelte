@@ -51,7 +51,7 @@
 	let search = $state('');
 	let roleFilter = $state<string | null>(null);
 
-	/** Roles that actually appear in the list — don't show tabs for roles with no one. */
+	/** No tabs for roles nobody in the list holds. */
 	let availableRoles = $derived([...new Set(applicants.map((a) => a.role))].sort());
 
 	let filtered = $derived(
@@ -65,11 +65,8 @@
 		})
 	);
 
-	/**
-	 * Toggle a decision on a single row. Pressing the already-pending decision clears it;
-	 * pressing a different one sets it. Pressing one that matches the released active
-	 * decision is a no-op, and the button is disabled at the template level anyway.
-	 */
+	// Pressing the already-pending decision clears it. Matching the released decision is
+	// a no-op; the button is disabled in the template anyway.
 	function decideOne(uid: string, decision: DecisionStatus) {
 		const row = applicants.find((a) => a.uid === uid);
 		if (!row || row.activeDecision === decision) return;
@@ -99,7 +96,6 @@
 	];
 </script>
 
-<!-- Toolbar: search and role filter -->
 <div class="mb-3 flex flex-wrap items-center gap-x-3 gap-y-2">
 	<input
 		type="search"
@@ -231,7 +227,6 @@
 	{/snippet}
 </DataTable>
 
-<!-- Read-only application modal, opened from the applicant's name. -->
 <Modal
 	open={open !== null}
 	title={open?.name ?? ''}

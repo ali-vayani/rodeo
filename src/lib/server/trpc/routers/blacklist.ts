@@ -16,11 +16,8 @@ const entryInput = z.object({
 });
 
 /**
- * Import rows arrive unvalidated on purpose.
- *
- * Validating the payload as `z.array(entryInput)` would reject the whole file over one
- * bad address, which is the wrong failure mode for a hand-maintained CSV. Each row is
- * checked individually below and the caller is told which ones failed.
+ * Deliberately loose: `z.array(entryInput)` would reject the whole CSV over one bad
+ * address. Rows are checked individually in `addBulk` and failures reported by position.
  */
 const importRowInput = z.object({
 	firstName: z.string(),
@@ -50,9 +47,8 @@ export const blacklistRouter = router({
 			reason: input.reason
 		};
 
-		// Re-adding an address updates the name and reason rather than failing on the unique
-		// index, since an admin retyping an existing address means to correct the entry.
-		// Name-only rows have no unique key to upsert against, so they just insert.
+		// Retyping an existing address means "correct the entry", so upsert rather than
+		// fail on the unique index. Name-only rows have no key to upsert against.
 		const entry = email
 			? await ctx.prisma.blacklist.upsert({
 					where: { email },
@@ -64,8 +60,7 @@ export const blacklistRouter = router({
 		const name = `${entry.firstName} ${entry.lastName}`;
 		await logAction(ctx, {
 			action: 'blacklist.add',
-			// The email/name distinction decides whether this auto-rejects or merely
-			// flags, so it belongs in the sentence rather than buried in metadata.
+			// Email vs name-only decides auto-reject vs flag, so it goes in the sentence.
 			summary: email
 				? `Blacklisted ${name} (${email})`
 				: `Blacklisted the name ${name} (no email — flags for review only)`,
@@ -77,13 +72,9 @@ export const blacklistRouter = router({
 	}),
 
 	/**
-	 * Bulk import, typically from a CSV.
-	 *
-	 * Partial success is the contract: valid rows are inserted, invalid rows are reported
-	 * back with their position, and nothing is rolled back.
-	 *
-	 * Unlike `add`, an import never overwrites an existing entry, which would silently
-	 * revert reasons an organizer curated by hand.
+	 * CSV import. Partial success is the contract: valid rows insert, invalid rows are
+	 * reported with their position, nothing rolls back. Unlike `add`, never overwrites an
+	 * existing entry, which would revert hand-curated reasons.
 	 */
 	addBulk: adminProcedure
 		.input(z.object({ rows: z.array(importRowInput).max(MAX_IMPORT_ROWS) }))
@@ -111,9 +102,8 @@ export const blacklistRouter = router({
 				});
 			});
 
-			// `skipDuplicates` leans on the unique index, which only covers rows with an address.
-			// Name-only rows would otherwise accumulate a copy per import, so they are deduplicated
-			// here against both the file and the existing table.
+			// `skipDuplicates` only covers rows with an address (the unique index). Name-only
+			// rows are deduplicated here against both the file and the table.
 			const existingNames = new Set(
 				(
 					await ctx.prisma.blacklist.findMany({
@@ -137,8 +127,7 @@ export const blacklistRouter = router({
 				skipDuplicates: true
 			});
 
-			// Every valid row either landed or was already present, so the difference is the
-			// duplicate count -- reported separately so the UI never calls a skip a success.
+			// Reported separately so the UI never calls a skipped duplicate a success.
 			const result = { added: count, duplicates: valid.length - count, invalid };
 
 			await logAction(ctx, {

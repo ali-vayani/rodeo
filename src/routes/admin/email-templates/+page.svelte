@@ -34,7 +34,7 @@
 	let active = $state<TemplateKey>('submit');
 	let saving = $state(false);
 	let sendingTest = $state(false);
-	/** Send Test always goes to the admin's own inbox — see email.sendTest. */
+	/** Send Test always goes to the admin's own inbox; see email.sendTest. */
 	const adminEmail = untrack(() => data.adminEmail);
 	let lastSavedAt = $state<Date | null>(null);
 	let toast = $state<{ message: string; type: 'success' | 'error' } | null>(null);
@@ -103,7 +103,6 @@
 	}
 </script>
 
-<!-- Page header -->
 <div class="mb-4 flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
 	<h1 class="text-[22px] font-bold text-primary">Email Templates</h1>
 	<div class="flex items-center gap-3">
@@ -124,13 +123,11 @@
 	</div>
 </div>
 
-<!-- Main card: template list + editor column.
-     Below md the fixed-height split becomes a natural-height stack: the rail
+<!-- Below md the fixed-height split becomes a natural-height stack: the rail
      flattens into a horizontal scroll strip on top, and the page scrolls. -->
 <div
 	class="flex flex-col rounded-md border border-border bg-white md:h-[calc(100vh-136px)] md:flex-row md:overflow-hidden"
 >
-	<!-- Template list -->
 	<div
 		class="flex flex-row overflow-x-auto border-b border-border bg-muted md:w-[160px] md:shrink-0 md:flex-col md:overflow-x-visible md:border-r md:border-b-0"
 	>
@@ -155,7 +152,6 @@
 		{/each}
 	</div>
 
-	<!-- Editor column -->
 	<div class="flex min-w-0 flex-1 flex-col gap-4 p-4 md:p-8">
 		<div>
 			<h2 class="text-[15px] font-semibold text-primary">{activeMeta.label}</h2>
@@ -204,7 +200,6 @@
 	</div>
 </div>
 
-<!-- Toast -->
 {#if toast}
 	<div
 		in:fly={{ x: 60, duration: 280 }}

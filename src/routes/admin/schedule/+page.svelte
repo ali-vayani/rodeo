@@ -21,7 +21,7 @@
 	const timezone = untrack(() => data.timezone);
 
 	// The two hackathon days, derived from Settings.hackathonStartDate rather than
-	// hardcoded. Both are fixed for the life of the page — a new start date only
+	// hardcoded. Both are fixed for the life of the page; a new start date only
 	// arrives on reload.
 	const day1 = untrack(() => dayKey(new Date(data.hackathonStartDate), timezone));
 	const day2 = nextDayKey(day1);
@@ -55,7 +55,7 @@
 	});
 
 	// The "Other" tab only appears when something actually falls outside the two
-	// hackathon days — otherwise a mistyped year would leave an event invisible
+	// hackathon days. Without it a mistyped year would leave an event invisible
 	// and impossible to delete.
 	let days = $derived<DayTab[]>([
 		{ key: day1, label: 'Day 1', sublabel: formatDayLabel(day1) },
@@ -161,7 +161,6 @@
 		{/key}
 	{/if}
 
-	<!-- Event list -->
 	<Card
 		title={selectedDay === OTHER_DAY ? 'Outside the hackathon dates' : 'Timeline'}
 		padding="none"

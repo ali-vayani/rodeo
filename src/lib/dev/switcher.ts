@@ -1,10 +1,7 @@
 /**
- * DEV ONLY. Pure helpers for the account switcher widget.
- *
- * Kept out of the `.svelte` file because vitest has one project here (node, no DOM), so
- * a plain module is testable and a component is not. Enums are imported as types from
- * the generated `enums` module: the client barrel runs `fileURLToPath` at module load
- * and 500s hydration.
+ * DEV ONLY. Pure helpers for the account switcher, kept out of the `.svelte` file so
+ * vitest (node, no DOM) can test them. Enums are type-only imports from `enums`: the
+ * client barrel runs `fileURLToPath` at module load and 500s hydration.
  */
 
 import type { Role, UserStatus, DecisionStatus } from '$lib/generated/prisma/enums';
@@ -20,20 +17,14 @@ export interface DevAccount {
 	pendingDecision: DecisionStatus | null;
 }
 
-/**
- * An account plus the values the panel would otherwise recompute on every keystroke:
- * a lowercased search haystack, and the two sort keys.
- */
+/** An account plus the search haystack and sort keys, computed once at fetch time. */
 export interface IndexedAccount extends DevAccount {
 	haystack: string;
 	rank: number;
 	seq: number;
 }
 
-/**
- * Sort order for the panel. Staff first, descending by access, then the population the
- * app is actually about.
- */
+/** Staff first, descending by access. */
 const ROLE_RANK: Role[] = [
 	'ADMIN',
 	'ORGANIZER',
@@ -44,15 +35,21 @@ const ROLE_RANK: Role[] = [
 	'UNDECLARED'
 ] as Role[];
 
-/** Trailing integer of a seeded address — `hacker42@yopmail.com` → 42. */
+/** `hacker42@yopmail.com` -> 42. */
 function emailSequence(email: string): number {
 	const match = /(\d+)@/.exec(email);
 	return match ? Number(match[1]) : 0;
 }
 
 /**
- * Attach the derived fields once, at fetch time. The haystack folds in the role name,
- * so typing `judge` filters to judges without touching a filter chip.
+ * Attaches the derived fields. The haystack folds in the role name, so typing `judge`
+ * filters to judges without a chip.
+ *
+ * Inputs:
+ * - accounts: readonly DevAccount[]
+ *
+ * Outputs:
+ * - IndexedAccount[] — same order as the input
  */
 export function indexAccounts(accounts: readonly DevAccount[]): IndexedAccount[] {
 	return accounts.map((account) => ({
@@ -64,8 +61,11 @@ export function indexAccounts(accounts: readonly DevAccount[]): IndexedAccount[]
 }
 
 /**
- * Role rank, then the numeric suffix. Plain lexicographic ordering puts `hacker100`
- * between `hacker1` and `hacker2`, which makes a 120-row list unreadable.
+ * Role rank, then numeric email suffix: lexicographic order puts `hacker100` between
+ * `hacker1` and `hacker2`.
+ *
+ * Outputs:
+ * - IndexedAccount[] — a new array; the input is not mutated
  */
 export function sortAccounts(accounts: readonly IndexedAccount[]): IndexedAccount[] {
 	return [...accounts].sort(
@@ -78,19 +78,15 @@ export function sortAccounts(accounts: readonly IndexedAccount[]): IndexedAccoun
 // ---------------------------------------------------------------------------
 
 /**
- * The synthetic "no decision recorded" option, spelled like `NO_DECISION` in
- * `$lib/admin/filters` so both decision filters agree on what a null column is called.
- * Not imported from there, which pulls the enums in as values.
+ * Spelled like `NO_DECISION` in `$lib/admin/filters` but not imported from there, which
+ * would pull the enums in as values.
  */
 export const NO_DECISION = 'NONE';
 
 /** A decision column's value, with null spelled out so it can be a chip. */
 export type DecisionFilterValue = DecisionStatus | typeof NO_DECISION;
 
-/**
- * Chip order for both decision groups: outcomes first, then the two flavours of "not
- * decided". Alphabetical would put Accepted next to Rejected and bury Waitlisted.
- */
+/** Outcomes first, then the two flavours of "not decided". */
 const DECISION_RANK: DecisionFilterValue[] = [
 	'ACCEPTED',
 	'WAITLISTED',
@@ -99,7 +95,6 @@ const DECISION_RANK: DecisionFilterValue[] = [
 	NO_DECISION
 ] as DecisionFilterValue[];
 
-/** The two decision columns, named so a caller can't mix them up positionally. */
 export type DecisionField = 'activeDecision' | 'pendingDecision';
 
 /** A row's value for one decision column, with null folded to `NO_DECISION`. */
@@ -107,8 +102,16 @@ export function decisionValue(account: DevAccount, field: DecisionField): Decisi
 	return account[field] ?? (NO_DECISION as DecisionFilterValue);
 }
 
-/** The chips worth offering for one decision column: only values some row has, so a
-    seed that created no rejections does not show a dead Rejected chip. */
+/**
+ * Chips for one decision column: only values some row has, in `DECISION_RANK` order.
+ *
+ * Inputs:
+ * - accounts: readonly DevAccount[]
+ * - field: DecisionField — which column to read
+ *
+ * Outputs:
+ * - DecisionFilterValue[] — empty when `accounts` is empty
+ */
 export function decisionOptions(
 	accounts: readonly DevAccount[],
 	field: DecisionField
@@ -121,18 +124,23 @@ export interface AccountFilters {
 	query?: string;
 	roles?: readonly Role[];
 	statuses?: readonly UserStatus[];
-	/** Matches `activeDecision` — the decision the applicant can actually see. */
+	/** Matches `activeDecision`, the released decision. */
 	decisions?: readonly DecisionFilterValue[];
-	/** Matches `pendingDecision` — decided by a reviewer but not yet released. */
+	/** Matches `pendingDecision`, decided but not yet released. */
 	pendingDecisions?: readonly DecisionFilterValue[];
 }
 
 /**
- * Search AND role AND status AND each decision column; within a group, OR. An empty
- * selection means "no filter", matching `buildRecipientParams`.
+ * AND across groups and the query; OR within a group. An empty selection means no
+ * filter, matching `buildRecipientParams`. The two decision columns are never merged:
+ * a released ACCEPTED beside a held REJECTED is the fixture this widget exists to find.
  *
- * The two decision columns are separate groups, never merged. A released ACCEPTED next
- * to a held REJECTED is exactly the fixture you open this widget to find.
+ * Inputs:
+ * - accounts: readonly IndexedAccount[]
+ * - filters: AccountFilters — query is trimmed and case-folded
+ *
+ * Outputs:
+ * - IndexedAccount[] — input order preserved
  */
 export function filterAccounts(
 	accounts: readonly IndexedAccount[],
@@ -180,8 +188,11 @@ export const POSITION_KEY = 'rodeo:dev-switcher:position';
 const POSITION_VERSION = 1;
 
 /**
- * Read the persisted position, or null for the default corner. Every failure funnels to
- * null: this widget mounts on every page, and `getItem` throws in Safari private mode.
+ * Reads the persisted position. Every failure funnels to null: this widget mounts on
+ * every page, and `getItem` throws in Safari private mode.
+ *
+ * Outputs:
+ * - Position | null — null means the default corner
  */
 export function loadPosition(storage: Pick<Storage, 'getItem'>): Position | null {
 	try {
@@ -202,21 +213,25 @@ export function loadPosition(storage: Pick<Storage, 'getItem'>): Position | null
 	}
 }
 
+/** Never throws: the button's position is a convenience. */
 export function savePosition(storage: Pick<Storage, 'setItem'>, pos: Position): void {
 	try {
 		storage.setItem(POSITION_KEY, JSON.stringify({ v: POSITION_VERSION, x: pos.x, y: pos.y }));
 	} catch {
-		// Where the button sits is a convenience and never worth an exception.
+		// Quota or private mode.
 	}
 }
 
 /**
- * Keep the button on screen. Called while dragging, when restoring a stored position,
- * on resize and from the reset control, which is what makes "I dragged it off the edge"
- * unreachable rather than merely unlikely.
+ * Keeps the button on screen. `Math.max` on the upper bound handles a viewport narrower
+ * than the button, where the clamp would otherwise invert to a negative coordinate.
  *
- * `Math.max` on the upper bound handles a viewport narrower than the button itself,
- * where the clamp would otherwise invert and pin it to a negative coordinate.
+ * Inputs:
+ * - pos: Position — candidate position
+ * - viewport: Size, size: Size, margin: number — px
+ *
+ * Outputs:
+ * - Position — within `[margin, viewport - size - margin]` on each axis
  */
 export function clampPosition(pos: Position, viewport: Size, size: Size, margin: number): Position {
 	const maxX = Math.max(margin, viewport.w - size.w - margin);
@@ -232,9 +247,8 @@ export function clampPosition(pos: Position, viewport: Size, size: Size, margin:
 // ---------------------------------------------------------------------------
 
 /**
- * Why the filters are persisted at all. Switching account is a full `location.assign`,
- * which remounts this component, so a search and four chip selections were thrown away
- * by the one action the panel exists to perform.
+ * Persisted because switching account is a full `location.assign`, which would
+ * otherwise throw the filters away.
  */
 export const FILTERS_KEY = 'rodeo:dev-switcher:filters';
 
@@ -257,18 +271,19 @@ const EMPTY_FILTERS: StoredFilters = {
 	pendingDecisions: []
 };
 
-/** Strings only, and only strings — anything else in the array is dropped. */
+/** Non-string entries are dropped; a non-array yields []. */
 function stringList(value: unknown): string[] {
 	return Array.isArray(value) ? value.filter((v): v is string => typeof v === 'string') : [];
 }
 
 /**
- * Read the persisted filters, always returning a usable object. Every failure funnels
- * to the empty set, like `loadPosition`.
+ * Reads the persisted filters. Every failure funnels to the empty set, like
+ * `loadPosition`. Values are not validated against the current enums: a stale role
+ * matches nothing and is one click of Clear away, where dropping the record loses the
+ * other four filters.
  *
- * Values are not validated against the current enums: a filter naming a role that no
- * longer exists matches nothing and is one click of Clear away, where dropping the
- * whole record loses the other four.
+ * Outputs:
+ * - StoredFilters — always a fresh, usable object
  */
 export function loadFilters(storage: Pick<Storage, 'getItem'>): StoredFilters {
 	try {
@@ -293,10 +308,11 @@ export function loadFilters(storage: Pick<Storage, 'getItem'>): StoredFilters {
 	}
 }
 
+/** Never throws, like `savePosition`. */
 export function saveFilters(storage: Pick<Storage, 'setItem'>, filters: StoredFilters): void {
 	try {
 		storage.setItem(FILTERS_KEY, JSON.stringify({ v: FILTERS_VERSION, ...filters }));
 	} catch {
-		// Same as savePosition: a convenience, never worth an exception.
+		// Quota or private mode.
 	}
 }

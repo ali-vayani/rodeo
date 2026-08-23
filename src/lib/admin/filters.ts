@@ -53,6 +53,19 @@ const LINKED_PARAM_KEY = {
 	YEAR: 'years'
 } as const satisfies Record<LinkedField, keyof LinkedParams>;
 
+/**
+ * Translates facet panel state into the wire params `$lib/server/recipients` reads.
+ *
+ * A facet with nothing selected is omitted, never sent as `[]`: the server reads an
+ * absent key as "no filter" and an empty array as "match nobody". Keys that no longer
+ * parse (a deleted question) are dropped rather than emptying the table.
+ *
+ * Inputs:
+ * - selection: FacetState — keyed by `Facet.key`; each entry may be untouched or cleared
+ *
+ * Outputs:
+ * - LinkedParams & AnswerParams — only the engaged facets, arrays copied
+ */
 export function facetParams(selection: FacetState = {}): LinkedParams & AnswerParams {
 	const params: LinkedParams & AnswerParams = {};
 	const answers: AnswerParam[] = [];
@@ -146,7 +159,18 @@ export function parseEmailCsv(text: string): { emails: string[]; invalid: string
 }
 
 /**
- * Translate checkbox state into tRPC filter params..
+ * Translates the Users/Email page filter state into tRPC recipient params.
+ *
+ * A checkbox group only travels when it narrows. All ticked is the default and all
+ * unticked filters nothing, so both omit their keys; sending `[]` would match nobody.
+ *
+ * Inputs:
+ * - roleFilter, statusFilter, decisionFilter: FilterState — option → checked
+ * - search: string — trimmed; blank is omitted
+ * - facets: FacetState — see `facetParams`
+ *
+ * Outputs:
+ * - RecipientParams — every unengaged key is `undefined`
  */
 export function buildRecipientParams(
 	roleFilter: FilterState,

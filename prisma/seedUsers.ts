@@ -9,16 +9,12 @@ import {
 } from '../src/lib/generated/prisma/client';
 import { isApplicantRole } from '../src/lib/admissions/roles';
 
-// ---------------------------------------------------------------------------
-// Bulk test accounts
-//
-// Every account is derived from the index alone, with no randomness, so the same run
-// produces the same database twice. hacker42@yopmail.com is always the same person in
+// Every account is derived from its index alone, with no randomness, so the same run
+// produces the same database twice: hacker42@yopmail.com is always the same person in
 // the same state.
 //
 // Emails are `<role><n>@yopmail.com`, numbered from 1 with no gaps, because the dev
 // login accepts any @yopmail.com address that exists in the User table.
-// ---------------------------------------------------------------------------
 
 const FIRST_NAMES = [
 	'Ali',
@@ -128,10 +124,6 @@ const MENTOR_TOPICS = [
 	'Embedded systems, microcontrollers, and the soldering iron. Bring your hardware problems.',
 	'Design and UX. I can help you make a weekend project look like it was on purpose.'
 ];
-
-// ---------------------------------------------------------------------------
-// Role plans
-// ---------------------------------------------------------------------------
 
 /** One lifecycle state a generated user can be parked in. */
 export type StatePlan = {
@@ -285,13 +277,9 @@ export const ROLE_PLANS: RolePlan[] = [
 	}
 ];
 
-// ---------------------------------------------------------------------------
-// Generation
-// ---------------------------------------------------------------------------
-
 /**
- * Walk the name pools so that consecutive users never share a first name — a table
- * of twelve Alis is a worse test fixture than a table of twelve different people.
+ * Walks the name pools so consecutive users never share a first name; a table of
+ * twelve Alis is a worse fixture than twelve different people.
  */
 function nameFor(seq: number): string {
 	const first = FIRST_NAMES[seq % FIRST_NAMES.length];
@@ -328,11 +316,17 @@ function countFor(plan: RolePlan): number {
 }
 
 /**
- * Build every account up front. `seq` runs across roles rather than restarting per
+ * Builds every account up front. `seq` runs across roles rather than restarting per
  * role, so admin1 and hacker1 are different people.
  *
- * Pass a custom `rolePlans` array to override state distributions, as the scenario
- * seed scripts do.
+ * Inputs:
+ * - rolePlans: RolePlan[] — state distributions per role; scenario seeds pass their own
+ *
+ * Outputs:
+ * - GeneratedUser[] — deterministic for a given plan list and SEED_* env counts
+ *
+ * Throws:
+ * - Error — a SEED_* count env var is not a non-negative integer
  */
 export function generateUsers(rolePlans: RolePlan[] = ROLE_PLANS): GeneratedUser[] {
 	const out: GeneratedUser[] = [];
@@ -360,13 +354,6 @@ export function generateUsers(rolePlans: RolePlan[] = ROLE_PLANS): GeneratedUser
 
 	return out;
 }
-
-// ---------------------------------------------------------------------------
-// Application responses
-//
-// Generated from whatever questions are in the database, so adding a question in
-// /admin/registration and re-seeding fills it in for everyone.
-// ---------------------------------------------------------------------------
 
 function shortAnswer(title: string, user: GeneratedUser, seq: number): string {
 	const t = title.toLowerCase();
@@ -426,6 +413,17 @@ function appliesTo(q: Question, user: GeneratedUser): boolean {
 
 export type GeneratedResponse = { userId: string; questionId: string; value: string };
 
+/**
+ * Builds application responses from whatever questions are in the database, so adding
+ * a question in /admin/registration and re-seeding fills it in for everyone.
+ *
+ * Inputs:
+ * - users: (GeneratedUser & { uid: string })[] — saved accounts; staff roles are skipped
+ * - questions: Question[] — any order; sorted by `order` here
+ *
+ * Outputs:
+ * - GeneratedResponse[] — rows ready for `applicationResponse.createMany`
+ */
 export function generateResponses(
 	users: (GeneratedUser & { uid: string })[],
 	questions: Question[]
@@ -456,18 +454,21 @@ export function generateResponses(
 	return out;
 }
 
-// ---------------------------------------------------------------------------
-// Write
-// ---------------------------------------------------------------------------
-
 /**
- * Seed every generated account and rebuild its application responses.
+ * Seeds every generated account and rebuilds its application responses.
  *
- * By default this upserts, idempotent by email, so re-running moves an account back to
- * its generated state without creating a second copy.
+ * Inputs:
+ * - prisma: PrismaClient
+ * - rolePlans: RolePlan[] | undefined — defaults to ROLE_PLANS
+ * - flush: boolean — delete the generated accounts first (scenario seeds do this),
+ *   which also clears review scores, claim locks and decision attribution
  *
- * With flush = true (used by scenario scripts) the generated accounts are deleted
- * first, which also clears review scores, claim locks and decision attribution.
+ * Outputs:
+ * - { users: User[]; responses: number } — saved rows and the response count
+ *
+ * Side effects:
+ * - Without flush, upserts by email, so re-running resets an account to its generated
+ *   state without creating a second copy. Always replaces the accounts' responses.
  */
 export async function seedUsers(
 	prisma: PrismaClient,
@@ -513,10 +514,15 @@ export async function seedUsers(
 }
 
 /**
- * Delete every @yopmail.com account this generator did not produce.
+ * Deletes every @yopmail.com account this generator did not produce. Destructive;
+ * callers gate it behind SEED_PRUNE=1 (`npm run db:seed:fresh`).
  *
- * Off by default and destructive. Opt in with SEED_PRUNE=1 (or `npm run db:seed:fresh`)
- * when you want the dev database to contain exactly the generated set.
+ * Inputs:
+ * - prisma: PrismaClient
+ * - rolePlans: RolePlan[] | undefined — defines the set to keep; defaults to ROLE_PLANS
+ *
+ * Outputs:
+ * - number — accounts deleted
  */
 export async function pruneUnmanagedUsers(
 	prisma: PrismaClient,

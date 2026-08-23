@@ -13,11 +13,9 @@
 		decisionFilter,
 		onToggleDecision,
 		onClearDecision,
-		// Defaults to the Users-page sidebar: a full-width strip below md, a fixed left rail
-		// from md up. The custom-email wizard overrides this to render inline.
-		//
-		// 240px rather than 200px because the facet comboboxes live here now, and their
-		// popover is anchored to the control's width. At 168px every university row truncated.
+		// Users-page sidebar default; the custom-email wizard overrides it to render inline.
+		// md:w-60, not narrower: the facet combobox popover is anchored to the control
+		// width, and at 168px every university row truncated.
 		class:
 			className = 'w-full shrink-0 border-b border-border bg-white px-4 py-4 md:w-60 md:overflow-y-auto md:border-r md:border-b-0 md:py-5',
 		columns = false,
@@ -37,27 +35,22 @@
 		onToggleDecision: (d: string) => void;
 		onClearDecision: () => void;
 		class?: string;
-		/** Lay the three groups out side by side instead of stacked. */
+		/** Side by side instead of stacked. */
 		columns?: boolean;
 		showHeading?: boolean;
-		/** Below md, collapse the groups behind a Filters toggle. No effect from md up. */
+		/** Below md, fold behind a Filters toggle. No effect from md up. */
 		collapsible?: boolean;
-		/**
-		 * Filters over the application answers. Empty renders nothing, so a caller that does
-		 * not fetch them is simply the three groups again.
-		 */
+		/** Empty renders nothing. */
 		facets?: Facet[];
 		/**
-		 * What each facet's controls hold. Empty means "no filter" here, the opposite of the
-		 * checkbox groups above, because these controls start with nothing ticked.
+		 * Empty means "no filter", the opposite of the checkbox groups above.
 		 * `facetParams` in `$lib/admin/filters` reconciles the two for the wire.
 		 */
 		selection?: FacetState;
 		onSelectionChange?: (selected: FacetState) => void;
 	} = $props();
 
-	// Collapsed by default on phones so the list doesn't push the results below
-	// the fold. md and up ignores this entirely — the rail is always expanded.
+	// Collapsed on phones so the list doesn't push results below the fold.
 	let expanded = $state(false);
 
 	const ROLES = ALL_ROLES;
@@ -68,12 +61,6 @@
 		return v.charAt(0) + v.slice(1).toLowerCase().replace(/_/g, ' ');
 	}
 
-	/**
-	 * The three account-level groups, as data.
-	 *
-	 * They were three copies of the same markup, and giving each one a fold would have
-	 * made that a third copy of the disclosure too. One list keeps the header written once.
-	 */
 	let groups = $derived([
 		{
 			key: 'role',
@@ -104,19 +91,13 @@
 		}
 	]);
 
-	/**
-	 * Per-group fold state. Absent means open, so folding is something the reader asks
-	 * for, never a default that hides a filter they have not seen yet.
-	 */
+	// Absent means open, so no filter is ever hidden before it is seen.
 	let openGroups = $state<Record<string, boolean>>({});
 
 	const uid = $props.id();
 	const panelId = (key: string) => `${uid}-${key}`;
 
-	/**
-	 * How many options a group has ticked. These groups read "all checked" and "none
-	 * checked" as no filter, so only a partial, non-zero count is narrowing the table.
-	 */
+	// "All checked" and "none checked" both mean no filter; only a partial count narrows.
 	function checkedCount(options: readonly string[], state: Record<string, boolean>): number {
 		return options.filter((o) => state[o] ?? true).length;
 	}
@@ -153,15 +134,10 @@
 			? 'hidden md:block'
 			: ''} {collapsible && expanded ? 'mt-4 md:mt-0' : ''}"
 	>
-		<!--
-					Role, Status and Decision. Each folds on its own, so the header and the count of
-					what the group is doing stay put when the options go away.
-				-->
 		{#each groups as group, index (group.key)}
 			{@const open = openGroups[group.key] ?? true}
 			{@const checked = checkedCount(group.options, group.state)}
-			<!-- The last group carries no bottom margin: the answer facets below bring
-			     their own top border and padding. -->
+			<!-- No bottom margin on the last group: the facets below bring their own border and padding. -->
 			<div class={index === groups.length - 1 ? (columns ? groupClass : '') : groupClass}>
 				<div class="mb-2 flex items-center justify-between gap-2">
 					<button
@@ -182,11 +158,7 @@
 						<span class="text-2xs font-bold tracking-eyebrow text-muted-foreground uppercase">
 							{group.title}
 						</span>
-						<!--
-												A partial count is the group narrowing the table, and folded shut this
-												badge is the only thing that says so. All ticked and none ticked both
-												mean "no filter", so neither earns a badge.
-											-->
+						<!-- Folded shut, this badge is the only sign the group is narrowing the table. -->
 						{#if checked > 0 && checked < group.options.length}
 							<span
 								class="rounded-sm bg-primary px-1 font-mono text-2xs leading-normal text-primary-foreground tabular-nums"
@@ -219,15 +191,8 @@
 			</div>
 		{/each}
 
-		<!--
-					Filters over the application answers, rendered from `facets`, so the controls are
-					whatever the form currently asks. This component knows the three groups above are
-					Role, Status and Decision, and knows nothing about what is below.
-
-					`collapsible` is deliberately not forwarded: the wrapper this sits inside is
-					already hidden by the Filters toggle above. `basis-full` puts it on its own row in
-					columns mode rather than as a fourth narrow column.
-				-->
+		<!-- `collapsible` is not forwarded: the wrapper is already hidden by the Filters
+		     toggle above. `basis-full` gives it its own row in columns mode. -->
 		<FacetFilters
 			{facets}
 			bind:selected={selection}

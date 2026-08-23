@@ -55,7 +55,6 @@
 	</header>
 
 	<div class="grid grid-cols-1 gap-5 {twoColumn ? 'lg:grid-cols-2' : 'max-w-lg'}">
-		<!-- Left column: profile + QR (QR only when confirmed/checked in) -->
 		<div class="flex flex-col gap-5">
 			<div class=" bg-card shadow-float">
 				<div

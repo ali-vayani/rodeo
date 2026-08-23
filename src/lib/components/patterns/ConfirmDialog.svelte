@@ -56,11 +56,6 @@
 	}
 </script>
 
-<!--
-	Replaces three separate type-the-word gates (RELEASE twice, SEND once), each
-	with its own state, reset logic and disabled predicate, plus the three
-	hand-rolled confirm dialogs.
--->
 <Modal bind:open {title} {description} {size} dismissible={!loading}>
 	{#if children}{@render children()}{/if}
 

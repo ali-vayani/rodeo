@@ -3,14 +3,12 @@ import { z, ZodError } from 'zod';
 import { formatTRPCError } from './init';
 
 /**
- * The formatter is what stands between a hacker and a wall of JSON.
- *
- * tRPC only runs it at the HTTP boundary, so the router tests never exercise it. Tested
- * against a real `ZodError` rather than a hand-built one, so a zod upgrade that moves
- * `issues` or `flatten` fails here rather than in production.
+ * tRPC only runs the formatter at the HTTP boundary, so the router tests never exercise
+ * it. Uses a real `ZodError` so a zod upgrade that moves `issues` or `flatten` fails
+ * here rather than in production.
  */
 
-/** The shape tRPC hands the formatter, reduced to the parts this reads. */
+/** The shape tRPC hands the formatter, reduced to the parts it reads. */
 const SHAPE = { message: 'Input validation failed', code: -32600, data: { code: 'BAD_REQUEST' } };
 
 function zodErrorFor(schema: z.ZodType, value: unknown): ZodError {
@@ -54,14 +52,12 @@ describe('formatTRPCError', () => {
 		});
 
 		expect(shape.data.zodError).toEqual({ email: ['Enter a valid email address.'] });
-		// Whatever tRPC already put on `data` has to survive — the client reads
-		// `data.code` to tell a CONFLICT from a generic failure.
+		// The client reads `data.code` to tell a CONFLICT from a generic failure.
 		expect(shape.data.code).toBe('BAD_REQUEST');
 	});
 
 	it('passes a non-zod error through untouched', () => {
-		// A TRPCError thrown by a procedure already carries the sentence it wants
-		// shown; rewriting it here would undo every deliberate message in the routers.
+		// Router TRPCErrors already carry the message they want shown.
 		const shape = formatTRPCError({ shape: SHAPE, error: { cause: new Error('connection lost') } });
 
 		expect(shape).toBe(SHAPE);

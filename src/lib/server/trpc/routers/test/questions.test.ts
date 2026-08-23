@@ -56,8 +56,7 @@ const questionInput = {
 
 describe('questions.list', () => {
 	it('requires authentication (no longer public)', async () => {
-		// Was publicProcedure — it served every question, incl. staff-audience and
-		// regex/linkedField internals, to anyone. Now gated.
+		// Public, this served staff-audience questions and regex/linkedField internals.
 		const caller = createTestCaller(db, null);
 		await expect(caller.questions.list({})).rejects.toMatchObject({ code: 'UNAUTHORIZED' });
 	});
@@ -91,7 +90,6 @@ describe('questions.list', () => {
 
 	it('excludes questions for other roles', async () => {
 		const caller = createTestCaller(db, hackerUser);
-		// Mock returns only matching questions (DB handles the filtering)
 		db.question.findMany.mockResolvedValue([allRolesQuestion]);
 		const result = await caller.questions.list({ role: Role.HACKER });
 		expect(result.find((q) => q.id === judgeQuestion.id)).toBeUndefined();
@@ -163,10 +161,8 @@ describe('questions.delete', () => {
 });
 
 describe('nullable columns round-trip', () => {
-	// Regression: those fields are nullable columns, so Prisma hands them back as `null`.
-	// The editor JSON-round-trips a question and posts it back, but the input schema
-	// declared them `.optional()`, which in zod rejects `null`. Every save containing a
-	// modified question blew up with "expected string, received null".
+	// Regression: the editor posts back rows with `null` in nullable columns, and zod's
+	// `.optional()` rejects `null`.
 	const runInTransaction = () =>
 		db.$transaction.mockImplementation(((arg: unknown) =>
 			typeof arg === 'function'
@@ -243,16 +239,13 @@ describe('questions.reorder', () => {
 		]);
 		expect(result).toEqual({ success: true });
 		expect(db.$transaction).toHaveBeenCalled();
-		// Verify update was called for each item
 		expect(db.question.update).toHaveBeenCalledTimes(2);
 	});
 });
 
 describe('linkedField is an enum, not free text', () => {
-	// It was `z.string().nullish()`, so anything parsed. The value is used as a computed
-	// key into a `User` update via `LINKED_FIELD_COLUMN`, and the allowlist was not
-	// consulted until read time — so `linkedField: 'univeristy'` saved without complaint
-	// and produced a question that wrote nowhere, with nothing anywhere saying so.
+	// Regression: as a free string, `linkedField: 'univeristy'` saved without complaint
+	// and produced a question that wrote nowhere.
 	it('accepts a real linked field', async () => {
 		const caller = createTestCaller(db, adminUser);
 		db.question.create.mockResolvedValue(hackerQuestion);

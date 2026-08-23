@@ -3,14 +3,8 @@
 
 	let { match, size = 'sm' }: { match: BlacklistMatch | null; size?: 'sm' | 'md' } = $props();
 
-	/**
-	 * Three signals, three weights. The badge has to say which one fired, because they mean
-	 * very different things to a reviewer.
-	 *
-	 * An email hit already rejected this applicant automatically, so it reads as a verdict.
-	 * A name hit decided nothing, so it reads as a question, and the fuzzy variant is
-	 * faintest because it can be a misspelling of an unrelated person's name.
-	 */
+	// An email hit already auto-rejected, so it reads as a verdict. A name hit decided
+	// nothing, so it reads as a question; fuzzy is faintest since it may be a misspelling.
 	const VARIANTS: Record<BlacklistMatch, { label: string; title: string; class: string }> = {
 		EMAIL: {
 			label: 'Blacklisted',

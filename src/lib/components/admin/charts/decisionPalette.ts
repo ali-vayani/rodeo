@@ -1,20 +1,11 @@
 /**
- * The one place decisions get a colour.
+ * The one place decisions get a colour; everything else on the dashboard is ink.
  *
- * Rodeo is monochrome: colour carries exactly one meaning, status. Decisions are the
- * only coloured series on the dashboard and everything else is ink.
+ * Validated against the `#ffffff` card surface. Two obligations every chart here meets:
+ * CVD delta-E in the 6-8 band needs secondary encoding (2px surface gaps, every value
+ * written as a number), and sub-3:1 contrast needs visible labels or a table view.
  *
- * Validated against the `#ffffff` card surface rather than eyeballed. Two warnings
- * carry obligations that every chart here meets: a CVD delta-E in the 6-8 band is legal
- * only with secondary encoding, so segments are separated by a 2px surface gap and
- * every value is written out as a number; sub-3:1 contrast obliges visible labels or a
- * table view, and `DecisionBar` ships both.
- *
- * The darker 700-step ramp was rejected — Rejected/Waitlisted measures delta-E 3.9
- * deutan. Brighter-and-labelled beats darker-and-indistinguishable.
- *
- * `awaiting` is the de-emphasis gray rather than a fourth hue, being the absence of a
- * decision.
+ * The 700-step ramp was rejected: Rejected/Waitlisted measures delta-E 3.9 deutan.
  */
 
 export type DecisionKey = 'accepted' | 'waitlisted' | 'rejected' | 'awaiting';
@@ -22,18 +13,15 @@ export type DecisionKey = 'accepted' | 'waitlisted' | 'rejected' | 'awaiting';
 export interface DecisionSeries {
 	key: DecisionKey;
 	label: string;
-	/** Written out, never built as `bg-${key}-500` — Tailwind scans source statically. */
+	/** Literal class name: Tailwind scans source statically and never sees `bg-${key}-500`. */
 	fill: string;
 	dot: string;
-	/** Ink for a label sitting *inside* the fill, picked by the fill's luminance. */
+	/** Ink for a label inside the fill, picked by the fill's luminance. */
 	inlineText: string;
 	hint: string;
 }
 
-/**
- * Order is the funnel's order, not a colour-safety ordering. The worst-scoring adjacent
- * pair is adjacent either way, so reordering buys nothing.
- */
+// Funnel order. The worst-scoring pair is adjacent either way, so reordering buys nothing.
 export const DECISION_SERIES: readonly DecisionSeries[] = [
 	{
 		key: 'accepted',
@@ -62,7 +50,7 @@ export const DECISION_SERIES: readonly DecisionSeries[] = [
 	{
 		key: 'awaiting',
 		label: 'Awaiting',
-		// neutral-400: light enough that ink, not white, is the legible label on it.
+		// De-emphasis gray, not a fourth hue. Light enough that ink, not white, is legible on it.
 		fill: 'bg-neutral-400',
 		dot: 'bg-neutral-400',
 		inlineText: 'text-foreground',

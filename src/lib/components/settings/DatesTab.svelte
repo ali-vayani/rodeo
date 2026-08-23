@@ -32,7 +32,7 @@
 	let rsvpDeadline = $state(untrack(() => toDatetimeLocal(RSVPDeadline)));
 	let eventStart = $state(untrack(() => toDatetimeLocal(hackathonStartDate)));
 
-	// Derived validation errors — only check a constraint when both dates are filled in
+	// Each constraint is checked only when both of its dates are filled in.
 	let errors = $derived({
 		appOpen:
 			appOpen && appClose && appOpen >= appClose ? 'Must be before Applications Close' : null,

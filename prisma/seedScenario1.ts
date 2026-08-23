@@ -29,10 +29,6 @@ if (!connectionString) {
 
 const prisma = createPrismaClient(connectionString);
 
-// ---------------------------------------------------------------------------
-// State distributions for this scenario
-// ---------------------------------------------------------------------------
-
 /**
  * ~30% registered but not yet submitted, ~70% submitted and waiting for review.
  * No decisions exist at all — the admissions queue is completely untouched.
@@ -115,10 +111,6 @@ const ROLE_PLANS: RolePlan[] = [
 		academic: false
 	}
 ];
-
-// ---------------------------------------------------------------------------
-// Main
-// ---------------------------------------------------------------------------
 
 async function main() {
 	assertSafeToSeed(connectionString);

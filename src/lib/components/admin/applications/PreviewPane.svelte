@@ -76,11 +76,8 @@
 								<span>{q.placeholder || q.title}</span>
 							</label>
 						{:else if q.type === 'DROPDOWN'}
-							<!--
-								A disabled text box, not a `Combobox`: this pane shows the organizer what
-								they built, and a live listbox they cannot open says less than one line
-								naming where the choices come from and how many there are.
-							-->
+							<!-- A disabled text box, not a `Combobox`: a listbox that cannot open says
+							     less than one line naming the source and count of the options. -->
 							<input type="text" placeholder={q.placeholder || 'Search…'} disabled />
 							<p class="field-hint">
 								{#if q.optionPreset}

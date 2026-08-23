@@ -5,21 +5,19 @@ import { logAction } from '$lib/server/log';
 import { buildExport, wipeDatabase } from '$lib/server/data';
 import { dataPasswordConfigured, verifyDataPassword } from '$lib/server/env';
 
-/**
- * The password every procedure here demands, on top of being an admin.
- *
- * Declared once and spread into both inputs so the two can never drift into
- * different rules about what a submitted password looks like.
- */
+/** Shared by both inputs so the two can't drift on what a password looks like. */
 const passwordInput = { password: z.string().min(1) };
 
 /**
- * Reject unless `ADMIN_DATA_PASSWORD` is set and matches.
+ * Rejects unless `ADMIN_DATA_PASSWORD` is set and matches.
  *
- * The three failures are told apart on purpose. "Not configured" is an operator
- * problem, and a wrong password is UNAUTHORIZED rather than FORBIDDEN, which
- * `adminProcedure` uses for "your account may not do this at all". The message never
- * echoes what was submitted, nor hints at its length.
+ * Inputs:
+ * - password: string — the submitted password; never echoed back
+ *
+ * Throws:
+ * - TRPCError PRECONDITION_FAILED — the env var is unset (an operator problem)
+ * - TRPCError UNAUTHORIZED — wrong password. Not FORBIDDEN, which `adminProcedure`
+ *   uses for "your account may not do this at all"
  */
 function requirePassword(password: string) {
 	if (!dataPasswordConfigured()) {
@@ -39,8 +37,8 @@ export const dataRouter = router({
 	/**
 	 * Every table, as a JSON string ready to be written to a file.
 	 *
-	 * A mutation rather than a query even though it only reads: tRPC puts query input in
-	 * the request URL, which would write the password into browser history and proxy logs.
+	 * A mutation despite only reading: tRPC puts query input in the URL, which would
+	 * write the password into browser history and proxy logs.
 	 */
 	exportAll: adminProcedure
 		.input(z.object({ ...passwordInput }))
@@ -49,8 +47,6 @@ export const dataRouter = router({
 
 			const data = await buildExport(ctx.prisma);
 
-			// The single most sensitive read in the app: one file with every applicant's name,
-			// email and answers.
 			await logAction(ctx, {
 				action: 'data.export',
 				summary: `Exported the full database (${data.counts.user} users across ${Object.keys(data.tables).length} tables)`,
@@ -61,19 +57,17 @@ export const dataRouter = router({
 		}),
 
 	/**
-	 * Empty the database, keeping staff accounts and the blacklist.
+	 * Empties the database, keeping staff accounts and the blacklist.
 	 *
-	 * Deliberately does NOT build its own export. The caller exports and writes the file
-	 * first, so the copy exists before anything is destroyed; doing both in one call would
-	 * put the only copy in a response body sent after the delete. The audit entry is
-	 * written afterwards, since `Log` is one of the tables emptied.
+	 * Does not build its own export: the caller exports and writes the file first, so a
+	 * copy exists before anything is destroyed. The audit entry is written afterwards
+	 * because `Log` is one of the tables emptied.
 	 */
 	wipe: adminProcedure
 		.input(
 			z.object({
 				...passwordInput,
-				// A second, different thing to get right. The password proves
-				// authority; this proves intent.
+				// The password proves authority; this proves intent.
 				confirm: z.literal('WIPE')
 			})
 		)

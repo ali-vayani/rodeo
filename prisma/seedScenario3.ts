@@ -35,10 +35,6 @@ if (!connectionString) {
 
 const prisma = createPrismaClient(connectionString);
 
-// ---------------------------------------------------------------------------
-// State distributions for this scenario
-// ---------------------------------------------------------------------------
-
 /**
  * Ordered so the first accounts in each email range land in the most useful states:
  * hacker1-5 are always CONFIRMED and hacker6-8 always CHECKED_IN.
@@ -60,7 +56,7 @@ const HACKER_STATES: StatePlan[] = [
 		activeDecision: DecisionStatus.ACCEPTED,
 		weight: 3
 	},
-	// Accepted but never RSVP'd — RSVP window expired.
+	// Accepted, never RSVP'd; the RSVP window expired.
 	{
 		status: UserStatus.APPLIED,
 		pendingDecision: DecisionStatus.ACCEPTED,
@@ -156,10 +152,6 @@ const ROLE_PLANS: RolePlan[] = [
 		academic: false
 	}
 ];
-
-// ---------------------------------------------------------------------------
-// Main
-// ---------------------------------------------------------------------------
 
 async function main() {
 	assertSafeToSeed(connectionString);

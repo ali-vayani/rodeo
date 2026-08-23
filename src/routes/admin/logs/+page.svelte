@@ -23,7 +23,6 @@
 	let page = $state(1);
 	let loading = $state(false);
 
-	// --- Filters ---
 	let search = $state('');
 	let actorId = $state('');
 	let action = $state('');
@@ -33,7 +32,7 @@
 	const hasFilters = $derived(Boolean(search.trim() || actorId || action || from || to));
 
 	// The leading blank row is the "no filter" choice, so these lists do not want
-	// `clearable` — that prop is for a control whose options do not include one.
+	// `clearable`; that prop is for a control whose options do not include one.
 	const actorOptions: ComboboxOption[] = $derived([
 		{ value: '', label: 'All admins' },
 		...data.actors.map((a) => ({ value: a.actorId, label: `${a.name} (${a.count})` }))
@@ -65,8 +64,8 @@
 				actorId: actorId || undefined,
 				action: action || undefined,
 				from: from ? new Date(from) : undefined,
-				// The input yields a bare date, which parses as midnight — without this
-				// the "to" bound silently excludes everything that happened that day.
+				// The input yields a bare date, which parses as midnight; without this the
+				// "to" bound silently excludes everything that happened that day.
 				to: to ? new Date(`${to}T23:59:59.999`) : undefined
 			});
 
@@ -80,7 +79,6 @@
 		}
 	}
 
-	/** Debounced so typing in the search box doesn't fire a query per keystroke. */
 	let searchTimer: ReturnType<typeof setTimeout>;
 	function onSearchInput() {
 		clearTimeout(searchTimer);
@@ -142,7 +140,6 @@
 </PageHeader>
 
 <div class="flex flex-col gap-4">
-	<!-- Filters -->
 	<div class="grid grid-cols-2 items-end gap-2 lg:grid-cols-[1.6fr_1fr_1fr_auto_auto_auto]">
 		<Input
 			bind:value={search}

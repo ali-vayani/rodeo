@@ -39,7 +39,6 @@
 		</p>
 	</div>
 
-	<!-- Danger callout, matching the Release Decisions treatment -->
 	<div class="rounded-md border border-danger-200 bg-danger-50 px-3.5 py-3">
 		<div class="text-base font-semibold text-foreground">
 			{#if loading}

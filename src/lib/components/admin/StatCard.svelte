@@ -6,19 +6,15 @@
 	}: {
 		label: string;
 		value: number;
-		/** The split behind the number. Without it the card is inert. */
+		/** Without it the card is inert. */
 		breakdown?: Array<{ label: string; value: number }>;
 	} = $props();
 
-	// Zero rows are dropped rather than shown as "Mentors 0": the panel says what the
-	// number is made of, and a role nobody holds is not part of it.
+	// A role nobody holds is not part of the number, so no "Mentors 0" row.
 	const rows = $derived(breakdown?.filter((r) => r.value > 0) ?? []);
 	const interactive = $derived(rows.length > 0);
 
-	/**
-	 * Screen readers never see the panel, so the same figures ride along on the card's
-	 * label. Without this the breakdown would be pointer-only information.
-	 */
+	// Screen readers never see the panel, so the figures ride along on the label.
 	const ariaSummary = $derived(
 		`${label}: ${value.toLocaleString()}. ` + rows.map((r) => `${r.label} ${r.value}`).join(', ')
 	);
@@ -31,20 +27,18 @@
 	let panelW = $state(0);
 	let panelH = $state(0);
 
-	// Down-and-right of the cursor, far enough that the pointer never covers the
-	// first row it is pointing at.
+	// Far enough down-right that the pointer never covers the first row.
 	const OFFSET = 14;
 	const EDGE = 8;
 
 	function place(event: PointerEvent) {
 		if (!open || anchored) return;
-		// Flip back inside the viewport near the right and bottom edges, rather than letting
-		// the panel run off screen on the last card in the row.
+		// Clamped to the viewport so the last card in a row can't push the panel off screen.
 		x = Math.max(EDGE, Math.min(event.clientX + OFFSET, window.innerWidth - panelW - EDGE));
 		y = Math.max(EDGE, Math.min(event.clientY + OFFSET, window.innerHeight - panelH - EDGE));
 	}
 
-	/** What last touched this card, so click handling can tell a tap from a click. */
+	/** Lets click handling tell a tap from a mouse click. */
 	let lastPointer = $state('mouse');
 
 	function enter(event: PointerEvent) {
@@ -60,10 +54,8 @@
 		lastPointer = event.pointerType;
 	}
 
-	/**
-	 * Only keyboard focus pins the panel. Clicking a button also focuses it, and
-	 * anchoring on that would drop a mouse user out of follow mode mid-hover.
-	 */
+	// Only keyboard focus pins the panel; a click also focuses, and anchoring on that
+	// would drop a mouse user out of follow mode mid-hover.
 	function focus(event: FocusEvent) {
 		if (!interactive) return;
 		if (!(event.currentTarget as HTMLElement).matches(':focus-visible')) return;
@@ -71,10 +63,7 @@
 		open = true;
 	}
 
-	/**
-	 * Taps and keyboard activation toggle, because neither has a hover to govern the
-	 * panel. A mouse click is ignored, since hover already decides what is shown.
-	 */
+	// Taps and keyboard toggle; a mouse click is ignored because hover already decides.
 	function toggle(event: MouseEvent) {
 		const keyboard = event.detail === 0;
 		if (!keyboard && lastPointer === 'mouse') return;
@@ -88,8 +77,7 @@
 </script>
 
 {#snippet panel()}
-	<!-- pointer-events-none so the panel can sit under the cursor without stealing
-	     the hover it is reacting to and flickering itself out of existence. -->
+	<!-- pointer-events-none: under the cursor it would steal its own hover and flicker. -->
 	<div
 		class="pointer-events-none min-w-36 rounded-md border border-border bg-card px-2.5 py-2 shadow-md"
 	>
@@ -114,11 +102,8 @@
 {/snippet}
 
 {#if interactive}
-	<!--
-			A real <button>, not a div with a tabindex. The breakdown is revealed on demand, so
-			the thing revealing it has to be focusable and operable, which also gives touch a
-			tap that works. Styled flat so it still reads as a card.
-		-->
+	<!-- A real <button>: the breakdown is revealed on demand, so its trigger must be
+	     focusable and operable. Styled flat so it still reads as a card. -->
 	<button
 		type="button"
 		class="relative block w-full min-w-0 cursor-default rounded-md border border-border bg-white px-5 py-4 text-left outline-none focus-visible:shadow-ring"
@@ -147,8 +132,7 @@
 {/if}
 
 {#if open && !anchored}
-	<!-- Fixed rather than absolute so the panel is positioned against the viewport and
-		     cannot be clipped by the stat grid. No transformed ancestor exists on /admin. -->
+	<!-- Fixed so the stat grid can't clip it. No transformed ancestor exists on /admin. -->
 	<div
 		class="fixed z-50"
 		style="left: {x}px; top: {y}px"

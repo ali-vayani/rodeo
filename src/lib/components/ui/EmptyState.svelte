@@ -20,11 +20,6 @@
 	} = $props();
 </script>
 
-<!--
-	Replaces six different treatments across the app: two centered blocks at
-	different paddings and type sizes, a third with horizontal padding as well,
-	an italic inline span, a bare paragraph, and a scoped-CSS one.
--->
 <div
 	class={cn(
 		'flex flex-col items-center justify-center gap-2 text-center',

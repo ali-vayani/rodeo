@@ -28,8 +28,7 @@
 		{ href: '/admin/settings', label: 'Settings', section: 'settings' }
 	] as const;
 
-	// Cosmetic only — hooks.server.ts is what actually denies these routes.
-	// resolve() here keeps the href literals typechecked against real routes.
+	// Cosmetic only: hooks.server.ts is what actually denies these routes.
 	const visibleLinks = $derived(
 		links
 			.filter((l) => canAccess(data.role, l.section))
@@ -40,7 +39,6 @@
 <div class="flex min-h-screen">
 	<SidebarNav links={visibleLinks} />
 
-	<!-- Main content -->
 	<main class="mt-topbar min-h-screen min-w-0 flex-1 bg-muted p-4 md:mt-0 md:ml-sidebar md:p-8">
 		{@render children()}
 	</main>

@@ -3,16 +3,8 @@
 	import type { ActivityEntry } from '$lib/dashboard';
 	import { formatRelativeTime } from '$lib/format';
 
-	/**
-	 * Staff work and applicant activity in one stream.
-	 *
-	 * This replaces the old split between "Recent activity" and "Recent applicants". They
-	 * were two views of the same question, and keeping them apart meant reading two panels
-	 * to answer it.
-	 *
-	 * The source filter is meaningful because the two streams come from genuinely
-	 * different places. See `dashboard.activity` for why applicant rows are derived.
-	 */
+	// Staff and applicant activity in one stream. See `dashboard.activity` for why
+	// applicant rows are derived.
 	let {
 		entries,
 		source = $bindable('all'),
@@ -63,15 +55,12 @@
 	{:else if entries.length === 0}
 		<EmptyState compact title="No activity" message={EMPTY_MESSAGE[source] ?? EMPTY_MESSAGE.all} />
 	{:else}
-		<!-- Scrolls inside the card so the feed sits level with the chart beside it
-		     rather than setting the row's height. `min-h-0` is required: without it a
-		     flex child refuses to shrink below its content and the overflow never
-		     engages. -->
+		<!-- Scrolls inside the card so the chart beside it sets the row height. `min-h-0`
+		     is required or the flex child never shrinks below its content. -->
 		<ul class="min-h-0 flex-1 overflow-y-auto">
 			{#each entries as entry (entry.id)}
 				<li class="flex items-start gap-2.5 border-b border-border-subtle py-2.5 last:border-b-0">
-					<!-- Filled for the entries worth stopping on; hollow for routine
-					     bookkeeping. Shape, not colour — this dot is not a status. -->
+					<!-- Filled for notable entries. Shape, not colour: this dot is not a status. -->
 					<span
 						class="mt-1.5 size-1.5 shrink-0 rounded-full {entry.notable
 							? 'bg-primary'

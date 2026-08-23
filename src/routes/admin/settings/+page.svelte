@@ -24,7 +24,6 @@
 	let toast = $state<{ message: string; type: 'success' | 'error' } | null>(null);
 	let toastTimer: ReturnType<typeof setTimeout>;
 
-	// Sidebar scroll-spy
 	let scrollContainer = $state<HTMLElement | undefined>(undefined);
 	let activeSection = $state('account');
 	const sectionIds = ['account', 'general', 'dates', 'scan-groups', 'data', 'danger'];
@@ -115,14 +114,12 @@
 <!-- Below md the page (not the container) scrolls, so the spy listens there too. -->
 <svelte:window onscroll={handleScroll} />
 
-<!-- Page header -->
 <div class="mb-4 flex items-center justify-between">
 	<h1 class="text-[22px] font-bold text-primary">Settings</h1>
 </div>
 
-<!-- Main card: sidebar + scrollable content. Below md the vertical Tabs rail flattens
-     into a horizontal strip on top and the frame takes its natural height, so the page
-     itself scrolls. -->
+<!-- Below md the vertical Tabs rail flattens into a horizontal strip on top and the
+     frame takes its natural height, so the page itself scrolls. -->
 <div
 	class="flex workspace-h flex-col overflow-hidden rounded-md border border-border bg-white md:flex-row"
 >
@@ -134,7 +131,6 @@
 		onChange={scrollToSection}
 	/>
 
-	<!-- Scrollable content area -->
 	<div
 		bind:this={scrollContainer}
 		onscroll={handleScroll}
@@ -156,7 +152,6 @@
 			</div>
 		</div>
 
-		<!-- General section (layout 2 bordered block) -->
 		<div
 			id="section-general"
 			class="scroll-mt-topbar overflow-hidden rounded-md border border-border md:scroll-mt-0"
@@ -176,7 +171,6 @@
 			</div>
 		</div>
 
-		<!-- Dates section -->
 		<div
 			id="section-dates"
 			class="scroll-mt-topbar overflow-hidden rounded-md border border-border md:scroll-mt-0"
@@ -199,7 +193,6 @@
 			</div>
 		</div>
 
-		<!-- Scan Groups section -->
 		<div
 			id="section-scan-groups"
 			class="scroll-mt-topbar overflow-hidden rounded-md border border-border md:scroll-mt-0"
@@ -230,7 +223,6 @@
 			</div>
 		</div>
 
-		<!-- Danger Zone section -->
 		<div
 			id="section-danger"
 			class="scroll-mt-topbar overflow-hidden rounded-md border border-[#fca5a5] md:scroll-mt-0"
@@ -250,7 +242,6 @@
 	</div>
 </div>
 
-<!-- Toast -->
 {#if toast}
 	<div
 		in:fly={{ x: 60, duration: 280 }}

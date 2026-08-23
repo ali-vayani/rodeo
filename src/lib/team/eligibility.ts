@@ -20,6 +20,10 @@ export type TeamEligibilitySubject = {
 /** Why an account may not be on a team, or `null` when it may. */
 export type TeamIneligibility = 'NOT_HACKER' | 'NOT_CONFIRMED';
 
+/**
+ * Role is checked before status so a judge or mentor, who clears the same confirm
+ * funnel, is told "not a hacker" rather than "go confirm your spot".
+ */
 export function teamIneligibility(user: TeamEligibilitySubject): TeamIneligibility | null {
 	if (user.role !== Role.HACKER) return 'NOT_HACKER';
 	if (user.activeDecision !== DecisionStatus.ACCEPTED) return 'NOT_CONFIRMED';

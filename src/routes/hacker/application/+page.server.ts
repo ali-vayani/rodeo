@@ -5,8 +5,6 @@ import { createContext } from '$lib/server/trpc/context';
 
 const createCaller = createCallerFactory(appRouter);
 
-// `?join=` is no longer read here — `hacker/+layout.server.ts` owns the invitation
-// now, so the banner it drives outlives this page.
 export const load: PageServerLoad = async (event) => {
 	const caller = createCaller(createContext(event));
 

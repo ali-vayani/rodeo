@@ -34,10 +34,6 @@
 	}
 </script>
 
-<!--
-	UserFilters and RecipientFilter were the same checkbox-group-with-clear
-	built twice, with different label styling and different clear affordances.
--->
 <div class={cn('flex flex-col gap-2', className)}>
 	<div class="flex items-baseline justify-between gap-2">
 		{#if collapsible}

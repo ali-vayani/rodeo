@@ -7,7 +7,6 @@
 
 	let { uid }: Props = $props();
 
-	// Derive a short display code from the uid
 	const displayCode = $derived('RC-' + uid.slice(-4).toUpperCase());
 
 	let qrDataUrl = $state('');

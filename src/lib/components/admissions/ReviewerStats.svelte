@@ -71,7 +71,6 @@
 </script>
 
 <div class="space-y-8">
-	<!-- Decisions overview -->
 	<section>
 		<h2 class="mb-3 font-mono text-2xs tracking-eyebrow text-foreground-tertiary uppercase">
 			Decisions
@@ -89,7 +88,6 @@
 		{/if}
 	</section>
 
-	<!-- By role -->
 	<section>
 		<h2 class="mb-3 font-mono text-2xs tracking-eyebrow text-foreground-tertiary uppercase">
 			By role
@@ -119,7 +117,6 @@
 		</DataTable>
 	</section>
 
-	<!-- Scoring -->
 	<section>
 		<h2 class="mb-3 font-mono text-2xs tracking-eyebrow text-foreground-tertiary uppercase">
 			Scoring
@@ -144,7 +141,6 @@
 		</div>
 	</section>
 
-	<!-- Reviewers -->
 	<section>
 		<h2 class="mb-3 font-mono text-2xs tracking-eyebrow text-foreground-tertiary uppercase">
 			Reviewers

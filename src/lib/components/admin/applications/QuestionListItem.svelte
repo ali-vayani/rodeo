@@ -6,16 +6,12 @@
 	interface Props {
 		question: Question;
 		index: number;
-		/** How many rows are currently visible — announced in the handle's label. */
+		/** Visible row count, announced in the handle's label. */
 		total: number;
-		/** True while this row is the one under the pointer. */
 		dragging?: boolean;
-		/** Which edge of this row to draw the landing indicator on, if any. */
+		/** Edge to draw the landing indicator on. */
 		dropEdge?: 'above' | 'below' | null;
-		/**
-		 * Vertical offset in px. On the row being dragged this follows the pointer; on the
-		 * rows it is passing, it is the one-slot shift that opens the landing gap.
-		 */
+		/** px. Follows the pointer on the dragged row; a one-slot shift on rows it passes. */
 		dragOffset?: number;
 		onEdit: () => void;
 		onDelete: () => void;
@@ -42,16 +38,13 @@
 	}: Props = $props();
 
 	let handleEl = $state<HTMLButtonElement | null>(null);
-	// Not `$state`: nothing renders off it, and it must be readable synchronously inside
-	// the pointer handlers.
+	// Not `$state`: nothing renders off it.
 	let activePointer: number | null = null;
 
-	// Pointer events rather than HTML5 drag-and-drop: `dragstart` never fires from a touch,
-	// and organizers triage on their phones.
+	// Pointer events, not HTML5 drag-and-drop: `dragstart` never fires from a touch.
 	function handlePointerDown(event: PointerEvent) {
 		if (event.button !== 0 || activePointer !== null) return;
-		// Suppresses the compatibility mouse events, so text does not select while dragging.
-		// That also suppresses click-to-focus, hence the explicit focus.
+		// Stops text selection while dragging; also stops click-to-focus, hence the explicit focus.
 		event.preventDefault();
 		activePointer = event.pointerId;
 		handleEl?.setPointerCapture(event.pointerId);
@@ -75,11 +68,10 @@
 
 	async function handleKeydown(event: KeyboardEvent) {
 		if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return;
-		// Otherwise the arrow scrolls the page out from under the row being moved.
+		// Otherwise the arrow scrolls the page out from under the row.
 		event.preventDefault();
 		onKeyboardMove(event.key === 'ArrowUp' ? -1 : 1);
-		// The keyed `{#each}` relocates this node rather than rebuilding it, but the move can
-		// still drop focus.
+		// The keyed `{#each}` relocates the node, but the move can still drop focus.
 		await tick();
 		handleEl?.focus();
 	}
@@ -210,17 +202,16 @@
 		box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
 	}
 
-	/* The row under the pointer: lifted off the list and following the cursor. */
 	.item.dragging {
 		z-index: 2;
 		border-color: var(--color-primary);
 		box-shadow: var(--shadow-md);
 		cursor: grabbing;
-		/* Snapping to the pointer, so no transition on `transform`. */
+		/* Snaps to the pointer, so no `transform` transition. */
 		transition: none;
 	}
 
-	/* Where it will land. The bar sits in the 6px gap between rows. */
+	/* Landing indicator, drawn in the 6px gap between rows. */
 	.item.drop-above::before,
 	.item.drop-below::after {
 		content: '';
@@ -259,7 +250,7 @@
 		background: none;
 		color: var(--color-neutral-400);
 		cursor: grab;
-		/* Without this a touch-drag scrolls the page instead of moving the row. */
+		/* Otherwise a touch-drag scrolls the page instead of moving the row. */
 		touch-action: none;
 		user-select: none;
 		-webkit-user-select: none;
@@ -332,8 +323,7 @@
 		flex-wrap: wrap;
 	}
 
-	/* Sentence-case prose, so it stays sans on the 12px secondary tier rather than
-		   becoming a mono uppercase eyebrow. It labels the row, it does not classify it. */
+	/* Sans, not a mono eyebrow: it labels the row rather than classifying it. */
 	.type-badge {
 		font-size: var(--text-sm);
 		font-weight: 500;

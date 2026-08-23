@@ -114,7 +114,6 @@
 		</p>
 	</div>
 
-	<!-- Mode toggle: the two are mutually exclusive so the selection is never ambiguous -->
 	<div class="flex w-fit overflow-hidden rounded-md border border-border">
 		{#each [{ id: 'filters', label: 'By filter' }, { id: 'emails', label: 'By email list' }] as m (m.id)}
 			<button
@@ -267,7 +266,6 @@
 		</div>
 	{/if}
 
-	<!-- Count block, per the mockup's big-numeral treatment -->
 	<div class="flex items-center gap-6 rounded-md border-2 border-primary px-6 py-4">
 		<div class="text-center">
 			<div class="font-mono text-3xl leading-none font-bold text-foreground">

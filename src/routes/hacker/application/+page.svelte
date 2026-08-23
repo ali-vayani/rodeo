@@ -18,7 +18,6 @@
 
 	const trpc = createClient();
 
-	// --- State machine ---
 	// untrack, like `user` below: the initial state is a snapshot, and the mutations on
 	// this page advance it explicitly.
 	let currentState = $state<ApplicationState>(untrack(() => computeApplicationState(data.user)));
@@ -27,7 +26,6 @@
 	// does not change.
 	let user = $state(untrack(() => ({ ...data.user })));
 
-	// --- Form state ---
 	const ROLES_FOR_APPLICATION: Role[] = [Role.HACKER, Role.JUDGE, Role.MENTOR, Role.VOLUNTEER];
 
 	// The account's own role when it is one you can apply as, else HACKER. An
@@ -39,12 +37,10 @@
 
 	let selectedRole = $state<Role>(initialRole());
 
-	// Response map: questionId → value (string)
 	let responses = $state<Record<string, string>>(
 		untrack(() => Object.fromEntries(data.responses.map((r) => [r.questionId, r.value])))
 	);
 
-	// --- Filtered questions ---
 	let filteredQuestions = $derived(
 		data.questions.filter(
 			(q) => q.targetRole.length === 0 || (q.targetRole as Role[]).includes(selectedRole)
@@ -62,7 +58,6 @@
 
 	let canSubmit = $derived(answeredRequiredCount === requiredQuestions.length);
 
-	// --- Application window ---
 	// `application.save` and `application.submit` are both gated on this window, so
 	// outside it the form was live but every keystroke was thrown away by the server.
 	let windowState = $derived(applicationWindowState(data.settings));
@@ -70,7 +65,6 @@
 	let opensOn = $derived(formatDateLong(data.settings?.applicationOpen));
 	let closesOn = $derived(formatDateLong(data.settings?.applicationDeadline));
 
-	// --- Auto-save ---
 	type SaveStatus = 'idle' | 'saving' | 'saved' | 'error';
 	let saveStatus = $state<SaveStatus>('idle');
 	let saveError = $state<string | null>(null);
@@ -86,7 +80,6 @@
 
 		responses[questionId] = value;
 
-		// Debounce per question
 		if (saveTimers[questionId]) clearTimeout(saveTimers[questionId]);
 		saveStatus = 'saving';
 		saveTimers[questionId] = setTimeout(async () => {
@@ -142,7 +135,6 @@
 		}
 	}
 
-	// --- Submit ---
 	let submitting = $state(false);
 	let submitError = $state<string | null>(null);
 
@@ -162,8 +154,8 @@
 		}
 	}
 
-	// Destructured as aliases because both handlers expose `error`; the getters are
-	// re-wrapped below so the rename doesn't freeze the value at destructure time.
+	// Kept as whole objects: both expose an `error` getter, and destructuring would
+	// freeze its value at that moment.
 	const rsvp = createRsvpHandler({
 		user,
 		onSuccess: () => {
@@ -177,10 +169,6 @@
 			currentState = 'declined';
 		}
 	});
-
-	// The team-invite banner used to live here. It now renders from `hacker/+layout`
-	// so it persists across the portal instead of only appearing on this page — see
-	// `$lib/server/invite.ts`.
 </script>
 
 {#snippet pageHeading(title: string, sub: string | null)}

@@ -5,11 +5,7 @@ import { usesSupabaseAuth, yopmailLoginEnabled } from '$lib/server/env';
 import { Role } from '$lib/generated/prisma/client';
 
 const COOKIE_NAME = 'session_uid';
-const COOKIE_MAX_AGE = 60 * 60 * 24 * 7; // 7 days
-
-// ---------------------------------------------------------------------------
-// Dev auth (yopmail only)
-// ---------------------------------------------------------------------------
+const COOKIE_MAX_AGE = 60 * 60 * 24 * 7;
 
 async function getDevSession(event: RequestEvent) {
 	const uid = event.cookies.get(COOKIE_NAME);
@@ -32,10 +28,6 @@ export function setSessionCookie(event: RequestEvent, uid: string) {
 export function clearSessionCookie(event: RequestEvent) {
 	event.cookies.delete(COOKIE_NAME, { path: '/' });
 }
-
-// ---------------------------------------------------------------------------
-// Production auth (Supabase JWT)
-// ---------------------------------------------------------------------------
 
 async function getProdSession(event: RequestEvent) {
 	const supabase = createSupabaseServerClient(event);
@@ -67,10 +59,18 @@ async function getProdSession(event: RequestEvent) {
 	});
 }
 
-// ---------------------------------------------------------------------------
-// Unified entry point
-// ---------------------------------------------------------------------------
-
+/**
+ * Resolves the signed-in user for this request.
+ *
+ * Inputs:
+ * - event: RequestEvent — supplies the cookies the session is read from
+ *
+ * Outputs:
+ * - User | null — the local User row, or null when nobody is signed in
+ *
+ * Side effects:
+ * - Creates the User row on a Supabase identity's first login.
+ */
 export async function getSession(event: RequestEvent) {
 	if (!usesSupabaseAuth()) return getDevSession(event);
 

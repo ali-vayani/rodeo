@@ -151,8 +151,7 @@ export async function stateFacet(
 			// Named, not "Home state". The Settings field exists so this row reads "Texas":
 			// an organizer filtering a Texan hackathon is thinking "Texas".
 			{ value: homeState, label: stateName(homeState), count: home },
-			// International is inside this row rather than beside it. An applicant flying in
-			// from Toronto is no less not-from-Texas than one driving from Atlanta.
+			// International is inside this row rather than beside it — see `namesFor`.
 			{ value: OUT_OF_STATE, label: `Outside ${stateName(homeState)}`, count: outside }
 		],
 		noneCount: buckets.none.count

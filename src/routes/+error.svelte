@@ -3,9 +3,8 @@
 	import { resolve } from '$app/paths';
 
 	/**
-	 * SvelteKit's default error page is an unstyled stack of black text. This one
-	 * is deliberately plain too — it renders outside any layout and must not
-	 * assume a session, a database, or anything else that might be what broke.
+	 * Renders outside every layout, so it must not assume a session, a database, or
+	 * anything else that might be what broke. Kept deliberately plain for that reason.
 	 */
 	const status = $derived(page.status);
 

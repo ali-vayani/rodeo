@@ -9,9 +9,6 @@ datasource db {
 
 
 
-// Enums
-// -----------------------------------------------------------------------------
-
 /// Roles are mutually exclusive: a `User` holds exactly one.
 enum Role {
   HACKER
@@ -82,9 +79,6 @@ enum InvitationStatus {
   DECLINED
 }
 
-// Models
-// -----------------------------------------------------------------------------
-
 model User {
   uid             String              @id @default(cuid())
   name            String
@@ -103,7 +97,7 @@ model User {
   status          UserStatus          @default(CREATED)
   createdAt       DateTime            @default(now())
 
-  // Presence lock: which admin is currently reviewing this applicant
+  /// Presence lock: the admin currently reviewing this applicant.
   claimedBy       String?
   claimedAt       DateTime?
   claimer         User?               @relation("ApplicationClaims", fields: [claimedBy], references: [uid])
@@ -134,7 +128,7 @@ model ApplicationResponse {
   user       User     @relation(fields: [userId], references: [uid], onDelete: Cascade)
   questionId String
   question   Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
-  value      String // json?
+  value      String
   createdAt  DateTime @default(now())
 
   @@unique([userId, questionId])
@@ -162,7 +156,8 @@ model Settings {
   waitlistTemplate    String
   waitlistSubject     String   @default("You're on the waitlist")
 
-  timezone            String // IANA identifier, e.g. "America/Chicago"
+  /// IANA identifier, e.g. "America/Chicago".
+  timezone            String
 
   homeState           String?
 }

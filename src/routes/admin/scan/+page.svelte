@@ -11,7 +11,6 @@
 
 	const trpc = createClient();
 
-	// --- Types ---
 	interface LastScan {
 		name: string;
 		role: string;
@@ -45,7 +44,6 @@
 		return role.charAt(0) + role.slice(1).toLowerCase();
 	}
 
-	// --- State seeded from SSR load ---
 	let scanActions = $state(untrack(() => [...data.scanActions]));
 	let selectedAction = $state(untrack(() => data.scanActions[0] ?? 'Check-In'));
 	let scanCounts = $state<Record<string, number>>(untrack(() => ({ ...data.scanCounts })));
@@ -57,18 +55,15 @@
 	let errorMsg = $state('');
 	let showManual = $state(false);
 
-	// --- Camera ---
 	let html5QrCode: Html5Qrcode | null = null;
 	let cameraStarted = $state(false);
 	let cameraError = $state('');
 
-	// --- Lookup / confirm dialog ---
 	let dialogOpen = $state(false);
 	let dialogUser = $state<LookupResult | null>(null);
 	let lookupLoading = $state(false);
 	let isConfirming = $state(false);
 
-	// --- Camera lifecycle ---
 	onMount(async () => {
 		try {
 			html5QrCode = new Html5Qrcode('reader');
@@ -113,11 +108,10 @@
 		try {
 			html5QrCode.resume();
 		} catch {
-			// already running — ignore
+			// already running
 		}
 	}
 
-	// --- Lookup flow (shared by camera detection + manual entry) ---
 	async function handleDetected(userCode: string) {
 		const code = userCode.trim();
 		if (!code || dialogOpen || lookupLoading) return;
@@ -174,7 +168,6 @@
 		if (!showManual) manualInput = '';
 	}
 
-	// --- Confirm dialog actions ---
 	async function confirmScan() {
 		if (!dialogUser) return;
 		isConfirming = true;
@@ -236,7 +229,6 @@
 	<title>Scan · Rodeo Admin</title>
 </svelte:head>
 
-<!-- Page header -->
 <div class="mb-4 flex items-center justify-between">
 	<div>
 		<h1 class="text-[22px] font-bold text-primary">Scan</h1>
@@ -250,9 +242,7 @@
 </div>
 
 <div class="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_320px]">
-	<!-- Scanner card -->
 	<div class="overflow-hidden rounded-md border border-border bg-white">
-		<!-- Scan action tabs -->
 		<div class="flex items-stretch overflow-x-auto border-b border-border">
 			{#each scanActions as action (action)}
 				<button
@@ -281,7 +271,6 @@
 				</div>
 			{/if}
 
-			<!-- Viewfinder -->
 			<div
 				class="relative mx-auto flex aspect-square w-full max-w-[440px] items-center justify-center overflow-hidden rounded-md border bg-muted transition-colors {scanState ===
 				'success'
@@ -292,7 +281,6 @@
 					<div id="reader"></div>
 				</div>
 
-				<!-- Guide overlay: corners + crosshair, always visible above the video -->
 				<div
 					class="absolute top-[10px] left-[10px] z-[1] h-4 w-4 rounded-tl-[2px] border-t-2 border-l-2 border-white/85 drop-shadow-[0_0_2px_rgba(0,0,0,0.45)]"
 				></div>
@@ -408,7 +396,6 @@
 				</div>
 			</div>
 
-			<!-- Scan next -->
 			{#if scanState !== 'idle'}
 				<button
 					onclick={scanNext}
@@ -431,7 +418,6 @@
 				</button>
 			{/if}
 
-			<!-- Manual entry -->
 			<div class="mx-auto mt-4 w-full max-w-[440px]">
 				{#if !showManual}
 					<button
@@ -492,7 +478,6 @@
 		</div>
 	</div>
 
-	<!-- Recent scans -->
 	<div class="overflow-hidden rounded-md border border-border bg-white">
 		<div class="flex items-center justify-between border-b border-border bg-muted px-4 py-[9px]">
 			<span class="text-[10px] font-bold tracking-widest text-muted-foreground uppercase">
@@ -549,7 +534,7 @@
 
 <style>
 	/* html5-qrcode owns the DOM inside #reader and sets width/height on it inline
-	   once the camera starts — those inline styles beat any CSS written for #reader
+	   once the camera starts. Those inline styles beat any CSS written for #reader
 	   itself, so the sizing is applied from this untouched wrapper instead. */
 	.qr-reader-wrap :global(#reader) {
 		width: 100% !important;

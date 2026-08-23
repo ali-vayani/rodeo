@@ -192,7 +192,7 @@
 	function goTo(next: 1 | 2 | 3) {
 		if (next === 3) {
 			confirmText = '';
-			// Fresh count at the moment of sending — filters may be stale by now.
+			// Fresh count at the moment of sending; the filters may be stale by now.
 			refreshCount();
 		}
 		step = next;
@@ -250,7 +250,6 @@
 			onChange={(value) => goTo(Number(value) as 1 | 2 | 3)}
 		/>
 
-		<!-- Step body -->
 		<div class="flex min-w-0 flex-1 flex-col gap-4 p-4 md:min-h-130 md:p-8">
 			{#if step === 1}
 				<RecipientFilter
@@ -294,7 +293,6 @@
 				/>
 			{/if}
 
-			<!-- Step actions -->
 			<div class="mt-auto flex shrink-0 items-center gap-2 border-t border-border pt-4">
 				{#if step > 1}
 					<Button onclick={() => goTo((step - 1) as 1 | 2)} disabled={sending}>Back</Button>

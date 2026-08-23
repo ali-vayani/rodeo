@@ -37,12 +37,8 @@
 	}: Props = $props();
 </script>
 
-<!--
-	Built on the shared Modal (bits-ui Dialog) for focus trap, scroll lock,
-	Escape, backdrop dismissal, and ARIA — replacing the hand-rolled overlay.
-	`open` is intentionally not bound: the parent owns the open state, and every
-	dismissal path funnels through onClose -> onCancel so the camera resumes.
--->
+<!-- `open` is not bound: the parent owns it, and every dismissal path funnels
+     through onClose -> onCancel so the camera resumes. -->
 <Modal
 	open={isOpen && user !== null}
 	title={user?.name ?? ''}

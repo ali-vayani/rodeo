@@ -585,8 +585,7 @@ describe('email.eventVars', () => {
 	});
 
 	it('falls back to the defaults with no Settings row, matching what sendCustom substitutes', async () => {
-		// This used to return null so the preview matched sendCustom's empty map. The
-		// agreement was honest and both halves were wrong. Both sides use the defaults now.
+		// Regression: both halves agreed on an empty var map, and both were wrong.
 		const caller = createTestCaller(db, adminUser);
 		db.settings.findFirst.mockResolvedValue(null);
 
@@ -642,9 +641,8 @@ describe('email.sendTest', () => {
 	});
 
 	it('falls back to sample dates when no settings row exists, but never a sample name', async () => {
-		// The dates have no source without a Settings row, so the samples stand in. `name`
-		// does have one, since this goes to the admin's own inbox, and greeting them as a
-		// stand-in would be the one misleading substitution in a proofreading message.
+		// Dates have no source without a Settings row; `name` always does, and greeting
+		// the admin as a stand-in would mislead a proofread.
 		const caller = createTestCaller(db, adminUser);
 		db.settings.findFirst.mockResolvedValue(null);
 

@@ -20,15 +20,12 @@ describe('dashboard.stats', () => {
 		const caller = createTestCaller(db, adminUser);
 
 		db.user.count.mockResolvedValue(10);
-		// groupBy is called three times: byStatus, byDecision, then byRole — the last
-		// became a real GROUP BY once a user held exactly one role, replacing a findMany
-		// that pulled every row back to be tallied in memory.
+		// groupBy call order: byStatus, byDecision, byRole, then decision x role.
 		mockGroupBy(db.user.groupBy)
 			.mockResolvedValueOnce([
 				{ status: UserStatus.CREATED, _count: { status: 7 } },
 				{ status: UserStatus.APPLIED, _count: { status: 3 } }
 			] as never)
-			// byDecision now counts with `_all` so the null bucket is a real count, not 0.
 			.mockResolvedValueOnce([
 				{ activeDecision: DecisionStatus.ACCEPTED, _count: { _all: 2 } },
 				{ activeDecision: null, _count: { _all: 8 } }
@@ -37,8 +34,6 @@ describe('dashboard.stats', () => {
 				{ role: Role.HACKER, _count: { role: 2 } },
 				{ role: Role.ORGANIZER, _count: { role: 1 } }
 			] as never)
-			// Fourth: decision × role, bounded to applicant roles — what the stat cards
-			// and their hover breakdowns read from.
 			.mockResolvedValueOnce([
 				{ activeDecision: DecisionStatus.ACCEPTED, role: Role.HACKER, _count: { _all: 2 } },
 				{ activeDecision: null, role: Role.HACKER, _count: { _all: 5 } },
@@ -110,10 +105,7 @@ describe('dashboard.stats', () => {
 
 			await caller.dashboard.stats();
 
-			// CREATED is excluded alongside the role bound: `dashboard.funnel` draws the
-			// same population, and an account that never submitted is not awaiting a
-			// decision. If the two ever disagree the page shows two different applicant
-			// counts side by side.
+			// Same population as `dashboard.funnel`, or the page shows two applicant counts.
 			expect(db.user.groupBy).toHaveBeenNthCalledWith(
 				4,
 				expect.objectContaining({

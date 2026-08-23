@@ -5,11 +5,16 @@ import { isAdmin, hasPortalAccess } from '$lib/auth/permissions';
 import type { Context } from './context';
 
 /**
- * Makes an input-validation failure readable.
+ * Replaces tRPC's default BAD_REQUEST message, the raw zod issue array as JSON, with the
+ * issues' own text. The UI renders `error.message` verbatim.
  *
- * tRPC turns a `ZodError` into a BAD_REQUEST whose `message` is the raw issue array as
- * JSON, and every catch block in the UI renders `error.message` directly. Using the
- * issues' own text means a procedure that spells one out has it show up verbatim.
+ * Inputs:
+ * - shape: tRPC error shape — the default formatted error
+ * - error: { cause?: unknown } — only a `ZodError` cause is rewritten
+ *
+ * Outputs:
+ * - shape — `message` is the joined issue text and `data.zodError` the field-keyed
+ *   breakdown; non-zod errors pass through untouched
  *
  * Exported for its own test: `createCallerFactory` bypasses the formatter.
  */
@@ -39,8 +44,8 @@ export const authedProcedure = t.procedure.use(({ ctx, next }) => {
 });
 
 /**
- * ADMIN only — the default for anything touching user data. Deliberately the stricter
- * of the two, so a call site nobody thought about denies rather than leaks.
+ * ADMIN only. The default for anything touching user data, so a call site nobody
+ * thought about denies rather than leaks.
  */
 export const adminProcedure = t.procedure.use(({ ctx, next }) => {
 	if (!ctx.user) throw new TRPCError({ code: 'UNAUTHORIZED' });
@@ -49,10 +54,8 @@ export const adminProcedure = t.procedure.use(({ ctx, next }) => {
 });
 
 /**
- * ADMIN or ORGANIZER — the shared admin-portal surface.
- *
- * Only for endpoints that expose no per-person data: scanning, the schedule, and the
- * dashboard's anonymous aggregates. See $lib/auth/permissions for the full split.
+ * ADMIN or ORGANIZER. Only for endpoints that expose no per-person data: scanning, the
+ * schedule, and the dashboard's anonymous aggregates. See $lib/auth/permissions.
  */
 export const portalProcedure = t.procedure.use(({ ctx, next }) => {
 	if (!ctx.user) throw new TRPCError({ code: 'UNAUTHORIZED' });

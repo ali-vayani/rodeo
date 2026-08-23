@@ -39,7 +39,6 @@ export interface EmailPayload {
 	attachments?: EmailAttachment[];
 }
 
-/** Built once and reused, rather than per message. */
 let resend: Resend | null = null;
 
 function resendClient(): Resend {
@@ -47,6 +46,18 @@ function resendClient(): Resend {
 	return resend;
 }
 
+/**
+ * Sends one message, or logs it outside production.
+ *
+ * Inputs:
+ * - payload: EmailPayload — recipient, subject, markdown body, optional attachments
+ *
+ * Outputs:
+ * - void
+ *
+ * Throws:
+ * - Error — in production, when no transport is configured or Resend rejects the send
+ */
 export async function sendEmail(payload: EmailPayload): Promise<void> {
 	const where = deployEnv();
 	// Everything that is not production prints and returns. Not conditional on

@@ -44,21 +44,14 @@
 		onRoleTabChange: (tab: Role | 'ALL') => void;
 		search: string;
 		onSearchInput: (value: string) => void;
-		/**
-		 * Which half of the queue is on screen. Defaults to `unscored`, but scored
-		 * applicants stay reachable or a mistyped score would be uncorrectable from the UI.
-		 */
+		/** Scored applicants stay reachable or a mistyped score would be uncorrectable from the UI. */
 		scoreFilter: ScoreFilter;
 		onScoreFilterChange: (value: ScoreFilter) => void;
 		/** One per application question that writes through to a `User` column. */
 		facets: Facet[];
 		facetSelection: FacetState;
 		onFacetsChange: (selected: FacetState) => void;
-		/**
-		 * What the last query did with the search term. `names` is ranked most-relevant
-		 * first; the rows below are `createdAt desc` and are not, which is why the
-		 * suggestions are a strip of their own rather than a reordering of the list.
-		 */
+		/** `names` is ranked by relevance; the list below is `createdAt desc`, hence a separate strip. */
 		searchInfo: { names: string[]; fuzzy: boolean; capped: boolean; exact: number };
 		onSuggestionSelect: (name: string) => void;
 		loading: boolean;
@@ -69,63 +62,31 @@
 		selfClaimUid: string | null;
 	} = $props();
 
-	// The collapsed rail is a desktop-only affordance. Gate on the same 48rem breakpoint
-	// as `md:` so a collapse toggled on desktop does not leave a shrunken list behind
-	// after resizing down.
+	// Same 48rem breakpoint as `md:`, so a desktop collapse never leaves a shrunken list
+	// behind after resizing down.
 	const mdUp = new MediaQuery('(min-width: 48rem)');
 	let isCollapsed = $derived(collapsed && mdUp.current);
 
-	/**
-	 * The filter panel is a disclosure at every width, not just on phones.
-	 *
-	 * `FacetFilters` has a `collapsible` of its own, but it only folds below md, which is
-	 * wrong for a 300px column that already spends two rows on tabs and a search box.
-	 * Three facets open underneath would push the queue off a laptop screen.
-	 *
-	 * `FacetFilters` also folds each facet individually. The two are one mechanism at two
-	 * scales: this toggle decides whether the panel is on screen at all. `collapsible` is
-	 * still not forwarded, since a third breakpoint-gated toggle would fight.
-	 *
-	 * Shut on arrival, deliberately: the per-facet folds start open, so opening this shows
-	 * every facet.
-	 */
+	// A disclosure at every width, not `FacetFilters.collapsible` (below md only): three
+	// open facets in a 300px column would push the queue off a laptop screen.
 	let filtersOpen = $state(false);
 
-	/**
-	 * How many facets are narrowing the queue, for the badge on a shut panel. Facets
-	 * rather than values, because a substring box and a numeric range are each one filter
-	 * however they are filled in.
-	 */
+	// Facets, not values: a substring box or a range is one filter however it is filled.
 	let activeFilterCount = $derived(
 		Object.values(facetSelection).filter((selection) => isEngaged(selection)).length
 	);
 
-	/**
-	 * Shown only when there is something to suggest.
-	 *
-	 * `fuzzy` means the fold ran, not that it found anything, and "did you mean:" followed
-	 * by nothing is worse than the plain empty state.
-	 */
+	// `fuzzy` means the fold ran, not that it found anything.
 	let showSuggestions = $derived(searchInfo.fuzzy && searchInfo.names.length > 0);
 
-	/**
-	 * The wording follows `exact`, not `fuzzy`.
-	 *
-	 * `fuzzy` only says the fold ran, and it runs below a floor of five rather than at
-	 * zero. Keying the sentence off it put "No exact match" above three people named
-	 * Vayani, which reads as a broken search.
-	 */
+	// Keyed off `exact`, not `fuzzy`: the fold runs below a floor of five, so keying off
+	// it put "No exact match" above three people named Vayani.
 	let suggestionsPrefix = $derived(
 		searchInfo.exact > 0 ? 'Similar names:' : 'No exact match — did you mean:'
 	);
 
-	/**
-	 * Built here rather than in markup so the sentence keeps its spacing. Svelte trims
-	 * whitespace at an `{#if}` boundary, which glued the cap onto the colon.
-	 *
-	 * The cap is stated, never hidden: a list that stopped at 25 is a different answer
-	 * from one that ran out.
-	 */
+	// Built here, not in markup: Svelte trims whitespace at an `{#if}` boundary, which
+	// glued the cap onto the colon.
 	let suggestionsLabel = $derived(
 		searchInfo.capped
 			? `${suggestionsPrefix} (showing the ${searchInfo.names.length} closest)`
@@ -170,15 +131,13 @@
 	}
 </script>
 
-<!-- Full-width below md (hidden once an applicant is open — the detail view
-     takes over); the classic 300px/44px rail from md up. -->
+<!-- Full-width below md, hidden once an applicant is open; a 300px/44px rail from md up. -->
 <div
 	class="w-full shrink-0 flex-col overflow-hidden border-border transition-[width] duration-200 ease-[ease] md:flex md:border-r {selectedUid
 		? 'hidden'
 		: 'flex'} {isCollapsed ? 'md:w-11' : 'md:w-75'}"
 >
 	{#if isCollapsed}
-		<!-- Collapsed strip -->
 		<div class="flex flex-col items-center gap-2 py-[10px]">
 			<button
 				onclick={onToggleCollapse}
@@ -194,7 +153,6 @@
 			</span>
 		</div>
 	{:else}
-		<!-- Role tabs + collapse button -->
 		<div class="flex shrink-0 items-stretch overflow-x-hidden border-b border-border">
 			<div class="flex flex-1 overflow-x-auto">
 				{#each ROLE_TABS as tab (tab.key)}
@@ -209,7 +167,6 @@
 					</button>
 				{/each}
 			</div>
-			<!-- Collapse toggle (desktop rail only) -->
 			<button
 				onclick={onToggleCollapse}
 				title="Collapse sidebar"
@@ -219,11 +176,8 @@
 			</button>
 		</div>
 
-		<!-- Scored / unscored split, then search -->
 		<div class="shrink-0 border-b border-border px-3 py-[10px]">
-			<!-- Built from the same plain buttons as the role tabs above rather than a shared
-						     control: the two sit two rows apart in a 300px rail and have to read as one
-						     set of filters. -->
+			<!-- Same plain buttons as the role tabs, so the two rows read as one set of filters. -->
 			<div class="mb-2 flex gap-1" role="group" aria-label="Filter by scoring state">
 				{#each SCORE_FILTERS as option (option.key)}
 					<button
@@ -248,18 +202,10 @@
 			/>
 		</div>
 
-		<!--
-					"Did you mean" -- the fallback the server applied, in the order it ranked.
-					Its own strip rather than folded into the list, because the rows below are
-					`createdAt desc` and reordering them would imply a relevance the queue lacks.
-				-->
 		{#if showSuggestions}
 			<div class="shrink-0 border-b border-border bg-muted px-3 py-2">
 				<div class="text-2xs text-foreground-secondary">{suggestionsLabel}</div>
-				<!--
-									Capped and scrolled like the filter panel: at the cap this is 25 full names,
-									which would leave two applicants visible on a laptop.
-								-->
+				<!-- Scrolled: at the cap this is 25 names, which would leave two applicants visible. -->
 				<div class="mt-1.5 flex max-h-40 flex-wrap gap-1 overflow-y-auto">
 					{#each searchInfo.names as name (name)}
 						{@const active =
@@ -280,7 +226,6 @@
 			</div>
 		{/if}
 
-		<!-- Application answers, behind a disclosure so the queue stays in view -->
 		{#if facets.length > 0}
 			<div class="shrink-0 border-b border-border">
 				<div class="flex items-stretch">
@@ -295,8 +240,7 @@
 					>
 						<span class="flex items-center gap-1.5">
 							Filters
-							<!-- The count is what keeps a shut panel honest: a filter you cannot see is
-														     still narrowing the queue. -->
+							<!-- A filter you cannot see is still narrowing the queue. -->
 							{#if activeFilterCount > 0}
 								<span
 									class="rounded-sm bg-primary px-1 font-mono text-2xs text-primary-foreground tabular-nums"
@@ -305,8 +249,7 @@
 								</span>
 							{/if}
 						</span>
-						<!-- Same rotating chevron as the per-facet folds inside the panel, so the
-						     two read as one mechanism at two scales. -->
+						<!-- Same chevron as the per-facet folds inside, so both read as one mechanism. -->
 						<span
 							aria-hidden="true"
 							class="inline-block text-md leading-none transition-transform duration-150 ease-out-quick {filtersOpen
@@ -338,7 +281,6 @@
 			</div>
 		{/if}
 
-		<!-- List -->
 		<div class="flex-1 overflow-y-auto transition-opacity" class:opacity-50={loading}>
 			{#if applicants.length === 0}
 				<div class="px-4 py-8 text-center text-xs text-muted-foreground">
@@ -360,7 +302,6 @@
 							? 'bg-[#ebebeb]'
 							: 'bg-white hover:bg-[#f5f5f5]'}"
 					>
-						<!-- Row top: name + decision chip -->
 						<div class="flex items-center justify-between gap-1.5">
 							<span class="truncate text-[13px] font-medium text-primary">
 								{applicant.name}
@@ -392,8 +333,7 @@
 										Reviewing
 									</span>
 								{/if}
-								<!-- A literal PENDING means untouched, not decided — chipping it
-								     would put a badge on every row in the scoring queue. -->
+								<!-- PENDING means untouched, not decided; chipping it would badge every row. -->
 								{#if applicant.pendingDecision && applicant.pendingDecision !== 'PENDING'}
 									<span
 										class="inline-block rounded px-1.5 py-0.5 text-[10px] font-semibold {DECISION_CLASS[
@@ -405,11 +345,9 @@
 								{/if}
 							</div>
 						</div>
-						<!-- Row middle: role -->
 						<div class="mt-0.5 text-[11px] text-muted-foreground">
 							{applicant.role.charAt(0) + applicant.role.slice(1).toLowerCase()}
 						</div>
-						<!-- Row bottom: applied date -->
 						<div class="mt-px font-mono text-[11px] text-[#cccccc]">
 							{formatShortDate(applicant.createdAt)}
 						</div>

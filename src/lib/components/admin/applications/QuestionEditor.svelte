@@ -15,11 +15,8 @@
 	interface Props {
 		question: Question | null;
 		/**
-		 * Title and type the Add Question form was carrying when it opened this.
-		 *
-		 * Only consulted for a new question. Seeding `type` is what makes the
-		 * type-dependent sections visible before anything has been added, so picking
-		 * "Dropdown" lands you straight in the options editor.
+		 * Title and type carried over from the Add Question form. New questions only.
+		 * Seeding `type` shows the type-dependent sections immediately.
 		 */
 		seed?: { title: string; type: QuestionType } | null;
 		isOpen: boolean;
@@ -56,7 +53,6 @@
 		...LINKED_FIELDS.map((field) => ({ value: field, label: LINKED_FIELD_LABEL[field] }))
 	];
 
-	// Form state
 	let title = $state('');
 	let type = $state<QuestionType>('SHORT_TEXT');
 	let required = $state(false);
@@ -71,14 +67,11 @@
 	let errors = $state<Record<string, string>>({});
 	let newOptionInput = $state('');
 
-	/**
-	 * The suggestion the organizer has waved away, so it stays away. Keyed by field
-	 * rather than a bare boolean, so dismissing the University chip does not suppress
-	 * the Year chip when they rewrite the question.
-	 */
+	// Keyed by field, not a boolean: dismissing the University chip must not suppress
+	// the Year chip after the title is rewritten.
 	let dismissed = $state<LinkedField | null>(null);
 
-	/** Set when defaults were just applied, so the note explains where the type came from. */
+	/** Drives the note explaining where the type came from. */
 	let appliedDefaults = $state(false);
 
 	$effect(() => {
@@ -116,29 +109,18 @@
 	});
 
 	const isOptions = $derived(type === 'MULTIPLE_CHOICE' || type === 'DROPDOWN');
-	// A preset supplies the list, so there is nothing to hand-author. The rows are hidden
-	// rather than disabled: an editor showing 6,447 read-only text inputs is not a form.
+	// Hidden rather than disabled under a preset: 6,447 read-only inputs is not a form.
 	const showOptions = $derived(isOptions && optionPreset === null);
 	const showPreset = $derived(isOptions && optionPreset !== null);
 	const showMinMax = $derived(type === 'NUMBER');
 	const showPlaceholder = $derived(type !== 'CHECKBOX' && type !== 'MULTIPLE_CHOICE');
 
-	/**
-	 * The linked field this title looks like it is asking for, when it isn't linked yet.
-	 *
-	 * Suppressed once a field is attached and once the organizer dismisses it. Purely
-	 * advisory: every field remains reachable from the select below.
-	 */
+	// Advisory only: every field stays reachable from the select.
 	const suggestion = $derived(linkedField === '' ? (suggestLinkedField(title) ?? null) : null);
 	const showSuggestion = $derived(suggestion !== null && suggestion !== dismissed);
 
-	/**
-	 * Attach a linked field and take the question shape it implies.
-	 *
-	 * Applied on every change, including back to None, so switching University to Year
-	 * does not leave the university preset behind. Defaults, not constraints: nothing
-	 * below is disabled afterwards.
-	 */
+	// Applies the field's default shape on every change, including back to None, so
+	// switching University to Year does not leave the university preset behind.
 	function setLinkedField(field: LinkedField | '') {
 		linkedField = field;
 		if (field === '') {
@@ -182,15 +164,9 @@
 		options = options.map((o, idx) => (idx === i ? val : o));
 	}
 
-	/**
-	 * The option rows, each carrying its index into the unfiltered `options`.
-	 *
-	 * `updateOption` and `removeOption` both address that array. Filtering first and using
-	 * the loop counter edited the wrong entry whenever a blank sat earlier in the list,
-	 * and left the rows with no stable key, since option text is editable and may repeat.
-	 *
-	 * A lone blank survives the filter so the editor always shows one empty row.
-	 */
+	// Each row carries its index into the unfiltered `options`: filtering first and
+	// using the loop counter edited the wrong entry whenever a blank sat earlier, and
+	// option text is editable so it cannot be the key. A lone blank survives the filter.
 	const editableOptions = $derived(
 		options
 			.map((value, index) => ({ value, index }))
@@ -229,8 +205,7 @@
 			max: showMinMax && max !== '' ? Number(max) : null,
 			regex: regex.trim() || undefined,
 			linkedField: linkedField || null,
-			// Cleared when the type no longer offers choices, so a preset left behind by
-			// switching to Short Text cannot come back if the type is switched again.
+			// Cleared for non-choice types so a stale preset cannot return on a later type switch.
 			optionPreset: isOptions ? optionPreset : null
 		};
 
@@ -275,7 +250,6 @@
 			</div>
 
 			<div class="modal-body">
-				<!-- Title -->
 				<div class="field" class:field-error={errors.title}>
 					<label for="q-title">Question Title <span class="req">*</span></label>
 					<input
@@ -286,11 +260,6 @@
 					/>
 					{#if errors.title}<p class="error-msg">{errors.title}</p>{/if}
 
-					<!--
-											Offered from the title, because the two things an organizer would have to
-											already know are nowhere else on this form. Dismissible, and it decides
-											nothing: the select below still offers every field.
-										-->
 					{#if showSuggestion && suggestion}
 						<div class="suggestion">
 							<span class="suggestion-text">
@@ -310,7 +279,6 @@
 					{/if}
 				</div>
 
-				<!-- Type + Required row -->
 				<div class="row-2">
 					<div class="field">
 						<label for="q-type">Type <span class="req">*</span></label>
@@ -333,11 +301,7 @@
 					</div>
 				</div>
 
-				<!-- Target Roles -->
-				<!--
-					A group of toggle buttons, not one control, so this is a group label
-					rather than a <label> — which would have nothing to point at.
-				-->
+				<!-- A group label, not a <label>: there is no single control to point at. -->
 				<div class="field">
 					<span class="field-label" id="target-roles-label">
 						Target Roles <span class="hint">(leave empty for all)</span>
@@ -356,7 +320,6 @@
 					</div>
 				</div>
 
-				<!-- Conditional: Placeholder -->
 				{#if showPlaceholder}
 					<div class="field">
 						<label for="q-placeholder">Placeholder Text</label>
@@ -369,7 +332,6 @@
 					</div>
 				{/if}
 
-				<!-- Conditional: Preset option list -->
 				{#if showPreset && optionPreset}
 					<div class="field">
 						<span class="field-label">Options</span>
@@ -386,7 +348,6 @@
 					</div>
 				{/if}
 
-				<!-- Conditional: Options -->
 				{#if showOptions}
 					<div class="field" class:field-error={errors.options}>
 						<span class="field-label" id="options-label">
@@ -438,7 +399,6 @@
 					</div>
 				{/if}
 
-				<!-- Conditional: Min/Max -->
 				{#if showMinMax}
 					<div class="row-2" class:field-error={errors.minMax}>
 						<div class="field">
@@ -453,14 +413,10 @@
 					{#if errors.minMax}<p class="error-msg" style="margin-top: -8px">{errors.minMax}</p>{/if}
 				{/if}
 
-				<!-- Linked Field -->
 				<div class="row-2">
 					<div class="field">
 						<label for="q-linked">Linked Field</label>
-						<!--
-													`onChange` rather than `bind:value`, because attaching a field also applies
-													the question shape it implies. A binding would skip that.
-												-->
+						<!-- `onChange`, not `bind:value`: attaching a field also applies its defaults. -->
 						<Combobox
 							id="q-linked"
 							options={LINKED_FIELD_CHOICES}
@@ -743,13 +699,8 @@
 		color: #fff;
 	}
 
-	/*
-	 * The suggestion strip and the preset row.
-	 *
-	 * Written in this modal's own scoped-CSS idiom rather than in design tokens: the file
-	 * predates the design system and porting it is a separate job. The chip shape still
-	 * follows the one the admissions and users pages use.
-	 */
+	/* Scoped CSS rather than design tokens: this file predates the design system and
+	   porting it is a separate job. */
 	.suggestion {
 		display: flex;
 		align-items: center;

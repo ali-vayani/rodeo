@@ -500,9 +500,8 @@ describe('application.rsvpDecline', () => {
 	});
 
 	it('still sends, from the defaults, when no settings row exists', async () => {
-		// Production ran with no Settings row for weeks: `settings.get` served DEFAULT_SETTINGS
-		// so the editor looked configured, while every sender read the row directly, found null,
-		// and skipped silently. Both sides resolve the same values now.
+		// Regression: the editor served DEFAULT_SETTINGS while the senders read the row
+		// directly, found null, and skipped silently.
 		const caller = createTestCaller(db, acceptedHacker);
 		db.user.findUniqueOrThrow.mockResolvedValue(acceptedHacker as never);
 		db.user.update.mockResolvedValue({
@@ -540,8 +539,7 @@ describe('application.rsvpDecline', () => {
 describe('application.submit', () => {
 	it('sets status to APPLIED on success', async () => {
 		const caller = createTestCaller(db, hackerUser);
-		// findUniqueOrThrow is called twice: once at the start to load the user (must be
-		// CREATED to pass the guard) and again after the compare-and-swap to re-read it.
+		// Read once for the CREATED guard, again after the CAS.
 		db.user.findUniqueOrThrow
 			.mockResolvedValueOnce(hackerUser as never)
 			.mockResolvedValue({ ...hackerUser, status: UserStatus.APPLIED } as never);
@@ -583,7 +581,7 @@ describe('application.submit', () => {
 	});
 
 	it('submits when no settings row exists yet', async () => {
-		// Fresh install — no configured window, so nothing to be outside of.
+		// Fresh install: no window, so nothing to be outside of.
 		const caller = createTestCaller(db, hackerUser);
 		db.user.findUniqueOrThrow
 			.mockResolvedValueOnce(hackerUser as never)
@@ -827,11 +825,8 @@ describe('application.submit', () => {
 	});
 
 	it('still acknowledges the application when no settings row exists', async () => {
-		// The production outage this exists to prevent: two applicants submitted against a
-		// database with no Settings row, `settings?.submitTemplate` was falsy, and the send
-		// was skipped with no error and nothing in the Resend dashboard to find. The window
-		// guards deliberately let a submission through in that state, so the acknowledgement
-		// has to go out with it.
+		// Regression: with no Settings row the send was skipped silently. The window guards
+		// let a submission through in that state, so the acknowledgement must go with it.
 		const caller = createTestCaller(db, hackerUser);
 		db.user.findUniqueOrThrow
 			.mockResolvedValueOnce(hackerUser as never)

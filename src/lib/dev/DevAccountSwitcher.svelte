@@ -23,57 +23,42 @@
 		type Position
 	} from './switcher';
 
-	/**
-	 * DEV ONLY. Floating account switcher.
-	 *
-	 * Mounted from the root layout behind `{#if dev}` and a dynamic import, so neither
-	 * this component nor its chunk exists in a production build. See
-	 * `src/routes/dev/accounts/+server.ts` for the endpoint and the gate.
-	 *
-	 * It sits in `src/lib/dev/` rather than `components/ui|patterns/` because
-	 * `scripts/lint-tokens.mjs` scopes those directories and a draggable widget needs
-	 * runtime `left`/`top`/`z-index` numbers no token can express.
-	 */
+	// DEV ONLY. Mounted from the root layout behind `{#if dev}` and a dynamic import, so
+	// no chunk exists in production. Endpoint and gate: `src/routes/dev/accounts/+server.ts`.
+	// Lives outside `components/` because `scripts/lint-tokens.mjs` scopes those
+	// directories and a draggable widget needs runtime `left`/`top`/`z-index` numbers.
 
 	const BUTTON_SIZE = 36;
 	const MARGIN = 12;
-	/** Below this, the pointer gesture was a press rather than a drag. */
+	/** px of movement below which a pointer gesture is a press, not a drag. */
 	const DRAG_THRESHOLD = 4;
-	/** A localhost fetch is ~10ms; an instant spinner reads as a flicker, not feedback. */
+	/** A localhost fetch is ~10ms; an instant spinner reads as a flicker. */
 	const SPINNER_DELAY_MS = 150;
 
 	let open = $state(false);
 	let accounts = $state<IndexedAccount[]>([]);
 	let currentUid = $state<string | null>(null);
 	let loading = $state(false);
-	/**
-	 * Whether a fetch has ever completed. Without it the header claims "Not signed in"
-	 * for the ~100ms before the first response lands.
-	 */
+	/** Without it the header claims "Not signed in" until the first response lands. */
 	let loaded = $state(false);
 	let showSpinner = $state(false);
 	let panelError = $state<string | null>(null);
 	let switching = $state(false);
 
-	/**
-	 * Restored at init rather than in an `$effect`. The root layout imports this component
-	 * dynamically behind `{#if dev}`, so it never runs during SSR and `localStorage`
-	 * always exists here.
-	 */
+	// Safe at init: the dynamic `{#if dev}` import means this never runs during SSR.
 	const restored = loadFilters(localStorage);
 
 	let query = $state(restored.query);
 	let roleFilter = $state<Role[]>(restored.roles as Role[]);
 	let statusFilter = $state<UserStatus[]>(restored.statuses as UserStatus[]);
-	/** Released — the decision the applicant sees. */
+	/** Released: the decision the applicant sees. */
 	let decisionFilter = $state<DecisionFilterValue[]>(restored.decisions as DecisionFilterValue[]);
-	/** Held — decided by a reviewer, not yet released. */
+	/** Held: decided by a reviewer, not yet released. */
 	let pendingFilter = $state<DecisionFilterValue[]>(
 		restored.pendingDecisions as DecisionFilterValue[]
 	);
 
-	// Written back on every change, so the full-page navigation a switch performs
-	// doesn't discard the narrowing you just did to find that account.
+	// A switch is a full-page navigation, which would otherwise discard the filters.
 	$effect(() => {
 		saveFilters(localStorage, {
 			query,
@@ -87,15 +72,12 @@
 	let searchEl = $state<HTMLInputElement | null>(null);
 	let buttonEl: HTMLButtonElement | null = null;
 
-	// -- Position ---------------------------------------------------------------
-	// `null` means "not yet dragged": the button renders with right/bottom so it stays
-	// glued to its corner across resizes. The first drag converts it to left/top.
+	// `null` means not yet dragged: the button renders with right/bottom so it stays in
+	// its corner across resizes. The first drag converts it to left/top.
 	let pos = $state<Position | null>(null);
 
-	// Deliberately NOT $state. Written on every pointermove and read only by the rAF that
-	// repaints, the same reasoning as `lastActivityAt` in reviewSession.svelte.ts. Routing
-	// a ~120Hz pointer stream through the reactive graph would render per sample. The one
-	// reactive write happens on pointerup.
+	// Not $state: a ~120Hz pointer stream through the reactive graph would render per
+	// sample. Read only by the rAF repaint; the one reactive write is on pointerup.
 	let dragging = false;
 	let moved = false;
 	let grabX = 0;
@@ -114,18 +96,14 @@
 		return clampPosition(next, viewport(), buttonSize(), MARGIN);
 	}
 
-	/**
-	 * Restore the stored position, clamped — a corner on a 4K monitor is off-screen on
-	 * a laptop, and the widget has to come back somewhere clickable.
-	 */
+	// Clamped: a corner on a 4K monitor is off-screen on a laptop.
 	$effect(() => {
 		const stored = loadPosition(localStorage);
 		if (stored) pos = clamped(stored);
 	});
 
 	function persist() {
-		// A window drag fires resize at frame rate; the clamp is trivial but a
-		// localStorage write per frame is not.
+		// Resize fires at frame rate; a localStorage write per frame is not trivial.
 		clearTimeout(saveTimer);
 		saveTimer = setTimeout(() => {
 			if (pos) savePosition(localStorage, pos);
@@ -133,7 +111,7 @@
 	}
 
 	function onResize() {
-		if (!pos) return; // still corner-pinned — CSS is already handling it
+		if (!pos) return; // still corner-pinned; CSS handles it
 		pos = clamped(pos);
 		persist();
 	}
@@ -150,8 +128,7 @@
 		if (event.button !== 0 || !buttonEl) return;
 		const rect = buttonEl.getBoundingClientRect();
 
-		// Switch from the corner-pinned default to explicit coordinates before the
-		// first move, so right/bottom and left/top never both apply.
+		// Explicit coordinates before the first move, so right/bottom and left/top never both apply.
 		pos = { x: rect.left, y: rect.top };
 
 		grabX = event.clientX - rect.left;
@@ -180,7 +157,7 @@
 		if (!dragging) return;
 		dragging = false;
 		buttonEl?.releasePointerCapture(event.pointerId);
-		if (!moved) return; // a press — onClick opens the panel
+		if (!moved) return; // a press; onClick opens the panel
 
 		if (frame) {
 			cancelAnimationFrame(frame);
@@ -191,9 +168,8 @@
 	}
 
 	function onClick() {
-		// Checked here rather than in pointerup because a drag ends with a click too. It is
-		// also what keeps keyboard activation working: Enter and Space produce a click with
-		// no pointer events before it, so `moved` is false and the panel opens.
+		// A drag ends with a click too. Enter and Space produce a click with no pointer
+		// events, so `moved` is false and the panel opens.
 		if (moved) {
 			moved = false;
 			return;
@@ -208,15 +184,13 @@
 		try {
 			localStorage.removeItem(POSITION_KEY);
 		} catch {
-			// Private mode. The button is back in its corner either way.
+			// Private mode; the button is back in its corner either way.
 		}
 		if (buttonEl) {
 			buttonEl.style.left = '';
 			buttonEl.style.top = '';
 		}
 	}
-
-	// ── Data ────────────────────────────────────────────────────────────────────
 
 	async function fetchAccounts() {
 		loading = true;
@@ -241,12 +215,11 @@
 
 	async function openPanel() {
 		open = true;
-		// Fetched on first open rather than on mount, since this component is on every page
-		// and most loads never open it. A switch is a full navigation.
+		// On first open, not mount: this component is on every page and most loads never open it.
 		if (!accounts.length && !loading) void fetchAccounts();
 		await tick();
 		searchEl?.focus();
-		// select(), so opening again replaces the last query instead of appending.
+		// So reopening replaces the last query instead of appending.
 		searchEl?.select();
 	}
 
@@ -264,9 +237,8 @@
 			if (!res.ok) throw new Error(`Switch failed (${res.status}).`);
 			const { redirectTo }: { redirectTo: string } = await res.json();
 
-			// A real document navigation rather than invalidateAll(). Becoming someone else
-			// invalidates every piece of client state in the app, and there is no reliable way
-			// to enumerate it. A full load is the only clean slate.
+			// Not invalidateAll(): becoming someone else invalidates every piece of client
+			// state, and a full load is the only clean slate.
 			location.assign(redirectTo);
 		} catch (error) {
 			switching = false;
@@ -274,11 +246,8 @@
 		}
 	}
 
-	// ── Filtering ───────────────────────────────────────────────────────────────
-
-	// Only offer chips that can match something, which drops the roles and statuses this
-	// seed never created. `accounts` is already in role-rank order and a Set keeps
-	// first-seen order, so the chips come out ranked without a sort.
+	// Only values some account has. `accounts` is in role-rank order and a Set keeps
+	// first-seen order, so the role chips come out ranked without a sort.
 	const roleOptions = $derived([...new Set(accounts.map((a) => a.role))]);
 	const statusOptions = $derived([...new Set(accounts.map((a) => a.status))].sort());
 	const activeDecisionOptions = $derived(decisionOptions(accounts, 'activeDecision'));
@@ -315,11 +284,8 @@
 		searchEl?.focus();
 	}
 
-	/**
-	 * The role header to emit before this row, or null to continue the current group.
-	 * Comparing against the previously *rendered* row means search and filtering need
-	 * no separate code path — a group filtered down to nothing simply never appears.
-	 */
+	// Role header to emit before this row, or null. Comparing against the previous
+	// rendered row means a group filtered to nothing simply never appears.
 	function groupHeader(rows: IndexedAccount[], index: number): Role | null {
 		const role = rows[index].role;
 		if (index === 0) return role;
@@ -331,26 +297,20 @@
 	}
 
 	function onKeydown(event: KeyboardEvent) {
-		// Cmd/Ctrl+K. preventDefault stops the browser's own address-bar search; the
-		// app itself binds no global shortcuts, so nothing in-page is clobbered.
+		// Cmd/Ctrl+K. preventDefault stops the browser's address-bar search; the app binds
+		// no global shortcuts of its own. Escape is handled by Modal.
 		if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
 			event.preventDefault();
 			if (open) open = false;
 			else void openPanel();
 		}
-		// Escape is Modal's own (bits-ui Dialog), so it is not handled here.
 	}
 </script>
 
 <svelte:window onkeydown={onKeydown} onresize={onResize} />
 
-<!--
-	One labelled row of toggle chips for one column.
-
-	A snippet rather than four copies, because the only thing that differed between the
-	role and status rows was the array. `string` rather than a generic: every value here
-	is a string enum, and the call sites do the one cast.
--->
+<!-- One labelled row of toggle chips. `string` rather than a generic: every value is a
+     string enum and the call sites do the one cast. -->
 {#snippet chipRow(
 	label: string,
 	hint: string,
@@ -364,10 +324,7 @@
 			role="group"
 			aria-label={label}
 		>
-			<!--
-							`title` rather than visible help text: the panel is already dense, and the
-							label alone answers the question this row exists to answer.
-						-->
+			<!-- `title` rather than visible help text: the panel is already dense. -->
 			<span
 				title={hint}
 				class="cursor-help pt-1 font-mono text-2xs tracking-eyebrow text-foreground-tertiary uppercase"
@@ -397,12 +354,8 @@
 	{/if}
 {/snippet}
 
-<!--
-	Fixed rather than absolute, so it stays put while a long table scrolls under it.
-	z-index 300 puts it above ToastHost (200), whose container is pointer-events-none, so
-	sitting below toasts would make the button dead for 3.2s after every success. Hidden
-	while the panel is open, because Modal portals at z-50.
--->
+<!-- z-index 300 sits above ToastHost (200); below it the button would be dead for 3.2s
+     after every success toast. Hidden while the panel is open because Modal portals at z-50. -->
 <button
 	bind:this={buttonEl}
 	type="button"
@@ -440,11 +393,7 @@
 			: 'Not signed in'}
 	bodyClass="pt-0"
 >
-	<!--
-			Sticky rather than outside the scroll container: Modal's body owns the
-			`panel-scroll` cap, and reaching around it would override a utility the primitive
-			is entitled to change.
-		-->
+	<!-- Sticky inside the scroll container: Modal's body owns the `panel-scroll` cap. -->
 	<div class="sticky top-0 z-10 -mx-6 bg-card px-6 pt-5 pb-3">
 		<input
 			bind:this={searchEl}
@@ -455,11 +404,7 @@
 			class={controlClass({ class: 'w-full' })}
 		/>
 
-		<!--
-					Every group is labelled with the column it filters, rather than four unlabelled
-					chip rows. "Decision" and "Pending" are named exactly as /admin/users titles the
-					same two columns, so the vocabulary is one thing to learn.
-				-->
+		<!-- "Decision" and "Pending" match the column titles on /admin/users. -->
 		{@render chipRow('Role', 'Matches any role the account holds', roleOptions, roleFilter, (v) => {
 			roleFilter = toggle(roleFilter, v as Role);
 		})}
@@ -538,10 +483,7 @@
 			{#each filtered as account, index (account.uid)}
 				{@const header = groupHeader(filtered, index)}
 				{#if header}
-					<!--
-											Static rather than sticky: the search block above already owns `top-0`, so a
-											sticky header would slide underneath it and vanish.
-										-->
+					<!-- Not sticky: the search block owns `top-0`, and this would slide under it. -->
 					<li
 						class="flex items-center gap-2 bg-card pt-3 pb-1 font-mono text-2xs
 						       tracking-eyebrow text-foreground-tertiary uppercase"
@@ -582,8 +524,7 @@
 						</span>
 
 						<span class="flex shrink-0 flex-wrap items-center justify-end gap-1">
-							<!-- Outline, not a colored tone: tone.ts reserves color for status, and a privilege
-														     rainbow would read as an alert. Role is separated from state by weight. -->
+							<!-- Outline, not a tone: tone.ts reserves colour for status. -->
 							<Badge variant="outline">{humanizeEnum(account.role)}</Badge>
 
 							<Badge tone={statusTone(account.status)} dot>{humanizeEnum(account.status)}</Badge>
@@ -593,12 +534,10 @@
 									{humanizeEnum(account.activeDecision)}
 								</Badge>
 							{:else if account.pendingDecision === 'PENDING'}
-								<!-- In the queue, undecided. Distinct from the branch below: PENDING is
-								     the absence of a decision, not one being withheld. -->
+								<!-- PENDING is the absence of a decision, not one being withheld. -->
 								<Badge>In review</Badge>
 							{:else if account.pendingDecision}
-								<!-- Decided but not released. Outline and labelled so it can never be
-								     read as the decision the applicant would actually see. -->
+								<!-- Outline and labelled so it cannot be read as the released decision. -->
 								<span title="Decided but not yet released to the applicant">
 									<Badge variant="outline">Held: {humanizeEnum(account.pendingDecision)}</Badge>
 								</span>

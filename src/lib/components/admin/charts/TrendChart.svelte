@@ -2,33 +2,14 @@
 	import type { TrendSeries } from '$lib/dashboard';
 	import { formatDayLabel } from '$lib/schedule/days';
 
-	/**
-	 * Applications and decisions per day.
-	 *
-	 * One axis. Both series are counts of people per day, so they share a scale and can
-	 * be compared directly. A second y-axis scaled to each series' own range would
-	 * invent a correlation that isn't in the data.
-	 *
-	 * Two shades of ink rather than two hues, because colour on this dashboard means
-	 * decision status and neither series is one.
-	 */
-	/**
-	 * `height` is a viewBox height, not pixels, so what this really sets is the aspect
-	 * ratio. 300 against a 620 width puts the chart close to the height of the activity
-	 * feed beside it.
-	 */
+	// One shared axis: both series are people per day, and a second y-axis would invent a
+	// correlation. Two shades of ink, not two hues, since colour here means decision status.
+	// `height` is viewBox units, so it really sets the aspect ratio.
 	let { series, height = 300 }: { series: TrendSeries; height?: number } = $props();
 
-	/**
-	 * The viewBox width tracks the rendered width, so one viewBox unit is one CSS pixel
-	 * and the chart never scales its own type.
-	 *
-	 * A fixed 620-unit viewBox falls apart on a phone: at 390px the drawing scales to
-	 * 0.63, taking 10px axis labels down to about 6px. Measuring the container instead
-	 * means the geometry reflows and the text stays the size the design system set.
-	 *
-	 * Floored at 320 so a card measured mid-layout never divides by zero.
-	 */
+	// viewBox width tracks rendered width so one unit is one CSS px and text never
+	// scales: a fixed 620 viewBox took 10px labels to ~6px on a phone. Floored at 320 so
+	// a card measured mid-layout never divides by zero.
 	let containerWidth = $state(620);
 	const W = $derived(Math.max(320, containerWidth));
 	const PLOT = $derived({ left: 40, right: W - 24, top: 12, bottom: 0 });
@@ -36,7 +17,7 @@
 	const points = $derived(series.points);
 	const nf = new Intl.NumberFormat('en-US');
 
-	/** Axis ticks land on round numbers, so the gridlines carry readable values. */
+	/** Rounds up so the axis ticks land on readable values. */
 	function niceMax(value: number): number {
 		if (value <= 4) return 4;
 		const magnitude = 10 ** Math.floor(Math.log10(value));
@@ -62,12 +43,7 @@
 
 	const last = $derived(points[points.length - 1]);
 
-	/**
-	 * Date labels thinned to whatever the width can hold, at ~90px each.
-	 *
-	 * A fixed "every nth point" rule fails at one end or the other. The tooltip carries
-	 * the exact day, so dropping labels costs nothing.
-	 */
+	// Date labels thinned to what the width holds at ~90px each; the tooltip has the exact day.
 	const labelEvery = $derived(
 		Math.max(1, Math.ceil(points.length / Math.max(2, Math.floor(W / 90))))
 	);
@@ -75,18 +51,11 @@
 	let hovered = $state<number | null>(null);
 	const hoveredPoint = $derived(hovered === null ? null : (points[hovered] ?? null));
 
-	/**
-	 * Nearest-point hover, handled once on the `<svg>` rather than by a transparent hit
-	 * rect per day.
-	 *
-	 * A stack of rects would each need an ARIA role to carry a pointer handler, and would
-	 * be 400 nodes on an all-time window. One handler also makes the whole plot live, so
-	 * there is no dead space between bands.
-	 */
+	// One handler on the <svg> rather than a hit rect per day: the rects would each need
+	// an ARIA role and total 400 nodes on an all-time window.
 	function onPointerMove(event: PointerEvent) {
 		const box = (event.currentTarget as SVGSVGElement).getBoundingClientRect();
 		if (box.width === 0 || points.length === 0) return;
-		// The viewBox scales uniformly, so a client x maps back through the ratio.
 		const viewX = ((event.clientX - box.left) / box.width) * W;
 		const span = PLOT.right - PLOT.left;
 		const ratio = span === 0 ? 0 : (viewX - PLOT.left) / span;
@@ -99,8 +68,6 @@
 	<p class="py-6 text-center text-base text-foreground-secondary">No activity in this range.</p>
 {:else}
 	<div class="relative" bind:clientWidth={containerWidth}>
-		<!-- viewBox width == rendered width (see `containerWidth`), so this neither
-		     scales up nor down and `preserveAspectRatio` never comes into it. -->
 		<svg
 			viewBox="0 0 {W} {height}"
 			width="100%"
@@ -158,8 +125,7 @@
 				class="stroke-primary"
 			/>
 
-			<!-- End markers carry a 2px surface ring so they stay legible where the two
-			     lines cross. -->
+			<!-- 2px surface ring keeps the end markers legible where the lines cross. -->
 			{#if last}
 				<circle
 					cx={x(points.length - 1)}
@@ -206,9 +172,8 @@
 		</svg>
 
 		{#if hoveredPoint && hovered !== null}
-			<!-- Follows the crosshair. The viewBox scales uniformly, so a viewBox x maps
-			     to a container percentage directly; clamped so the panel can't hang off
-			     either edge of the card. -->
+			<!-- viewBox x maps straight to a container percentage; clamped so the panel
+			     can't hang off either edge. -->
 			<div
 				role="status"
 				style="left: {Math.min(88, Math.max(12, (x(hovered) / W) * 100))}%"

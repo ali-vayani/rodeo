@@ -26,10 +26,14 @@ type QuestionInput = {
 };
 
 /**
- * Turn whatever `questions.change` threw into one sentence the organizer can act on.
+ * Turns whatever `questions.change` threw into one sentence the organizer can act on.
+ * Only text we author reaches the client; the full error stays in `console.error`.
  *
- * A blanket "Please try again" hid the actual cause. Only text we author reaches the
- * client; the full error, stack included, stays in `console.error`.
+ * Inputs:
+ * - error: unknown — the caught value, usually a ZodError, TRPCError, or Prisma error
+ *
+ * Outputs:
+ * - string — a lowercase clause that completes "Failed to save changes: ..."
  */
 function describeSaveFailure(error: unknown): string {
 	const zodError =
@@ -51,8 +55,8 @@ function describeSaveFailure(error: unknown): string {
 	// A TRPCError message is text we wrote (permission denied, not found, …).
 	if (error instanceof TRPCError) return error.message;
 
-	// Anything else — Prisma, network — could carry query internals, so name the
-	// class of failure only.
+	// Anything else (Prisma, network) could carry query internals, so name the class of
+	// failure only.
 	if (error instanceof Error && error.name.startsWith('Prisma')) {
 		return 'the database rejected the change';
 	}

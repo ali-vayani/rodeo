@@ -26,7 +26,6 @@
 
 	type User = (typeof data.users)[number];
 
-	// Snapshot from server; updated client-side on pagination / edits
 	let users = $state<User[]>(untrack(() => [...data.users]));
 	let total = $state(untrack(() => data.total));
 	let page = $state(1);
@@ -49,7 +48,6 @@
 		}
 	}
 
-	// --- Filter state ---
 	// Vocabulary and the checkbox-state to tRPC-params translation are shared with the
 	// custom-email wizard, so a count here and a send there cannot disagree.
 	let roleFilter = $state(allChecked(ALL_ROLES));
@@ -78,7 +76,6 @@
 		};
 	}
 
-	// --- Typo-tolerant search ---
 	// What the server fell back to when the typed term matched almost nothing. The rows
 	// themselves are `createdAt desc` under pagination and are NOT ranked; these names are.
 	let expansion = $state(untrack(() => data.search));
@@ -145,7 +142,6 @@
 		searchTimer = setTimeout(() => loadPage(1), 400);
 	}
 
-	// --- CSV export ---
 	let exporting = $state(false);
 
 	async function exportCsv() {
@@ -164,7 +160,6 @@
 		}
 	}
 
-	// --- Toast ---
 	let toast = $state<{ message: string; type: 'success' | 'error' } | null>(null);
 	let toastTimer: ReturnType<typeof setTimeout>;
 
@@ -174,7 +169,6 @@
 		toastTimer = setTimeout(() => (toast = null), 3200);
 	}
 
-	// --- Modal state ---
 	let detailOpen = $state(false);
 	let selectedUser = $state<User | null>(null);
 	// Typed as the enums rather than plain strings; '' is the modal's own "unset" for the
@@ -198,7 +192,6 @@
 	 */
 	const released = $derived(Boolean(selectedUser?.activeDecision));
 
-	// --- Full profile (user.getById) ---
 	// The list row carries only the seven columns the table shows, so the modal opens
 	// immediately on row data and fills this half in when it lands. `profileToken` stops
 	// a slow response for an old row overwriting a fast one for the row you are on.
@@ -294,7 +287,6 @@
 		openModal(user);
 	}
 
-	// --- Display helpers ---
 	const DECISION_CLASS: Record<string, string> = {
 		ACCEPTED: 'bg-[#d1fae5] text-[#065f46]',
 		WAITLISTED: 'bg-[#fef9c3] text-[#713f12]',
@@ -316,7 +308,6 @@
 	}
 </script>
 
-<!-- Header -->
 <div class="mb-6 flex items-center justify-between">
 	<h1 class="text-[22px] font-bold text-primary">Users</h1>
 	<button
@@ -329,9 +320,8 @@
 	</button>
 </div>
 
-<!-- Layout: filters + results. Below md the filter rail becomes a collapsible strip
-     stacked on top and the table becomes a card list; from md up it is the original
-     sidebar + table. -->
+<!-- Below md the filter rail becomes a collapsible strip stacked on top and the table
+     becomes a card list; from md up it is a sidebar beside a table. -->
 <div class="flex flex-col overflow-hidden rounded-md border border-border bg-white md:flex-row">
 	<UserFilters
 		collapsible
@@ -349,9 +339,7 @@
 		onSelectionChange={() => loadPage(1)}
 	/>
 
-	<!-- Table area -->
 	<div class="flex min-w-0 flex-1 flex-col">
-		<!-- Search + count bar -->
 		<div class="flex items-center gap-3 border-b border-border px-4 py-3">
 			<input
 				type="text"
@@ -454,7 +442,6 @@
 				{/each}
 			</div>
 
-			<!-- Scrollable table wrapper (md and up) — unchanged from desktop -->
 			<div
 				class="hidden max-h-[calc(100vh-280px)] overflow-x-auto overflow-y-auto transition-opacity md:block"
 				class:opacity-50={loadingPage}
@@ -549,7 +536,6 @@
 	</div>
 </div>
 
-<!-- Pagination bar -->
 {#if totalPages > 1}
 	<div
 		class="mt-4 flex flex-wrap items-center justify-center gap-2 transition-opacity sm:gap-4"
@@ -595,7 +581,6 @@
 	bodyClass="flex flex-col gap-5"
 >
 	{#if selectedUser}
-		<!-- Info row -->
 		<div class="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
 			<div>
 				<div class="mb-1 text-2xs font-bold tracking-eyebrow text-muted-foreground uppercase">
@@ -647,7 +632,6 @@
 			{/if}
 		</div>
 
-		<!-- Status + Decisions row: single column on phones, three-up from sm -->
 		<div class="grid grid-cols-1 gap-3 sm:grid-cols-3">
 			<div>
 				<div class="mb-1.5 text-2xs font-bold tracking-eyebrow text-muted-foreground uppercase">
@@ -706,7 +690,6 @@
 	{/snippet}
 </Modal>
 
-<!-- Toast (slides in from right) -->
 {#if toast}
 	<div
 		in:fly={{ x: 60, duration: 280 }}

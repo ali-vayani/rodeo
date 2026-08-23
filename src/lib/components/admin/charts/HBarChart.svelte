@@ -1,16 +1,8 @@
 <script lang="ts">
 	import type { ValueCount } from '$lib/dashboard';
 
-	/**
-	 * Ranked magnitude — universities, years, anything that is one series of counts.
-	 *
-	 * One hue for every bar. Shading each bar darker-where-bigger double-encodes length as
-	 * colour, and on nominal categories it implies a ranking the data does not carry.
-	 *
-	 * `ordered` opts into keeping the caller's order instead of sorting by count, which is
-	 * right for an ordinal field like Year where re-sorting by popularity makes the shape
-	 * of the cohort unreadable.
-	 */
+	// One hue for every bar: shading by size double-encodes length and implies a
+	// ranking nominal categories do not carry.
 	let {
 		rows,
 		ordered = false,
@@ -20,18 +12,15 @@
 		wideLabels = false
 	}: {
 		rows: ValueCount[];
+		/** Keep the caller's order; right for ordinal fields like Year. */
 		ordered?: boolean;
-		/** Darken the leading bar. Off for ordinal data, where "first" isn't "biggest". */
+		/** Darken the leading bar. Off for ordinal data, where first isn't biggest. */
 		emphasizeFirst?: boolean;
 		/** Denominator for the hover percentage. Defaults to the sum of `rows`. */
 		total?: number;
 		/** Scale bars against this instead of the largest row. */
 		max?: number;
-		/**
-		 * Widen the label column. "University of Illinois Urbana-Champaign" truncates to
-		 * "University of Illinois..." at the default width, which is indistinguishable
-		 * from "University of Illinois Chicago".
-		 */
+		/** At the default width "University of Illinois Urbana-Champaign" and "...Chicago" truncate identically. */
 		wideLabels?: boolean;
 	} = $props();
 

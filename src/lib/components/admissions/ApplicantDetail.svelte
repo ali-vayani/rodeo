@@ -56,11 +56,10 @@
 		onReclaim: () => void;
 	} = $props();
 
-	// No banner while we hold it or are acquiring it — avoids a layout shift on
-	// every applicant switch.
+	// No banner while owned or acquiring: avoids a layout shift on every applicant switch.
 	let banner = $derived.by(() => {
 		if (lockState === 'locked') {
-			return lockFreed ? 'No longer being reviewed. Claim it to make a decision.' : null; // rendered with the claimer's name emphasised below
+			return lockFreed ? 'No longer being reviewed. Claim it to make a decision.' : null; // null: claimer's name rendered below
 		}
 		if (lockState === 'expired') {
 			return 'Your review session expired after inactivity. Resume review to make a decision.';
@@ -105,7 +104,6 @@
 </script>
 
 <div class="flex h-full flex-col">
-	<!-- Read-only banner -->
 	{#if showBanner}
 		<div
 			class="flex shrink-0 items-center gap-2 border-b border-[#fde68a] bg-[#fffbeb] px-4 py-2.5 sm:px-5"
@@ -121,10 +119,9 @@
 		</div>
 	{/if}
 
-	<!-- Header -->
 	<div class="shrink-0 border-b border-border px-4 pt-3 pb-3 sm:px-6 sm:pt-4">
 		{#if onBack}
-			<!-- Mobile only: returns to the full-width list (and releases the claim) -->
+			<!-- Mobile only. Returning to the list also releases the claim. -->
 			<button
 				onclick={onBack}
 				class="mb-2 inline-flex cursor-pointer items-center gap-1 border-none bg-transparent p-0 text-base font-medium text-muted-foreground md:hidden"
@@ -153,9 +150,8 @@
 				>
 					{roleLabel(applicant.role)}
 				</span>
-				<!-- `pendingDecision` of PENDING is the enum's starting value, not a
-				     verdict — chipping it would label every untouched applicant
-				     "Pending: Pending". -->
+				<!-- PENDING is the enum's starting value, not a verdict: chipping it would
+				     label every untouched applicant "Pending: Pending". -->
 				{#if pendingChip}
 					<span
 						class="inline-block rounded px-2 py-[3px] text-[11px] font-semibold {DECISION_CLASS[
@@ -178,11 +174,7 @@
 		</div>
 	</div>
 
-	<!--
-			Metadata on one line rather than as a labelled 2x2 grid. The grid cost 122px of a
-			900px screen to carry four facts a reviewer does not read: the role is already a
-			chip two rows up, and the rest are reference details.
-		-->
+	<!-- One line, not a labelled grid: the grid cost 122px for facts a reviewer does not read. -->
 	<div
 		class="flex shrink-0 flex-wrap items-center gap-x-2 gap-y-0.5 border-b border-[#f0f0f0] px-4 py-2 text-[11px] text-muted-foreground sm:px-6"
 	>
@@ -193,7 +185,6 @@
 		<span class="font-mono break-all">{applicant.uid}</span>
 	</div>
 
-	<!-- Application responses -->
 	<div class="flex-1 px-4 py-5 sm:px-6 md:overflow-y-auto">
 		{#if applicant.application.length > 0}
 			<div class="mb-[14px] text-[10px] font-bold tracking-widest text-muted-foreground uppercase">
@@ -203,9 +194,7 @@
 		<ApplicationResponses responses={applicant.application} />
 	</div>
 
-	<!-- Scoring bar. Keyed so switching applicants reseeds the score and notes
-	     drafts from the newly selected row rather than carrying the last one's
-	     typing across. -->
+	<!-- Keyed so switching applicants reseeds the drafts instead of carrying typing across. -->
 	{#key applicant.uid}
 		<ScoreBar
 			score={applicant.score}

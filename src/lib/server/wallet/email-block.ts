@@ -40,6 +40,7 @@ export type CheckInPassBlock = {
 	attachments: EmailAttachment[];
 };
 
+/** What a non-attending recipient gets: the variable expands to nothing and the email still sends. */
 const EMPTY: CheckInPassBlock = { html: '', attachments: [] };
 
 /** Matches `QRCard.svelte` so the printed code is the same in both places. */

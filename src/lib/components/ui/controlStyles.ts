@@ -2,8 +2,7 @@
  * The shell every form control shares: input, textarea, select trigger.
  *
  * Kept here rather than in one of the components so a select and a text input are
- * provably the same height and share one focus treatment. The audit found 46 inputs,
- * 5 textareas and 11 selects each with their own border, padding and focus state.
+ * provably the same height and share one focus treatment.
  */
 
 import { cn } from '$lib/utils';
@@ -26,6 +25,18 @@ export function controlBorder(invalid: boolean): string {
 		: 'border border-border';
 }
 
+/**
+ * Builds the full class string for a form control.
+ *
+ * Inputs:
+ * - options.invalid: boolean — swaps in the danger border and ring
+ * - options.mono: boolean — monospace type
+ * - options.sized: boolean — include the fixed height and padding; false for textareas
+ * - options.class: string — caller additions, merged last
+ *
+ * Outputs:
+ * - string — Tailwind classes
+ */
 export function controlClass(options: {
 	invalid?: boolean;
 	mono?: boolean;

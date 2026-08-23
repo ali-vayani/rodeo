@@ -85,7 +85,6 @@
 	let presenceMap = $state<Record<string, string>>({});
 	let paneEl = $state<HTMLElement | null>(null);
 
-	// Release modal
 	let showReleaseModal = $state(false);
 	let releaseConfirmText = $state('');
 	let releasing = $state(false);
@@ -94,7 +93,6 @@
 	/** Which list triggered the release — drives the optimistic update. */
 	let releaseScope = $state<'decide' | 'reconsider'>('decide');
 
-	// Toast
 	let toast = $state<{ message: string; type: 'success' | 'error' } | null>(null);
 	let toastTimer: ReturnType<typeof setTimeout>;
 
@@ -169,7 +167,6 @@
 		selectedUid = uid;
 	}
 
-	// Presence poll: refresh who-is-reviewing-what
 	$effect(() => {
 		const adminUid = data.adminUid;
 
@@ -263,8 +260,8 @@
 		}
 	}
 
-	/** Best-effort: the counts are a readout, and failing to refresh them is not
-	    worth an error toast on top of whatever the operator just did. */
+	// Best-effort: the counts are a readout, and failing to refresh them is not worth an
+	// error toast on top of whatever the operator just did.
 	async function refreshStats() {
 		try {
 			stats = await trpc.admissions.stats.query();
@@ -499,7 +496,6 @@
 		try {
 			const applicant = reconsider.find((a) => a.uid === uid);
 			await trpc.admissions.release.mutate({ uids: [uid] });
-			// After release the new decision becomes active — update both fields.
 			reconsider = reconsider.map((a) =>
 				a.uid === uid
 					? { ...a, activeDecision: a.pendingDecision ?? a.activeDecision, pendingDecision: null }
@@ -566,7 +562,6 @@
 	}
 </script>
 
-<!-- Page header -->
 <div class="mb-4">
 	<h1 class="text-[22px] font-bold text-primary">Admissions</h1>
 	<span class="mt-0.5 block text-[13px] text-muted-foreground">
@@ -726,7 +721,6 @@
 	/>
 {/if}
 
-<!-- Release Decisions modal -->
 <Modal
 	bind:open={showReleaseModal}
 	title="Release Decisions"
@@ -770,7 +764,6 @@
 	{/snippet}
 </Modal>
 
-<!-- Toast -->
 {#if toast}
 	<div
 		in:fly={{ x: 60, duration: 280 }}

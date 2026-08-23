@@ -18,7 +18,6 @@
 	let pendingCount = $state<number | null>(null);
 	let countLoading = $state(false);
 
-	// Export-and-wipe
 	let showWipeModal = $state(false);
 	let wipePassword = $state('');
 	let wipeConfirmText = $state('');
@@ -116,7 +115,6 @@
 </script>
 
 <div class="max-w-[520px] space-y-3">
-	<!-- Release Decisions -->
 	<div class="rounded border border-[#fca5a5] px-5 py-4">
 		<div class="mb-1 text-[13px] font-semibold text-primary">Release Decisions</div>
 		<p class="mb-4 text-xs text-muted-foreground">
@@ -131,7 +129,6 @@
 		</button>
 	</div>
 
-	<!-- Export and wipe -->
 	<div class="rounded border border-[#fca5a5] px-5 py-4">
 		<div class="mb-1 text-[13px] font-semibold text-primary">Export and Wipe Database</div>
 		<p class="mb-4 text-xs text-muted-foreground">
@@ -148,8 +145,6 @@
 	</div>
 </div>
 
-<!-- Release modal. The shared Modal handles the overlay, focus trap, Escape and mobile
-     sizing. -->
 <Modal
 	bind:open={showReleaseModal}
 	title="Release Decisions"
@@ -215,8 +210,7 @@
 	{/snippet}
 </Modal>
 
-<!-- Export-and-wipe modal. Two independent gates: the password proves authority,
-     the typed word proves intent. Neither substitutes for the other. -->
+<!-- Two independent gates: the password proves authority, the typed word proves intent. -->
 <Modal
 	bind:open={showWipeModal}
 	title="Export and Wipe Database"

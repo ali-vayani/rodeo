@@ -29,10 +29,6 @@ if (!connectionString) {
 
 const prisma = createPrismaClient(connectionString);
 
-// ---------------------------------------------------------------------------
-// State distributions for this scenario
-// ---------------------------------------------------------------------------
-
 /**
  * Everyone who applied has been reviewed, but activeDecision remains null across the
  * board, so hackers see no decision in their portal yet.
@@ -110,10 +106,6 @@ const ROLE_PLANS: RolePlan[] = [
 		academic: false
 	}
 ];
-
-// ---------------------------------------------------------------------------
-// Main
-// ---------------------------------------------------------------------------
 
 async function main() {
 	assertSafeToSeed(connectionString);

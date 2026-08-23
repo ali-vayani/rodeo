@@ -22,10 +22,9 @@ import { humanizeEnum } from '$lib/format';
 /**
  * The filter vocabulary for every application answer worth filtering on.
  *
- * `adminProcedure`, not `portalProcedure`. The pages that render these controls are
- * absent from `ORGANIZER_SECTIONS`, so widening it would grant nothing usable while
- * leaking every university in the applicant pool with exact headcounts. At a count of
- * one that is per-person data in aggregate clothing.
+ * `adminProcedure`, not `portalProcedure`: the pages rendering these controls are not
+ * in `ORGANIZER_SECTIONS`, and every university with exact headcounts is per-person
+ * data in aggregate clothing.
  */
 
 /** What the facet builder needs off a question. */
@@ -35,15 +34,11 @@ type FacetQuestion = Pick<
 >;
 
 /**
- * Which control a question's facet renders as. Derived from its `type`, never from its
- * name or id.
+ * Which control a question's facet renders as, derived from its `type`. `null` means
+ * no facet: LONG_TEXT only, since a value list over essays is a transcript.
  *
- * `null` means no facet, which is `LONG_TEXT` alone. A value list over paragraphs is a
- * transcript, and a substring box over an essay is a search engine.
- *
- * A preset-backed question is deliberately not a `select`. The university preset is
- * 6,400 entries against a `MAX_FACET_OPTIONS` of 500, and answers are not confined to
- * the list anyway, so observed values are the only complete vocabulary.
+ * Preset-backed questions are a `combobox`, not a `select`: the university preset is
+ * 6,400 entries against `MAX_FACET_OPTIONS` of 500, and answers aren't confined to it.
  */
 function controlFor(question: Pick<Question, 'type' | 'optionPreset'>): FacetControl | null {
 	if (question.type === QuestionType.LONG_TEXT) return null;
@@ -56,18 +51,15 @@ function controlFor(question: Pick<Question, 'type' | 'optionPreset'>): FacetCon
 		case QuestionType.NUMBER:
 			return 'range';
 		default:
-			// SHORT_TEXT. Free text with no vocabulary anyone would recognise, so it gets a
-			// substring box rather than a list nobody could read.
+			// SHORT_TEXT: free text with no shared vocabulary gets a substring box.
 			return 'search';
 	}
 }
 
 /**
- * A linked field's control. The same decision, except it only ever gets a value list.
- *
- * Its vocabulary is one cheap `groupBy` over a `User` column away, so a list is
- * affordable where it is not for an answer row. And the wire format is a plural array
- * of values (`universities`, `years`) with nowhere to put a bound or a substring.
+ * A linked field always gets a value list: its vocabulary is one cheap `groupBy` over a
+ * `User` column, and the wire format (`universities`, `years`) has nowhere to put a
+ * bound or a substring.
  */
 function linkedControlFor(question: Pick<Question, 'type' | 'optionPreset'>): FacetControl {
 	const control = controlFor(question);
@@ -79,8 +71,8 @@ async function observedValues(
 	prisma: Pick<PrismaClient, 'user'>,
 	field: LinkedField
 ): Promise<{ counts: Map<string, number>; noneCount: number }> {
-	// `groupBy`'s return type is derived from the `by` tuple, which a runtime-chosen
-	// column name cannot produce. `LINKED_FIELD_COLUMN` is what keeps the set closed.
+	// `groupBy`'s return type is keyed on the `by` tuple, which a runtime-chosen column
+	// can't produce. `LINKED_FIELD_COLUMN` keeps the set closed.
 	const column = LINKED_FIELD_COLUMN[field];
 	const rows = (await (prisma.user.groupBy as unknown as (args: unknown) => Promise<unknown[]>)({
 		by: [column],
@@ -92,8 +84,7 @@ async function observedValues(
 	for (const row of rows) {
 		const value = row[column];
 		const count = row._count._all;
-		// `''` is absent everywhere. The write-through in `application.save` does not trim,
-		// so a blank answer stores an empty string rather than leaving the column NULL.
+		// `application.save` doesn't trim, so a blank answer stores '' rather than NULL.
 		if (value === null || value === '') noneCount += count;
 		else counts.set(value, count);
 	}
@@ -101,17 +92,16 @@ async function observedValues(
 	return { counts, noneCount };
 }
 
-/** Declared options first, then values users hold that the question no longer offers. */
+/**
+ * Declared options in the editor's order (zero counts included, since the form offers
+ * them), then values users still hold from options since renamed or deleted.
+ */
 function selectOptions(declared: string[], counts: Map<string, number>): FacetOption[] {
-	// Declared options keep the editor's order, including zero-count ones. The form
-	// offers them, so the filter should too.
 	const options: FacetOption[] = declared.map((value) => ({
 		value,
 		count: counts.get(value) ?? 0
 	}));
 
-	// Values nobody can pick any more but plenty still hold, from an option renamed or
-	// deleted after they answered. Appended rather than interleaved, most-held first.
 	const declaredSet = new Set(declared);
 	const extras = [...counts.entries()]
 		.filter(([value]) => !declaredSet.has(value))
@@ -122,11 +112,9 @@ function selectOptions(declared: string[], counts: Map<string, number>): FacetOp
 }
 
 /**
- * Free-text vocabulary: whatever people actually typed, most common first.
- *
- * Capped, because this list is unbounded by construction. The Full Name facet is one
- * row per person. Truncation is reported rather than hidden. The predicate still
- * accepts any value, and the typo-tolerant search box finds names outside the list.
+ * Free-text vocabulary, most common first. Capped because the list is unbounded (Full
+ * Name is one row per person); truncation is reported, and the predicate still accepts
+ * values outside the list.
  */
 function comboboxOptions(counts: Map<string, number>): {
 	options: FacetOption[];
@@ -146,11 +134,8 @@ const CHECKBOX_OPTIONS = [
 ];
 
 /**
- * How many users a question is even asked of.
- *
- * "No answer" is counted against the population the question targets, not every
- * account. Otherwise a hacker-only question shows a `noneCount` covering every judge
- * and admin. An empty `targetRole` means everyone.
+ * How many users a question is asked of, so "no answer" on a hacker-only question
+ * doesn't count every judge and admin. Empty `targetRole` means everyone.
  */
 function audienceSize(targetRole: Role[], byRole: Map<Role, number>, total: number): number {
 	if (targetRole.length === 0) return total;
@@ -158,11 +143,9 @@ function audienceSize(targetRole: Role[], byRole: Map<Role, number>, total: numb
 }
 
 /**
- * Tells apart two facets a form gives the same title.
- *
- * The seeded form asks "Organization / Company" of judges and of mentors. Different
- * questions, rendered as two identical controls. The target role is appended, and only
- * when a title is duplicated. A question targeting everyone keeps the bare title.
+ * Appends the target role to facets sharing a title (the seeded form asks
+ * "Organization / Company" of judges and of mentors). Only duplicated titles change,
+ * and a question targeting everyone keeps the bare title.
  */
 function disambiguate(facets: Facet[], roles: Map<string, Role[]>): void {
 	const seen = new Map<string, number>();
@@ -178,17 +161,12 @@ function disambiguate(facets: Facet[], roles: Map<string, Role[]>): void {
 
 export const filtersRouter = router({
 	/**
-	 * Every filter control the admin pages should render, with counts.
+	 * Every filter control the admin pages render, with counts. See `$lib/facets`.
+	 * Nothing hardcodes which filters exist, so a deleted question just stops appearing.
 	 *
-	 * Three kinds, one contract. See `$lib/facets`. Nothing here hardcodes which filters
-	 * exist, so an unlinked field or a deleted question simply stops appearing.
-	 *
-	 * Counts are global: every `User` row, unscoped by whatever the calling page is
-	 * filtering on. So a number beside an option means "how many people hold this value",
-	 * which is what an organizer wants from a facet, and it avoids recomputing every facet
-	 * on every keystroke.
-	 *
-	 * Four queries regardless of form size, plus one `groupBy` per linked facet.
+	 * Counts are global, unscoped by the calling page's filters: "how many people hold
+	 * this value", and no recompute on every keystroke. Four queries regardless of form
+	 * size, plus one `groupBy` per linked facet.
 	 */
 	facets: adminProcedure.query(async ({ ctx }): Promise<Facet[]> => {
 		const [questions, roleRows, totalUsers, settings] = await Promise.all([
@@ -202,8 +180,7 @@ export const filtersRouter = router({
 					linkedField: true,
 					targetRole: true
 				},
-				// Two questions may name the same linked column; the first one on the form
-				// wins, so the label matches what an applicant was actually asked.
+				// Two questions may link the same column; the first on the form wins.
 				orderBy: { order: 'asc' }
 			}),
 			ctx.prisma.user.groupBy({ by: ['role'], _count: { _all: true } }),
@@ -215,15 +192,14 @@ export const filtersRouter = router({
 
 		const facets: Facet[] = [];
 
-		// --- Linked fields, read off their `User` columns ---
 		const byField = new Map<LinkedField, FacetQuestion>();
 		for (const question of questions) {
 			if (!isLinkedField(question.linkedField)) continue;
 			if (!byField.has(question.linkedField)) byField.set(question.linkedField, question);
 		}
 
-		// Iterated in FILTERABLE_LINKED_FIELDS order rather than question order, so the
-		// panel's controls do not reshuffle when someone reorders the application form.
+		// Linked fields, read off their `User` columns. Iterated in FILTERABLE_LINKED_FIELDS
+		// order so the panel doesn't reshuffle when the form is reordered.
 		for (const field of FILTERABLE_LINKED_FIELDS) {
 			const question = byField.get(field);
 			if (!question) continue;
@@ -246,24 +222,22 @@ export const filtersRouter = router({
 				truncated
 			});
 
-			// State sits directly under University because it is University read through a
-			// dataset. Anywhere else and an organizer hunts for the two halves of one question.
+			// State is University read through a dataset, so it sits directly under it.
 			if (field === 'UNIVERSITY') {
 				const state = await stateFacet(ctx.prisma, settings?.homeState ?? null);
 				if (state) facets.push(state);
 			}
 		}
 
-		// --- Everything else on the form ---
-		// A linked question is skipped. It already has a facet above reading the column its
-		// answers were copied into, and both would narrow the same thing by different routes.
+		// Everything else on the form. Linked questions are skipped: they already have a
+		// facet above reading the column their answers were copied into.
 		const answerQuestions = questions
 			.filter((q) => q.linkedField === null)
 			.map((q) => ({ question: q, control: controlFor(q) }))
 			.filter((q): q is { question: FacetQuestion; control: FacetControl } => q.control !== null);
 
-		// One `groupBy` per question that needs a vocabulary. `search` facets are excluded.
-		// Not shipping a thousand essay openings is why short text gets a substring box.
+		// `search` facets need no vocabulary; shipping a thousand short-text answers is
+		// why they get a substring box.
 		const tallied = answerQuestions.filter((q) => q.control !== 'search');
 		const valueRows = tallied.length
 			? await ctx.prisma.applicationResponse.groupBy({
@@ -279,8 +253,7 @@ export const filtersRouter = router({
 		const answerCounts = new Map<string, Map<string, number>>();
 		const answered = new Map<string, number>();
 		for (const row of valueRows) {
-			// Same NULL-or-empty reading as the linked columns: a field opened and cleared
-			// leaves a row holding '', and that is an absent answer, not a value.
+			// As with the linked columns, '' is an absent answer, not a value.
 			if (row.value === '') continue;
 			const counts = answerCounts.get(row.questionId) ?? new Map<string, number>();
 			counts.set(row.value, row._count._all);
@@ -291,8 +264,7 @@ export const filtersRouter = router({
 		for (const { question, control } of answerQuestions) {
 			const counts = answerCounts.get(question.id) ?? new Map<string, number>();
 			const audience = audienceSize(question.targetRole, byRole, totalUsers);
-			// Never negative, even if the audience shrank under answers already given —
-			// a role changed after someone applied leaves their answer behind.
+			// Never negative: a role changed after applying leaves the answer behind.
 			const noneCount = Math.max(0, audience - (answered.get(question.id) ?? 0));
 
 			const facet: Facet = {
@@ -313,8 +285,7 @@ export const filtersRouter = router({
 				facet.options = options;
 				facet.truncated = truncated;
 			} else if (control === 'range') {
-				// The observed extent, so the two inputs can say what the data actually
-				// spans rather than making an organizer guess at the units.
+				// Observed extent, so the inputs can show what the data spans.
 				const numbers = [...counts.keys()].map(Number).filter(Number.isFinite);
 				if (numbers.length) {
 					facet.bounds = { min: Math.min(...numbers), max: Math.max(...numbers) };
@@ -325,8 +296,7 @@ export const filtersRouter = router({
 			questionRoles.set(facet.key, question.targetRole);
 		}
 
-		// Last, so it sees the linked and state facets too — a question titled "State"
-		// would collide with the derived one just as readily as with another question.
+		// Last, so a question titled "State" collides with the derived facet too.
 		disambiguate(facets, questionRoles);
 
 		return facets;

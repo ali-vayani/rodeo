@@ -37,10 +37,6 @@
 	const CELL = 'px-3.5 text-base';
 </script>
 
-<!--
-	Replaces four tables written in four styles — one of which, UserTable.svelte,
-	was dead code that routes/admin/users duplicated inline.
--->
 <div class={cn('overflow-hidden rounded-lg border border-border bg-card shadow-sm', className)}>
 	<div class={cn('overflow-x-auto', scrollClass, loading && 'opacity-50 transition-opacity')}>
 		{#if rows.length === 0}

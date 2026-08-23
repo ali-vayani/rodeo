@@ -17,11 +17,6 @@
 	} = $props();
 </script>
 
-<!--
-	The manual focus-on-cancel and the hand-rolled backdrop/Escape handling are
-	gone: ConfirmDialog sits on bits-ui Dialog, which traps focus, restores it on
-	close, and locks scroll.
--->
 <ConfirmDialog
 	bind:open
 	title="Remove from blacklist?"

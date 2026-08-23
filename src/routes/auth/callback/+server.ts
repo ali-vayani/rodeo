@@ -2,7 +2,19 @@ import { redirect } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { createSupabaseServerClient } from '$lib/server/supabase';
 
-/** A same-origin path from an untrusted `next`, or `/` if it points anywhere else. */
+/**
+ * Restricts an untrusted redirect target to this origin. `next` comes off the query
+ * string, so accepting an absolute URL would turn the login flow into an open redirect.
+ * Resolving against our own origin is what catches `/\evil.com`, which a plain
+ * `startsWith('/')` check let through and the browser resolves cross-origin.
+ *
+ * Inputs:
+ * - raw: string | null — the `next` query param, possibly absent or malformed
+ * - origin: string — this deployment's origin
+ *
+ * Outputs:
+ * - string — a same-origin path with query and hash, or `/` for anything else
+ */
 function safeInternalPath(raw: string | null, origin: string): string {
 	if (!raw) return '/';
 	try {
@@ -24,10 +36,6 @@ export const GET: RequestHandler = async (event) => {
 	const code = event.url.searchParams.get('code');
 	const next = event.url.searchParams.get('next');
 
-	// Same-origin paths only. `next` comes off the query string, so accepting an
-	// absolute URL would turn the login flow into an open redirect. Resolve against our
-	// own origin and require it to stay there — a plain `startsWith('/') && !'//'` prefix
-	// check let `/\evil.com` through, which the browser resolves cross-origin.
 	const destination = safeInternalPath(next, event.url.origin);
 
 	if (code) {

@@ -23,36 +23,24 @@
 		collapsible = false,
 		heading = undefined
 	}: {
-		/**
-		 * One entry per filterable thing an applicant told us. Built on the server from the
-		 * questions themselves, so a question that is deleted, unlinked or switched to Long
-		 * Text simply stops appearing here.
-		 */
+		/** Built server-side from the questions; a deleted or retyped question just drops out. */
 		facets: Facet[];
-		/** What each facet's controls hold, keyed by `Facet.key`. Bindable. */
+		/** Keyed by `Facet.key`. Bindable. */
 		selected?: FacetState;
-		/** Fires only on user interaction — see the note on `MultiCombobox.onChange`. */
+		/** Fires only on user interaction, like `MultiCombobox.onChange`. */
 		onChange?: (selected: FacetState) => void;
 		class?: string;
-		/** Lay the facets out side by side instead of stacked, for an inline panel. */
+		/** Side by side instead of stacked. */
 		columns?: boolean;
-		/** Below md, collapse the facets behind a toggle. No effect from md up. */
+		/** Below md, fold behind a toggle. No effect from md up. */
 		collapsible?: boolean;
-		/** Optional section title above the facets. */
 		heading?: string;
 	} = $props();
 
-	// Collapsed by default on phones so a long university list doesn't push the
-	// results below the fold. md and up ignores this entirely.
+	// Collapsed on phones so a long university list doesn't push results below the fold.
 	let expanded = $state(false);
 
-	/**
-	 * Per-facet fold state, keyed by facet. Absent means open, so folding a group is
-	 * something the reader asks for, never a default that hides an unseen filter.
-	 *
-	 * This nests inside `collapsible` above rather than competing with it: that one folds
-	 * the whole section on phones, this one folds a single facet anywhere.
-	 */
+	// Per-facet fold. Absent means open, so no filter is ever hidden before it is seen.
 	let openFacets = $state<Record<string, boolean>>({});
 
 	const uid = $props.id();
@@ -70,8 +58,7 @@
 	let typingTimers: Record<string, ReturnType<typeof setTimeout>> = {};
 
 	function set(key: string, next: FacetSelection) {
-		// Cancels a pending keystroke on the same facet. Clearing a substring box mid-debounce
-		// would otherwise fetch twice, once for the clear and once when the stale timer fires.
+		// Otherwise clearing a box mid-debounce fetches twice: once now, once when the timer fires.
 		clearTimeout(typingTimers[key]);
 		selected = { ...selected, [key]: next };
 		onChange?.(selected);
@@ -89,15 +76,10 @@
 		);
 	}
 
-	/**
-	 * Typing is debounced; ticking is not.
-	 *
-	 * Every caller re-runs its query from `onChange`, so a substring box firing per
-	 * keystroke is one `contains` scan per letter. A checkbox has no such problem.
-	 */
+	// Typed input only. Every caller re-queries from `onChange`, so per-keystroke firing
+	// is one `contains` scan per letter.
 	function setDebounced(key: string, next: FacetSelection) {
-		// The binding updates immediately so the input stays responsive; only the
-		// notification waits.
+		// The binding updates at once so the input stays responsive; only the notification waits.
 		selected = { ...selected, [key]: next };
 		clearTimeout(typingTimers[key]);
 		typingTimers[key] = setTimeout(() => onChange?.(selected), TYPING_DELAY_MS);
@@ -111,40 +93,22 @@
 		return Number.isFinite(n) ? n : undefined;
 	}
 
-	/**
-	 * "No answer", not "No <question title>".
-	 *
-	 * `No ${facet.label.toLowerCase()}` worked when the only facets were University and
-	 * Year. A facet is now labelled with whatever the question is called, and questions
-	 * are commonly phrased as questions, which produced "No how many hackathons have you
-	 * attended?". No template survives arbitrary titles, and the facet's own header is
-	 * directly above this row.
-	 */
+	// Not `No ${facet.label}`: facets are labelled with the question title, which gave
+	// "No how many hackathons have you attended?".
 	const NO_VALUE_LABEL = 'No answer';
 
-	/**
-	 * What a truncated list has to admit to.
-	 *
-	 * A free-text facet's vocabulary is unbounded, so the server ships only the most common
-	 * `MAX_FACET_OPTIONS`. An absent value must not read as a value that does not exist:
-	 * the predicate still accepts any value, and searching is how the rest are reached.
-	 */
+	// The server ships only the top `MAX_FACET_OPTIONS` of a free-text facet. An absent
+	// option must not read as a nonexistent value; search still reaches the rest.
 	function truncationHint(facet: Facet): string | undefined {
 		if (!facet.truncated) return undefined;
 		return `Showing the ${MAX_FACET_OPTIONS} most common — search to find others.`;
 	}
 
-	/**
-	 * Whether "no value" is worth offering at all.
-	 *
-	 * ~530 users have no university, so that row is a real query. Every user has a name,
-	 * so "No full name" would be a filter guaranteed to return nothing.
-	 */
+	// Every user has a name, so "No full name" would be a filter that returns nothing.
 	function hasNoValueRow(facet: Facet): boolean {
 		return facet.noneCount > 0;
 	}
 
-	/** The facet's own options plus the "no value" sentinel, in one list. */
 	function optionsWithNoValue(facet: Facet): MultiComboboxOption[] {
 		const options: MultiComboboxOption[] = facet.options.map((option) => ({
 			value: option.value,
@@ -157,11 +121,8 @@
 		return options;
 	}
 
-	/**
-	 * The badge on a folded facet's header: how many options are ticked, or a dot for the
-	 * controls that have no count to give. A facet folded shut is still narrowing the
-	 * list, and this badge is the only thing on screen that says so.
-	 */
+	// Count of ticked options, or a dot for controls without a count. A folded facet is
+	// still narrowing the list and this badge is the only thing that says so.
 	function badgeFor(facet: Facet): string | null {
 		const selection = selectionFor(facet.key);
 		if (selection.values?.length) return String(selection.values.length);
@@ -173,11 +134,8 @@
 		'placeholder:text-foreground-tertiary focus-visible:shadow-ring focus-visible:outline-none';
 </script>
 
-<!--
-	Every control here is chosen from `facet.control`, never from `facet.key`. Switch a
-	question from Dropdown to Short Text and its filter turns from a checkbox list into a
-	substring box on its own, because nothing below knows which question it is rendering.
--->
+<!-- Controls are chosen from `facet.control`, never `facet.key`: nothing here knows
+     which question it is rendering, so retyping a question retypes its filter. -->
 {#if facets.length > 0}
 	<div class={cn('flex flex-col gap-3', className)}>
 		{#if collapsible}
@@ -249,13 +207,9 @@
 					</div>
 
 					{#if !open}
-						<!-- Folded: header only. The panel below is unmounted, not merely
-						     hidden — `selected` lives with the caller, so nothing is lost. -->
+						<!-- Folded. Unmounting loses nothing: `selected` lives with the caller. -->
 					{:else if facet.control === 'search'}
-						<!--
-													Free text with no vocabulary worth listing. A substring box, because a list
-													of what a thousand people typed is a transcript rather than a filter.
-												-->
+						<!-- Free text with no vocabulary worth listing. -->
 						<input
 							id={panelId(facet.key)}
 							type="text"
@@ -267,10 +221,7 @@
 								setDebounced(facet.key, { contains: (e.target as HTMLInputElement).value })}
 						/>
 					{:else if facet.control === 'range'}
-						<!--
-													Numeric. Two bounds rather than a value list, because "under 21" is the
-													question people ask of a number. Either end may be left empty.
-												-->
+						<!-- Numeric: two bounds, either may be empty. -->
 						<div id={panelId(facet.key)} class="flex flex-col gap-1">
 							<div class="flex items-center gap-1.5">
 								<input
@@ -300,17 +251,13 @@
 								/>
 							</div>
 							{#if facet.bounds}
-								<!-- What the data actually spans, so nobody has to guess the units. -->
 								<span class="text-2xs text-foreground-tertiary">
 									Answers range {facet.bounds.min}–{facet.bounds.max}
 								</span>
 							{/if}
 						</div>
 					{:else if facet.control === 'combobox'}
-						<!--
-													Free text with a bounded observed vocabulary. There is no authoritative list
-													to check off, so the control has to be searchable and typo-tolerant.
-												-->
+						<!-- Free text with an observed vocabulary: no authoritative list, so searchable. -->
 						<div id={panelId(facet.key)}>
 							<MultiCombobox
 								options={optionsWithNoValue(facet)}
@@ -323,10 +270,7 @@
 							/>
 						</div>
 					{:else}
-						<!--
-							The question enumerates its own answers, so its option list is
-							authoritative and a checkbox list shows the whole vocabulary at once.
-						-->
+						<!-- The question enumerates its answers, so the whole vocabulary fits a checkbox list. -->
 						{@const chosen = splitNoValue(values)}
 						<div id={panelId(facet.key)} class="flex flex-col gap-1.5">
 							{#each facet.options as option (option.value)}

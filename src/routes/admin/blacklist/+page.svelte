@@ -18,14 +18,13 @@
 
 	let entries = $state<Entry[]>(untrack(() => [...data.entries]));
 
-	// --- Add form ---
 	let addFirstName = $state('');
 	let addLastName = $state('');
 	let addEmail = $state('');
 	let addReason = $state('');
 	let adding = $state(false);
 
-	// Email is optional -- a name-only entry still flags at review time -- so only the two
+	// Email is optional (a name-only entry still flags at review time), so only the two
 	// name fields gate the button.
 	const canAdd = $derived(Boolean(addFirstName.trim() && addLastName.trim()) && !adding);
 
@@ -59,7 +58,6 @@
 		if (e.key === 'Enter') addEntry();
 	}
 
-	// --- Remove ---
 	/** Entry awaiting confirmation. Non-null is what puts the dialog on screen. */
 	let pendingDelete = $state<Entry | null>(null);
 	let deleting = $state(false);
@@ -81,7 +79,6 @@
 		}
 	}
 
-	// --- Search ---
 	let search = $state('');
 
 	const filtered = $derived.by(() => {
@@ -93,7 +90,6 @@
 		);
 	});
 
-	// --- CSV import ---
 	let importing = $state(false);
 	let fileInput = $state<HTMLInputElement | null>(null);
 
@@ -136,7 +132,6 @@
 	/** Rejected rows from the last import, kept on screen so they can actually be fixed. */
 	let importErrors = $state<{ row: number; reason: string }[]>([]);
 
-	// --- Table ---
 	const COLUMNS: Column<Entry>[] = [
 		{ key: 'name', header: 'Name', nowrap: true },
 		{ key: 'email', header: 'Email' },
@@ -155,7 +150,6 @@
 </PageHeader>
 
 <div class="flex flex-col gap-4">
-	<!-- Add form -->
 	<div class="grid grid-cols-2 gap-2 lg:grid-cols-[1fr_1fr_1.2fr_1.4fr_auto]">
 		<Input
 			bind:value={addFirstName}
@@ -193,7 +187,6 @@
 		</Button>
 	</div>
 
-	<!-- Toolbar -->
 	<div class="flex items-center gap-2">
 		<Input bind:value={search} placeholder="search by name or email…" mono aria-label="Search" />
 		<input

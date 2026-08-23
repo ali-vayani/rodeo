@@ -227,10 +227,8 @@
 		margin: 0;
 	}
 
-	/* Takes the leftover height between header and footer and scrolls inside it.
-	   `min-height: 0` is what lets it shrink past its content — a column flex
-	   item otherwise refuses to go below its content height and the change list
-	   pushes the footer out of the modal. */
+	/* `min-height: 0` is required: a column flex item otherwise refuses to shrink below
+	   its content and the change list pushes the footer out of the modal. */
 	.modal-body {
 		flex: 1 1 auto;
 		min-height: 0;
@@ -241,11 +239,8 @@
 		gap: 14px;
 	}
 
-	/* The body is itself a column flex container, so its children are flex items and
-		   shrink by default. `.change-section` has `overflow: hidden`, which zeroes its
-		   automatic minimum size, so a long list was squashed and clipped instead of
-		   overflowing the body. Pinning the children at their natural height is what makes
-		   the body a real overflow container. */
+	/* `.change-section` has `overflow: hidden`, which zeroes its flex minimum size, so a
+	   long list was squashed and clipped instead of overflowing the body. */
 	.modal-body > * {
 		flex-shrink: 0;
 	}

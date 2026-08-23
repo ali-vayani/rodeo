@@ -20,7 +20,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		// rather than a cookie, so a deep link survives the round trip.
 		redirectTo: url.searchParams.get('redirectTo'),
 		// The anon key goes to the browser deliberately: it is a public credential
-		// — row-level security is what protects the data — and the OAuth redirect
+		// (row-level security is what protects the data) and the OAuth redirect
 		// has to be initiated client-side.
 		supabaseUrl: supabaseAuth ? (env.SUPABASE_URL ?? null) : null,
 		supabaseAnonKey: supabaseAuth ? (env.SUPABASE_ANON_KEY ?? null) : null
@@ -28,19 +28,23 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 };
 
 /**
- * Where to land after signing in, restricted to this origin.
+ * Restricts the post-login destination to this origin. `redirectTo` arrives on the
+ * query string, so an absolute URL would make the login form an open redirect. Same
+ * rule as the OAuth callback: resolve against our own origin and require it to stay
+ * there, which catches `/\evil.com` (the browser treats the backslash as `/`). No second
+ * decodeURIComponent, since `searchParams.get` already decoded once and a second pass
+ * could inject CR/LF.
  *
- * `redirectTo` arrives on the query string, so an absolute URL would make the login
- * form an open redirect. Same rule as the OAuth callback. Decoding a malformed escape
- * throws, and a bad link should not 500 the login page, so that falls back too.
+ * Inputs:
+ * - raw: string | null — the `redirectTo` value, possibly absent or malformed
+ * - origin: string — this deployment's origin
+ *
+ * Outputs:
+ * - string — a same-origin path with query and hash, or `/` for anything else
  */
 function safeRedirect(raw: string | null, origin: string): string {
 	if (!raw) return '/';
 
-	// Resolve against our own origin and require it to stay there. The prefix check this
-	// replaces let `/\evil.com` through: a backslash isn't `/`, but the browser treats it
-	// as one. `searchParams.get` has already decoded once, so there is no second
-	// decodeURIComponent here, which could inject a CR/LF.
 	let url: URL;
 	try {
 		url = new URL(raw, origin);
@@ -85,7 +89,7 @@ export const actions: Actions = {
 	/**
 	 * Supabase email/password sign-in. The server client writes the session
 	 * cookies through the same adapter the OAuth callback uses, so nothing else
-	 * changes downstream — getProdSession picks the session up on the redirect.
+	 * changes downstream: getProdSession picks the session up on the redirect.
 	 */
 	password: async (event) => {
 		if (!usesSupabaseAuth()) {
@@ -185,8 +189,8 @@ export const actions: Actions = {
 			redirectTo: new URL('/auth/callback?next=/reset-password', event.url.origin).toString()
 		});
 
-		// Only operational failures land here (rate limit, transport) — an
-		// unknown address reports success, so this form can't enumerate accounts.
+		// Only operational failures land here (rate limit, transport). An unknown
+		// address reports success, so this form can't enumerate accounts.
 		if (error) return fail(400, { forgotError: error.message });
 
 		return { resetSent: true };

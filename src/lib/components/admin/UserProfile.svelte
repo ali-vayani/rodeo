@@ -1,8 +1,7 @@
 <script lang="ts" module>
 	/**
-	 * Everything the person submitted, plus the two relations that say where they sit in
-	 * the event. Typed structurally rather than off the router so this component stays
-	 * free of server imports, and the responses use the same shape `ApplicantDetail` takes.
+	 * Typed structurally rather than off the router to keep server imports out of this
+	 * component. `application` matches the shape `ApplicantDetail` takes.
 	 */
 	export type ProfileData = {
 		application: Array<{
@@ -33,15 +32,11 @@
 		error?: string | null;
 	} = $props();
 
-	// The payload already arrives in `question.order` — user.getById sorts it — so
-	// this is a display concern only, not a re-sort.
+	// Already in `question.order`: user.getById sorts it.
 	let responses = $derived(profile?.application ?? []);
 </script>
 
-<!--
-	The read-only half of the user detail modal: the application answers, the team, and
-	the scan trail. The editing controls live above this in the modal.
--->
+<!-- Read-only half of the user detail modal; the editing controls sit above it. -->
 <section class="flex flex-col gap-5 border-t border-border pt-5">
 	<div>
 		<div class="mb-3 flex items-baseline justify-between gap-3">
@@ -54,7 +49,6 @@
 		</div>
 
 		{#if loading}
-			<!-- The modal is already open and editable by now; only this half is waiting. -->
 			<div class="flex items-center gap-2 py-4 text-base text-foreground-secondary">
 				<Spinner label="" />
 				Loading application…
@@ -79,10 +73,7 @@
 						<dt class="mb-1.5 text-sm font-semibold text-foreground-secondary">
 							{response.question.title}
 						</dt>
-						<!--
-													Each answer scrolls inside its own box. Essay questions run to several
-													paragraphs, and without a cap one pushes every other answer out of reach.
-												-->
+						<!-- Capped and scrolled per answer: one essay must not push the rest out of reach. -->
 						<dd
 							class="m-0 max-h-40 overflow-y-auto rounded-md border border-border bg-muted px-3 py-2.5
 							       text-base leading-relaxed break-words whitespace-pre-wrap text-foreground"

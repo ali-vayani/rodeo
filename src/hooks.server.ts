@@ -18,8 +18,6 @@ validateEnv();
 
 warnIncompleteWalletConfig();
 warnIncompleteS3Config();
-
-// Which backend uploads are going to, when it isn't a bucket.
 reportStorageBackend();
 
 /**

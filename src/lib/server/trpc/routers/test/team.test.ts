@@ -605,10 +605,8 @@ describe('team.joinByCode', () => {
 	});
 
 	it('settles the pending invitation the joiner never opened', async () => {
-		// The reported bug: emailed an invite, joined by pasting the link instead. The
-		// invitation stayed PENDING, so the team listed them under "Pending invitations"
-		// beside their own member row and a later re-invite was refused as a duplicate
-		// against a row nothing could clear.
+		// Regression: invited by email, joined via the link. The invitation stayed PENDING,
+		// listing them under "Pending invitations" beside their own member row.
 		const caller = createTestCaller(db, confirmedHacker);
 		db.user.findUniqueOrThrow.mockResolvedValue(confirmedHacker as never);
 		db.team.findUnique.mockResolvedValue({ ...mockTeam, members: [hackerUser] } as never);
@@ -768,11 +766,8 @@ describe('team.leaveTeam', () => {
 	});
 
 	it('clears the invitations binding the leaver to the team', async () => {
-		// The other half of the reported bug: `teamId = null` alone left the settled
-		// invitation behind, and a former member is exactly who a team re-invites. The
-		// duplicate guard in inviteMember only looks at PENDING rows, but a row still
-		// addressed to someone who is no longer here describes a relationship that
-		// ended — leaving has to put the account back where it started.
+		// `teamId = null` alone left the ACCEPTED row behind, and a former member is
+		// exactly who a team re-invites.
 		const caller = createTestCaller(db, hackerUser);
 		db.user.findUniqueOrThrow.mockResolvedValue({
 			teamId: 'team-1',

@@ -41,40 +41,36 @@
 		onClear,
 		onReleaseOne
 	}: {
-		/** Already ranked by the server — this component never reorders. */
+		/** Already ranked by the server; never reordered here. */
 		applicants: Applicant[];
 		loading: boolean;
 		deciding: boolean;
 		releasingOne: boolean;
-		/** Applicants with no score yet, which by definition can't appear here. */
+		/** Unscored applicants cannot appear here; the count is shown so the list is not mistaken for complete. */
 		unscoredCount: number;
 		onDecide: (uids: string[], decision: DecisionStatus) => void;
-		/** Clear the pending decision on a single applicant. */
 		onClear: (uid: string) => void;
-		/** Release one applicant's pending decision and email them immediately. */
+		/** Releases and emails immediately. */
 		onReleaseOne: (uid: string) => void;
 	} = $props();
 
 	let selected = new SvelteSet<string>();
-	/** Number, not string — `bind:value` on a number input coerces. */
+	/** Number, not string: `bind:value` on a number input coerces. */
 	let topN = $state<number | undefined>(undefined);
 	let open = $state<Applicant | null>(null);
 
-	/** The bulk action awaiting confirmation. */
+	/** Bulk action awaiting confirmation. */
 	let pending = $state<DecisionStatus | null>(null);
 
-	/** The applicant whose individual release is being confirmed. */
 	let releaseTarget = $state<(typeof rows)[number] | null>(null);
 
-	// Rank is assigned here rather than read off the row because it is a property of
-	// position in this list, not of the applicant.
+	// Rank is a property of position in this list, not of the applicant.
 	let rows = $derived(applicants.map((applicant, i) => ({ ...applicant, rank: i + 1 })));
 	type Row = (typeof rows)[number];
 
 	let allSelected = $derived(rows.length > 0 && selected.size === rows.length);
 
-	// Selection survives a refetch by uid, so anyone who dropped out of the list is
-	// pruned before a bulk action can carry a stale uid to the server.
+	// Prunes uids that dropped out on refetch before a bulk action can send them.
 	$effect(() => {
 		const present = new Set(applicants.map((a) => a.uid));
 		for (const uid of selected) if (!present.has(uid)) selected.delete(uid);
@@ -90,12 +86,8 @@
 		else for (const row of rows) selected.add(row.uid);
 	}
 
-	/**
-	 * Select, never decide, the top N.
-	 *
-	 * The cutoff is the one action here that touches an unbounded number of people from a
-	 * single keystroke, so it lands the operator in front of a selection they can adjust.
-	 */
+	// Selects, never decides: one keystroke touching an unbounded number of people lands
+	// the operator in front of a selection they can adjust.
 	function selectTop() {
 		if (topN === undefined || !Number.isInteger(topN) || topN < 1) return;
 		selected.clear();
@@ -108,10 +100,7 @@
 		if (decision) onDecide([...selected], decision);
 	}
 
-	/**
-	 * Toggle a decision on a single row. Pressing a decision that's already the
-	 * pending one clears it; pressing a different one sets it.
-	 */
+	// Pressing the already-pending decision clears it.
 	function decideOne(uid: string, decision: DecisionStatus) {
 		const row = rows.find((r) => r.uid === uid);
 		if (row?.pendingDecision === decision) {
@@ -146,7 +135,6 @@
 	];
 </script>
 
-<!-- Toolbar: selection, the cutoff, and the bulk actions it feeds -->
 <div class="mb-3 flex flex-wrap items-center gap-x-3 gap-y-2">
 	<Button size="sm" onclick={toggleAll} disabled={rows.length === 0}>
 		{allSelected ? 'Clear selection' : 'Select all'}
@@ -190,10 +178,6 @@
 	{/if}
 </div>
 
-<!--
-	The unscored are invisible here by construction, since there is no rank to put them
-	at. Saying so keeps "I worked the whole list" from being wrong.
--->
 {#if unscoredCount > 0}
 	<div
 		class="mb-3 rounded-md border border-warning-200 bg-warning-50 px-3.5 py-2.5 text-xs text-warning-700"
@@ -245,8 +229,7 @@
 			<span class="font-mono text-base font-medium tabular-nums">{row.score}</span>
 		{:else if column.key === 'notes'}
 			{#if row.notes}
-				<!-- Truncated with the full text on hover: the column has to stay narrow
-				     enough that the score and the decision are on screen together. -->
+				<!-- Clamped so the score and decision stay on screen together; full text on hover. -->
 				<span class="line-clamp-2 text-xs text-foreground-secondary" title={row.notes}>
 					{row.notes}
 				</span>
@@ -308,8 +291,7 @@
 	{/snippet}
 </DataTable>
 
-<!-- Bulk confirmation. No typed phrase — a pending decision is reversible right
-     up until Release, which has a gate of its own. -->
+<!-- No typed phrase: a pending decision is reversible until Release, which has its own gate. -->
 <ConfirmDialog
 	open={pending !== null}
 	title="Apply to {pluralize(selected.size, 'applicant')}?"
@@ -321,7 +303,6 @@
 	onCancel={() => (pending = null)}
 />
 
-<!-- Per-row release confirmation. -->
 <ConfirmDialog
 	open={releaseTarget !== null}
 	title="Release decision for {releaseTarget?.name ?? ''}?"
@@ -335,8 +316,7 @@
 	onCancel={() => (releaseTarget = null)}
 />
 
-<!-- Read-only application, opened from the applicant's name. The rows already
-     carry their answers, so this costs no extra request. -->
+<!-- Rows already carry their answers, so this costs no extra request. -->
 <Modal
 	open={open !== null}
 	title={open?.name ?? ''}

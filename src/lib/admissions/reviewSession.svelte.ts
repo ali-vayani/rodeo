@@ -13,8 +13,9 @@ export type ReviewPhase =
 	| 'locked' // another admin holds it
 	| 'error'; // the claim request itself failed
 
-const IDLE_CHECK_MS = 5_000; // poll while open
-/** Only runs while the modal is up. */
+/** How often an owned session re-checks for idleness. Coarse: nothing is rendered from it. */
+const IDLE_CHECK_MS = 5_000;
+/** Modal countdown redraw; only runs while the modal is up. */
 const COUNTDOWN_TICK_MS = 1_000;
 const ACTIVITY_THROTTLE_MS = 1_000;
 
@@ -23,6 +24,7 @@ const HEARTBEAT_FAILURE_LIMIT = 2;
 
 const ACTIVITY_EVENTS = ['pointermove', 'pointerdown', 'keydown', 'wheel', 'scroll'] as const;
 
+/** `1:05` past a minute, `45s` under it. Rounds up so an open modal never reads `0s`. */
 export function formatCountdown(ms: number): string {
 	const total = Math.ceil(ms / 1000);
 	const minutes = Math.floor(total / 60);
@@ -31,7 +33,16 @@ export function formatCountdown(ms: number): string {
 }
 
 /**
- * Next applicant nobody else is reviewing
+ * The next applicant nobody else is reviewing, scanning forward from `fromIndex` and
+ * wrapping around to the start of the list.
+ *
+ * Inputs:
+ * - presenceMap: Record<string, string> — uid → holder name; any entry means "held"
+ * - fromIndex: number — clamped into range, so a stale index after a removal is fine
+ * - excludeUid: string | null — the applicant just left, even if no longer held
+ *
+ * Outputs:
+ * - string | null — null when every applicant is held or the list is empty
  */
 export function pickNextUnlocked(
 	applicants: readonly { uid: string }[],
@@ -45,7 +56,7 @@ export function pickNextUnlocked(
 	for (let i = 0; i < count; i++) {
 		const applicant = applicants[(start + i) % count];
 		if (applicant.uid === excludeUid) continue;
-		if (presenceMap[applicant.uid]) continue; // held by someone else
+		if (presenceMap[applicant.uid]) continue;
 		return applicant.uid;
 	}
 	return null;
@@ -58,6 +69,24 @@ export type ReviewSessionOptions = {
 	onRerollNeeded?: (uid: string, claimerName: string | null) => void;
 };
 
+/**
+ * Holds the review lock on whichever applicant is selected, for as long as the admin
+ * is actually looking at them. Must be called during component init: it registers
+ * `$effect`s that claim on selection change, heartbeat while owned, and release on
+ * idle, on deselect, and on teardown.
+ *
+ * Inputs:
+ * - options.getUid: () => string | null — the selected applicant; read reactively
+ * - options.getPresence: () => Record<string, string> — who holds what, from the poll
+ * - options.onToast — how session-ending events are reported to the admin
+ * - options.onRerollNeeded — called when `confirm()` finds the applicant taken meanwhile
+ *
+ * Outputs:
+ * - reactive getters (`phase`, `canDecide`, countdown state) plus the modal actions
+ *
+ * Side effects:
+ * - Calls `admissions.claim`, `heartbeat` and `releaseClaim` on the server.
+ */
 export function createReviewSession(options: ReviewSessionOptions) {
 	const trpc = createClient();
 
@@ -320,6 +349,7 @@ export function createReviewSession(options: ReviewSessionOptions) {
 			void acquire(uid, ++generation);
 		},
 
+		/** The server already cleared this claim (`setScore` does), so teardown must not release it again. */
 		markClaimCleared(uid: string) {
 			if (heldUid === uid) heldUid = null;
 		}

@@ -567,13 +567,12 @@ describe('admissions.release', () => {
 		db.user.findMany.mockResolvedValue([pendingUser] as never);
 		db.settings.findFirst.mockResolvedValue(null);
 		db.log.create.mockResolvedValue({} as never);
-		// Each swap reports one row updated (the compare-and-swap took).
 		db.$transaction.mockResolvedValue([{ count: 1 }]);
 
 		const result = await caller.admissions.release({});
 		expect(result).toEqual({ released: 1 });
 		expect(db.$transaction).toHaveBeenCalled();
-		// updateMany is the compare-and-swap: keyed on the exact pending value we read.
+		// The CAS is keyed on the exact pending value read.
 		expect(db.user.updateMany).toHaveBeenCalledWith(
 			expect.objectContaining({
 				where: { uid: pendingUser.uid, pendingDecision: pendingUser.pendingDecision },
@@ -1216,10 +1215,7 @@ describe('admissions.list — scoring filters', () => {
 });
 
 describe('admissions.reviewerStats', () => {
-	/**
-	 * Set up the two DB calls the query makes: groupBy for counts, then findMany to
-	 * resolve the admin names. The order is fixed — groupBy first, then the name lookup.
-	 */
+	/** groupBy for counts first, then findMany for the admin names. */
 	function mockReviewerStats(
 		groups: Array<{ scoredBy: string; count: number; lastScoredAt: Date | null }>,
 		admins: Array<{ uid: string; name: string }>
@@ -1250,7 +1246,6 @@ describe('admissions.reviewerStats', () => {
 		const result = await caller.admissions.reviewerStats();
 
 		expect(result).toHaveLength(2);
-		// Higher count comes first
 		expect(result[0]?.uid).toBe(adminUser2.uid);
 		expect(result[0]?.scored).toBe(12);
 		expect(result[1]?.uid).toBe(adminUser.uid);

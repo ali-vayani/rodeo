@@ -31,10 +31,7 @@ const SETTLED_DECISIONS = [
 	DecisionStatus.WAITLISTED
 ] as const;
 
-/**
- * Fallback when `Settings` has no row yet (a fresh database, or the tests).
- * Only ever used for day bucketing, where being wrong by an offset is cosmetic.
- */
+/** Only used for day bucketing, where a wrong offset is cosmetic. */
 const FALLBACK_TIMEZONE = 'America/Chicago';
 
 /** Windows the dashboard offers. `null` means all time. */
@@ -56,9 +53,8 @@ async function eventTimezone(prisma: { settings: { findFirst: () => Promise<unkn
 
 export const dashboardRouter = router({
 	/**
-	 * Organizers get the aggregates, which name nobody, but not `recentActivity`, which
-	 * is a log of named users. It comes back null for them rather than being dropped, so
-	 * the shape stays the same for every caller.
+	 * Organizers get the aggregates but not `recentActivity`, which names users. It is
+	 * null for them rather than dropped, so the shape is the same for every caller.
 	 */
 	stats: portalProcedure.query(async ({ ctx }) => {
 		const showActivity = isAdmin(ctx.user.role);
@@ -70,36 +66,27 @@ export const dashboardRouter = router({
 				_count: { status: true }
 			}),
 
-			// `_all`, not `_count: { activeDecision: true }`. A per-field count ignores nulls, so
-			// the "no decision yet" bucket would always read 0.
+			// `_all`: a per-field count ignores nulls, so "no decision yet" would read 0.
 			ctx.prisma.user.groupBy({
 				by: ['activeDecision'],
 				_count: { _all: true }
 			}),
 
-			// A real `groupBy` now that a user holds one role, so the whole table stops crossing
-			// the wire on every dashboard load.
 			ctx.prisma.user.groupBy({
 				by: ['role'],
 				_count: { role: true }
 			}),
 
-			// Decision × role, bounded to the people who actually go through admissions. The
-			// `byDecision` tally above counts every user, which puts 60-odd staff accounts into
-			// its null bucket. The stat cards read from this instead, so each card's number and
-			// its hover breakdown come off the same rows.
-			//
-			// CREATED is excluded for the same reason the funnel excludes it, and the two must
-			// agree or the page contradicts itself. An account that has submitted nothing is not
-			// awaiting a decision, it is not in the queue at all.
+			// Decision x role for the stat cards, so each card's number and its hover
+			// breakdown come off the same rows. `byDecision` above counts every user, which
+			// puts staff into its null bucket. CREATED is excluded to agree with the funnel.
 			ctx.prisma.user.groupBy({
 				by: ['activeDecision', 'role'],
 				where: { role: { in: APPLICANT_ROLES }, status: { not: UserStatus.CREATED } },
 				_count: { _all: true }
 			}),
 
-			// No `include: { actor: true }`: the feed renders `actorName`, which is
-			// snapshotted on the row precisely so it doesn't need the join.
+			// No actor join: the feed renders the snapshotted `actorName`.
 			showActivity
 				? ctx.prisma.log.findMany({
 						take: 20,
@@ -124,9 +111,7 @@ export const dashboardRouter = router({
 			decisionCounts[key] = row._count._all;
 		}
 
-		// One pass over the decision × role rows fills every stat card and its hover
-		// breakdown. `awaiting` collects both a null activeDecision and the PENDING
-		// placeholder, since PENDING is a starting state rather than an outcome.
+		// `awaiting` collects both null and the PENDING placeholder, which is not an outcome.
 		const applicants = {
 			total: 0,
 			accepted: emptyTally(),
@@ -163,7 +148,7 @@ export const dashboardRouter = router({
 		};
 	}),
 
-	/** Named applicants — admin only. The dashboard skips this call for organizers. */
+	/** Names applicants, so admin only. The dashboard skips this call for organizers. */
 	recentApplicants: adminProcedure
 		.input(z.object({ amount: z.number().int().min(1).max(100).default(10) }))
 		.query(async ({ ctx, input }) => {
@@ -171,8 +156,8 @@ export const dashboardRouter = router({
 				take: input.amount,
 				orderBy: { createdAt: 'desc' },
 				where: { status: { not: UserStatus.CREATED } },
-				// Just what a name card renders. An unprojected row would ship `score`, `notes` and
-				// `pendingDecision` to the dashboard to draw a name. See ../selects.
+				// Just what a name card renders; a full row ships `score`, `notes` and
+				// `pendingDecision`. See ../selects.
 				select: {
 					uid: true,
 					name: true,
@@ -186,13 +171,8 @@ export const dashboardRouter = router({
 
 	/**
 	 * The admissions pipeline: applied, decided, accepted, confirmed, checked in.
-	 *
-	 * Deliberately not windowed, and the dashboard labels it "current". Every stage asks
-	 * about present state, and three of the five have no timestamp to filter on anyway.
-	 * `UserStatus` records where someone is, never when they got there.
-	 *
-	 * One `groupBy` over (status × activeDecision) answers all five: they are five reads
-	 * of the same rows, not five populations.
+	 * Not windowed: every stage is present state, and `UserStatus` records where someone
+	 * is, never when they got there. One `groupBy` answers all five stages.
 	 */
 	funnel: portalProcedure.query(async ({ ctx }): Promise<FunnelStage[]> => {
 		const rows = await ctx.prisma.user.groupBy({
@@ -209,8 +189,7 @@ export const dashboardRouter = router({
 
 		for (const row of rows) {
 			const count = row._count._all;
-			// CREATED means the account exists but nothing was submitted. Not an applicant yet,
-			// and counting them would make every conversion below look worse than it is.
+			// Nothing submitted yet; counting them makes every conversion look worse.
 			if (row.status === UserStatus.CREATED) continue;
 			applied += count;
 
@@ -273,15 +252,10 @@ export const dashboardRouter = router({
 	}),
 
 	/**
-	 * Applications and decisions per day, as two series on one scale.
-	 *
-	 * Bucketed in the hackathon's timezone, not UTC. A Texas hackathon's 7pm submissions
-	 * are tomorrow's in UTC, which would shift a whole evening onto the wrong bar.
-	 *
-	 * Selects the two date columns and folds in JS rather than reaching for `$queryRaw`
-	 * with `date_trunc`. Both sets are bounded by the applicant pool, so this is a few
-	 * hundred KB at worst, against a raw query that would need its own timezone handling
-	 * and could not be exercised by the mocked-Prisma tests.
+	 * Applications and decisions per day. Bucketed in the hackathon's timezone, not UTC,
+	 * or a Texas evening's submissions land on tomorrow's bar. Folded in JS rather than
+	 * `$queryRaw` + `date_trunc`: a few hundred KB at worst, no raw-SQL timezone
+	 * handling, and the mocked-Prisma tests can exercise it.
 	 */
 	overTime: portalProcedure
 		.input(z.object({ window: windowInput }).default({ window: 'all' }))
@@ -326,8 +300,7 @@ export const dashboardRouter = router({
 			for (const row of applications) bump(row.createdAt, 'applications');
 			for (const row of decisions) if (row.decidedAt) bump(row.decidedAt, 'decisions');
 
-			// Days with no activity still get a point, so a flat stretch reads as "nothing
-			// happened" rather than being closed over by a straight line between two peaks.
+			// Idle days still get a point, so a flat stretch isn't a line between two peaks.
 			const today = dayKey(new Date(), timezone);
 			const firstSeen = [...buckets.keys()].sort()[0];
 			const start = from
@@ -349,18 +322,13 @@ export const dashboardRouter = router({
 		}),
 
 	/**
-	 * The unified activity feed: staff actions and applicant actions in one stream.
+	 * Staff and applicant actions in one feed. `Log` only records staff work, so
+	 * applicant rows are derived from `User.createdAt` and `Scan`. Classification is by
+	 * action slug, never the actor's current role, so a demoted organizer's past
+	 * decisions don't reclassify.
 	 *
-	 * Two sources, because `Log` only ever records staff work. Applicant rows are derived:
-	 * an application from `User.createdAt`, a check-in from `Scan`. That is also what
-	 * makes the source filter meaningful rather than cosmetic.
-	 *
-	 * Classification is by action slug, never by the actor's current role. An organizer
-	 * later demoted to hacker must not have their past decisions reclassify.
-	 *
-	 * Known gap: RSVP confirm/decline cannot appear here. `UserStatus` has no timestamp,
-	 * so there is no instant to sort those rows by. Fixing it is a schema change
-	 * (`statusChangedAt`), and inventing an order would be worse than their absence.
+	 * Known gap: RSVP confirm/decline can't appear because `UserStatus` has no timestamp
+	 * to sort by. Fixing it needs a `statusChangedAt` column.
 	 */
 	activity: adminProcedure
 		.input(
@@ -378,8 +346,7 @@ export const dashboardRouter = router({
 			const wantAdmin = source === 'all' || source === 'admin';
 			const wantHacker = source === 'all' || source === 'hacker';
 
-			// Each source fetches `limit` rows: after the merge the newest `limit` win, and
-			// one source can legitimately supply all of them.
+			// Each source fetches `limit` rows since one source may supply all of them.
 			const [logs, applicants, scans] = await Promise.all([
 				wantAdmin
 					? ctx.prisma.log.findMany({
@@ -440,8 +407,7 @@ export const dashboardRouter = router({
 			}
 
 			for (const applicant of applicants) {
-				// createdAt, not a submission timestamp. The schema has no separate one, and an
-				// applicant-role account past CREATED has submitted.
+				// The schema has no submission timestamp; createdAt stands in.
 				const detail = [applicant.university, applicant.year].filter(Boolean).join(' · ');
 				entries.push({
 					id: `applicant:${applicant.uid}`,
@@ -470,8 +436,7 @@ export const dashboardRouter = router({
 				});
 			}
 
-			// Ties broken by id so a re-fetch can't shuffle two rows written in the same
-			// millisecond past each other.
+			// Ties broken by id so same-millisecond rows don't shuffle between fetches.
 			entries.sort(
 				(a, b) => b.timestamp.getTime() - a.timestamp.getTime() || a.id.localeCompare(b.id)
 			);
@@ -479,14 +444,10 @@ export const dashboardRouter = router({
 		}),
 
 	/**
-	 * Where applicants come from and how far along they are.
-	 *
-	 * `adminProcedure` for the same reason as `filters.facets`: every university with
-	 * exact headcounts is per-person data in aggregate clothing.
-	 *
-	 * Reads the two linked columns directly rather than going through `filters.facets`,
-	 * which ships up to 500 options per facet because it is building a filter vocabulary.
-	 * A dashboard card wants the top handful and the size of the tail.
+	 * University and year breakdowns. `adminProcedure` as with `filters.facets`: exact
+	 * headcounts per university are per-person data in aggregate clothing. Reads the
+	 * linked columns directly because `facets` ships up to 500 options per facet and a
+	 * card wants the top handful plus the size of the tail.
 	 */
 	demographics: adminProcedure
 		.input(z.object({ top: z.number().int().min(3).max(20).default(7) }).default({ top: 7 }))
@@ -496,8 +457,7 @@ export const dashboardRouter = router({
 			const [universityRows, yearRows, questions] = await Promise.all([
 				ctx.prisma.user.groupBy({ by: ['university'], where, _count: { _all: true } }),
 				ctx.prisma.user.groupBy({ by: ['year'], where, _count: { _all: true } }),
-				// Labels come from the questions, so each card is headed the way the form
-				// actually asks — "Year" here, "Class standing" at another hackathon.
+				// Card labels follow the form's own wording ("Year" vs "Class standing").
 				ctx.prisma.question.findMany({
 					where: { linkedField: { in: [...FILTERABLE_LINKED_FIELDS] } },
 					select: { title: true, options: true, linkedField: true },
@@ -530,8 +490,7 @@ export const dashboardRouter = router({
 				questions.find((q) => isLinkedField(q.linkedField) && q.linkedField === field);
 			const yearQuestion = labelFor('YEAR');
 
-			// A declared option order beats popularity for an ordinal field. Freshman to Senior
-			// is what the reader expects, and sorting by headcount makes the cohort unreadable.
+			// Declared order beats popularity for an ordinal field (Freshman to Senior).
 			const declared = yearQuestion?.options ?? [];
 			const years = declared.length
 				? [

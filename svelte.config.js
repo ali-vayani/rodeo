@@ -7,9 +7,8 @@ const config = {
 		runes: ({ filename }) => (filename.split(/[/\\]/).includes('node_modules') ? undefined : true)
 	},
 	kit: {
-		// Rodeo deploys to Vercel, as the previous one did. The Node runtime rather
-		// than edge: every route talks to Postgres through Prisma, which needs a
-		// real TCP socket.
+		// Node runtime rather than edge: every route talks to Postgres through Prisma,
+		// which needs a real TCP socket.
 		adapter: adapter({ runtime: 'nodejs22.x' })
 	}
 };

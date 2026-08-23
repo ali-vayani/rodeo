@@ -414,7 +414,6 @@ export function whereFromConditions(
 export function recipientConditions(filters: RecipientFilters): Prisma.UserWhereInput[] {
 	const { roles, statuses, decisions, includeNoDecision, emails } = filters;
 
-	// AND conditions so each filter stacks independently.
 	const conditions: Prisma.UserWhereInput[] = [];
 
 	// Lowercased to match stored addresses, which are written lowercase everywhere.

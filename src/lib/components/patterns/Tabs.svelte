@@ -49,7 +49,6 @@
 	}
 </script>
 
-<!-- Replaces five implementations of this control across the admin. -->
 <div
 	role="tablist"
 	aria-orientation={orientation}

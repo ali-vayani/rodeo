@@ -23,7 +23,6 @@
 	}: {
 		score: number | null;
 		notes: string | null;
-		/** Who last scored this applicant, when it wasn't nobody. */
 		scorerName: string | null;
 		scoredAt: Date | string | null;
 		onSave: (score: number, notes: string) => void;
@@ -38,24 +37,17 @@
 		onReclaim: () => void;
 	} = $props();
 
-	/**
-	 * Drafts, not bindings. The parent remounts this bar per applicant (`{#key}`), which
-	 * is what seeds them. An `$effect` syncing props into state would fight the
-	 * reviewer's own typing on every parent update.
-	 */
-	/**
-	 * Held as a number, not a string: `bind:value` on `<input type="number">` coerces,
-	 * so this is whatever the DOM hands back, or undefined once the field is cleared.
-	 * Typing it as a string and calling `.trim()` threw on the first keystroke.
-	 */
+	// Drafts seeded by the parent's `{#key}` remount. An `$effect` syncing props into
+	// state would fight the reviewer's typing on every parent update. `scoreDraft` is a
+	// number because `bind:value` on a number input coerces; as a string, `.trim()` threw.
 	let scoreDraft = $state<number | undefined>(untrack(() => score ?? undefined));
 	let notesDraft = $state(untrack(() => notes ?? ''));
 
 	let empty = $derived(scoreDraft === undefined || Number.isNaN(scoreDraft));
 	let valid = $derived(!empty && isValidScore(scoreDraft as number));
 
-	// While the claim is in flight the controls stay put but dimmed. Flashing a read-only
-	// strip on every applicant switch trains reviewers to click through it.
+	// Controls stay put but dimmed while acquiring; a read-only flash on every switch
+	// trains reviewers to click through it.
 	let showControls = $derived(lockState === 'owned' || lockState === 'acquiring');
 	let busy = $derived(saving || lockState === 'acquiring');
 
@@ -81,8 +73,8 @@
 		lockState === 'locked' ? 'Claim' : (ACTION_LABEL[lockState] ?? 'Claim')
 	);
 
-	// Nothing to offer while someone else genuinely holds the lock: the server refuses any
-	// claim against a fresh one, so a button would be a no-op that reads like a takeover.
+	// The server refuses a claim against a fresh lock, so a button would be a no-op that
+	// reads like a takeover.
 	let showAction = $derived(lockState !== 'locked' || lockFreed);
 	let actionIsPrimary = $derived(lockState === 'expired' || (lockState === 'locked' && lockFreed));
 
@@ -91,12 +83,7 @@
 		onSave(scoreDraft as number, notesDraft);
 	}
 
-	/**
-	 * Enter saves from the score field.
-	 *
-	 * The whole pass is type-a-number-move-on, several hundred times. Not wired to the
-	 * notes box, where Enter has to stay a newline.
-	 */
+	// Enter saves from the score field only; in the notes box it stays a newline.
 	function onScoreKeydown(event: KeyboardEvent) {
 		if (event.key !== 'Enter') return;
 		event.preventDefault();
@@ -104,8 +91,7 @@
 	}
 </script>
 
-<!-- Sticky below md so the score field stays reachable while a long application
-     scrolls past; static from md up, where the detail pane scrolls internally. -->
+<!-- Sticky below md so the score field stays reachable while a long application scrolls. -->
 <div
 	class="sticky bottom-0 z-10 shrink-0 border-t border-border bg-white px-4 py-3 sm:px-5 md:static md:z-auto"
 >
@@ -141,10 +127,7 @@
 			</div>
 
 			<div class="flex items-center gap-2.5 max-md:w-full">
-				<!--
-									A plain labelled number field rather than 21 buttons or a slider: the reviewer
-									already has both hands on the keyboard, and a slider cannot be typed into.
-								-->
+				<!-- A number field, not 21 buttons or a slider: the reviewer is on the keyboard. -->
 				<label for="score-input" class="text-xs font-semibold whitespace-nowrap text-foreground">
 					Score
 				</label>
@@ -177,8 +160,7 @@
 			</div>
 		</div>
 
-		<!-- Re-scoring overwrites, attribution included, so say whose number is on
-		     screen before someone changes it. -->
+		<!-- Re-scoring overwrites attribution, so say whose number this is first. -->
 		{#if score !== null && scorerName}
 			<div class="mt-2 text-2xs text-foreground-tertiary">
 				Scored {score}/{MAX_SCORE} by {scorerName}{scoredAt ? ` · ${formatDate(scoredAt)}` : ''}

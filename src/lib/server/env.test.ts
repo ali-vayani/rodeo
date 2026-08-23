@@ -232,8 +232,8 @@ describe('validateEnv', () => {
 		delete env.RESEND_API_KEY;
 		delete env.SUPABASE_URL;
 
-		// Preview exists to review UI; its outbound mail is already fenced to
-		// yopmail addresses, so a missing provider there isn't a boot failure.
+		// Preview exists to review UI and sends no mail at all, so a missing provider
+		// there isn't a boot failure.
 		expect(() => validateEnv()).not.toThrow();
 	});
 });

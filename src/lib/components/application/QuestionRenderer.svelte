@@ -39,7 +39,6 @@
 			(disabled ? ' cursor-not-allowed bg-muted text-muted-foreground' : '')
 	);
 
-	// Use question id as the form element id
 	const inputId = $derived(`q-${question.id}`);
 
 	/**

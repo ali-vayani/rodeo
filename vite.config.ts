@@ -10,6 +10,9 @@ import { sveltekit } from '@sveltejs/kit/vite';
  * dead-code elimination, so `vite build` still wrote an 11.7 KB orphan and listed it in
  * the manifest. Emptying the modules at load time is what makes "absent in production"
  * true. The matching server route guards itself at runtime, since that gate is tested.
+ *
+ * Outputs:
+ * - Plugin — a `pre` build-only plugin that empties every module under src/lib/dev/
  */
 function excludeDevOnlyClientCode() {
 	const DEV_ONLY = /[\\/]src[\\/]lib[\\/]dev[\\/]/;

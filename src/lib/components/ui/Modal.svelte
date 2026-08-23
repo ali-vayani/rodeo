@@ -39,7 +39,6 @@
 		if (!next) onClose?.();
 	}
 
-	// Replaces six hand-written pixel widths across nine overlays.
 	const SIZES: Record<Size, string> = {
 		sm: 'max-w-modal-sm',
 		md: 'max-w-modal-md',
@@ -49,12 +48,7 @@
 	};
 </script>
 
-<!--
-	Built on bits-ui Dialog for focus trap, focus restore, scroll lock, Escape,
-	and correct ARIA. The nine hand-rolled overlays this replaces re-derived
-	backdrop and key handling each time, trapped focus in none of them, and
-	needed seven `svelte-ignore a11y_*` comments to stay quiet.
--->
+<!-- bits-ui Dialog supplies the focus trap, focus restore, scroll lock, Escape and ARIA. -->
 <Dialog.Root bind:open {onOpenChange}>
 	<Dialog.Portal>
 		<Dialog.Overlay

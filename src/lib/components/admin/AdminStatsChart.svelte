@@ -3,20 +3,8 @@
 	import type { AdminStats, UnattributedStats } from '$lib/stats';
 	import { pluralize } from '$lib/format';
 
-	/**
-	 * Per-admin review activity, ranked.
-	 *
-	 * Segment colours come from the status ramps, which is the one job colour does here.
-	 * That ramp puts green next to red, a pair colour-blind readers separate poorly
-	 * (delta-E 6.3 deutan) and which clears neither swatch the 3:1 contrast bar against a
-	 * white card. So every segment is also spelled out as a number underneath: the bar is
-	 * the comparison, the digits are the data.
-	 */
-	/**
-	 * The time window used to live here as a `Select` in this card's header. It moved up
-	 * to the dashboard, which now owns one range for every panel that can honestly be
-	 * scoped by one.
-	 */
+	// Per-admin review activity. The status ramp puts green beside red (delta-E 6.3
+	// deutan, neither at 3:1 on white), so every segment is also written out as a number.
 	let {
 		admins,
 		unattributed,
@@ -27,24 +15,19 @@
 		loading?: boolean;
 	} = $props();
 
-	/**
-	 * Written out rather than built as `bg-${tone}-500`, since Tailwind scans source
-	 * text statically and never sees a constructed class name.
-	 */
+	// Literal class names: Tailwind scans source statically and never sees `bg-${tone}-500`.
 	const SEGMENTS = [
 		{ key: 'accepted', label: 'Accepted', bar: 'bg-success-500', dot: 'bg-success-500' },
 		{ key: 'rejected', label: 'Rejected', bar: 'bg-danger-500', dot: 'bg-danger-500' },
 		{ key: 'waitlisted', label: 'Waitlisted', bar: 'bg-warning-500', dot: 'bg-warning-500' }
 	] as const;
 
-	// Everyone with something to show. The query zero-fills the full staff roster so the
-	// shape is stable, but 60 empty rows would bury the handful who reviewed anything.
+	// The query zero-fills the whole staff roster; 60 empty rows would bury the reviewers.
 	const active = $derived(
 		admins.filter((a) => a.decisions > 0 || a.emailCampaigns > 0 || a.scans > 0)
 	);
 
-	// Bars are scaled against the busiest reviewer, not each to their own 100% —
-	// normalising per row would draw one decision the same width as two hundred.
+	// Scaled against the busiest reviewer; per-row 100% would draw 1 decision as wide as 200.
 	const maxDecisions = $derived(Math.max(1, ...active.map((a) => a.decisions)));
 
 	const nf = new Intl.NumberFormat('en-US');
@@ -66,8 +49,7 @@
 			message="Decisions, emails and scans appear here as admins work through applications."
 		/>
 	{:else}
-		<!-- Legend. Present because there is more than one series, so identity never
-		     rests on colour alone. -->
+		<!-- Legend: more than one series, so identity never rests on colour alone. -->
 		<div class="mb-4 flex flex-wrap items-center gap-x-4 gap-y-1.5">
 			{#each SEGMENTS as segment (segment.key)}
 				<div class="flex items-center gap-1.5">
@@ -87,8 +69,7 @@
 						</span>
 					</div>
 
-					<!-- 2px gaps between fills, so adjacent segments stay separable where the
-					     hues themselves don't. -->
+					<!-- 2px gaps keep adjacent segments separable where the hues are not. -->
 					<div class="flex h-2 gap-0.5" role="presentation">
 						{#each SEGMENTS as segment (segment.key)}
 							{@const count = admin[segment.key]}
@@ -102,8 +83,6 @@
 						{/each}
 					</div>
 
-					<!-- The numbers the bar stands in for. Text keeps text tokens; the bar
-					     above carries the identity. -->
 					<div
 						class="mt-1.5 flex flex-wrap gap-x-3 gap-y-0.5 font-mono text-2xs text-foreground-tertiary tabular-nums"
 					>
@@ -126,12 +105,9 @@
 		</ul>
 
 		{#if unattributed.total > 0}
-			<!-- Decisions nobody is on the hook for: made before attribution existed, or by the
-						     blacklist auto-reject. Shown rather than dropped so the bars above sum to the
-						     real decision totals. -->
-			<!-- `pluralize` already emits the count, so pairing it with a formatted number
-						     printed "98 unattributed 98 decisions". The formatted number wins, being the
-						     one that groups thousands. -->
+			<!-- Decisions made before attribution existed or by the blacklist auto-reject.
+			     Shown so the bars above sum to the real totals. Not `pluralize`: it emits the
+			     count itself, which printed "98 unattributed 98 decisions". -->
 			<p class="mt-4 border-t border-border pt-3 text-xs text-foreground-tertiary">
 				<span class="font-mono tabular-nums">{nf.format(unattributed.total)}</span>
 				unattributed {unattributed.total === 1 ? 'decision' : 'decisions'} — recorded before attribution

@@ -162,8 +162,8 @@
 		/>
 	</div>
 
-	<!-- The pipeline leads: it is the question the dashboard exists to answer —
-	     where is this cycle right now. -->
+	<!-- The pipeline leads: "where is this cycle right now" is the question the
+	     dashboard exists to answer. -->
 	<div class="mb-4">
 		<Card title="Admissions funnel">
 			{#snippet actions()}
@@ -271,7 +271,6 @@
 		{/if}
 	</div>
 
-	<!-- Who the applicants are. -->
 	{#if data.demographics}
 		{@const demo = data.demographics}
 		<div class="grid grid-cols-1 gap-4 lg:grid-cols-2">

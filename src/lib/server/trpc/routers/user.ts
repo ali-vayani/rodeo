@@ -7,29 +7,21 @@ import { logAction, valueOrNone } from '$lib/server/log';
 import { TEAM_MEMBER_SELECT, SELF_USER_SELECT } from '$lib/server/trpc/selects';
 
 /**
- * One CSV cell, safe to open in a spreadsheet.
- *
- * Quoting is unconditional, because a comma stored in any field silently shifts every
- * column after it.
- *
- * The leading apostrophe is the formula-injection guard. Excel and Sheets treat a cell
- * opening with `=`, `+`, `-` or `@` as a formula, so an applicant who names themselves
- * `=HYPERLINK(...)` gets code running against the roster when an admin opens the file.
- * The apostrophe forces text and is stripped by the spreadsheet on display.
+ * One CSV cell, always quoted, with formula injection neutralised. Excel and Sheets
+ * treat a cell opening with `=`, `+`, `-`, `@`, `\t` or `\r` as a formula, so an
+ * applicant named `=HYPERLINK(...)` would run code when an admin opens the roster. The
+ * leading apostrophe forces text and is hidden on display.
  */
 function csvCell(value: string | null | undefined): string {
 	const raw = value ?? '';
-	// `\t` and `\r` are formula triggers too: Excel treats a cell starting with either
-	// (before an `=`/`+`/`-`/`@`) as a formula, so they belong in the neutralization set.
 	const neutralized = /^[=+\-@\t\r]/.test(raw) ? `'${raw}` : raw;
 	return `"${neutralized.replace(/"/g, '""')}"`;
 }
 
 export const userRouter = router({
 	me: authedProcedure.query(async ({ ctx }) => {
-		// Explicit `select`, never `include`. This is `authedProcedure`, so the nested team
-		// members and invitees are other people, and an `include` would return their email,
-		// status and embargoed `pendingDecision` to any hacker. See ../selects.
+		// `select`, never `include`: teammates and invitees are other people, and `include`
+		// would hand any hacker their embargoed `pendingDecision`. See ../selects.
 		return ctx.prisma.user.findUniqueOrThrow({
 			where: { uid: ctx.user.uid },
 			select: {
@@ -74,8 +66,7 @@ export const userRouter = router({
 		.query(async ({ ctx, input }) => {
 			const { page, pageSize, ...filters } = input;
 
-			// Shared with email.sendCustom / previewRecipients, including the typo-tolerant
-			// search, so the count an admin sees and the set that gets mailed cannot diverge.
+			// Shared with email.sendCustom so the count shown and the set mailed can't diverge.
 			const { where, expansion } = await resolveRecipientWhere(ctx.prisma, filters);
 
 			const [total, users] = await Promise.all([
@@ -88,8 +79,7 @@ export const userRouter = router({
 				})
 			]);
 
-			// `search` reports when the exact term matched nobody and these rows are near-misses
-			// instead, and when that suggestion list hit its cap.
+			// `search` reports when these rows are near-misses for a term that matched nobody.
 			return { users, total, page, pageSize, search: expansion };
 		}),
 
@@ -97,8 +87,7 @@ export const userRouter = router({
 		return ctx.prisma.user.findUniqueOrThrow({
 			where: { uid: input.uid },
 			include: {
-				// Answers come back in `question.order`, the order the applicant was asked them in.
-				// Sorted here so two readers of this payload cannot disagree about the application.
+				// Sorted here so every reader sees answers in the order they were asked.
 				application: { include: { question: true }, orderBy: { question: { order: 'asc' } } },
 				team: { include: { members: true } },
 				scans: { orderBy: { timestamp: 'desc' } }
@@ -107,24 +96,22 @@ export const userRouter = router({
 	}),
 
 	/**
-	 * Set an account's role. Singular, and that is the point: roles are mutually exclusive,
-	 * so this replaces rather than adds. Granting someone ORGANIZER takes away their
-	 * HACKER role, and with it their hacker portal. See `$lib/auth/permissions`.
+	 * Roles are mutually exclusive, so this replaces rather than adds: granting
+	 * ORGANIZER removes HACKER and the hacker portal with it. See `$lib/auth/permissions`.
+	 *
+	 * Throws:
+	 * - TRPCError BAD_REQUEST — demoting the last remaining admin
 	 */
 	updateRole: adminProcedure
 		.input(z.object({ uid: z.string(), role: z.nativeEnum(Role) }))
 		.mutation(async ({ ctx, input }) => {
-			// Read first so the audit entry can record what the role was. Half of what an audit
-			// gets opened to answer is what the value changed from.
 			const before = await ctx.prisma.user.findUniqueOrThrow({
 				where: { uid: input.uid },
 				select: { name: true, role: true }
 			});
 
-			// Don't let the platform be left with no admin. Moving someone off ADMIN is refused
-			// unless another remains, otherwise a self-demotion locks everyone out with recovery
-			// only via the database. Exclusive roles make this matter more: an admin who takes
-			// the HACKER role no longer keeps admin alongside it.
+			// A self-demotion with no other admin locks everyone out, recoverable only via
+			// the database.
 			const losingAdmin = before.role === Role.ADMIN && input.role !== Role.ADMIN;
 			if (losingAdmin) {
 				const otherAdmins = await ctx.prisma.user.count({
@@ -177,20 +164,15 @@ export const userRouter = router({
 		}),
 
 	/**
-	 * Manual pending-decision override from /admin/users.
+	 * Manual pending-decision override from /admin/users. Not guarded by the review
+	 * lock, so it is the escape hatch if a claim wedges; it does clear the claim.
 	 *
-	 * Intentionally not guarded by the admissions review lock, so it is the escape hatch
-	 * if a claim ever wedges. It does clear the claim.
+	 * `activeDecision` is not settable: it has already been emailed and this path sends
+	 * nothing, so writing it would change what the system believes without changing what
+	 * the person was told. Once released, this endpoint refuses decision edits entirely.
 	 *
-	 * `activeDecision` is deliberately not settable. An active decision has already been
-	 * emailed, and this path sends nothing, so writing it would change what the system
-	 * believes without changing what the person was told. The supported way to alter a
-	 * published outcome is to set a new pending decision and release it. Enforced at the
-	 * input schema rather than only hidden in the UI.
-	 *
-	 * Once released, this endpoint stops accepting decision edits entirely. Note that this
-	 * is currently the last UI path to a released decision: the admissions queue loads with
-	 * `noDecision: true`, so released applicants do not appear there to be re-decided.
+	 * Throws:
+	 * - TRPCError CONFLICT — the applicant already has a released decision
 	 */
 	updateDecisions: adminProcedure
 		.input(
@@ -205,8 +187,7 @@ export const userRouter = router({
 				select: { pendingDecision: true, activeDecision: true }
 			});
 
-			// A released applicant is off-limits here, whatever the payload says. Thrown rather
-			// than ignored, so an admin is told their edit did not happen.
+			// Thrown rather than ignored, so the admin is told their edit did not happen.
 			if (before.activeDecision !== null) {
 				throw new TRPCError({
 					code: 'CONFLICT',
@@ -214,13 +195,11 @@ export const userRouter = router({
 				});
 			}
 
-			// Reattribute only on a real change. /admin/users saves role, status and decisions in
-			// one Promise.all, so stamping `decidedBy` unconditionally would let an unrelated role
-			// edit take credit for a decision someone else made.
+			// Reattribute only on a real change: /admin/users saves role, status and decisions
+			// together, so an unrelated edit must not take credit for someone else's decision.
 			const decisionChanged = before.pendingDecision !== input.pendingDecision;
 
-			// Nothing is released at this point (guarded above), so clearing the pending
-			// decision leaves nobody accountable and the attribution goes with it.
+			// Clearing the decision clears the attribution with it.
 			const attribution = !decisionChanged
 				? undefined
 				: input.pendingDecision !== null
@@ -237,15 +216,13 @@ export const userRouter = router({
 				}
 			});
 
-			// Logged as an override rather than a decision: this path bypasses the review lock
-			// and the release step.
+			// An override, not a decision: this path bypasses the review lock and release.
 			await logAction(ctx, {
 				action: 'user.decision.override',
 				summary:
 					`Overrode ${user.name}'s pending decision — ` +
 					`${valueOrNone(before.pendingDecision)} to ${valueOrNone(input.pendingDecision)}`,
 				target: { id: user.uid, label: user.name },
-				// No `activeDecision` key: the guard above means it is always null here.
 				metadata: {
 					pendingFrom: before.pendingDecision,
 					pendingTo: input.pendingDecision
@@ -260,8 +237,7 @@ export const userRouter = router({
 			orderBy: { createdAt: 'desc' }
 		});
 
-		// A query, but still logged. This is the one call that hands an admin every
-		// applicant's name and email in a file.
+		// A query, but logged: it hands an admin every applicant's name and email in a file.
 		await logAction(ctx, {
 			action: 'user.export',
 			summary: `Exported the user list (${users.length} users)`,

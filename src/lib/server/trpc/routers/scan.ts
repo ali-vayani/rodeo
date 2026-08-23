@@ -5,11 +5,8 @@ import { logAction } from '$lib/server/log';
 import { Role, UserStatus, type PrismaClient } from '$lib/generated/prisma/client';
 
 /**
- * The projection every endpoint here hands back in place of a `User` row.
- *
- * Organizers may work the scan page but are explicitly not to see per-person data,
- * and a full row carries phone-book detail plus the decision columns. These are the
- * fields the scan UI consumes, plus `uid`, which the page sends back on confirm.
+ * Returned in place of a `User` row. Organizers work the scan page but must not see
+ * the decision columns; this is what the scan UI consumes plus `uid` for confirm.
  */
 const scanUserSelect = {
 	uid: true,
@@ -21,16 +18,12 @@ const scanUserSelect = {
 	status: true
 } as const;
 
-/**
- * Scans and history are the event's own record, not the attendee's — no user row
- * hangs off them beyond the name the recent-scans list prints.
- */
+/** No user row hangs off a scan beyond the name the recent-scans list prints. */
 const scanSelect = { id: true, action: true, timestamp: true } as const;
 
 /**
- * A scanned QR carries the whole uid, but a human typing from the printed badge has
- * only the `RC-` + last four, matched as a uid suffix. Anything shorter stops
- * identifying one person: `RC-` alone strips to `''`, which is `uid LIKE '%'`.
+ * A printed badge shows `RC-` + the last four of the uid, matched as a suffix. Shorter
+ * stops identifying one person: `RC-` alone strips to `''`, which is `uid LIKE '%'`.
  */
 const MIN_CODE_SUFFIX_LENGTH = 4;
 
@@ -40,16 +33,15 @@ function allowedActions(settings: { scanActions: string[] } | null): string[] {
 }
 
 /**
- * The action that means "arrived at the event" and promotes CONFIRMED → CHECKED_IN.
- * By convention the first configured action; `Check-In` on a fresh install.
+ * The action that promotes CONFIRMED to CHECKED_IN. By convention the first configured
+ * action; `Check-In` on a fresh install.
  */
 function checkInAction(settings: { scanActions: string[] } | null): string {
 	return allowedActions(settings)[0];
 }
 
 function assertActionAllowed(settings: { scanActions: string[] } | null, action: string): void {
-	// Fail closed before a Settings row exists: without this, any string was accepted
-	// and persisted as a scan action.
+	// Fails closed before a Settings row exists rather than persisting any string.
 	if (!allowedActions(settings).includes(action)) {
 		throw new TRPCError({
 			code: 'BAD_REQUEST',
@@ -72,10 +64,8 @@ async function resolveUserByCode(prisma: PrismaClient, userCode: string) {
 		});
 	}
 
-	// `take: 2` is all it costs to tell "one match" from "more than one". A suffix is not
-	// a unique key, so silently taking the first row checks in the wrong person and
-	// audit-logs it under their name. Case-insensitive because the badge prints the suffix
-	// uppercased while a cuid is lowercase.
+	// A suffix is not a unique key; `take: 2` detects ambiguity instead of checking in the
+	// wrong person. Case-insensitive because the badge uppercases a lowercase cuid.
 	const users = await prisma.user.findMany({
 		where: { OR: [{ uid: code }, { uid: { endsWith: suffix, mode: 'insensitive' } }] },
 		select: scanUserSelect,
@@ -188,7 +178,7 @@ export const scanRouter = router({
 
 		const counts: Record<string, number> = {};
 		for (const action of actions) counts[action] = 0;
-		// Also surfaces retired actions with historical scans that are no longer in settings — intentional.
+		// Intentionally also surfaces retired actions that still have scans.
 		for (const row of grouped) counts[row.action] = row._count.action;
 
 		return counts;
@@ -202,16 +192,13 @@ export const scanRouter = router({
 			})
 		)
 		.mutation(async ({ ctx, input }) => {
-			// The write path runs the same helpers as `lookup` on purpose. It used to carry its
-			// own copy of the action check and the code lookup, so a fix to one missed the other.
 			const settings = await ctx.prisma.settings.findFirst();
 			assertActionAllowed(settings, input.action);
 			const user = await resolveUserByCode(ctx.prisma, input.userCode);
 			const isDuplicate = await isDuplicateToday(ctx.prisma, user.uid, input.action);
 
-			// Checking in is what moves a CONFIRMED attendee to CHECKED_IN, and nothing else in
-			// the app writes that status. The scan row and the status change commit together, so
-			// a recorded check-in cannot exist without the status, or vice versa.
+			// Nothing else writes CHECKED_IN. The scan row and the status change commit
+			// together so neither can exist without the other.
 			const promotesToCheckedIn =
 				input.action === checkInAction(settings) && user.status === UserStatus.CONFIRMED;
 
@@ -261,8 +248,7 @@ export const scanRouter = router({
 	getHistory: portalProcedure
 		.input(z.object({ userId: z.string() }))
 		.query(async ({ ctx, input }) => {
-			// Takes an arbitrary uid, so it deliberately returns nothing about the person
-			// it belongs to — only that user's scan trail.
+			// Takes an arbitrary uid, so returns only the scan trail, nothing about the person.
 			return ctx.prisma.scan.findMany({
 				where: { userId: input.userId },
 				orderBy: { timestamp: 'desc' },

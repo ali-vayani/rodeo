@@ -3,23 +3,15 @@
 	import { cn } from '$lib/utils';
 	import { DECISION_SERIES, type DecisionKey } from './decisionPalette';
 
-	/**
-	 * Applicants by decision, as one 100%-stacked bar.
-	 *
-	 * The form is the point. Four separate stat cards give four numbers and leave the
-	 * reader to work out the proportions; one bar gives the counts and the shape in a
-	 * single mark.
-	 *
-	 * Segments are separated by a 2px surface gap, never a border. See `decisionPalette`
-	 * for why that gap is mandatory rather than decorative.
-	 */
+	// Applicants by decision as one 100%-stacked bar. Segments are separated by a 2px
+	// surface gap, never a border; see `decisionPalette` for why the gap is mandatory.
 	let {
 		counts,
 		byRole = undefined,
 		total
 	}: {
 		counts: Record<DecisionKey, number>;
-		/** Optional role split per decision, surfaced on hover. */
+		/** Role split per decision, surfaced on hover. */
 		byRole?: Partial<Record<DecisionKey, Array<{ label: string; value: number }>>>;
 		total: number;
 	} = $props();
@@ -38,11 +30,7 @@
 		})).filter((segment) => segment.count > 0)
 	);
 
-	/**
-	 * Only label inside a segment that can hold the text. A number crammed into a 3%
-	 * sliver either overflows its fill or gets cropped, and the legend below carries
-	 * every value regardless.
-	 */
+	// A label in a 3% sliver overflows or crops; the legend carries every value anyway.
 	const LABEL_MIN_SHARE = 9;
 
 	function tooltipFor(key: DecisionKey, label: string, hint: string, count: number) {
@@ -60,8 +48,7 @@
 		<p class="text-xs text-foreground-secondary">
 			{nf.format(total)} applicants · staff accounts excluded
 		</p>
-		<!-- The table view is an obligation, not a nicety: two of these fills sit below
-				     3:1 against the card, so a non-colour route to the same numbers must exist. -->
+		<!-- Two fills sit below 3:1 against the card, so a non-colour route to the numbers must exist. -->
 		<button
 			type="button"
 			aria-pressed={showTable}
@@ -116,14 +103,12 @@
 			</tfoot>
 		</table>
 	{:else}
-		<!-- gap-0.5 is the 2px surface gap. One width across the whole stack. -->
+		<!-- gap-0.5 is the 2px surface gap. -->
 		<div class="flex h-7 gap-0.5" role="img" aria-label="Applicants by decision">
 			{#each segments as segment (segment.key)}
 				<Tooltip content={tooltipFor(segment.key, segment.label, segment.hint, segment.count)}>
 					{#snippet children(props)}
-						<!-- A real <button>, not a div carrying a tabindex. The role split behind each
-												     segment is information, so it has to be reachable by keyboard, and only a
-												     natively focusable element makes that true for assistive tech. -->
+						<!-- A real <button>: the role split behind each segment must be keyboard-reachable. -->
 						<button
 							{...props}
 							type="button"
@@ -131,8 +116,7 @@
 							style="width: {segment.share}%"
 							class={cn(
 								'flex cursor-help items-center justify-center transition-[filter] duration-150 hover:brightness-95',
-								// Square at the joints, 4px only on the two outer ends: this is one
-								// bar made of segments, not four pills sitting in a row.
+								// Rounded only at the outer ends: one bar, not four pills.
 								'first:rounded-l-sm last:rounded-r-sm',
 								'focus-visible:shadow-ring focus-visible:outline-none',
 								segment.fill
@@ -149,8 +133,7 @@
 			{/each}
 		</div>
 
-		<!-- Legend is always present for >=2 series, and carries every value — so no
-		     number on this chart is reachable only by hovering. -->
+		<!-- Carries every value, so no number here is reachable only by hovering. -->
 		<ul class="mt-3 flex flex-wrap gap-x-4 gap-y-1.5">
 			{#each DECISION_SERIES as series (series.key)}
 				<li class="flex items-center gap-1.5 text-xs text-foreground-secondary">

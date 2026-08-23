@@ -139,7 +139,7 @@
 		toIndex: number;
 		startY: number;
 		offset: number;
-		/** Row geometry, measured once at pointerdown — nothing reflows mid-drag. */
+		/** Row geometry, measured once at pointerdown; nothing reflows mid-drag. */
 		rects: { top: number; height: number }[];
 		/** Height of the dragged row plus the list gap: how far the rows it passes slide. */
 		slot: number;
@@ -242,7 +242,7 @@
 		return 0;
 	}
 
-	/** ArrowUp/ArrowDown on a focused handle — the keyboard path to reordering. */
+	/** ArrowUp/ArrowDown on a focused handle: the keyboard path to reordering. */
 	function moveByKeyboard(id: string, delta: -1 | 1) {
 		const fromIndex = filteredQuestions.findIndex((q) => q.id === id);
 		if (fromIndex === -1) return;
@@ -286,7 +286,7 @@
 					...partial
 				} as Question
 			];
-			// Only now — a cancelled add should leave what was typed in place.
+			// Only now: a cancelled add should leave what was typed in place.
 			addTitle = '';
 			addType = 'SHORT_TEXT';
 		}
@@ -341,11 +341,8 @@
 	];
 </script>
 
-<!-- Page -->
 <div class="mx-auto flex min-h-screen max-w-[1200px] flex-col gap-5 py-2 md:px-8 md:py-7">
-	<!-- Header -->
 	<div class="flex flex-col gap-2.5">
-		<!-- Top row -->
 		<div class="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
 			<div class="flex items-center gap-3">
 				<h1 class="m-0 text-[22px] font-extrabold tracking-tight text-[#191919]">Applications</h1>
@@ -372,7 +369,6 @@
 				{/if}
 			</button>
 		</div>
-		<!-- Bottom row -->
 		<div class="flex items-center">
 			<div class="flex items-center gap-1.5">
 				<label for="role-select" class="text-xs font-medium text-[#888]">Role:</label>
@@ -388,11 +384,8 @@
 		</div>
 	</div>
 
-	<!-- Content grid -->
 	<div class="grid grid-cols-1 items-start gap-5 lg:grid-cols-[60%_1fr]">
-		<!-- Left: Question list -->
 		<div class="flex flex-col gap-2.5">
-			<!-- Col header -->
 			<div class="flex items-center gap-2 px-0.5">
 				<span class="text-[11px] font-bold tracking-[0.08em] text-[#aaa] uppercase">Questions</span>
 				<span
@@ -402,7 +395,6 @@
 				</span>
 			</div>
 
-			<!-- List -->
 			{#if workingQuestions.length === 0}
 				<div class="rounded-lg border border-dashed border-[#e0e0e0] p-8 text-center">
 					<p class="m-0 text-[13px] text-[#aaa]">No questions yet. Add one below.</p>
@@ -434,7 +426,6 @@
 				</div>
 			{/if}
 
-			<!-- Add question form -->
 			<div class="mt-1 overflow-hidden rounded-[10px] border border-[#e0e0e0] bg-white">
 				<div
 					class="flex items-center gap-[7px] border-b border-[#e0e0e0] bg-[#f4f4f4] px-3.5 py-2.5 text-xs font-bold tracking-[0.01em] text-[#444]"
@@ -482,14 +473,12 @@
 			</div>
 		</div>
 
-		<!-- Right: Preview -->
 		<div class="lg:sticky lg:top-5 lg:h-[calc(100vh-120px)]">
 			<PreviewPane questions={workingQuestions} {selectedRole} />
 		</div>
 	</div>
 </div>
 
-<!-- Hidden save form -->
 <form
 	method="POST"
 	action="?/save"
@@ -510,7 +499,6 @@
 	<input type="hidden" name="changes" value={changesPayload} />
 </form>
 
-<!-- Modals -->
 <QuestionEditor
 	question={editingQuestion}
 	seed={addSeed}
@@ -537,7 +525,6 @@
 	onCancel={() => (confirmOpen = false)}
 />
 
-<!-- Toast -->
 {#if toastMsg}
 	<div
 		class="fixed right-6 bottom-6 z-[100] flex animate-[slideUp_0.2s_ease] items-center gap-2 rounded-[9px] px-[18px] py-3 text-[13px] font-medium text-white shadow-[0_8px_24px_rgba(0,0,0,0.2)]"

@@ -1,8 +1,7 @@
 /**
- * Infrastructure shared by seed.ts and the three scenario seed scripts.
- *
- * Keeping the Prisma client setup, production guard and question list here means all
- * four entry points stay in sync when the application form changes.
+ * Shared by seed.ts and the three scenario seeds: Prisma client setup, the production
+ * guard and the question list, so all four entry points move together when the
+ * application form changes.
  */
 
 import 'dotenv/config';
@@ -18,11 +17,16 @@ import {
 // makes the seeded form an example of the feature rather than a contradiction of it.
 import { YEAR_OPTIONS } from '../src/lib/questions/linkedFieldDefaults';
 
-// ---------------------------------------------------------------------------
-// Prisma client
-// ---------------------------------------------------------------------------
-
-/** Strip sslmode=require and re-add ssl without cert verification, same as db.ts. */
+/**
+ * Pool options for a connection string, mirroring src/lib/server/db.ts: `sslmode=require`
+ * is stripped and replaced with ssl that skips cert verification.
+ *
+ * Inputs:
+ * - url: string — Postgres connection string
+ *
+ * Outputs:
+ * - { connectionString: string; ssl?: { rejectUnauthorized: false } }
+ */
 export function poolTls(url: string) {
 	if (!url.includes('sslmode=require')) return { connectionString: url };
 	const stripped = new URL(url);
@@ -38,13 +42,8 @@ export function createPrismaClient(connectionString: string): PrismaClient {
 	return new PrismaClient({ adapter });
 }
 
-// ---------------------------------------------------------------------------
-// Production guard
-//
-// Deliberately duplicated from src/lib/server/env.ts: this runs under tsx with
-// no SvelteKit aliases, so it cannot import $lib. Keep the two in step.
-// ---------------------------------------------------------------------------
-
+// Duplicated from src/lib/server/env.ts: this runs under tsx with no SvelteKit aliases,
+// so it cannot import $lib. Keep the two in step.
 const LOCAL_HOSTS = ['localhost', '127.0.0.1', '::1', '[::1]'];
 
 function databaseHost(url: string | undefined): string | null {
@@ -56,6 +55,17 @@ function databaseHost(url: string | undefined): string | null {
 	}
 }
 
+/**
+ * Refuses to seed anything that looks like a real database.
+ *
+ * Inputs:
+ * - url: string | undefined — DATABASE_URL; must point at a local host unless
+ *   SEED_ALLOW_REMOTE=1 (with a non-public DATABASE_SCHEMA) or SEED_ALLOW_PRODUCTION=1
+ *
+ * Throws:
+ * - Error — production env vars are set, the host is not local, or SEED_ALLOW_REMOTE
+ *   would target the `public` schema
+ */
 export function assertSafeToSeed(url: string | undefined): void {
 	if (process.env.SEED_ALLOW_PRODUCTION === '1') return;
 
@@ -95,12 +105,8 @@ export function assertSafeToSeed(url: string | undefined): void {
 	}
 }
 
-// ---------------------------------------------------------------------------
-// Questions
-// Linked questions write through to the User model on save.
-// Order 0–9 reserved for linked/identity questions; general questions start at 10.
-// ---------------------------------------------------------------------------
-
+// Order 0-9 is reserved for linked/identity questions, which write through to the
+// User row on save; general questions start at 10.
 export const questions = [
 	// --- Identity (linked to User fields) ---
 	{
@@ -274,12 +280,16 @@ export const questions = [
 	}
 ];
 
-// ---------------------------------------------------------------------------
-// Question seeding
-// Matched on order+targetRole, not title. Titles are editable in the admin UI, so
-// matching on them would duplicate a question that had been renamed.
-// ---------------------------------------------------------------------------
-
+/**
+ * Upserts the seed question list. Matched on order+targetRole, not title: titles are
+ * editable in the admin UI, so matching on them would duplicate a renamed question.
+ *
+ * Inputs:
+ * - prisma: PrismaClient
+ *
+ * Side effects:
+ * - Creates or updates one Question row per entry in `questions`.
+ */
 export async function seedQuestions(prisma: PrismaClient): Promise<void> {
 	console.log('Seeding questions...');
 	for (const q of questions) {

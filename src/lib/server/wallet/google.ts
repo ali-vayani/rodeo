@@ -101,20 +101,19 @@ function classDefinition(credentials: GoogleWalletCredentials) {
 	};
 }
 
-/**
- * Create the pass class if it isn't there. Memoised in a module-scoped promise so a
- * warm instance pays once, and a 409 counts as success since two cold starts racing is
- * normal.
- *
- * Deliberately never updates: artwork changes are an operator action, not a side effect
- * of a hacker tapping a button.
- */
 let ensured: Promise<void> | null = null;
 
 export function resetGoogleClassMemo(): void {
 	ensured = null;
 }
 
+/**
+ * Create the pass class if it isn't there. Memoised in `ensured` so a warm instance
+ * pays once, and a 409 counts as success since two cold starts racing is normal.
+ *
+ * Deliberately never updates: artwork changes are an operator action, not a side effect
+ * of a hacker tapping a button.
+ */
 async function ensureClass(credentials: GoogleWalletCredentials, token: string): Promise<void> {
 	ensured ??= (async () => {
 		const id = classId(credentials);

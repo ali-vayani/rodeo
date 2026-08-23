@@ -24,12 +24,8 @@
 	let progressPercent = $derived(Math.max(0, Math.min(100, (remainingMs / IDLE_GRACE_MS) * 100)));
 </script>
 
-<!--
-	No backdrop onclick, unlike the other modals in this app. "Dismiss" has no safe
-	meaning here: treating it as confirm would let a stray click silently renew the
-	lock, and treating it as a no-op would hide a countdown that is still running.
-	Escape maps to release — an explicit gesture that cannot renew by accident.
--->
+<!-- No backdrop dismiss: as confirm, a stray click would silently renew the lock; as a
+     no-op, it would hide a running countdown. Escape releases, which cannot renew by accident. -->
 <div role="presentation" class="fixed inset-0 z-[100] flex items-center justify-center bg-black/45">
 	<div
 		role="dialog"
@@ -51,8 +47,7 @@
 			<div class="mb-4 rounded border border-[#fde68a] bg-[#fffbeb] px-[14px] py-3">
 				<div class="text-[13px] leading-[1.5] text-[#92400e]">
 					Your review lock on <strong>{applicantName}</strong> will be released in
-					<!-- aria-live off: announcing a number every second is hostile to screen
-					     readers; the static description above carries the meaning. -->
+					<!-- aria-live off: a number announced every second is hostile to screen readers. -->
 					<span class="font-mono font-semibold" aria-live="off">{remainingLabel}</span>
 					so another admin can pick them up.
 				</div>

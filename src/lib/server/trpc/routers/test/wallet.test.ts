@@ -109,10 +109,8 @@ describe('wallet.availability', () => {
 	});
 
 	it('reads the deadline from the Settings row, not the router default', async () => {
-		// `settings.get()` substitutes DEFAULT_SETTINGS, whose RSVPDeadline is
-		// `new Date()` fixed at module load — i.e. always in the past. Sourcing the
-		// deadline from there would hand a pass to every confirmed account on an
-		// unconfigured install. `null` has to mean "not yet".
+		// DEFAULT_SETTINGS.RSVPDeadline is `new Date()` at module load, always in the past;
+		// sourcing from it would hand a pass to every confirmed account on a fresh install.
 		afterDeadline();
 		configureBothProviders();
 		db.settings.findFirst.mockResolvedValue(null as never);
@@ -143,10 +141,8 @@ describe('wallet.availability', () => {
 	});
 
 	it('reports configured:false when neither provider has credentials', async () => {
-		// This is what tells the card to render nothing at all rather than explain a
-		// wait: the deployment does not do wallet passes, so there is nothing to
-		// wait for. Collapsing it into the two booleans would make "not offered"
-		// and "not offered yet" indistinguishable.
+		// Tells the card to render nothing rather than explain a wait: "not offered" and
+		// "not offered yet" must stay distinguishable.
 		afterDeadline();
 		const caller = createTestCaller(db, confirmedHacker);
 		expect(await caller.wallet.availability()).toEqual({
