@@ -88,6 +88,13 @@ const requiredQuestion = {
 	regex: null
 };
 
+const requiredCheckbox = {
+	...requiredQuestion,
+	id: 'q-consent',
+	title: 'MLH Code of Conduct',
+	type: QuestionType.CHECKBOX
+};
+
 describe('application.getMyResponses', () => {
 	it('returns current user responses with questions', async () => {
 		const caller = createTestCaller(db, hackerUser);
@@ -676,6 +683,53 @@ describe('application.submit', () => {
 				userId: hackerUser.uid,
 				questionId: 'q-1',
 				value: 'Hacker User',
+				createdAt: new Date('2024-01-01')
+			}
+		] as never);
+		db.blacklist.findUnique.mockResolvedValue(null as never);
+		db.user.updateMany.mockResolvedValue({ count: 1 } as never);
+
+		const result = await caller.application.submit();
+		expect(result.status).toBe(UserStatus.APPLIED);
+	});
+
+	it('treats an unticked required checkbox as unanswered', async () => {
+		// Clearing a checkbox autosaves 'false', which is not blank. Under the old blank
+		// check that satisfied the question, so the MLH consent gates passed unticked.
+		const caller = createTestCaller(db, hackerUser);
+		db.user.findUniqueOrThrow.mockResolvedValue(hackerUser as never);
+		db.settings.findFirst.mockResolvedValue(openWindow);
+		db.question.findMany.mockResolvedValue([requiredCheckbox] as never);
+		db.applicationResponse.findMany.mockResolvedValue([
+			{
+				id: 'resp-1',
+				userId: hackerUser.uid,
+				questionId: 'q-consent',
+				value: 'false',
+				createdAt: new Date('2024-01-01')
+			}
+		] as never);
+
+		await expect(caller.application.submit()).rejects.toMatchObject({
+			code: 'BAD_REQUEST',
+			message: expect.stringContaining('MLH Code of Conduct')
+		});
+		expect(db.user.updateMany).not.toHaveBeenCalled();
+	});
+
+	it('accepts a ticked required checkbox', async () => {
+		const caller = createTestCaller(db, hackerUser);
+		db.user.findUniqueOrThrow
+			.mockResolvedValueOnce(hackerUser as never)
+			.mockResolvedValue({ ...hackerUser, status: UserStatus.APPLIED } as never);
+		db.settings.findFirst.mockResolvedValue(openWindow);
+		db.question.findMany.mockResolvedValue([requiredCheckbox] as never);
+		db.applicationResponse.findMany.mockResolvedValue([
+			{
+				id: 'resp-1',
+				userId: hackerUser.uid,
+				questionId: 'q-consent',
+				value: 'true',
 				createdAt: new Date('2024-01-01')
 			}
 		] as never);

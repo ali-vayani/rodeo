@@ -6,6 +6,7 @@
  */
 
 import { Role, UserStatus } from '$lib/generated/prisma/client';
+import { UPLOAD_EXTENSIONS, hasAllowedExtension } from '$lib/application/files';
 import { MAX_UPLOAD_BYTES } from './s3';
 
 /**
@@ -23,9 +24,11 @@ export type UploadRejection = { message: string; status: 400 | 413 };
  * Whether these bytes may be stored. Returns the reason rather than throwing, so the
  * caller picks the status code.
  *
- * No content-type allowlist: an allowlist would either be a new column or a guess that
- * blocks the one applicant with an unusual resume format, and every download is served
- * as an attachment anyway.
+ * The extension is checked, not the content type: a browser reports whatever it guessed
+ * from the same extension, so sniffing `file.type` would ask the client twice rather
+ * than once. It is a claim either way — the point is to catch the applicant who
+ * attached the wrong thing, not to stop one who is lying. Every download is served as
+ * an attachment regardless.
  */
 export function checkUpload(file: { size: number; name: string }): UploadRejection | null {
 	if (file.size === 0) {
@@ -42,6 +45,13 @@ export function checkUpload(file: { size: number; name: string }): UploadRejecti
 
 	if (file.name.trim() === '') {
 		return { message: 'That file has no name.', status: 400 };
+	}
+
+	if (!hasAllowedExtension(file.name)) {
+		return {
+			message: `That file must be one of ${UPLOAD_EXTENSIONS.join(', ')}.`,
+			status: 400
+		};
 	}
 
 	return null;

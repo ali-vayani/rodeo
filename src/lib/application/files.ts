@@ -7,3 +7,22 @@
 export function isPdfFilename(name: string): boolean {
 	return name.trim().toLowerCase().endsWith('.pdf');
 }
+
+/**
+ * The extensions a FILE question accepts. Resume formats — the only thing FILE is used
+ * for — so this is a constant rather than a per-question column.
+ *
+ * Isomorphic on purpose: the `accept` attribute on the file input and the server-side
+ * check in `checkUpload` read the same array, because `accept` is only a picker hint and
+ * an applicant can pick "All Files" past it.
+ */
+export const UPLOAD_EXTENSIONS = ['.doc', '.docx', '.pdf'] as const;
+
+/** The `accept` attribute for a file input, e.g. `.doc,.docx,.pdf`. */
+export const UPLOAD_ACCEPT = UPLOAD_EXTENSIONS.join(',');
+
+/** Whether a filename claims one of the accepted extensions. */
+export function hasAllowedExtension(name: string): boolean {
+	const lower = name.trim().toLowerCase();
+	return UPLOAD_EXTENSIONS.some((extension) => lower.endsWith(extension));
+}

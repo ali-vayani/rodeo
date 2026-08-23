@@ -49,9 +49,24 @@ describe('checkUpload', () => {
 		expect(checkUpload({ size: 100, name: '   ' })?.status).toBe(400);
 	});
 
-	it('does not filter by content type', () => {
-		// Downloads are attachments, so an unexpected type is harmless.
-		expect(checkUpload({ size: 100, name: 'portfolio.sketch' })).toBeNull();
+	it('rejects an extension outside the allowlist, and names the accepted ones', () => {
+		// The `accept` attribute on the input is a picker hint, not a gate — "All Files"
+		// walks straight past it, so the refusal has to happen here.
+		const rejection = checkUpload({ size: 100, name: 'portfolio.sketch' });
+		expect(rejection?.status).toBe(400);
+		expect(rejection?.message).toMatch(/\.doc, \.docx, \.pdf/);
+	});
+
+	it('accepts every allowed extension, whatever the case', () => {
+		for (const name of ['cv.doc', 'cv.docx', 'cv.pdf', 'CV.PDF', 'CV.DocX']) {
+			expect(checkUpload({ size: 100, name })).toBeNull();
+		}
+	});
+
+	it('does not let .doc match a .docx-lookalike suffix', () => {
+		// `.doc` is a prefix of `.docx`, so an endsWith allowlist has to be checked
+		// per-extension rather than by stripping.
+		expect(checkUpload({ size: 100, name: 'resume.docx.exe' })?.status).toBe(400);
 	});
 });
 

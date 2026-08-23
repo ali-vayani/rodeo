@@ -145,6 +145,22 @@ function assertAnswerValid(question: AnswerableQuestion, value: string) {
 	}
 }
 
+/**
+ * Whether a stored response counts as an answer to a required question.
+ *
+ * A blank value never does: autosave writes a row as soon as a field is touched, so
+ * presence of the row let an applicant satisfy every required question by saving "".
+ *
+ * A CHECKBOX needs the second clause. Clearing one autosaves the string 'false', which
+ * is not blank — so the required consent boxes (MLH data sharing, code of conduct, food
+ * allergy waiver) passed submit while unticked, which is the opposite of what a consent
+ * gate is for.
+ */
+function isAnswered(type: QuestionType, value: string | undefined): boolean {
+	if (value === undefined || value.trim() === '') return false;
+	return type === QuestionType.CHECKBOX ? value === 'true' : true;
+}
+
 export const applicationRouter = router({
 	/** Get all responses for the current user. */
 	getMyResponses: authedProcedure.query(async ({ ctx }) => {
@@ -414,12 +430,8 @@ export const applicationRouter = router({
 				where: { userId: ctx.user.uid }
 			});
 
-			// A response row with a blank value is not an answer: building the set from row
-			// existence let an applicant satisfy every required question by saving "".
-			const answeredIds = new Set(
-				responses.filter((r) => r.value.trim() !== '').map((r) => r.questionId)
-			);
-			const unanswered = questions.filter((q) => !answeredIds.has(q.id));
+			const answers = new Map(responses.map((r) => [r.questionId, r.value]));
+			const unanswered = questions.filter((q) => !isAnswered(q.type, answers.get(q.id)));
 
 			if (unanswered.length > 0) {
 				throw new TRPCError({
