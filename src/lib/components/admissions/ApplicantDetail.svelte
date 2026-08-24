@@ -181,8 +181,6 @@
 		<span>{humanizeEnum(applicant.status)}</span>
 		<span aria-hidden="true">·</span>
 		<span>Applied {formatDate(applicant.createdAt)}</span>
-		<span aria-hidden="true">·</span>
-		<span class="font-mono break-all">{applicant.uid}</span>
 	</div>
 
 	<div class="flex-1 px-4 py-5 sm:px-6 md:overflow-y-auto">
