@@ -16,6 +16,9 @@ import {
 // The editor applies these when a field is linked; seeding the same values is what
 // makes the seeded form an example of the feature rather than a contradiction of it.
 import { YEAR_OPTIONS } from '../src/lib/questions/linkedFieldDefaults';
+// The same copy `settings.get` falls back to, so a seeded row and an unseeded install
+// disagree about nothing but the dates.
+import { DEFAULT_SETTINGS } from '../src/lib/server/settings';
 
 /**
  * Pool options for a connection string, mirroring src/lib/server/db.ts: `sslmode=require`
@@ -218,6 +221,16 @@ export const questions = [
 		placeholder: 'Yes, I need travel assistance',
 		order: 25
 	},
+	// The only FILE question. seedFiles.ts writes real bytes for its answers, so upload,
+	// download and the PDF viewer all have something to exercise.
+	{
+		title: 'Resume',
+		type: QuestionType.FILE,
+		required: false,
+		targetRole: [Role.HACKER],
+		placeholder: 'PDF only',
+		order: 26
+	},
 
 	// --- Judge-specific ---
 	{
@@ -304,4 +317,83 @@ export async function seedQuestions(prisma: PrismaClient): Promise<void> {
 			console.log(`  ✓ ${q.title}`);
 		}
 	}
+}
+
+// ---------------------------------------------------------------------------
+// Settings
+//
+// Every seed writes this row. Without one the window guards read "no window
+// enforced" and fail open, which meant a freshly seeded database could never show a
+// closed application or a passed RSVP deadline — including `db:seed:closed`, whose
+// whole point is the first of those.
+// ---------------------------------------------------------------------------
+
+const DAY = 24 * 60 * 60 * 1000;
+
+/** `n` days from now; negative for the past. */
+export function daysOut(n: number): Date {
+	return new Date(Date.now() + n * DAY);
+}
+
+export type SeedWindow = {
+	applicationOpen: Date;
+	applicationDeadline: Date;
+	RSVPDeadline: Date;
+	hackathonStartDate: Date;
+};
+
+/**
+ * Relative to the run, not fixed calendar dates: a scenario seeded in March must still
+ * describe the same moment in the cycle when it is re-run in August.
+ */
+export const SEED_WINDOWS = {
+	/** Applications live, both deadlines ahead. */
+	open: {
+		applicationOpen: daysOut(-14),
+		applicationDeadline: daysOut(21),
+		RSVPDeadline: daysOut(35),
+		hackathonStartDate: daysOut(42)
+	},
+	/** Submissions closed, RSVP still ahead — decisions are being worked through. */
+	closed: {
+		applicationOpen: daysOut(-45),
+		applicationDeadline: daysOut(-3),
+		RSVPDeadline: daysOut(14),
+		hackathonStartDate: daysOut(21)
+	},
+	/** The morning of: everything shut, the event underway. */
+	event: {
+		applicationOpen: daysOut(-60),
+		applicationDeadline: daysOut(-30),
+		RSVPDeadline: daysOut(-7),
+		hackathonStartDate: daysOut(0)
+	}
+} satisfies Record<string, SeedWindow>;
+
+/**
+ * Write the Settings row for a scenario. An existing row keeps its email copy: a
+ * re-seed moves the clock, it does not discard templates someone was drafting.
+ *
+ * Inputs:
+ * - prisma: PrismaClient — client for the database being seeded
+ * - window: SeedWindow — the four dates this scenario presents
+ *
+ * Outputs:
+ * - Promise<void>
+ *
+ * Side effects:
+ * - Creates or updates the single Settings row, and logs the resulting window.
+ */
+export async function seedSettings(prisma: PrismaClient, window: SeedWindow): Promise<void> {
+	const existing = await prisma.settings.findFirst({ select: { id: true } });
+	if (existing) {
+		await prisma.settings.update({ where: { id: existing.id }, data: window });
+	} else {
+		await prisma.settings.create({ data: { ...DEFAULT_SETTINGS, ...window } });
+	}
+
+	console.log(
+		`Settings: applications ${window.applicationOpen.toDateString()} → ` +
+			`${window.applicationDeadline.toDateString()}, RSVP by ${window.RSVPDeadline.toDateString()}.`
+	);
 }

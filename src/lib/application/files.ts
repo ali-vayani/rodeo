@@ -26,3 +26,16 @@ export function hasAllowedExtension(name: string): boolean {
 	const lower = name.trim().toLowerCase();
 	return UPLOAD_EXTENSIONS.some((extension) => lower.endsWith(extension));
 }
+
+/**
+ * Where a question's file lives in storage. Derived from the two ids that already
+ * identify the answer rather than stored, so there is no key to migrate or forge and
+ * re-uploading overwrites in place. The prefix keeps these clear of wallet artwork.
+ *
+ * Here rather than in `$lib/server/applicationFiles` (which re-exports it) because this
+ * module imports nothing: the seed scripts run under tsx with no SvelteKit aliases and
+ * need the same format, and a second copy of it is a key that can silently drift.
+ */
+export function applicationFileKey(userId: string, questionId: string): string {
+	return `applications/${userId}/${questionId}`;
+}

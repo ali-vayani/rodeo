@@ -12,7 +12,13 @@
 
 import 'dotenv/config';
 import { Role, UserStatus, DecisionStatus } from '../src/lib/generated/prisma/client';
-import { assertSafeToSeed, createPrismaClient, seedQuestions } from './seedShared';
+import {
+	assertSafeToSeed,
+	createPrismaClient,
+	seedQuestions,
+	seedSettings,
+	SEED_WINDOWS
+} from './seedShared';
 import {
 	generateUsers,
 	pruneUnmanagedUsers,
@@ -112,6 +118,7 @@ async function main() {
 
 	console.log('Scenario 2 — Applications Closed\n');
 	await seedQuestions(prisma);
+	await seedSettings(prisma, SEED_WINDOWS.closed);
 
 	if (process.env.SEED_PRUNE === '1') {
 		const pruned = await pruneUnmanagedUsers(prisma, ROLE_PLANS);

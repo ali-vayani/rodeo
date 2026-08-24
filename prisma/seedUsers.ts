@@ -8,6 +8,7 @@ import {
 	type User
 } from '../src/lib/generated/prisma/client';
 import { isApplicantRole } from '../src/lib/admissions/roles';
+import { writeSeedFiles, type SeededFile } from './seedFiles';
 
 // Every account is derived from its index alone, with no randomness, so the same run
 // produces the same database twice: hacker42@yopmail.com is always the same person in
@@ -387,6 +388,10 @@ function answerFor(q: Question, user: GeneratedUser, seq: number): string | null
 	if (q.linkedField === 'YEAR') return user.year ?? YEARS[seq % YEARS.length];
 
 	switch (q.type) {
+		// The stored answer is the filename; the bytes are written separately, keyed on
+		// the user and question. Must end .pdf — the in-browser viewer refuses anything else.
+		case QuestionType.FILE:
+			return `${user.name.toLowerCase().replace(/[^a-z]+/g, '-')}-resume.pdf`;
 		case QuestionType.DROPDOWN:
 		case QuestionType.MULTIPLE_CHOICE:
 			return q.options.length ? q.options[seq % q.options.length] : null;
@@ -454,6 +459,27 @@ export function generateResponses(
 	return out;
 }
 
+/** The generated answers that need bytes written for them, with who they belong to. */
+function fileAnswers(
+	saved: (GeneratedUser & { uid: string })[],
+	questions: Question[],
+	responses: GeneratedResponse[]
+): SeededFile[] {
+	const fileQuestions = new Map(
+		questions.filter((q) => q.type === QuestionType.FILE).map((q) => [q.id, q.title])
+	);
+	const names = new Map(saved.map((u) => [u.uid, u.name]));
+
+	return responses
+		.filter((r) => fileQuestions.has(r.questionId))
+		.map((r) => ({
+			userId: r.userId,
+			questionId: r.questionId,
+			name: names.get(r.userId) ?? 'Applicant',
+			heading: fileQuestions.get(r.questionId)!
+		}));
+}
+
 /**
  * Seeds every generated account and rebuilds its application responses.
  *
@@ -509,6 +535,10 @@ export async function seedUsers(
 	if (responses.length) {
 		await prisma.applicationResponse.createMany({ data: responses });
 	}
+
+	// After the rows, not before: a file with no response row behind it is unreachable,
+	// while a row written first would briefly promise bytes that do not exist yet.
+	await writeSeedFiles(fileAnswers(saved, questions, responses));
 
 	return { users: rows, responses: responses.length };
 }

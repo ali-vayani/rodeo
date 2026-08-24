@@ -9,14 +9,10 @@ import { Role, UserStatus } from '$lib/generated/prisma/client';
 import { UPLOAD_EXTENSIONS, hasAllowedExtension } from '$lib/application/files';
 import { MAX_UPLOAD_BYTES } from './s3';
 
-/**
- * Where a question's file lives in the bucket. Derived from the two ids that already
- * identify the answer rather than stored, so there is no key to migrate or forge and
- * re-uploading overwrites in place. The prefix keeps these clear of wallet artwork.
- */
-export function applicationFileKey(userId: string, questionId: string): string {
-	return `applications/${userId}/${questionId}`;
-}
+// Lives in `$lib/application/files`, which imports nothing, so the seed scripts can
+// derive the same key without SvelteKit aliases. Re-exported so the call sites here
+// are unchanged.
+export { applicationFileKey } from '$lib/application/files';
 
 export type UploadRejection = { message: string; status: 400 | 413 };
 

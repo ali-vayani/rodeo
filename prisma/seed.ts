@@ -1,5 +1,11 @@
 import 'dotenv/config';
-import { assertSafeToSeed, createPrismaClient, seedQuestions } from './seedShared';
+import {
+	assertSafeToSeed,
+	createPrismaClient,
+	seedQuestions,
+	seedSettings,
+	SEED_WINDOWS
+} from './seedShared';
 import { generateUsers, pruneUnmanagedUsers, seedUsers, summarize } from './seedUsers';
 
 const connectionString = process.env.DATABASE_URL;
@@ -15,6 +21,7 @@ async function main() {
 	assertSafeToSeed(connectionString);
 
 	await seedQuestions(prisma);
+	await seedSettings(prisma, SEED_WINDOWS.open);
 
 	if (process.env.SEED_PRUNE === '1') {
 		const pruned = await pruneUnmanagedUsers(prisma);
