@@ -6,7 +6,7 @@
 
 /** One stage of the admissions pipeline, as the funnel draws it. */
 export interface FunnelStage {
-	key: 'applied' | 'decided' | 'accepted' | 'confirmed' | 'checkedIn';
+	key: 'created' | 'applied' | 'decided' | 'accepted' | 'confirmed' | 'checkedIn';
 	label: string;
 	/** One line saying what the stage counts, shown under the label. */
 	hint: string;

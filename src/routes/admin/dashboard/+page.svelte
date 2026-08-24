@@ -139,9 +139,7 @@
 	const applied = $derived(stageCount('applied'));
 
 	const totals = $derived({
-		scans: (adminStats?.admins ?? []).reduce((sum, admin) => sum + admin.scans, 0),
-		campaigns: (adminStats?.admins ?? []).reduce((sum, admin) => sum + admin.emailCampaigns, 0),
-		recipients: (adminStats?.admins ?? []).reduce((sum, admin) => sum + admin.emailRecipients, 0)
+		scans: (adminStats?.admins ?? []).reduce((sum, admin) => sum + admin.scans, 0)
 	});
 </script>
 
@@ -208,13 +206,13 @@
 							.map((row) => ({ label: row.label, value: row.count }))}
 					/>
 				{/if}
+				<StatCard
+					label="Teams"
+					value={data.stats.teams.total}
+					breakdown={[{ label: 'Applicants on a team', value: data.stats.teams.members }]}
+				/>
 				{#if adminStats}
 					<StatCard label="Scans" value={totals.scans} />
-					<StatCard
-						label="Campaigns"
-						value={totals.campaigns}
-						breakdown={[{ label: 'Recipients reached', value: totals.recipients }]}
-					/>
 				{/if}
 			</div>
 		{/if}

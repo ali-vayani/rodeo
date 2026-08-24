@@ -58,42 +58,49 @@ export const dashboardRouter = router({
 	 */
 	stats: portalProcedure.query(async ({ ctx }) => {
 		const showActivity = isAdmin(ctx.user.role);
-		const [total, byStatus, byDecision, byRole, applicantRows, recentActivity] = await Promise.all([
-			ctx.prisma.user.count(),
+		const [total, byStatus, byDecision, byRole, applicantRows, teams, teamed, recentActivity] =
+			await Promise.all([
+				ctx.prisma.user.count(),
 
-			ctx.prisma.user.groupBy({
-				by: ['status'],
-				_count: { status: true }
-			}),
+				ctx.prisma.user.groupBy({
+					by: ['status'],
+					_count: { status: true }
+				}),
 
-			// `_all`: a per-field count ignores nulls, so "no decision yet" would read 0.
-			ctx.prisma.user.groupBy({
-				by: ['activeDecision'],
-				_count: { _all: true }
-			}),
+				// `_all`: a per-field count ignores nulls, so "no decision yet" would read 0.
+				ctx.prisma.user.groupBy({
+					by: ['activeDecision'],
+					_count: { _all: true }
+				}),
 
-			ctx.prisma.user.groupBy({
-				by: ['role'],
-				_count: { role: true }
-			}),
+				ctx.prisma.user.groupBy({
+					by: ['role'],
+					_count: { role: true }
+				}),
 
-			// Decision x role for the stat cards, so each card's number and its hover
-			// breakdown come off the same rows. `byDecision` above counts every user, which
-			// puts staff into its null bucket. CREATED is excluded to agree with the funnel.
-			ctx.prisma.user.groupBy({
-				by: ['activeDecision', 'role'],
-				where: { role: { in: APPLICANT_ROLES }, status: { not: UserStatus.CREATED } },
-				_count: { _all: true }
-			}),
+				// Decision x role for the stat cards, so each card's number and its hover
+				// breakdown come off the same rows. `byDecision` above counts every user, which
+				// puts staff into its null bucket. CREATED is excluded to agree with the funnel.
+				ctx.prisma.user.groupBy({
+					by: ['activeDecision', 'role'],
+					where: { role: { in: APPLICANT_ROLES }, status: { not: UserStatus.CREATED } },
+					_count: { _all: true }
+				}),
 
-			// No actor join: the feed renders the snapshotted `actorName`.
-			showActivity
-				? ctx.prisma.log.findMany({
-						take: 20,
-						orderBy: { timestamp: 'desc' }
-					})
-				: null
-		]);
+				ctx.prisma.team.count(),
+
+				// Members, not the sum of team sizes: the tile's breakdown says how many
+				// people the teams reach.
+				ctx.prisma.user.count({ where: { teamId: { not: null } } }),
+
+				// No actor join: the feed renders the snapshotted `actorName`.
+				showActivity
+					? ctx.prisma.log.findMany({
+							take: 20,
+							orderBy: { timestamp: 'desc' }
+						})
+					: null
+			]);
 
 		const roleCounts: Partial<Record<Role, number>> = {};
 		for (const row of byRole) {
@@ -144,6 +151,7 @@ export const dashboardRouter = router({
 			byDecision: decisionCounts,
 			byRole: roleCounts,
 			applicants,
+			teams: { total: teams, members: teamed },
 			recentActivity
 		};
 	}),
@@ -170,9 +178,9 @@ export const dashboardRouter = router({
 		}),
 
 	/**
-	 * The admissions pipeline: applied, decided, accepted, confirmed, checked in.
+	 * The admissions pipeline: accounts, applied, decided, accepted, confirmed, checked in.
 	 * Not windowed: every stage is present state, and `UserStatus` records where someone
-	 * is, never when they got there. One `groupBy` answers all five stages.
+	 * is, never when they got there. One `groupBy` answers all six stages.
 	 */
 	funnel: portalProcedure.query(async ({ ctx }): Promise<FunnelStage[]> => {
 		const rows = await ctx.prisma.user.groupBy({
@@ -181,6 +189,7 @@ export const dashboardRouter = router({
 			_count: { _all: true }
 		});
 
+		let created = 0;
 		let applied = 0;
 		let decided = 0;
 		let accepted = 0;
@@ -189,6 +198,8 @@ export const dashboardRouter = router({
 
 		for (const row of rows) {
 			const count = row._count._all;
+			// Every row is an account, CREATED included: the stage the rest converts from.
+			created += count;
 			// Nothing submitted yet; counting them makes every conversion look worse.
 			if (row.status === UserStatus.CREATED) continue;
 			applied += count;
@@ -209,12 +220,20 @@ export const dashboardRouter = router({
 
 		return [
 			{
+				key: 'created',
+				label: 'Accounts',
+				hint: 'signed up',
+				count: created,
+				conversion: null,
+				conversionOf: null
+			},
+			{
 				key: 'applied',
 				label: 'Applied',
 				hint: 'submitted an application',
 				count: applied,
-				conversion: null,
-				conversionOf: null
+				conversion: ratio(applied, created),
+				conversionOf: 'of accounts'
 			},
 			{
 				key: 'decided',

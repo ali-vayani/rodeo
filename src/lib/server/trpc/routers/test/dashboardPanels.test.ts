@@ -39,6 +39,7 @@ describe('dashboard.funnel', () => {
 		const stages = await caller.dashboard.funnel();
 		const count = (key: string) => stages.find((s) => s.key === key)?.count;
 
+		expect(count('created')).toBe(70); // every account, CREATED included
 		expect(count('applied')).toBe(30); // 10+5+3+4+6+2, the 40 CREATED excluded
 		expect(count('decided')).toBe(20); // 5+3+4+6+2
 		expect(count('accepted')).toBe(12); // 4+6+2
@@ -54,7 +55,8 @@ describe('dashboard.funnel', () => {
 		] as never);
 
 		const stages = await caller.dashboard.funnel();
-		expect(stages[0].conversion).toBeNull(); // applied has nothing to convert from
+		expect(stages[0].conversion).toBeNull(); // accounts has nothing to convert from
+		expect(stages.find((s) => s.key === 'applied')?.conversion).toBe(1); // 100 of 100 accounts
 		expect(stages.find((s) => s.key === 'decided')?.conversion).toBe(1); // 100/100
 		expect(stages.find((s) => s.key === 'accepted')?.conversion).toBe(0.5); // 50 of 100 decided
 		expect(stages.find((s) => s.key === 'confirmed')?.conversion).toBe(1); // 50 of 50 accepted
@@ -66,7 +68,7 @@ describe('dashboard.funnel', () => {
 
 		const stages = await caller.dashboard.funnel();
 		expect(stages.every((s) => s.count === 0)).toBe(true);
-		expect(stages.map((s) => s.conversion)).toEqual([null, null, null, null, null]);
+		expect(stages.map((s) => s.conversion)).toEqual([null, null, null, null, null, null]);
 	});
 
 	it('is visible to organizers — it names nobody', async () => {
