@@ -1,12 +1,14 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
 	import { fly } from 'svelte/transition';
-	import { beforeNavigate } from '$app/navigation';
 	import { createClient } from '$lib/trpc/client';
 	import { EMAIL_TEMPLATES, type TemplateKey } from '$lib/email/templates';
+	import { pluralize } from '$lib/format';
 	import TemplateEditor from '$lib/components/email/TemplateEditor.svelte';
 	import EmailPreview from '$lib/components/email/EmailPreview.svelte';
 	import Toast from '$lib/components/legacy/Toast.svelte';
+	import UnsavedChangesModal from '$lib/components/admin/UnsavedChangesModal.svelte';
+	import { createUnsavedGuard } from '$lib/admin/unsavedGuard.svelte';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
@@ -51,12 +53,14 @@
 		lastSavedAt?.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) ?? ''
 	);
 
-	beforeNavigate((nav) => {
-		if (!isDirty) return;
-		if (!confirm('You have unsaved template changes. Leave anyway?')) {
-			nav.cancel();
-		}
-	});
+	const guard = createUnsavedGuard(() => isDirty);
+
+	/** `save` reports failure by leaving the drafts dirty, so that is the signal to stay. */
+	async function saveAndLeave() {
+		await save();
+		if (isDirty) guard.dismiss();
+		else guard.proceed();
+	}
 
 	function showToast(message: string, type: 'success' | 'error' = 'success') {
 		clearTimeout(toastTimer);
@@ -209,3 +213,14 @@
 		<Toast message={toast.message} type={toast.type} />
 	</div>
 {/if}
+
+<UnsavedChangesModal
+	open={guard.open}
+	description="{pluralize(dirtyKeys.length, 'template')} {dirtyKeys.length === 1
+		? 'has'
+		: 'have'} unsaved changes. Save them before leaving?"
+	{saving}
+	onSave={saveAndLeave}
+	onDiscard={guard.proceed}
+	onCancel={guard.dismiss}
+/>

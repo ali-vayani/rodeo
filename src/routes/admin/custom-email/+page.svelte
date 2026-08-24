@@ -1,6 +1,5 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
-	import { beforeNavigate } from '$app/navigation';
 	import { createClient } from '$lib/trpc/client';
 	import {
 		ALL_ROLES,
@@ -14,6 +13,8 @@
 	import type { FacetState } from '$lib/facets';
 	import RecipientFilter from '$lib/components/email/RecipientFilter.svelte';
 	import RecipientListModal from '$lib/components/email/RecipientListModal.svelte';
+	import UnsavedChangesModal from '$lib/components/admin/UnsavedChangesModal.svelte';
+	import { createUnsavedGuard } from '$lib/admin/unsavedGuard.svelte';
 	import TemplateEditor from '$lib/components/email/TemplateEditor.svelte';
 	import EmailPreview, { type PreviewAs } from '$lib/components/email/EmailPreview.svelte';
 	import { NAME_FALLBACK, SAMPLE_VARS } from '$lib/email/variables';
@@ -153,10 +154,9 @@
 		onNext: () => (previewCursor += 1)
 	});
 
-	beforeNavigate((nav) => {
-		if (!isDirty || sending) return;
-		if (!confirm('You have an unsent draft. Leave anyway?')) nav.cancel();
-	});
+	// A draft here has nowhere to be saved to — it is composed and sent, or discarded —
+	// so the modal offers no save action.
+	const guard = createUnsavedGuard(() => isDirty && !sending);
 
 	/** Re-count against the same predicate the send will use. */
 	async function refreshCount() {
@@ -341,4 +341,13 @@
 	total={count ?? 0}
 	externalEmails={sendExternal ? externalEmails : []}
 	onClose={() => (listOpen = false)}
+/>
+
+<UnsavedChangesModal
+	open={guard.open}
+	title="Unsent draft"
+	description="This email has not been sent. Leaving discards what you have written."
+	discardLabel="Discard draft"
+	onDiscard={guard.proceed}
+	onCancel={guard.dismiss}
 />

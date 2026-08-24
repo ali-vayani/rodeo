@@ -6,9 +6,11 @@
 	import QuestionEditor from '$lib/components/admin/applications/QuestionEditor.svelte';
 	import PreviewPane from '$lib/components/admin/applications/PreviewPane.svelte';
 	import ConfirmationModal from '$lib/components/admin/applications/ConfirmationModal.svelte';
+	import UnsavedChangesModal from '$lib/components/admin/UnsavedChangesModal.svelte';
+	import { createUnsavedGuard } from '$lib/admin/unsavedGuard.svelte';
 	import { Combobox } from '$lib/components/ui';
 
-	import type { QuestionType, Question, Role } from '$lib/generated/prisma/client';
+	import type { Question, Role } from '$lib/generated/prisma/client';
 
 	interface Props {
 		data: PageData;
@@ -40,11 +42,6 @@
 	let editorOpen = $state(false);
 	let editingQuestion = $state<Question | null>(null);
 	let confirmOpen = $state(false);
-
-	let addTitle = $state('');
-	let addType = $state<QuestionType>('SHORT_TEXT');
-	/** What the Add Question form was carrying when it opened the editor. */
-	let addSeed = $state<{ title: string; type: QuestionType } | null>(null);
 
 	let toastMsg = $state('');
 	let toastKind = $state<'success' | 'error'>('success');
@@ -113,16 +110,17 @@
 			pendingChanges.reordered.length > 0
 	);
 
-	$effect(() => {
-		const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-			if (isDirty) {
-				e.preventDefault();
-				e.returnValue = '';
-			}
-		};
-		window.addEventListener('beforeunload', handleBeforeUnload);
-		return () => window.removeEventListener('beforeunload', handleBeforeUnload);
-	});
+	// Covers the tab close the old `beforeunload` listener covered, and in-app navigation
+	// it did not: leaving for another admin page silently threw the edits away.
+	const guard = createUnsavedGuard(() => isDirty);
+
+	/** Set while a save is running so the navigation can resume once it lands. */
+	let leaveAfterSave = $state(false);
+
+	function saveAndLeave() {
+		leaveAfterSave = true;
+		(document.getElementById('save-form') as HTMLFormElement)?.requestSubmit();
+	}
 
 	// -- Reordering --------------------------------------------------------------
 	// The list renders `filteredQuestions`, so a row's visible index is NOT its index in
@@ -264,7 +262,11 @@
 			options: [...(q.options ?? [])],
 			targetRole: [...(q.targetRole ?? [])]
 		};
-		addSeed = null;
+		editorOpen = true;
+	}
+
+	function openAdd() {
+		editingQuestion = null;
 		editorOpen = true;
 	}
 
@@ -286,13 +288,9 @@
 					...partial
 				} as Question
 			];
-			// Only now: a cancelled add should leave what was typed in place.
-			addTitle = '';
-			addType = 'SHORT_TEXT';
 		}
 		editorOpen = false;
 		editingQuestion = null;
-		addSeed = null;
 	}
 
 	function deleteQuestion(id: string | undefined) {
@@ -300,20 +298,6 @@
 		// No `order` rewrite here either: renumbering the survivors made every remaining row
 		// look edited, and removing one row leaves the rest in the same relative sequence.
 		workingQuestions = workingQuestions.filter((q) => q.id !== id);
-	}
-
-	/**
-	 * Hand the typed title and type to the editor rather than adding straight to the list.
-	 *
-	 * Appending directly meant a Dropdown arrived with zero options, and the only way to
-	 * give it any was to add it, find the row and press Edit. Routing through the editor
-	 * also means new questions face the same validation as edited ones.
-	 */
-	function handleQuickAdd() {
-		if (!addTitle.trim()) return;
-		addSeed = { title: addTitle.trim(), type: addType };
-		editingQuestion = null;
-		editorOpen = true;
 	}
 
 	function handleSaveClick() {
@@ -329,16 +313,6 @@
 			reordered: pendingChanges.reordered
 		})
 	);
-
-	const QUESTION_TYPES: { value: QuestionType; label: string }[] = [
-		{ value: 'SHORT_TEXT', label: 'Short Text' },
-		{ value: 'LONG_TEXT', label: 'Long Text' },
-		{ value: 'MULTIPLE_CHOICE', label: 'Multiple Choice' },
-		{ value: 'DROPDOWN', label: 'Dropdown' },
-		{ value: 'NUMBER', label: 'Number' },
-		{ value: 'CHECKBOX', label: 'Checkbox' },
-		{ value: 'FILE', label: 'File Upload' }
-	];
 </script>
 
 <div class="mx-auto flex min-h-screen max-w-[1200px] flex-col gap-5 py-2 md:px-8 md:py-7">
@@ -426,51 +400,34 @@
 				</div>
 			{/if}
 
-			<div class="mt-1 overflow-hidden rounded-[10px] border border-[#e0e0e0] bg-white">
-				<div
-					class="flex items-center gap-[7px] border-b border-[#e0e0e0] bg-[#f4f4f4] px-3.5 py-2.5 text-xs font-bold tracking-[0.01em] text-[#444]"
+			<!--
+				One button, not a title field and a type picker.
+
+				The inline form asked for a title and a type and then opened the editor anyway,
+				which meant the two controls on screen described a fraction of what a question
+				needs — a Dropdown still had no options, nothing had a target role. The editor
+				asks for all of it in one place, so the entry point is just the way in.
+			-->
+			<button
+				type="button"
+				onclick={openAdd}
+				class="mt-1 flex w-full cursor-pointer items-center justify-center gap-[7px] rounded-[10px] border border-dashed border-[#d0d0d0] bg-white px-3.5 py-3 text-[13px] font-semibold text-[#444] transition-colors duration-[120ms] hover:border-[#191919] hover:text-[#191919]"
+			>
+				<svg
+					width="13"
+					height="13"
+					viewBox="0 0 24 24"
+					fill="none"
+					stroke="currentColor"
+					stroke-width="2.5"
+					stroke-linecap="round"
+					stroke-linejoin="round"
 				>
-					<svg
-						width="13"
-						height="13"
-						viewBox="0 0 24 24"
-						fill="none"
-						stroke="currentColor"
-						stroke-width="2.5"
-						stroke-linecap="round"
-						stroke-linejoin="round"
-					>
-						<line x1="12" y1="5" x2="12" y2="19"></line>
-						<line x1="5" y1="12" x2="19" y2="12"></line>
-					</svg>
-					Add Question
-				</div>
-				<div class="flex flex-col gap-2 p-3.5">
-					<input
-						type="text"
-						bind:value={addTitle}
-						placeholder="Question title…"
-						onkeydown={(e) => e.key === 'Enter' && handleQuickAdd()}
-						class="box-border w-full rounded-md border border-[#e0e0e0] bg-white px-2.5 py-2 text-[13px] text-[#191919] transition-[border-color,box-shadow] duration-[120ms] outline-none focus:border-[#191919] focus:shadow-[0_0_0_2px_rgba(25,25,25,0.07)]"
-					/>
-					<div class="flex gap-2">
-						<Combobox
-							options={QUESTION_TYPES}
-							value={addType}
-							onChange={(next) => (addType = next as QuestionType)}
-							ariaLabel="New question type"
-							class="flex-1"
-						/>
-						<button
-							class="cursor-pointer rounded-md border border-[#191919] bg-[#191919] px-5 py-2 text-[13px] font-semibold whitespace-nowrap text-white transition-colors duration-[120ms] hover:bg-[#333] disabled:cursor-not-allowed disabled:opacity-35"
-							onclick={handleQuickAdd}
-							disabled={!addTitle.trim()}
-						>
-							Add
-						</button>
-					</div>
-				</div>
-			</div>
+					<line x1="12" y1="5" x2="12" y2="19"></line>
+					<line x1="5" y1="12" x2="19" y2="12"></line>
+				</svg>
+				Add Question
+			</button>
 		</div>
 
 		<div class="lg:sticky lg:top-5 lg:h-[calc(100vh-120px)]">
@@ -491,6 +448,13 @@
 				await invalidateAll();
 			}
 			await update({ reset: false });
+			// A failed save keeps them here with the error toast rather than carrying the
+			// held navigation through with the changes still unsaved.
+			if (leaveAfterSave) {
+				leaveAfterSave = false;
+				if (result.type === 'success') guard.proceed();
+				else guard.dismiss();
+			}
 		};
 	}}
 	id="save-form"
@@ -501,7 +465,6 @@
 
 <QuestionEditor
 	question={editingQuestion}
-	seed={addSeed}
 	isOpen={editorOpen}
 	onSave={handleEditorSave}
 	onCancel={() => {
@@ -562,6 +525,15 @@
 		{toastMsg}
 	</div>
 {/if}
+
+<UnsavedChangesModal
+	open={guard.open}
+	description="The question list has unsaved changes. Save them before leaving?"
+	saving={isSaving}
+	onSave={saveAndLeave}
+	onDiscard={guard.proceed}
+	onCancel={guard.dismiss}
+/>
 
 <style>
 	@keyframes slideUp {

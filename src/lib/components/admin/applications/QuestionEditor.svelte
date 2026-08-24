@@ -14,17 +14,12 @@
 
 	interface Props {
 		question: Question | null;
-		/**
-		 * Title and type carried over from the Add Question form. New questions only.
-		 * Seeding `type` shows the type-dependent sections immediately.
-		 */
-		seed?: { title: string; type: QuestionType } | null;
 		isOpen: boolean;
 		onSave: (question: Partial<Question>) => void;
 		onCancel: () => void;
 	}
 
-	let { question, seed = null, isOpen, onSave, onCancel }: Props = $props();
+	let { question, isOpen, onSave, onCancel }: Props = $props();
 
 	const QUESTION_TYPES: { value: QuestionType; label: string }[] = [
 		{ value: 'SHORT_TEXT', label: 'Short Text' },
@@ -89,8 +84,8 @@
 				linkedField = question.linkedField ?? '';
 				optionPreset = question.optionPreset;
 			} else {
-				title = seed?.title ?? '';
-				type = seed?.type ?? 'SHORT_TEXT';
+				title = '';
+				type = 'SHORT_TEXT';
 				required = false;
 				targetRole = [];
 				placeholder = '';
