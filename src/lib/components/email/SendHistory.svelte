@@ -5,9 +5,23 @@
 		body: string;
 		userIds: string[];
 		sentAt: Date;
+		failed: string[];
+		errors: unknown;
 	};
 
 	let { logs }: { logs: LogRow[] } = $props();
+
+	/** Distinct failure reasons with counts, biggest first, for the cell tooltip. */
+	function failureReasons(log: LogRow): string {
+		const counts = new Map<string, number>();
+		for (const message of Object.values((log.errors ?? {}) as Record<string, string>)) {
+			counts.set(message, (counts.get(message) ?? 0) + 1);
+		}
+		return [...counts]
+			.sort((a, b) => b[1] - a[1])
+			.map(([message, count]) => `${count}× ${message}`)
+			.join('\n');
+	}
 </script>
 
 <div class="rounded-md border border-border bg-card">
@@ -42,6 +56,11 @@
 							Recipients
 						</th>
 						<th
+							class="w-24 px-4 py-2 font-mono text-2xs font-medium tracking-eyebrow text-foreground-tertiary uppercase"
+						>
+							Failed
+						</th>
+						<th
 							class="w-48 px-4 py-2 font-mono text-2xs font-medium tracking-eyebrow text-foreground-tertiary uppercase"
 						>
 							Sent
@@ -55,6 +74,17 @@
 								{log.subject}
 							</td>
 							<td class="px-4 py-2 font-mono text-sm text-foreground">{log.userIds.length}</td>
+							{#if log.failed.length > 0}
+								<!-- Hover for the why: distinct error messages with counts. -->
+								<td
+									class="cursor-help px-4 py-2 font-mono text-sm text-destructive"
+									title={failureReasons(log)}
+								>
+									{log.failed.length}
+								</td>
+							{:else}
+								<td class="px-4 py-2 font-mono text-sm text-foreground-tertiary">—</td>
+							{/if}
 							<td class="px-4 py-2 font-mono text-sm text-foreground-secondary">
 								{new Date(log.sentAt).toLocaleString()}
 							</td>

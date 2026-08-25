@@ -310,9 +310,17 @@ export const emailRouter = router({
 				});
 			} catch (error) {
 				const message = error instanceof Error ? error.message : String(error);
+				// The return value below reaches only the browser tab driving the send, so this
+				// line is the one place the failure lands somewhere an operator can grep.
+				console.error(`[email] send ${log.id} to ${input.recipient} failed: ${message}`);
 				await ctx.prisma.emailLog.update({
 					where: { id: log.id },
-					data: log.failed.includes(input.recipient) ? {} : { failed: { push: input.recipient } }
+					data: {
+						...(log.failed.includes(input.recipient) ? {} : { failed: { push: input.recipient } }),
+						// Whole-object write, not a path update: the page sends one recipient at a
+						// time, so the row read above is current.
+						errors: { ...(log.errors as Record<string, string>), [input.recipient]: message }
+					}
 				});
 				return {
 					ok: false,
@@ -329,9 +337,16 @@ export const emailRouter = router({
 				data: {
 					sent: { push: input.recipient },
 					// Clears an earlier attempt, so a recipient who failed and then succeeded is
-					// not counted in both columns.
+					// not counted in both columns — nor blamed for an error that got retried away.
 					...(log.failed.includes(input.recipient)
-						? { failed: { set: log.failed.filter((r) => r !== input.recipient) } }
+						? {
+								failed: { set: log.failed.filter((r) => r !== input.recipient) },
+								errors: Object.fromEntries(
+									Object.entries(log.errors as Record<string, string>).filter(
+										([r]) => r !== input.recipient
+									)
+								)
+							}
 						: {})
 				}
 			});
@@ -361,17 +376,42 @@ export const emailRouter = router({
 			const failed = log.failed.length;
 			const total = log.userIds.length;
 
+			// One line per distinct error, biggest group first, so 475 identical quota
+			// rejections read as one reason rather than 475.
+			const counts = new Map<string, number>();
+			for (const message of Object.values(log.errors as Record<string, string>)) {
+				counts.set(message, (counts.get(message) ?? 0) + 1);
+			}
+			const failures = [...counts]
+				.map(([message, count]) => ({ message, count }))
+				.sort((a, b) => b.count - a.count);
+
+			// The audit entry is where an admin looks first, so the "why" belongs in the
+			// summary itself. Capped at three reasons to keep a poisoned list readable.
+			const shown = failures.slice(0, 3).map((f) => `${f.count}× ${f.message}`);
+			const reasons =
+				shown.length > 0
+					? ` (${shown.join('; ')}${failures.length > 3 ? `; and ${failures.length - 3} more` : ''})`
+					: '';
+
 			await logAction(ctx, {
 				action: 'email.custom.send',
 				summary:
 					`Sent a custom email "${log.subject}" to ${sent} of ${total} ` +
 					`${total === 1 ? 'recipient' : 'recipients'}` +
-					(failed > 0 ? ` — ${failed} failed to send` : ''),
+					(failed > 0 ? ` — ${failed} failed to send${reasons}` : ''),
 				target: { id: log.id, label: log.subject },
-				metadata: { recipients: total, sent, failed, subject: log.subject }
+				metadata: {
+					recipients: total,
+					sent,
+					failed,
+					// Flattened for LogMetadata; the summary shows the top three, this holds all.
+					failures: failures.map((f) => `${f.count}× ${f.message}`),
+					subject: log.subject
+				}
 			});
 
-			return { sent, failed, total };
+			return { sent, failed, total, failures };
 		}),
 
 	/**
