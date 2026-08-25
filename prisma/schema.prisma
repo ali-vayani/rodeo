@@ -192,9 +192,11 @@ model Question {
 
   optionPreset OptionPreset?
 
-  /// MULTI_SELECT only: offer an "Other" box alongside the options. The typed answer is
-  /// stored as an ordinary member of the answer set, so it needs no separate column —
-  /// it is simply the one member that isn't in `options`.
+  /// Offer an "Other" box alongside the options, on MULTI_SELECT and MULTIPLE_CHOICE
+  /// and DROPDOWN. The typed answer is stored in place of an option, so it needs no
+  /// separate column — on a multi-select it is simply the one member of the set that
+  /// isn't in `options`. A preset already takes write-ins without it; see
+  /// `acceptsWriteIn`.
   allowOther  Boolean             @default(false)
 
   responses   ApplicationResponse[]

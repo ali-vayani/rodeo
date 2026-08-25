@@ -10,6 +10,9 @@ import type { OptionPreset, Question, QuestionType } from '$lib/generated/prisma
 /** The shape any of the four callers can supply: their selects differ, this doesn't. */
 type OptionBearing = Pick<Question, 'type' | 'optionPreset'>;
 
+/** Plus the write-in opt-in, which only `acceptsWriteIn` and its callers need. */
+type WriteInBearing = OptionBearing & Pick<Question, 'allowOther'>;
+
 /**
  * Question types whose answer is exactly one of a fixed set rather than free text.
  *
@@ -34,14 +37,19 @@ export function hasPresetOptions(question: OptionBearing): boolean {
 }
 
 /**
- * A preset-backed question takes answers that are not in its list.
+ * The question takes answers that are not in its list.
  *
- * The university preset is 6,447 institutions, which is not every institution, so
- * rejecting a write-in would block an applicant over a gap in a third-party dataset.
- * Hand-authored `options` stay strict.
+ * True for a preset: the university preset is 6,447 institutions, which is not every
+ * institution, so rejecting a write-in would block an applicant over a gap in a
+ * third-party dataset. Otherwise only when the organizer asked for it with
+ * `allowOther`, which is what renders the "Other" row. Hand-authored options stay
+ * strict by default — four typed choices usually mean exactly those four.
  */
-export function acceptsWriteIn(question: OptionBearing): boolean {
-	return hasPresetOptions(question);
+export function acceptsWriteIn(question: WriteInBearing): boolean {
+	if (hasPresetOptions(question)) return true;
+	// `=== true` rather than truthiness: a caller with a narrower select leaves the
+	// column `undefined`, and the safe reading of "don't know" is the strict one.
+	return question.allowOther === true && isOptionsType(question.type);
 }
 
 /** Presets that resolve to a bundled list. Keyed by the Prisma enum. */

@@ -995,6 +995,7 @@ describe('application.save — preset-backed questions', () => {
 		type: QuestionType.DROPDOWN,
 		options: [],
 		optionPreset: 'UNIVERSITIES_NA',
+		allowOther: false,
 		min: null,
 		max: null,
 		regex: null
@@ -1037,6 +1038,26 @@ describe('application.save — preset-backed questions', () => {
 			caller.application.save({ questionId: 'q-1', value: 'COBOL' })
 		).rejects.toMatchObject({ code: 'BAD_REQUEST' });
 		expect(db.applicationResponse.upsert).not.toHaveBeenCalled();
+	});
+
+	it('accepts an off-list answer once the question opts into "Other"', async () => {
+		// The renderer's "Other" row saves free text through the same field, so the flag has
+		// to move the server's membership check too — otherwise the box refuses everything
+		// typed into it.
+		const caller = createTestCaller(db, hackerUser);
+		openApplication();
+		db.question.findUnique.mockResolvedValue({
+			...presetQuestion,
+			linkedField: null,
+			type: QuestionType.MULTIPLE_CHOICE,
+			options: ['Rust', 'Go'],
+			optionPreset: null,
+			allowOther: true
+		} as never);
+
+		await caller.application.save({ questionId: 'q-1', value: 'COBOL' });
+
+		expect(db.applicationResponse.upsert).toHaveBeenCalled();
 	});
 
 	it('writes a linked answer to the column the enum names, not to the enum member', async () => {

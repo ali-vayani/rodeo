@@ -258,7 +258,10 @@ export const questions = [
 		type: QuestionType.MULTIPLE_CHOICE,
 		required: true,
 		targetRole: [Role.JUDGE],
-		options: ['Software Engineering', 'Design / UX', 'Product', 'Data / ML', 'Hardware', 'Other'],
+		options: ['Software Engineering', 'Design / UX', 'Product', 'Data / ML', 'Hardware'],
+		// The list used to end in a literal 'Other', which saved the word "Other" as the
+		// answer. The flag saves what the judge actually typed.
+		allowOther: true,
 		order: 31
 	},
 

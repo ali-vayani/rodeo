@@ -49,12 +49,39 @@ describe('acceptsWriteIn', () => {
 	it('lets a preset-backed question take an answer outside its list', () => {
 		// The university preset is 6,447 institutions, which is not all of them. Rejecting
 		// the rest would hard-block those applicants over a gap in a third-party dataset.
-		expect(acceptsWriteIn({ type: 'DROPDOWN', optionPreset: 'UNIVERSITIES_NA' })).toBe(true);
+		expect(
+			acceptsWriteIn({ type: 'DROPDOWN', optionPreset: 'UNIVERSITIES_NA', allowOther: false })
+		).toBe(true);
 	});
 
 	it('keeps a hand-authored list strict', () => {
 		// An organizer who typed four choices meant exactly those four.
-		expect(acceptsWriteIn({ type: 'DROPDOWN', optionPreset: null })).toBe(false);
-		expect(acceptsWriteIn({ type: 'DROPDOWN', optionPreset: null })).toBe(false);
+		expect(acceptsWriteIn({ type: 'DROPDOWN', optionPreset: null, allowOther: false })).toBe(false);
+		expect(acceptsWriteIn({ type: 'MULTIPLE_CHOICE', optionPreset: null, allowOther: false })).toBe(
+			false
+		);
+	});
+
+	it('opens a hand-authored list once the organizer ticks Other', () => {
+		// The "Other" row writes free text into the same answer, so the server has to take it.
+		expect(acceptsWriteIn({ type: 'MULTIPLE_CHOICE', optionPreset: null, allowOther: true })).toBe(
+			true
+		);
+		expect(acceptsWriteIn({ type: 'DROPDOWN', optionPreset: null, allowOther: true })).toBe(true);
+	});
+
+	it('ignores the flag on a question with no options to be other than', () => {
+		// Switching a multiple choice to Short Text leaves the column set until the editor
+		// saves. Until then it must not turn the membership check off for a type that has
+		// no list — the same stranding `hasPresetOptions` guards against.
+		expect(acceptsWriteIn({ type: 'SHORT_TEXT', optionPreset: null, allowOther: true })).toBe(
+			false
+		);
+	});
+
+	it('treats a missing column as strict, not as a write-in', () => {
+		// A caller with a narrower select leaves the field `undefined`. Reading that as
+		// "Other is on" would wave every off-list answer through.
+		expect(acceptsWriteIn({ type: 'MULTIPLE_CHOICE', optionPreset: null } as never)).toBe(false);
 	});
 });

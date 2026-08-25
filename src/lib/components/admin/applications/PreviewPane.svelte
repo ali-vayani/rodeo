@@ -84,6 +84,7 @@
 									{OPTION_PRESET_LABEL[q.optionPreset]} · answers outside the list are accepted
 								{:else if q.options.length > 0}
 									Searchable · {q.options.length} option{q.options.length === 1 ? '' : 's'}
+									{#if q.allowOther}· write-ins accepted{/if}
 								{:else}
 									No options defined yet
 								{/if}
@@ -118,6 +119,12 @@
 										<span>{opt}</span>
 									</label>
 								{/each}
+								{#if q.allowOther}
+									<label class="radio-label">
+										<input type="radio" name="preview-{q.id || i}" disabled />
+										<span>Other</span>
+									</label>
+								{/if}
 								{#if q.options.length === 0}
 									<p class="field-hint no-opts">No options defined yet</p>
 								{/if}

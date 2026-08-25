@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { untrack } from 'svelte';
 	import { QuestionType } from '$lib/generated/prisma/enums';
 	import type { QuestionModel } from '$lib/generated/prisma/models/Question';
 	import { Combobox } from '$lib/components/ui';
@@ -6,7 +7,7 @@
 	import { UPLOAD_ACCEPT } from '$lib/application/files';
 	import type { ComboboxOption } from '$lib/components/ui/types';
 	import { loadPresetOptions } from '$lib/questions/presetOptions';
-	import { hasPresetOptions } from '$lib/questions/options';
+	import { acceptsWriteIn, hasPresetOptions } from '$lib/questions/options';
 	import { decodeMultiSelect, encodeMultiSelect, splitWriteIn } from '$lib/questions/multiSelect';
 
 	interface Props {
@@ -93,6 +94,19 @@
 		// an answer nobody can see ends up in the export.
 		if (!otherOpen) emit(answer.selected, null);
 	}
+
+	/**
+	 * MULTIPLE_CHOICE only: whether "Other" is the radio that's picked. A single-select
+	 * answer is one string, so unlike the multi-select above there is nothing to take
+	 * apart — the write-in simply is the answer.
+	 *
+	 * Initialised from that answer, so a saved write-in reopens as a write-in, then left
+	 * alone. As a `$derived` an empty box would snap back to the list the moment the
+	 * applicant cleared it. Same shape as `Combobox`'s `custom`.
+	 */
+	let otherPicked = $state(
+		untrack(() => question.allowOther && value !== '' && !question.options.includes(value))
+	);
 </script>
 
 <div class="flex flex-col gap-2">
@@ -176,14 +190,56 @@
 						type="radio"
 						name={question.id}
 						value={option}
-						checked={value === option}
+						checked={!otherPicked && value === option}
 						{disabled}
-						onchange={() => onchange(option)}
+						onchange={() => {
+							otherPicked = false;
+							onchange(option);
+						}}
 						class="accent-brand-purple"
 					/>
 					{option}
 				</label>
 			{/each}
+			{#if question.allowOther}
+				<label
+					class="flex items-center gap-2 text-md text-foreground {disabled
+						? 'cursor-not-allowed text-muted-foreground'
+						: 'cursor-pointer'}"
+				>
+					<!-- Picking Other clears the answer rather than carrying the last option into
+					     the box: the box is what gets stored, and a prefilled one would save a
+					     choice the applicant has just moved away from. -->
+					<input
+						type="radio"
+						name={question.id}
+						checked={otherPicked}
+						{disabled}
+						onchange={() => {
+							otherPicked = true;
+							onchange('');
+						}}
+						class="accent-brand-purple"
+					/>
+					Other
+				</label>
+				{#if otherPicked}
+					<!-- Indented on a wrapper so the input keeps its own full width. -->
+					<div class="pl-6">
+						<!-- Saved on blur, not per keystroke, for the same reason as the multi-select
+						     box below: a half-typed write-in is a value the facet list would offer. -->
+						<input
+							type="text"
+							class={inputClass}
+							placeholder="Please specify"
+							aria-label="{question.title} — other"
+							{value}
+							{disabled}
+							onchange={(e) => onchange((e.target as HTMLInputElement).value)}
+						/>
+					</div>
+				{/if}
+			{/if}
 		</div>
 	{:else if question.type === QuestionType.MULTI_SELECT}
 		<div class="flex flex-col gap-2">
@@ -242,9 +298,9 @@
 					Every dropdown is searchable, whether it holds six options or 6,447. A type-ahead
 					over six costs nothing; a plain `<select>` over 6,447 is unusable.
 
-					`allowCustom` only for a preset-backed question, matching `acceptsWriteIn` on the
-					server: a preset is a vocabulary the applicant may step outside of, while
-					hand-authored options are the four choices an organizer meant.
+					`allowCustom` matches `acceptsWriteIn` on the server: a preset is a vocabulary
+					the applicant may step outside of, and a hand-authored list only when the
+					organizer ticked "Other".
 				-->
 		{#await choices}
 			<div class={inputClass}>Loading options…</div>
@@ -256,7 +312,7 @@
 				class="rounded-none"
 				ariaLabel={question.title}
 				placeholder={question.placeholder ?? 'Search…'}
-				allowCustom={hasPresetOptions(question)}
+				allowCustom={acceptsWriteIn(question)}
 				customLabel="Not listed — enter it myself"
 				onChange={onchange}
 			/>

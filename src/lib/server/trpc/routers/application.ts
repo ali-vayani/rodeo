@@ -118,8 +118,8 @@ function assertAnswerValid(question: AnswerableQuestion, value: string) {
 		}
 	}
 
-	// Single-select answers must be one of the offered options — unless the choices came
-	// from a preset, which is a vocabulary rather than a constraint. See `acceptsWriteIn`.
+	// Single-select answers must be one of the offered options — unless the question
+	// takes write-ins, either from a preset or from `allowOther`. See `acceptsWriteIn`.
 	if (
 		isOptionsType(question.type) &&
 		!acceptsWriteIn(question) &&

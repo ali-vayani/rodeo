@@ -117,9 +117,10 @@
 	const showPreset = $derived(isPresetable && optionPreset !== null);
 	// Hidden rather than disabled under a preset: 6,447 read-only inputs is not a form.
 	const showOptions = $derived(isOptions && !showPreset);
-	// Multi-select only. A radio group or a dropdown that accepted a write-in would need
-	// its own control for the typed value, which is a different feature than this one.
-	const showAllowOther = $derived(type === 'MULTI_SELECT');
+	// Any hand-authored list, whatever the control. Not under a preset: that already
+	// accepts answers outside its list, so an Other box would be a second write-in
+	// control for the same answer.
+	const showAllowOther = $derived(showOptions);
 	const showMinMax = $derived(type === 'NUMBER');
 	// The types with no single input to put hint text in.
 	const showPlaceholder = $derived(
@@ -419,7 +420,7 @@
 							<span>Offer an "Other" box</span>
 						</label>
 						<p class="field-note">
-							Applicants can tick Other and type an answer that isn't on the list. It is stored like
+							Applicants can pick Other and type an answer that isn't on the list. It is stored like
 							any other choice, and shows up in the filters beside them.
 						</p>
 					</div>
