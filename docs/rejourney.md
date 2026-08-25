@@ -28,6 +28,20 @@ starts recording. Identity follows the session: `setUserIdentity(uid)` when sign
 `clearUserIdentity()` when signed out. The SDK queues identity calls made before init
 finishes, so there is no ordering hazard between the `$effect` and `onMount`.
 
+## Replay CSS needs CORS
+
+Normally the recorder inlines our stylesheets into the snapshot, so replays are
+self-contained. But when a visitor's browser privacy tooling blocks CSSOM access,
+rrweb falls back to recording the `<link href>` alone, and Rejourney's replayer
+must fetch that CSS from our site cross-origin — which fails without CORS and
+plays back an unstyled page. `vercel.json` therefore serves `/_app/immutable/*`
+(hashed public assets, nothing sensitive) with `Access-Control-Allow-Origin: *`.
+Confirmed with Rejourney: this is the intended fix, common to all replay tools.
+
+One inherent leftover: those fallback sessions reference the deploy's hashed CSS
+files, so after enough redeploys an old session's CSS can 404 and replay unstyled
+anyway. Only affects the privacy-tooling minority; nothing to do about it.
+
 ## Privacy defaults
 
 SDK defaults we are relying on (see `DEFAULT_WEB_CONFIG` in the package):
