@@ -266,6 +266,7 @@ describe('filters.facets — questions that write no User column', () => {
 		[QuestionType.DROPDOWN, 'select'],
 		[QuestionType.MULTIPLE_CHOICE, 'select'],
 		[QuestionType.CHECKBOX, 'select'],
+		[QuestionType.MULTI_SELECT, 'select'],
 		[QuestionType.NUMBER, 'range'],
 		[QuestionType.SHORT_TEXT, 'search']
 	])('renders %s as %s', async (type, control) => {
@@ -311,6 +312,42 @@ describe('filters.facets — questions that write no User column', () => {
 			{ value: 'true', label: 'Yes', count: 5 },
 			{ value: 'false', label: 'No', count: 7 }
 		]);
+	});
+
+	it('counts a multi-select answer against every option it holds', async () => {
+		// `groupBy` buckets these rows by the whole encoded set, so left alone the facet
+		// would offer '["None","Vegan"]' as a filter value and report every real option
+		// as held by nobody.
+		db.question.findMany.mockResolvedValue([
+			{ ...dropdown, type: QuestionType.MULTI_SELECT }
+		] as never);
+		mockGroupBy(db.applicationResponse.groupBy).mockResolvedValue([
+			answerRow('q-diet', '["Vegetarian","Vegan"]', 4),
+			answerRow('q-diet', '["Vegan"]', 3)
+		]);
+
+		const [facet] = await createTestCaller(db, adminUser).filters.facets();
+		expect(facet.options).toEqual([
+			{ value: 'None', count: 0 },
+			{ value: 'Vegetarian', count: 4 },
+			// Both sets contain it, so the counts add rather than overwrite each other.
+			{ value: 'Vegan', count: 7 }
+		]);
+	});
+
+	it('counts a multi-select respondent once toward the answered tally', async () => {
+		// The option counts deliberately sum past the number of people. `noneCount` must
+		// not, or picking three boxes would drive "no answer" negative.
+		db.user.count.mockResolvedValue(10);
+		db.question.findMany.mockResolvedValue([
+			{ ...dropdown, type: QuestionType.MULTI_SELECT }
+		] as never);
+		mockGroupBy(db.applicationResponse.groupBy).mockResolvedValue([
+			answerRow('q-diet', '["None","Vegetarian","Vegan"]', 6)
+		]);
+
+		const [facet] = await createTestCaller(db, adminUser).filters.facets();
+		expect(facet.noneCount).toBe(4);
 	});
 
 	it('captions a numeric range with the extent of the answers', async () => {

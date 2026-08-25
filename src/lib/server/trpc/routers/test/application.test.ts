@@ -715,6 +715,33 @@ describe('application.submit', () => {
 		expect(db.user.updateMany).not.toHaveBeenCalled();
 	});
 
+	it('treats an uninterpretable required multi-select as unanswered', async () => {
+		// A blank is already caught by the generic check. This is the row left behind when
+		// a question is switched to MULTI_SELECT: non-blank, so the old rule counted it,
+		// but it decodes to nothing and shows the applicant an empty group of boxes.
+		const caller = createTestCaller(db, hackerUser);
+		db.user.findUniqueOrThrow.mockResolvedValue(hackerUser as never);
+		db.settings.findFirst.mockResolvedValue(openWindow);
+		db.question.findMany.mockResolvedValue([
+			{ ...requiredCheckbox, title: 'Tracks', type: QuestionType.MULTI_SELECT }
+		] as never);
+		db.applicationResponse.findMany.mockResolvedValue([
+			{
+				id: 'resp-1',
+				userId: hackerUser.uid,
+				questionId: 'q-consent',
+				value: 'Web',
+				createdAt: new Date('2024-01-01')
+			}
+		] as never);
+
+		await expect(caller.application.submit()).rejects.toMatchObject({
+			code: 'BAD_REQUEST',
+			message: expect.stringContaining('Tracks')
+		});
+		expect(db.user.updateMany).not.toHaveBeenCalled();
+	});
+
 	it('accepts a ticked required checkbox', async () => {
 		const caller = createTestCaller(db, hackerUser);
 		db.user.findUniqueOrThrow
@@ -846,6 +873,108 @@ describe('application.submit', () => {
 			// No settings row means no check-in block, so nothing to attach.
 			[]
 		);
+	});
+});
+
+describe('application.save — multi-select questions', () => {
+	const multiQuestion = {
+		linkedField: null,
+		targetRole: [],
+		type: QuestionType.MULTI_SELECT,
+		options: ['Rust', 'Go', 'Zig'],
+		optionPreset: null,
+		allowOther: false,
+		min: null,
+		max: null,
+		regex: null
+	};
+
+	function openApplication() {
+		db.user.findUniqueOrThrow.mockResolvedValue(hackerUser as never);
+		db.settings.findFirst.mockResolvedValue(openWindow);
+		db.applicationResponse.upsert.mockResolvedValue(response as never);
+		db.question.findUnique.mockResolvedValue(multiQuestion as never);
+	}
+
+	it('accepts a set drawn from the offered options', async () => {
+		const caller = createTestCaller(db, hackerUser);
+		openApplication();
+
+		await caller.application.save({ questionId: 'q-1', value: '["Rust","Zig"]' });
+
+		expect(db.applicationResponse.upsert).toHaveBeenCalledWith(
+			expect.objectContaining({ update: { value: '["Rust","Zig"]' } })
+		);
+	});
+
+	it('rejects a set containing an option the question does not offer', async () => {
+		// The same rule the single-select branch enforces. A direct tRPC call bypasses the
+		// checkbox group, so "one of the choices" has to hold per member, not per answer.
+		const caller = createTestCaller(db, hackerUser);
+		openApplication();
+
+		await expect(
+			caller.application.save({ questionId: 'q-1', value: '["Rust","COBOL"]' })
+		).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+		expect(db.applicationResponse.upsert).not.toHaveBeenCalled();
+	});
+
+	it('rejects a non-empty value that is not an encoded set', async () => {
+		// Storing it would leave an answer no reader can interpret: the admissions detail,
+		// the facet counts and the filter predicate all decode it back to nothing.
+		const caller = createTestCaller(db, hackerUser);
+		openApplication();
+
+		await expect(
+			caller.application.save({ questionId: 'q-1', value: 'Rust' })
+		).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+	});
+
+	it('accepts one write-in when the question offers an Other box', async () => {
+		const caller = createTestCaller(db, hackerUser);
+		openApplication();
+		db.question.findUnique.mockResolvedValue({ ...multiQuestion, allowOther: true } as never);
+
+		await caller.application.save({ questionId: 'q-1', value: '["Rust","COBOL"]' });
+
+		expect(db.applicationResponse.upsert).toHaveBeenCalledWith(
+			expect.objectContaining({ update: { value: '["Rust","COBOL"]' } })
+		);
+	});
+
+	it('rejects a second write-in, since the form offers one box', async () => {
+		// Storing both would show only the first back in the Other box, so the second
+		// would be an answer the applicant could never see or correct.
+		const caller = createTestCaller(db, hackerUser);
+		openApplication();
+		db.question.findUnique.mockResolvedValue({ ...multiQuestion, allowOther: true } as never);
+
+		await expect(
+			caller.application.save({ questionId: 'q-1', value: '["COBOL","Fortran"]' })
+		).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+		expect(db.applicationResponse.upsert).not.toHaveBeenCalled();
+	});
+
+	it('rejects a repeated choice', async () => {
+		// Not reachable from the checkbox group, but it would double-count the option in
+		// every facet tally, which reads as more interest than actually exists.
+		const caller = createTestCaller(db, hackerUser);
+		openApplication();
+
+		await expect(
+			caller.application.save({ questionId: 'q-1', value: '["Rust","Rust"]' })
+		).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+	});
+
+	it('still accepts clearing every box', async () => {
+		// An empty selection encodes to '', which is a blank draft field and not an answer
+		// to validate. Rejecting it would make a ticked box impossible to untick.
+		const caller = createTestCaller(db, hackerUser);
+		openApplication();
+
+		await caller.application.save({ questionId: 'q-1', value: '' });
+
+		expect(db.applicationResponse.upsert).toHaveBeenCalled();
 	});
 });
 

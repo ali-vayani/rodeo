@@ -10,7 +10,13 @@ import type { OptionPreset, Question, QuestionType } from '$lib/generated/prisma
 /** The shape any of the four callers can supply: their selects differ, this doesn't. */
 type OptionBearing = Pick<Question, 'type' | 'optionPreset'>;
 
-/** Question types that offer a fixed set of answers rather than free text. */
+/**
+ * Question types whose answer is exactly one of a fixed set rather than free text.
+ *
+ * MULTI_SELECT is deliberately absent: its answer is an encoded set, so every caller
+ * here — preset lookup, write-in policy, the `options.includes(value)` check — would
+ * be reading a JSON array as if it were one option. It has its own branch at each.
+ */
 export function isOptionsType(type: QuestionType): boolean {
 	return type === 'MULTIPLE_CHOICE' || type === 'DROPDOWN';
 }

@@ -63,7 +63,8 @@ const questionInput = z.object({
 	// Used as a computed key into a `User` update; a free-form string would let a typo
 	// save a question that writes nowhere.
 	linkedField: z.nativeEnum(LinkedField).nullish(),
-	optionPreset: z.nativeEnum(OptionPreset).nullish()
+	optionPreset: z.nativeEnum(OptionPreset).nullish(),
+	allowOther: z.boolean().default(false)
 });
 
 export const questionsRouter = router({

@@ -17,6 +17,7 @@ import {
 } from '$lib/facets';
 import { stateFacet } from '$lib/server/homeState';
 import { hasPresetOptions } from '$lib/questions/options';
+import { decodeMultiSelect } from '$lib/questions/multiSelect';
 import { humanizeEnum } from '$lib/format';
 
 /**
@@ -46,6 +47,7 @@ function controlFor(question: Pick<Question, 'type' | 'optionPreset'>): FacetCon
 	switch (question.type) {
 		case QuestionType.DROPDOWN:
 		case QuestionType.MULTIPLE_CHOICE:
+		case QuestionType.MULTI_SELECT:
 		case QuestionType.CHECKBOX:
 			return 'select';
 		case QuestionType.NUMBER:
@@ -250,14 +252,31 @@ export const filtersRouter = router({
 		/** Target roles per facet key, for `disambiguate` below. */
 		const questionRoles = new Map<string, Role[]>();
 
+		// `groupBy` buckets a MULTI_SELECT by its whole encoded set, and nobody filters by
+		// "picked exactly Rust and Go". Those rows are unpacked onto their options below.
+		const multiSelectIds = new Set(
+			tallied
+				.filter(({ question }) => question.type === QuestionType.MULTI_SELECT)
+				.map(({ question }) => question.id)
+		);
+
 		const answerCounts = new Map<string, Map<string, number>>();
 		const answered = new Map<string, number>();
 		for (const row of valueRows) {
 			// As with the linked columns, '' is an absent answer, not a value.
 			if (row.value === '') continue;
 			const counts = answerCounts.get(row.questionId) ?? new Map<string, number>();
-			counts.set(row.value, row._count._all);
+			if (multiSelectIds.has(row.questionId)) {
+				// Accumulated, not assigned: two different sets can both contain this option.
+				for (const option of decodeMultiSelect(row.value)) {
+					counts.set(option, (counts.get(option) ?? 0) + row._count._all);
+				}
+			} else {
+				counts.set(row.value, row._count._all);
+			}
 			answerCounts.set(row.questionId, counts);
+			// Still one row per user either way, so the answered tally is unaffected by the
+			// unpacking above — the option counts sum past it, and are meant to.
 			answered.set(row.questionId, (answered.get(row.questionId) ?? 0) + row._count._all);
 		}
 

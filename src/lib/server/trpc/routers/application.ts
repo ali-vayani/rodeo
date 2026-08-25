@@ -7,6 +7,7 @@ import { APPLICANT_ROLES } from '$lib/admissions/roles';
 import { normalizeEmail } from '$lib/blacklist/match';
 import { LINKED_FIELD_COLUMN, isLinkedField } from '$lib/linkedFields';
 import { acceptsWriteIn, isOptionsType } from '$lib/questions/options';
+import { decodeMultiSelect } from '$lib/questions/multiSelect';
 import { sendTemplatedEmail } from '$lib/server/email';
 import { buildEmailPersonalization } from '$lib/server/wallet/email-block';
 import { emailSettings } from '$lib/server/settings';
@@ -89,6 +90,7 @@ type AnswerableQuestion = {
 	type: QuestionType;
 	options: string[];
 	optionPreset: OptionPreset | null;
+	allowOther: boolean;
 	min: number | null;
 	max: number | null;
 	regex: string | null;
@@ -127,6 +129,27 @@ function assertAnswerValid(question: AnswerableQuestion, value: string) {
 		throw new TRPCError({ code: 'BAD_REQUEST', message: 'That is not one of the choices.' });
 	}
 
+	// The same rule over a set. A non-empty value that decodes to nothing is malformed
+	// rather than empty — the caller already let real blanks through — and storing it
+	// would leave an answer no reader could interpret.
+	if (question.type === QuestionType.MULTI_SELECT) {
+		const chosen = decodeMultiSelect(value);
+		if (chosen.length === 0) {
+			throw new TRPCError({ code: 'BAD_REQUEST', message: 'That is not a valid selection.' });
+		}
+		if (new Set(chosen).size !== chosen.length) {
+			throw new TRPCError({ code: 'BAD_REQUEST', message: 'That selection repeats a choice.' });
+		}
+
+		const offList = chosen.filter((c) => !question.options.includes(c));
+		// `allowOther` buys exactly one write-in, the one the "Other" box holds. Several
+		// means a hand-built payload, and storing them would show only the first back.
+		const allowed = question.allowOther ? 1 : 0;
+		if (question.options.length > 0 && offList.length > allowed) {
+			throw new TRPCError({ code: 'BAD_REQUEST', message: 'That is not one of the choices.' });
+		}
+	}
+
 	if (question.regex) {
 		let re: RegExp;
 		try {
@@ -155,10 +178,15 @@ function assertAnswerValid(question: AnswerableQuestion, value: string) {
  * is not blank — so the required consent boxes (MLH data sharing, code of conduct, food
  * allergy waiver) passed submit while unticked, which is the opposite of what a consent
  * gate is for.
+ *
+ * A MULTI_SELECT clears to '' and so is already caught above; the third clause is for
+ * an unreadable value, which is no more an answer than a blank one.
  */
 function isAnswered(type: QuestionType, value: string | undefined): boolean {
 	if (value === undefined || value.trim() === '') return false;
-	return type === QuestionType.CHECKBOX ? value === 'true' : true;
+	if (type === QuestionType.CHECKBOX) return value === 'true';
+	if (type === QuestionType.MULTI_SELECT) return decodeMultiSelect(value).length > 0;
+	return true;
 }
 
 export const applicationRouter = router({
@@ -218,6 +246,7 @@ export const applicationRouter = router({
 					type: true,
 					options: true,
 					optionPreset: true,
+					allowOther: true,
 					min: true,
 					max: true,
 					regex: true

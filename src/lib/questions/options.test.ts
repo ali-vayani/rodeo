@@ -8,12 +8,15 @@ const ALL_TYPES: QuestionType[] = [
 	'DROPDOWN',
 	'NUMBER',
 	'CHECKBOX',
+	'MULTI_SELECT',
 	'SHORT_TEXT',
 	'LONG_TEXT'
 ];
 
 describe('isOptionsType', () => {
 	it('is true for exactly the three types that enumerate their answers', () => {
+		// MULTI_SELECT enumerates its answers too, and still must not be here: its value is
+		// an encoded set, so every caller would compare a JSON array against one option.
 		expect(ALL_TYPES.filter(isOptionsType)).toEqual(['MULTIPLE_CHOICE', 'DROPDOWN', 'DROPDOWN']);
 	});
 });

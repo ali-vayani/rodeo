@@ -7,6 +7,7 @@
 	import type { ComboboxOption } from '$lib/components/ui/types';
 	import { loadPresetOptions } from '$lib/questions/presetOptions';
 	import { hasPresetOptions } from '$lib/questions/options';
+	import { decodeMultiSelect, encodeMultiSelect, splitWriteIn } from '$lib/questions/multiSelect';
 
 	interface Props {
 		question: QuestionModel;
@@ -52,10 +53,50 @@
 			? loadPresetOptions(question.optionPreset)
 			: Promise.resolve(question.options.map((option) => ({ value: option })))
 	);
+
+	/**
+	 * MULTI_SELECT only: `value` holds the whole set, so it is taken apart once per
+	 * change into the ticked options and the "Other" text, which is simply the member
+	 * that isn't on the list.
+	 */
+	const answer = $derived(splitWriteIn(decodeMultiSelect(value), question.options));
+
+	/**
+	 * Whether the "Other" row is open, which is not the same as it holding text: the box
+	 * has to be tickable before there is anything to type into it, and an empty write-in
+	 * is not a member worth storing. Cleared when the applicant unticks it.
+	 */
+	let otherOpen = $state(false);
+	const showOther = $derived(otherOpen || answer.writeIn !== null);
+
+	/**
+	 * Emitted in `question.options` order rather than click order, so two applicants who
+	 * ticked the same boxes store the same string and the facet counts line up. The
+	 * write-in trails the declared options for the same reason.
+	 */
+	function emit(selected: string[], writeIn: string | null) {
+		const ordered = question.options.filter((o) => selected.includes(o));
+		const trimmed = writeIn?.trim();
+		onchange(encodeMultiSelect(trimmed ? [...ordered, trimmed] : ordered));
+	}
+
+	function toggleOption(option: string) {
+		const next = answer.selected.includes(option)
+			? answer.selected.filter((o) => o !== option)
+			: [...answer.selected, option];
+		emit(next, answer.writeIn);
+	}
+
+	function toggleOther() {
+		otherOpen = !showOther;
+		// Unticking drops whatever was typed; leaving it stored under a hidden box is how
+		// an answer nobody can see ends up in the export.
+		if (!otherOpen) emit(answer.selected, null);
+	}
 </script>
 
 <div class="flex flex-col gap-2">
-	{#if question.type === QuestionType.CHECKBOX || question.type === QuestionType.MULTIPLE_CHOICE || question.type === QuestionType.DROPDOWN}
+	{#if question.type === QuestionType.CHECKBOX || question.type === QuestionType.MULTIPLE_CHOICE || question.type === QuestionType.MULTI_SELECT || question.type === QuestionType.DROPDOWN}
 		<!--
 					For checkbox/radio the label is rendered per-item below. A dropdown is here
 					because `Combobox` owns its own input and generates its own id, so a `for`
@@ -143,6 +184,58 @@
 					{option}
 				</label>
 			{/each}
+		</div>
+	{:else if question.type === QuestionType.MULTI_SELECT}
+		<div class="flex flex-col gap-2">
+			{#each question.options as option (option)}
+				<label
+					class="flex items-center gap-2 text-md text-foreground {disabled
+						? 'cursor-not-allowed text-muted-foreground'
+						: 'cursor-pointer'}"
+				>
+					<input
+						type="checkbox"
+						checked={answer.selected.includes(option)}
+						{disabled}
+						onchange={() => toggleOption(option)}
+						class="h-4 w-4 accent-brand-purple"
+					/>
+					{option}
+				</label>
+			{/each}
+			{#if question.allowOther}
+				<div class="flex flex-col gap-2">
+					<label
+						class="flex items-center gap-2 text-md text-foreground {disabled
+							? 'cursor-not-allowed text-muted-foreground'
+							: 'cursor-pointer'}"
+					>
+						<input
+							type="checkbox"
+							checked={showOther}
+							{disabled}
+							onchange={toggleOther}
+							class="h-4 w-4 accent-brand-purple"
+						/>
+						Other
+					</label>
+					{#if showOther}
+						<!-- Indented on a wrapper so the input keeps its own full width. -->
+						<div class="pl-6">
+							<!-- Saved on blur, not per keystroke: the page debounces autosave, and a
+							     half-typed write-in is a value the facet list would offer as a filter. -->
+							<input
+								type="text"
+								class={inputClass}
+								placeholder="Please specify"
+								value={answer.writeIn ?? ''}
+								{disabled}
+								onchange={(e) => emit(answer.selected, (e.target as HTMLInputElement).value)}
+							/>
+						</div>
+					{/if}
+				</div>
+			{/if}
 		</div>
 	{:else if question.type === QuestionType.DROPDOWN}
 		<!--

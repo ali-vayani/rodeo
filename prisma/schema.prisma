@@ -40,6 +40,9 @@ enum QuestionType {
   DROPDOWN
   NUMBER
   CHECKBOX
+  /// Several of `options` at once. The answer is a JSON array of the chosen options
+  /// in `ApplicationResponse.value`; see `$lib/questions/multiSelect`.
+  MULTI_SELECT
   SHORT_TEXT
   LONG_TEXT
   /// An uploaded file. The answer is the original filename, not a key — the key is
@@ -188,6 +191,12 @@ model Question {
   linkedField LinkedField?
 
   optionPreset OptionPreset?
+
+  /// MULTI_SELECT only: offer an "Other" box alongside the options. The typed answer is
+  /// stored as an ordinary member of the answer set, so it needs no separate column —
+  /// it is simply the one member that isn't in `options`.
+  allowOther  Boolean             @default(false)
+
   responses   ApplicationResponse[]
 }
 

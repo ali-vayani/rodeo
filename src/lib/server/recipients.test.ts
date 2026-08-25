@@ -324,8 +324,9 @@ function fakePrisma(names: string[], exactMatches: number) {
 		// `resolveRecipientWhere` resolves the answer filters too. Present so the type
 		// matches; unreached, because none of these cases carries an `answers` key.
 		applicationResponse: { groupBy: async () => [] },
-		settings: { findFirst: async () => null }
-	} as unknown as Pick<PrismaClient, 'user' | 'applicationResponse' | 'settings'>;
+		settings: { findFirst: async () => null },
+		question: { findMany: async () => [] }
+	} as unknown as Pick<PrismaClient, 'user' | 'applicationResponse' | 'settings' | 'question'>;
 	return { prisma, calls };
 }
 
@@ -439,7 +440,11 @@ describe('searchCondition', () => {
  * A prisma stand-in for the answer filters: distinct answers per question, plus the
  * Settings row the state filter reads its home state from.
  */
-function answerPrisma(values: string[] = [], homeState: string | null = null) {
+function answerPrisma(
+	values: string[] = [],
+	homeState: string | null = null,
+	multiSelectIds: string[] = []
+) {
 	const calls = { groupBy: 0, settings: 0 };
 	return {
 		calls,
@@ -456,8 +461,11 @@ function answerPrisma(values: string[] = [], homeState: string | null = null) {
 					return { homeState };
 				}
 			},
-			user: { groupBy: async () => [] }
-		} as unknown as Pick<PrismaClient, 'user' | 'applicationResponse' | 'settings'>
+			user: { groupBy: async () => [] },
+			// Which questions store a set. Empty means every filtered question is
+			// single-select, which is what the cases below assume unless they say otherwise.
+			question: { findMany: async () => multiSelectIds.map((id) => ({ id })) }
+		} as unknown as Pick<PrismaClient, 'user' | 'applicationResponse' | 'settings' | 'question'>
 	};
 }
 
@@ -531,6 +539,57 @@ describe('resolveAnswerConditions — values', () => {
 			]
 		});
 		expect(conds).toHaveLength(2);
+	});
+});
+
+describe('resolveAnswerConditions — multi-select', () => {
+	it('matches an option inside the stored set, not the whole set', () => {
+		// An `IN` on the encoded value would only match someone who picked exactly Rust
+		// and nothing else — so every multi-select filter would quietly return nobody.
+		return expect(
+			resolveAnswerConditions(answerPrisma([], null, [QUESTION]).prisma, {
+				answers: [{ questionId: QUESTION, values: ['Rust', 'Go'] }]
+			})
+		).resolves.toEqual([
+			{
+				application: {
+					some: {
+						questionId: QUESTION,
+						OR: [{ value: { contains: '"Rust"' } }, { value: { contains: '"Go"' } }]
+					}
+				}
+			}
+		]);
+	});
+
+	it('still reads the sentinel as unanswered', async () => {
+		// An empty selection stores '', the same blank every other type clears to, so the
+		// no-value arm needs no multi-select spelling of its own.
+		const [condition] = await resolveAnswerConditions(answerPrisma([], null, [QUESTION]).prisma, {
+			answers: [{ questionId: QUESTION, values: ['Rust', NO_VALUE] }]
+		});
+		expect(condition).toEqual({
+			OR: [
+				{
+					application: {
+						some: { questionId: QUESTION, OR: [{ value: { contains: '"Rust"' } }] }
+					}
+				},
+				{ application: { none: { questionId: QUESTION } } },
+				{ application: { some: { questionId: QUESTION, value: '' } } }
+			]
+		});
+	});
+
+	it('leaves single-select questions on the exact `IN` they have always used', async () => {
+		// The lookup exists so the common case keeps its indexed match. A substring
+		// predicate over every answer would be both slower and laxer than what was asked.
+		const { prisma } = answerPrisma([], null, ['q-other']);
+		expect(
+			await resolveAnswerConditions(prisma, {
+				answers: [{ questionId: QUESTION, values: ['Yes'] }]
+			})
+		).toEqual([{ application: { some: { questionId: QUESTION, value: { in: ['Yes'] } } } }]);
 	});
 });
 

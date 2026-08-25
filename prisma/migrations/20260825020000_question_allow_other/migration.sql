@@ -1,0 +1,11 @@
+-- An "Other" write-in box on a MULTI_SELECT question.
+--
+-- A column rather than an always-on behaviour: an organizer who typed six exact
+-- choices should be able to keep the list closed, and defaulting to false leaves
+-- every existing question answering exactly as it does today.
+--
+-- No column is added for the typed text. A write-in is stored as an ordinary
+-- member of the answer set — the one member that isn't in `options` — which is
+-- what lets the facet builder count it and the filter predicate match it with no
+-- special case at either end.
+ALTER TABLE "Question" ADD COLUMN "allowOther" BOOLEAN NOT NULL DEFAULT false;

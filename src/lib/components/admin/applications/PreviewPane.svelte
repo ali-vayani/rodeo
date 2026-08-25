@@ -88,6 +88,28 @@
 									No options defined yet
 								{/if}
 							</p>
+						{:else if q.type === 'MULTI_SELECT'}
+							<div class="radio-group">
+								{#each q.options as opt (opt)}
+									<label class="checkbox-label">
+										<input type="checkbox" disabled />
+										<span>{opt}</span>
+									</label>
+								{/each}
+								{#if q.allowOther}
+									<label class="checkbox-label">
+										<input type="checkbox" disabled />
+										<span>Other</span>
+									</label>
+								{/if}
+								{#if q.options.length === 0}
+									<p class="field-hint no-opts">No options defined yet</p>
+								{:else}
+									<p class="field-hint">
+										Applicants can pick more than one{q.allowOther ? ', or write their own' : ''}
+									</p>
+								{/if}
+							</div>
 						{:else if q.type === 'MULTIPLE_CHOICE'}
 							<div class="radio-group">
 								{#each q.options as opt (opt)}

@@ -28,7 +28,8 @@ const allRolesQuestion = {
 	max: null,
 	regex: null,
 	linkedField: null,
-	optionPreset: null
+	optionPreset: null,
+	allowOther: false
 };
 
 const hackerQuestion = {

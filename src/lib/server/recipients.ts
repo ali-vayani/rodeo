@@ -1,8 +1,9 @@
 import { z } from 'zod';
 import type { Prisma, PrismaClient } from '$lib/generated/prisma/client';
-import { Role, UserStatus, DecisionStatus } from '$lib/generated/prisma/client';
+import { Role, UserStatus, DecisionStatus, QuestionType } from '$lib/generated/prisma/client';
 import { LINKED_FIELD_COLUMN, type LinkedField } from '$lib/linkedFields';
 import { splitNoValue } from '$lib/facets';
+import { encodeMultiSelectMember } from '$lib/questions/multiSelect';
 import { stateCondition } from '$lib/server/homeState';
 import { tokenMatch, normalizeName } from '$lib/text/similarity';
 import { isValidEmail } from '$lib/email/address';
@@ -311,6 +312,43 @@ function answeredWith(questionId: string, values: string[]): Prisma.UserWhereInp
 }
 
 /**
+ * Users whose MULTI_SELECT answer contains any of `values`.
+ *
+ * A substring match, because the chosen options live inside one `text` column that
+ * Postgres cannot index into. `encodeMultiSelectMember` quotes the option, so "Go"
+ * cannot match the answer `["Golang"]`. Case-sensitive on purpose: these are the exact
+ * strings the question offered, not a search box.
+ */
+function answerContainsAny(questionId: string, values: string[]): Prisma.UserWhereInput {
+	return {
+		application: {
+			some: {
+				questionId,
+				OR: values.map((value) => ({ value: { contains: encodeMultiSelectMember(value) } }))
+			}
+		}
+	};
+}
+
+/**
+ * Which of `questionIds` store a set rather than a single answer.
+ *
+ * Looked up rather than inferred, so single-select filtering stays the indexed `IN` it
+ * has always been: a predicate that handled both shapes would substring-match every
+ * plain answer too, which is a laxer question than the organizer asked.
+ */
+async function multiSelectQuestions(
+	prisma: Pick<PrismaClient, 'question'>,
+	questionIds: string[]
+): Promise<Set<string>> {
+	const rows = await prisma.question.findMany({
+		where: { id: { in: questionIds }, type: QuestionType.MULTI_SELECT },
+		select: { id: true }
+	});
+	return new Set(rows.map((row) => row.id));
+}
+
+/**
  * The distinct answers to a NUMBER question that fall inside a range.
  *
  * Answers are stored as text, so `value >= 18` would be a string comparison in which
@@ -346,12 +384,22 @@ async function numericMatches(
  * skipped.
  */
 export async function resolveAnswerConditions(
-	prisma: Pick<PrismaClient, 'user' | 'applicationResponse' | 'settings'>,
+	prisma: Pick<PrismaClient, 'user' | 'applicationResponse' | 'settings' | 'question'>,
 	filters: AnswerFilters
 ): Promise<Prisma.UserWhereInput[]> {
 	const conditions: Prisma.UserWhereInput[] = [];
+	const entries = filters.answers ?? [];
 
-	for (const entry of filters.answers ?? []) {
+	// One read for the whole panel, and only when something is actually selected — the
+	// range and substring paths don't care what shape the answer is stored in.
+	const withValues = entries
+		.filter((entry) => entry.values?.length)
+		.map((entry) => entry.questionId);
+	const multiSelect = withValues.length
+		? await multiSelectQuestions(prisma, withValues)
+		: new Set<string>();
+
+	for (const entry of entries) {
 		const { questionId, values, contains, min, max } = entry;
 
 		if (values !== undefined) {
@@ -360,7 +408,13 @@ export async function resolveAnswerConditions(
 			} else {
 				const { values: real, includeNone } = splitNoValue(values);
 				const or: Prisma.UserWhereInput[] = [];
-				if (real.length) or.push(answeredWith(questionId, real));
+				if (real.length) {
+					or.push(
+						multiSelect.has(questionId)
+							? answerContainsAny(questionId, real)
+							: answeredWith(questionId, real)
+					);
+				}
 				if (includeNone) or.push(...unansweredConditions(questionId));
 				conditions.push(or.length === 1 ? or[0] : { OR: or });
 			}
@@ -471,7 +525,7 @@ export function buildRecipientWhere(
  * probe's scope and as the predicate, which is what keeps preview and send in step.
  */
 export async function resolveRecipientWhere(
-	prisma: Pick<PrismaClient, 'user' | 'applicationResponse' | 'settings'>,
+	prisma: Pick<PrismaClient, 'user' | 'applicationResponse' | 'settings' | 'question'>,
 	filters: RecipientFilters
 ): Promise<{ where: Prisma.UserWhereInput; expansion: SearchExpansion }> {
 	// The answer conditions are part of the scope the search probe counts inside, not

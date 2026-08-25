@@ -78,6 +78,7 @@
 
 	const TYPE_LABELS: Record<QuestionType, string> = {
 		MULTIPLE_CHOICE: 'Multiple Choice',
+		MULTI_SELECT: 'Multi-Select',
 		DROPDOWN: 'Dropdown',
 		NUMBER: 'Number',
 		CHECKBOX: 'Checkbox',
@@ -88,6 +89,7 @@
 
 	const TYPE_COLORS: Record<QuestionType, string> = {
 		MULTIPLE_CHOICE: '#7c3aed',
+		MULTI_SELECT: '#4338ca',
 		DROPDOWN: '#0369a1',
 		NUMBER: '#b45309',
 		CHECKBOX: '#047857',

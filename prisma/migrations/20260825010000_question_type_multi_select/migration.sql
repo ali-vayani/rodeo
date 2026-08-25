@@ -1,0 +1,13 @@
+-- A MULTI_SELECT question type: several of the offered options at once.
+--
+-- Additive, like the FILE member before it: an added enum value cannot invalidate
+-- an existing row, so there is no backfill and no rewrite of the Question table.
+-- Nothing here reads the new value, so the restriction on using a freshly added
+-- enum member inside the same transaction block does not apply.
+--
+-- No column is added. The answer lives in ApplicationResponse.value as a JSON
+-- array of the chosen options — see `$lib/questions/multiSelect`. A JSON array
+-- rather than a delimited list because option text is organizer-authored and may
+-- contain any delimiter, and as text rather than jsonb because every other answer
+-- type shares this one column.
+ALTER TYPE "QuestionType" ADD VALUE 'MULTI_SELECT';

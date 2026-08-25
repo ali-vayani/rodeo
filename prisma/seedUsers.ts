@@ -8,6 +8,10 @@ import {
 	type User
 } from '../src/lib/generated/prisma/client';
 import { isApplicantRole } from '../src/lib/admissions/roles';
+import { encodeMultiSelect } from '../src/lib/questions/multiSelect';
+
+/** Answers typed into an "Other" box, for the questions that offer one. */
+const WRITE_INS = ['Robotics', 'Bioinformatics', 'Quantum', 'Fintech'];
 import { writeSeedFiles, type SeededFile } from './seedFiles';
 
 // Every account is derived from its index alone, with no randomness, so the same run
@@ -397,6 +401,16 @@ function answerFor(q: Question, user: GeneratedUser, seq: number): string | null
 			return q.options.length ? q.options[seq % q.options.length] : null;
 		case QuestionType.CHECKBOX:
 			return seq % 3 === 0 ? 'true' : 'false';
+		// One to three options, so the facet counts have overlapping sets to add up and
+		// some applicants share a pick without sharing the whole selection.
+		case QuestionType.MULTI_SELECT: {
+			if (!q.options.length) return null;
+			const picked = q.options.filter((_, i) => (i + seq) % q.options.length <= seq % 3);
+			// Every seventh answer writes one in, so the facet list has a value outside the
+			// declared options to sort in beside them.
+			const writeIn = q.allowOther && seq % 7 === 0 ? [WRITE_INS[seq % WRITE_INS.length]] : [];
+			return encodeMultiSelect([...picked, ...writeIn]);
+		}
 		case QuestionType.NUMBER: {
 			const min = q.min ?? 0;
 			const max = q.max ?? min + 10;

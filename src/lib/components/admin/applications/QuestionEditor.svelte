@@ -25,6 +25,7 @@
 		{ value: 'SHORT_TEXT', label: 'Short Text' },
 		{ value: 'LONG_TEXT', label: 'Long Text' },
 		{ value: 'MULTIPLE_CHOICE', label: 'Multiple Choice' },
+		{ value: 'MULTI_SELECT', label: 'Multi-Select' },
 		{ value: 'DROPDOWN', label: 'Dropdown' },
 		{ value: 'NUMBER', label: 'Number' },
 		{ value: 'CHECKBOX', label: 'Checkbox' },
@@ -59,6 +60,7 @@
 	let regex = $state('');
 	let linkedField = $state<LinkedField | ''>('');
 	let optionPreset = $state<OptionPreset | null>(null);
+	let allowOther = $state(false);
 	let errors = $state<Record<string, string>>({});
 	let newOptionInput = $state('');
 
@@ -83,6 +85,7 @@
 				regex = question.regex ?? '';
 				linkedField = question.linkedField ?? '';
 				optionPreset = question.optionPreset;
+				allowOther = question.allowOther;
 			} else {
 				title = '';
 				type = 'SHORT_TEXT';
@@ -95,6 +98,7 @@
 				regex = '';
 				linkedField = '';
 				optionPreset = null;
+				allowOther = false;
 			}
 			errors = {};
 			newOptionInput = '';
@@ -103,12 +107,24 @@
 		}
 	});
 
-	const isOptions = $derived(type === 'MULTIPLE_CHOICE' || type === 'DROPDOWN');
+	// Every type that draws on a hand-authored option list, single-select or not.
+	const isOptions = $derived(
+		type === 'MULTIPLE_CHOICE' || type === 'MULTI_SELECT' || type === 'DROPDOWN'
+	);
+	// Only single-select types: a preset is a 6,447-entry vocabulary, and a checkbox
+	// group over it is not a control anyone can use.
+	const isPresetable = $derived(type === 'MULTIPLE_CHOICE' || type === 'DROPDOWN');
+	const showPreset = $derived(isPresetable && optionPreset !== null);
 	// Hidden rather than disabled under a preset: 6,447 read-only inputs is not a form.
-	const showOptions = $derived(isOptions && optionPreset === null);
-	const showPreset = $derived(isOptions && optionPreset !== null);
+	const showOptions = $derived(isOptions && !showPreset);
+	// Multi-select only. A radio group or a dropdown that accepted a write-in would need
+	// its own control for the typed value, which is a different feature than this one.
+	const showAllowOther = $derived(type === 'MULTI_SELECT');
 	const showMinMax = $derived(type === 'NUMBER');
-	const showPlaceholder = $derived(type !== 'CHECKBOX' && type !== 'MULTIPLE_CHOICE');
+	// The types with no single input to put hint text in.
+	const showPlaceholder = $derived(
+		type !== 'CHECKBOX' && type !== 'MULTIPLE_CHOICE' && type !== 'MULTI_SELECT'
+	);
 
 	// Advisory only: every field stays reachable from the select.
 	const suggestion = $derived(linkedField === '' ? (suggestLinkedField(title) ?? null) : null);
@@ -200,8 +216,10 @@
 			max: showMinMax && max !== '' ? Number(max) : null,
 			regex: regex.trim() || undefined,
 			linkedField: linkedField || null,
-			// Cleared for non-choice types so a stale preset cannot return on a later type switch.
-			optionPreset: isOptions ? optionPreset : null
+			// Cleared for the types that can't carry one, so a stale preset cannot return on a
+			// later type switch.
+			optionPreset: isPresetable ? optionPreset : null,
+			allowOther: showAllowOther && allowOther
 		};
 
 		onSave(data);
@@ -391,6 +409,19 @@
 							</div>
 						</div>
 						{#if errors.options}<p class="error-msg">{errors.options}</p>{/if}
+					</div>
+				{/if}
+
+				{#if showAllowOther}
+					<div class="field field-inline">
+						<label>
+							<input type="checkbox" bind:checked={allowOther} />
+							<span>Offer an "Other" box</span>
+						</label>
+						<p class="field-note">
+							Applicants can tick Other and type an answer that isn't on the list. It is stored like
+							any other choice, and shows up in the filters beside them.
+						</p>
 					</div>
 				{/if}
 

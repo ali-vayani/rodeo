@@ -231,6 +231,18 @@ export const questions = [
 		placeholder: 'PDF only',
 		order: 26
 	},
+	// Appended on a free order rather than slotted in among the questions above.
+	// `seedQuestions` matches on order+targetRole, so renumbering an existing question
+	// rewrites whatever already sits at that order — along with its answers.
+	{
+		title: 'Which tracks are you interested in?',
+		type: QuestionType.MULTI_SELECT,
+		required: false,
+		targetRole: [Role.HACKER],
+		options: ['AI/ML', 'Web', 'Mobile', 'Hardware', 'Game Dev', 'Security'],
+		allowOther: true,
+		order: 27
+	},
 
 	// --- Judge-specific ---
 	{

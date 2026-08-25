@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { QuestionType } from '$lib/generated/prisma/enums';
 	import FileAnswer from '$lib/components/files/FileAnswer.svelte';
+	import { decodeMultiSelect } from '$lib/questions/multiSelect';
 
 	let {
 		responses
@@ -15,6 +16,12 @@
 
 	// Sorted here, not per call site, so the scoring and decision passes show the same order.
 	let sorted = $derived([...responses].sort((a, b) => a.question.order - b.question.order));
+
+	/** A MULTI_SELECT stores JSON, which is not what a reviewer should be reading. */
+	function display(response: (typeof sorted)[number]): string {
+		if (response.question.type !== QuestionType.MULTI_SELECT) return response.value;
+		return decodeMultiSelect(response.value).join(', ');
+	}
 </script>
 
 {#if sorted.length === 0}
@@ -38,7 +45,7 @@
 					<div
 						class="rounded border border-border bg-[#f9f9f9] px-3 py-[10px] text-[13px] leading-[1.5] break-words whitespace-pre-wrap text-primary"
 					>
-						{response.value || '—'}
+						{display(response) || '—'}
 					</div>
 				{/if}
 			</div>
