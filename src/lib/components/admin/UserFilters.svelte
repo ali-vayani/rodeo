@@ -91,7 +91,7 @@
 		}
 	]);
 
-	// Absent means open, so no filter is ever hidden before it is seen.
+	// Absent means collapsed; the badge on a folded group says it is still narrowing.
 	let openGroups = $state<Record<string, boolean>>({});
 
 	const uid = $props.id();
@@ -135,7 +135,7 @@
 			: ''} {collapsible && expanded ? 'mt-4 md:mt-0' : ''}"
 	>
 		{#each groups as group, index (group.key)}
-			{@const open = openGroups[group.key] ?? true}
+			{@const open = openGroups[group.key] ?? false}
 			{@const checked = checkedCount(group.options, group.state)}
 			<!-- No bottom margin on the last group: the facets below bring their own border and padding. -->
 			<div class={index === groups.length - 1 ? (columns ? groupClass : '') : groupClass}>

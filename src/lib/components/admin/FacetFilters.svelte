@@ -40,7 +40,7 @@
 	// Collapsed on phones so a long university list doesn't push results below the fold.
 	let expanded = $state(false);
 
-	// Per-facet fold. Absent means open, so no filter is ever hidden before it is seen.
+	// Per-facet fold. Absent means collapsed; the badge on a folded facet says it is still engaged.
 	let openFacets = $state<Record<string, boolean>>({});
 
 	const uid = $props.id();
@@ -165,7 +165,7 @@
 				{@const selection = selectionFor(facet.key)}
 				{@const values = valuesFor(facet.key)}
 				{@const badge = badgeFor(facet)}
-				{@const open = openFacets[facet.key] ?? true}
+				{@const open = openFacets[facet.key] ?? false}
 				<div class={cn('flex flex-col gap-2', columns && 'min-w-0 flex-1 basis-48')}>
 					<div class="flex items-baseline justify-between gap-2">
 						<button
