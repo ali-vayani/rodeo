@@ -127,7 +127,9 @@
 		{ key: 'timestamp', header: 'When', nowrap: true, width: 'lg:w-40' },
 		{ key: 'actor', header: 'Admin', nowrap: true, width: 'lg:w-44' },
 		{ key: 'action', header: 'Action', nowrap: true, width: 'lg:w-52' },
-		{ key: 'summary', header: 'Detail' }
+		// Truncated to keep every row one line tall; the click-through modal has the
+		// full text, which failure-reason summaries can easily run past a screen line.
+		{ key: 'summary', header: 'Detail', truncate: true }
 	];
 </script>
 

@@ -50,6 +50,8 @@ export interface Column<Row> {
 	align?: 'left' | 'right';
 	/** Keeps the cell on one line. */
 	nowrap?: boolean;
+	/** Clamps the cell to one ellipsized line, so long content cannot stretch the row. */
+	truncate?: boolean;
 	/** Plain text when there's no `cell` snippet for this column. */
 	value?: (row: Row) => string;
 }

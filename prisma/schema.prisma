@@ -254,6 +254,8 @@ model EmailLog {
   // skips `sent` rather than mailing anyone twice.
   sent     String[]
   failed   String[]
+  // Recipient → last delivery error, so a failed blast records why, not just who.
+  errors   Json     @default("{}")
 }
 
 model Group {
