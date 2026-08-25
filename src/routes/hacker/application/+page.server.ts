@@ -2,6 +2,7 @@ import type { PageServerLoad } from './$types';
 import { createCallerFactory } from '$lib/server/trpc/init';
 import { appRouter } from '$lib/server/trpc/router';
 import { createContext } from '$lib/server/trpc/context';
+import { toSelfUser } from '$lib/server/trpc/selects';
 
 const createCaller = createCallerFactory(appRouter);
 
@@ -15,5 +16,5 @@ export const load: PageServerLoad = async (event) => {
 	]);
 	const settings = 'id' in rawSettings ? rawSettings : null;
 
-	return { user: event.locals.user!, questions, responses, settings };
+	return { user: toSelfUser(event.locals.user!), questions, responses, settings };
 };

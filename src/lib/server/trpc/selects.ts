@@ -6,6 +6,8 @@
  * another user's record projects through one of these whitelists, never an `include`.
  */
 
+import type { User } from '$lib/generated/prisma/client';
+
 /**
  * What the account/team UI renders for someone other than the caller. Excludes status,
  * decisions, university, year, and the claim columns.
@@ -33,3 +35,21 @@ export const SELF_USER_SELECT = {
 	teamId: true,
 	createdAt: true
 } as const;
+
+export type SelfUser = Pick<User, keyof typeof SELF_USER_SELECT>;
+
+/**
+ * Applies SELF_USER_SELECT to a row already in hand. Page loads hold the full
+ * `locals.user`, and returning it whole serializes `pendingDecision` and the claim
+ * columns into the page — this is the only shape a load may return.
+ *
+ * Inputs:
+ * - user: User — a full row, typically `locals.user`
+ *
+ * Outputs:
+ * - SelfUser — only the SELF_USER_SELECT columns
+ */
+export function toSelfUser(user: User): SelfUser {
+	const keys = Object.keys(SELF_USER_SELECT) as (keyof typeof SELF_USER_SELECT)[];
+	return Object.fromEntries(keys.map((key) => [key, user[key]])) as SelfUser;
+}
