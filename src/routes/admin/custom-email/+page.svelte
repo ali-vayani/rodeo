@@ -17,7 +17,7 @@
 	import { createUnsavedGuard } from '$lib/admin/unsavedGuard.svelte';
 	import TemplateEditor from '$lib/components/email/TemplateEditor.svelte';
 	import EmailPreview, { type PreviewAs } from '$lib/components/email/EmailPreview.svelte';
-	import { NAME_FALLBACK, SAMPLE_VARS } from '$lib/email/variables';
+	import { NAME_FALLBACK, SAMPLE_VARS, unavailableVariables } from '$lib/email/variables';
 	import { UserStatus } from '$lib/generated/prisma/enums';
 	import SendConfirmation, { CONFIRM_WORD } from '$lib/components/email/SendConfirmation.svelte';
 	import SendHistory from '$lib/components/email/SendHistory.svelte';
@@ -29,6 +29,10 @@
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
+
+	// Greys out the chips for variables this event has no value for; `startSend`
+	// refuses a draft that uses one, so the editor says so before it is typed.
+	const unavailable = $derived(unavailableVariables(data.settings));
 
 	const trpc = createClient();
 
@@ -346,7 +350,7 @@
 						Variables are substituted per recipient when the email is sent.
 					</p>
 				</div>
-				<TemplateEditor label="Custom" bind:subject bind:body />
+				<TemplateEditor label="Custom" bind:subject bind:body {unavailable} />
 				<EmailPreview {subject} {body} vars={previewVars} {previewAs} height="sm" />
 			{:else}
 				<SendConfirmation

@@ -576,6 +576,59 @@ describe('admissions.setDecision', () => {
 });
 
 describe('admissions.release', () => {
+	it('refuses the whole batch when the decision template cannot be rendered', async () => {
+		// Before the transaction, deliberately: releasing is irreversible, so an
+		// unrenderable template has to stop the batch while stopping it is still free.
+		// Skipping the send afterwards would leave applicants decided and unmailed.
+		const caller = createTestCaller(db, adminUser);
+		db.user.findMany.mockResolvedValue([pendingUser] as never);
+		db.settings.findFirst.mockResolvedValue({
+			...mockSettings,
+			RSVPDeadline: null,
+			acceptTemplate: 'You are in! RSVP by {{rsvp_deadline}}.'
+		} as never);
+
+		await expect(caller.admissions.release({})).rejects.toMatchObject({
+			code: 'BAD_REQUEST',
+			message: expect.stringContaining('{{rsvp_deadline}}')
+		});
+
+		// The decisions are untouched, which is the whole point of checking first.
+		expect(db.$transaction).not.toHaveBeenCalled();
+		expect(db.user.updateMany).not.toHaveBeenCalled();
+	});
+
+	it('releases normally when the template needs nothing the event lacks', async () => {
+		const caller = createTestCaller(db, adminUser);
+		db.user.findMany.mockResolvedValue([pendingUser] as never);
+		db.settings.findFirst.mockResolvedValue({
+			...mockSettings,
+			RSVPDeadline: null,
+			acceptTemplate: 'You are in! We start {{hackathon_start}}.'
+		} as never);
+		db.log.create.mockResolvedValue({} as never);
+		db.$transaction.mockResolvedValue([{ count: 1 }]);
+
+		await expect(caller.admissions.release({})).resolves.toEqual({ released: 1 });
+	});
+
+	it('ignores the variable in a template no one in the batch will receive', async () => {
+		// Only ACCEPTED is pending here, so a broken waitlist template is not this
+		// batch's problem and must not block it.
+		const caller = createTestCaller(db, adminUser);
+		db.user.findMany.mockResolvedValue([pendingUser] as never);
+		db.settings.findFirst.mockResolvedValue({
+			...mockSettings,
+			RSVPDeadline: null,
+			acceptTemplate: 'You are in!',
+			waitlistTemplate: 'Hold tight until {{rsvp_deadline}}.'
+		} as never);
+		db.log.create.mockResolvedValue({} as never);
+		db.$transaction.mockResolvedValue([{ count: 1 }]);
+
+		await expect(caller.admissions.release({})).resolves.toEqual({ released: 1 });
+	});
+
 	it('copies pending→active for all matched users', async () => {
 		const caller = createTestCaller(db, adminUser);
 		db.user.findMany.mockResolvedValue([pendingUser] as never);

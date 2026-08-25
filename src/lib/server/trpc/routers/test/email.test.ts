@@ -727,6 +727,83 @@ describe('email.previewRecipients', () => {
 	});
 });
 
+describe('refusing a template whose variables have no value', () => {
+	const noDeadline = { ...mockSettings, RSVPDeadline: null };
+
+	it('refuses startSend before resolving a single recipient', async () => {
+		const caller = createTestCaller(db, adminUser);
+		db.settings.findFirst.mockResolvedValue(noDeadline);
+
+		await expect(
+			caller.email.startSend({
+				...emailInput,
+				body: 'RSVP by {{rsvp_deadline}}.',
+				expectedCount: 1
+			} as never)
+		).rejects.toMatchObject({
+			code: 'BAD_REQUEST',
+			message: expect.stringContaining('{{rsvp_deadline}}')
+		});
+
+		// Nothing was queued: the whole point is that this is caught before the send.
+		expect(db.emailLog.create).not.toHaveBeenCalled();
+		expect(sendEmail).not.toHaveBeenCalled();
+	});
+
+	it('refuses on the subject too', async () => {
+		const caller = createTestCaller(db, adminUser);
+		db.settings.findFirst.mockResolvedValue(noDeadline);
+
+		await expect(
+			caller.email.startSend({
+				...emailInput,
+				subject: 'RSVP by {{rsvp_deadline}}',
+				expectedCount: 1
+			} as never)
+		).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+	});
+
+	it('allows the same draft once a deadline exists', async () => {
+		const caller = createTestCaller(db, adminUser);
+		db.settings.findFirst.mockResolvedValue(mockSettings);
+		mockUsers([hackerUser] as never);
+		stubSendLog();
+
+		await expect(
+			caller.email.startSend({
+				...emailInput,
+				body: 'RSVP by {{rsvp_deadline}}.',
+				expectedCount: 1
+			} as never)
+		).resolves.toMatchObject({ users: 1 });
+	});
+
+	it('refuses a test send, so proofreading is where this surfaces', async () => {
+		const caller = createTestCaller(db, adminUser);
+		db.settings.findFirst.mockResolvedValue(noDeadline);
+
+		await expect(
+			caller.email.sendTest({
+				template: 'accept',
+				subject: 'You are in',
+				body: 'RSVP by {{rsvp_deadline}}.'
+			})
+		).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+		expect(sendEmail).not.toHaveBeenCalled();
+	});
+
+	it('leaves a draft without the variable alone', async () => {
+		const caller = createTestCaller(db, adminUser);
+		db.settings.findFirst.mockResolvedValue(noDeadline);
+		mockUsers([hackerUser] as never);
+		stubSendLog();
+
+		await expect(
+			caller.email.startSend({ ...emailInput, expectedCount: 1 } as never)
+		).resolves.toMatchObject({ users: 1 });
+	});
+});
+
 describe('email.eventVars', () => {
 	it('renders the dates server-side, exactly as a send would', async () => {
 		const caller = createTestCaller(db, adminUser);
@@ -745,8 +822,9 @@ describe('email.eventVars', () => {
 
 		await expect(caller.email.eventVars()).resolves.toEqual({
 			hackathon_start: DEFAULT_SETTINGS.hackathonStartDate.toLocaleDateString(),
-			// The default row has no RSVP deadline, so the var latches to the event start.
-			rsvp_deadline: DEFAULT_SETTINGS.hackathonStartDate.toLocaleDateString()
+			// The default row has no RSVP deadline, so the variable renders blank rather
+			// than naming a date the event does not have.
+			rsvp_deadline: ''
 		});
 	});
 });

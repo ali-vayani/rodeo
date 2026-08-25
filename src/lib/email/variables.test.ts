@@ -9,6 +9,8 @@ import {
 	buildTemplateVars,
 	buildEventVars,
 	buildExternalTemplateVars,
+	unavailableVariables,
+	templateBlockers,
 	NAME_FALLBACK,
 	type TemplateSegment
 } from './variables';
@@ -189,6 +191,17 @@ describe('buildEventVars / buildExternalTemplateVars', () => {
 		expect(buildExternalTemplateVars(settings).name).toBe(NAME_FALLBACK);
 	});
 
+	it('renders rsvp_deadline blank when no deadline is set', () => {
+		// Not the event start: naming the start date as an RSVP deadline states something
+		// the event does not have. Blank is the floor — `templateBlockers` stops a
+		// template that uses the variable from sending at all.
+		const vars = buildEventVars({ ...settings, RSVPDeadline: null });
+		expect(vars.rsvp_deadline).toBe('');
+		// The key still exists, or `substituteVariables` would leave `{{rsvp_deadline}}`
+		// literal in a hacker's inbox.
+		expect(Object.keys(vars)).toContain('rsvp_deadline');
+	});
+
 	it('reads as a sentence in the salutation it has to survive', () => {
 		// "Hi hacker," is the whole reason the fallback is a filler and not a name.
 		expect(substituteVariables('Hi {{name}},', buildExternalTemplateVars(settings))).toBe(
@@ -223,5 +236,61 @@ describe('buildEventVars / buildExternalTemplateVars', () => {
 		// disagrees with the inbox.
 		const template = VARIABLE_KEYS.map((k) => `{{${k}}}`).join(' ');
 		expect(substituteVariables(template, buildExternalTemplateVars(settings))).not.toMatch(/\{\{/);
+	});
+});
+
+describe('unavailableVariables / templateBlockers', () => {
+	const withDeadline = { RSVPDeadline: new Date(2026, 3, 1) };
+	const withoutDeadline = { RSVPDeadline: null };
+
+	it('reports nothing unavailable while a deadline is set', () => {
+		expect(unavailableVariables(withDeadline).size).toBe(0);
+		expect(templateBlockers(['RSVP by {{rsvp_deadline}}.'], withDeadline)).toBeNull();
+	});
+
+	it('marks rsvp_deadline unavailable with no deadline, and says why', () => {
+		const unavailable = unavailableVariables(withoutDeadline);
+		expect([...unavailable.keys()]).toEqual(['rsvp_deadline']);
+		expect(unavailable.get('rsvp_deadline')).toContain('RSVP Deadline');
+	});
+
+	it('blocks a template that uses the variable, naming it and the fix', () => {
+		const blocked = templateBlockers(['Hi', 'RSVP by {{rsvp_deadline}}.'], withoutDeadline);
+		expect(blocked?.keys).toEqual(['rsvp_deadline']);
+		expect(blocked?.message).toContain('{{rsvp_deadline}}');
+		expect(blocked?.message).toContain('no RSVP Deadline is set');
+	});
+
+	it('blocks on the subject alone', () => {
+		// A variable in either field is enough; the subject is not the lesser half.
+		expect(templateBlockers(['Due {{rsvp_deadline}}', 'body'], withoutDeadline)).not.toBeNull();
+	});
+
+	it('lets a template through when it does not use the variable', () => {
+		expect(
+			templateBlockers(['Hi {{name}}', 'See you {{hackathon_start}}.'], withoutDeadline)
+		).toBeNull();
+	});
+
+	it('never blocks on hacker_qr_code, which is empty per recipient by design', () => {
+		// Blocking on it would stop every non-attendee's mail, which is the opposite of
+		// what the block is for.
+		expect(templateBlockers(['s', '{{hacker_qr_code}}'], withoutDeadline)).toBeNull();
+	});
+
+	it('reports each blocked variable once however often it appears', () => {
+		const blocked = templateBlockers(
+			['{{rsvp_deadline}}', '{{rsvp_deadline}} and {{rsvp_deadline}}'],
+			withoutDeadline
+		);
+		expect(blocked?.keys).toEqual(['rsvp_deadline']);
+	});
+
+	it('is re-runnable despite the shared global regex', () => {
+		// Same stale-lastIndex trap tokenizeTemplate guards against.
+		const args = ['s', '{{rsvp_deadline}}'] as const;
+		expect(templateBlockers([...args], withoutDeadline)).toEqual(
+			templateBlockers([...args], withoutDeadline)
+		);
 	});
 });

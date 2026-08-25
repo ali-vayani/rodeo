@@ -10,11 +10,14 @@ export const load: PageServerLoad = async (event) => {
 	// Unfiltered count for the initial "everyone" state, recent sends, and the date
 	// variables, rendered server-side so the compose preview substitutes the exact strings
 	// the send will. The filter facets ride along for the same reason as on /admin/users.
-	const [recipients, history, eventVars, facets] = await Promise.all([
+	const [recipients, history, eventVars, facets, settings] = await Promise.all([
 		caller.email.previewRecipients({}),
 		caller.email.getLogs({ page: 1, pageSize: 10 }),
 		caller.email.eventVars(),
-		caller.filters.facets()
+		caller.filters.facets(),
+		// Only for which variables have a value: the editor greys the rest, and
+		// `email.startSend` refuses a draft that uses one.
+		caller.settings.get()
 	]);
-	return { recipients, history, eventVars, facets };
+	return { recipients, history, eventVars, facets, settings };
 };

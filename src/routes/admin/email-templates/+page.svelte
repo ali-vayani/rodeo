@@ -3,6 +3,7 @@
 	import { fly } from 'svelte/transition';
 	import { createClient } from '$lib/trpc/client';
 	import { EMAIL_TEMPLATES, type TemplateKey } from '$lib/email/templates';
+	import { unavailableVariables } from '$lib/email/variables';
 	import { pluralize } from '$lib/format';
 	import TemplateEditor from '$lib/components/email/TemplateEditor.svelte';
 	import EmailPreview from '$lib/components/email/EmailPreview.svelte';
@@ -30,6 +31,10 @@
 
 	// `saved` is the last-known-persisted baseline; `drafts` is what the admin edits.
 	// Both are $state so resetting the baseline after a save re-runs the deriveds below.
+	// Greys out the chips for variables this event has no value for; the send paths
+	// refuse a template that uses one, so the editor says so before it is typed.
+	const unavailable = $derived(unavailableVariables(data.settings));
+
 	let saved = $state(untrack(() => extract(data.settings)));
 	let drafts = $state(untrack(() => extract(data.settings)));
 
@@ -166,6 +171,7 @@
 			label={activeMeta.label}
 			bind:subject={drafts[active].subject}
 			bind:body={drafts[active].body}
+			{unavailable}
 		/>
 
 		<!-- Remount on switch so the preview shows the new template immediately
