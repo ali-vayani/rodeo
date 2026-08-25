@@ -14,6 +14,7 @@
 		DECISION_VALUES,
 		DECISION_OPTIONS,
 		allChecked,
+		noneChecked,
 		buildRecipientParams
 	} from '$lib/admin/filters';
 	import { linkedFacetKey, type FacetState } from '$lib/facets';
@@ -120,19 +121,18 @@
 		loadPage(1);
 	}
 
-	// `clear` resets a group to its all-ticked "no filter" default. None ticked also
-	// means "no filter", so clearing to empty would show every row above a panel
-	// claiming nothing is selected.
+	// `clear` unchecks every option. Functionally identical to all-ticked — both mean
+	// "no filter" per `buildRecipientParams` — but reads correctly as Clear.
 	function clearRole() {
-		roleFilter = allChecked(ALL_ROLES);
+		roleFilter = noneChecked(ALL_ROLES);
 		loadPage(1);
 	}
 	function clearStatus() {
-		statusFilter = allChecked(ALL_STATUSES);
+		statusFilter = noneChecked(ALL_STATUSES);
 		loadPage(1);
 	}
 	function clearDecision() {
-		decisionFilter = allChecked(DECISION_OPTIONS);
+		decisionFilter = noneChecked(DECISION_OPTIONS);
 		loadPage(1);
 	}
 
