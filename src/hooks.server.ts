@@ -38,6 +38,17 @@ function routedPathname(rawPathname: string): string {
 	}
 }
 
+/**
+ * Whether a path is the section root or anything beneath it.
+ *
+ * The root itself has to count: `startsWith('/hacker/')` alone leaves `/hacker` — a real
+ * route since the portal gained a Home page — outside every check below, which would
+ * serve it to logged-out visitors and to roles without portal access.
+ */
+function inSection(pathname: string, root: string): boolean {
+	return pathname === root || pathname.startsWith(`${root}/`);
+}
+
 export const handle: Handle = async ({ event, resolve }) => {
 	event.locals.user = await getSession(event);
 
@@ -48,17 +59,17 @@ export const handle: Handle = async ({ event, resolve }) => {
 		redirect(302, homePathFor(user.role));
 	}
 
-	if (pathname.startsWith('/hacker/') || pathname.startsWith('/admin/')) {
+	if (inSection(pathname, '/hacker') || inSection(pathname, '/admin')) {
 		if (!user) {
 			const redirectTo = encodeURIComponent(pathname);
 			redirect(302, `/login?redirectTo=${redirectTo}`);
 		}
 
-		if (pathname.startsWith('/hacker/') && !canAccessHackerPortal(user.role)) {
+		if (inSection(pathname, '/hacker') && !canAccessHackerPortal(user.role)) {
 			redirect(302, homePathFor(user.role));
 		}
 
-		if (pathname.startsWith('/admin/')) {
+		if (inSection(pathname, '/admin')) {
 			if (!hasPortalAccess(user.role)) redirect(302, homePathFor(user.role));
 
 			const section = sectionForPath(pathname);
