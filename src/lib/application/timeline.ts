@@ -28,27 +28,27 @@ const MILESTONES: { key: MilestoneKey; label: string; detail: string }[] = [
 	{
 		key: 'open',
 		label: 'Applications open',
-		detail: 'Start any time before the deadline. Answers save as you type.'
+		detail: 'Submit your application any time before the deadline. Your progress is saved automatically.'
 	},
 	{
 		key: 'close',
 		label: 'Applications close',
-		detail: "Last call — answers can't be changed after this."
+		detail: 'Applications are no longer accepted after this deadline.'
 	},
 	{
 		key: 'decisions',
 		label: 'Decisions go out',
-		detail: 'Everyone hears back by email, accepted or not.'
+		detail: 'All applicants will receive an email with their application decision.'
 	},
 	{
 		key: 'rsvp',
 		label: 'RSVP due',
-		detail: "Confirm your spot, or it's released to the waitlist."
+		detail: 'Confirm your participation by this date. Unconfirmed spots may be offered to applicants on the waitlist.'
 	},
 	{
 		key: 'event',
 		label: 'The hackathon begins',
-		detail: 'Your check-in code is on the Account page.'
+		detail: 'Check in using the code available on your Account page.'
 	}
 ];
 
