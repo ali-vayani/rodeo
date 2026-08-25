@@ -3,11 +3,9 @@
 	import poster from '$lib/assets/poster.png';
 	import BracketFrame from '$lib/components/brand/BracketFrame.svelte';
 	import EventTrail from '$lib/components/hacker/EventTrail.svelte';
-	import Badge from '$lib/components/ui/Badge.svelte';
 	import { computeApplicationState, getApplicationStateLabel } from '$lib/application/state';
 	import { buildTimeline } from '$lib/application/timeline';
 	import { applicationWindowState } from '$lib/application/window';
-	import type { Tone } from '$lib/ui/tone';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
@@ -91,16 +89,6 @@
 	const gate = $derived(state === 'filling' ? FILLING[windowState] : GATES[state]);
 
 	const statusLabel = $derived(getApplicationStateLabel(data.user));
-
-	const STATUS_TONES: Record<Exclude<typeof state, 'filling'>, Tone> = {
-		submitted: 'info',
-		accepted: 'success',
-		waitlisted: 'warning',
-		rejected: 'danger',
-		rsvpd: 'success',
-		declined: 'danger',
-		'checked-in': 'success'
-	};
 </script>
 
 <header class="mb-6">
@@ -135,11 +123,19 @@
 
 			<div class="mt-5">
 				{#if statusLabel}
-					<Badge tone={STATUS_TONES[state as Exclude<typeof state, 'filling'>]} dot>
-						{statusLabel}
-					</Badge>
+					<!--
+						Not the admin's status pill: its tone ramp and dot are triage chrome, and out
+						here there is only one row to read. Set the way the trail beside it sets a stop
+						— mono eyebrow, hairline, the answer in the display face.
+					-->
+					<div class="flex items-baseline justify-between gap-3 border-y border-brand-line py-3">
+						<span class="font-mono text-2xs tracking-eyebrow text-foreground-tertiary uppercase">
+							Status
+						</span>
+						<span class="font-display text-xl font-bold text-brand-purple">{statusLabel}</span>
+					</div>
 				{/if}
-				<p class="mt-3 text-md leading-relaxed text-foreground-secondary">
+				<p class="mt-4 text-md leading-relaxed text-foreground-secondary">
 					Signed in as <span class="font-semibold text-foreground">{data.user.name}</span>.
 				</p>
 
