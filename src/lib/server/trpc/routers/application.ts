@@ -8,6 +8,7 @@ import { normalizeEmail } from '$lib/blacklist/match';
 import { LINKED_FIELD_COLUMN, isLinkedField } from '$lib/linkedFields';
 import { acceptsWriteIn, isOptionsType } from '$lib/questions/options';
 import { decodeMultiSelect } from '$lib/questions/multiSelect';
+import { isAnswered } from '$lib/questions/isAnswered';
 import { sendTemplatedEmail } from '$lib/server/email';
 import { buildEmailPersonalization } from '$lib/server/wallet/email-block';
 import { emailSettings } from '$lib/server/settings';
@@ -168,27 +169,6 @@ function assertAnswerValid(question: AnswerableQuestion, value: string) {
 	}
 }
 
-/**
- * Whether a stored response counts as an answer to a required question.
- *
- * A blank value never does: autosave writes a row as soon as a field is touched, so
- * presence of the row let an applicant satisfy every required question by saving "".
- *
- * A CHECKBOX needs the second clause. Clearing one autosaves the string 'false', which
- * is not blank — so the required consent boxes (MLH data sharing, code of conduct, food
- * allergy waiver) passed submit while unticked, which is the opposite of what a consent
- * gate is for.
- *
- * A MULTI_SELECT clears to '' and so is already caught above; the third clause is for
- * an unreadable value, which is no more an answer than a blank one.
- */
-function isAnswered(type: QuestionType, value: string | undefined): boolean {
-	if (value === undefined || value.trim() === '') return false;
-	if (type === QuestionType.CHECKBOX) return value === 'true';
-	if (type === QuestionType.MULTI_SELECT) return decodeMultiSelect(value).length > 0;
-	return true;
-}
-
 export const applicationRouter = router({
 	/** Get all responses for the current user. */
 	getMyResponses: authedProcedure.query(async ({ ctx }) => {
@@ -197,6 +177,56 @@ export const applicationRouter = router({
 			include: { question: true }
 		});
 	}),
+
+	/**
+	 * Record the role the applicant is filling the form out as.
+	 *
+	 * Called when they pick one rather than at submit, because `save` and the file upload
+	 * both decide whether a question was asked of this applicant from the stored role. A
+	 * role that lived only in the page's state meant every judge, mentor and volunteer
+	 * answer was refused as FORBIDDEN while the form went on showing it accepted, and
+	 * submit then reported those same questions as unanswered.
+	 *
+	 * @param role - the role to apply as
+	 */
+	setRole: authedProcedure
+		.input(z.object({ role: z.nativeEnum(Role) }))
+		.mutation(async ({ ctx, input }) => {
+			// Never staff. Along with `submit`, this is one of only two places a role changes
+			// without an admin, so `role: "ADMIN"` must be unreachable from here.
+			if (!APPLICANT_ROLES.includes(input.role)) {
+				throw new TRPCError({
+					code: 'BAD_REQUEST',
+					message: 'That is not a role you can apply as.'
+				});
+			}
+
+			const [user, settings] = await Promise.all([
+				ctx.prisma.user.findUniqueOrThrow({
+					where: { uid: ctx.user.uid },
+					select: { status: true }
+				}),
+				ctx.prisma.settings.findFirst()
+			]);
+
+			// Same gates as `save`: after submission the role is what an admin is reviewing
+			// against, and outside the window there is nothing to fill out.
+			if (user.status !== UserStatus.CREATED) {
+				throw new TRPCError({
+					code: 'BAD_REQUEST',
+					message: 'Your application has already been submitted and can no longer be edited.'
+				});
+			}
+
+			assertWithinApplicationWindow(settings);
+
+			await ctx.prisma.user.update({
+				where: { uid: ctx.user.uid },
+				data: { role: input.role }
+			});
+
+			return { role: input.role };
+		}),
 
 	/**
 	 * Save a response for a question.

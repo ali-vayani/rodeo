@@ -5,6 +5,7 @@
 	import { applicationWindowState } from '$lib/application/window';
 	import { formatDateLong } from '$lib/format';
 	import { errorMessage } from '$lib/ui/errors';
+	import { isAnswered } from '$lib/questions/isAnswered';
 	import { createClient } from '$lib/trpc/client';
 	import { untrack } from 'svelte';
 	import { TriangleAlert } from 'lucide-svelte';
@@ -37,7 +38,21 @@
 
 	let selectedRole = $state<Role>(initialRole());
 
+	// The role the server has on record, which is what `syncRole` reconciles against.
+	let persistedRole = $state<Role>(untrack(() => user.role));
+
 	let responses = $state<Record<string, string>>(
+		untrack(() => Object.fromEntries(data.responses.map((r) => [r.questionId, r.value])))
+	);
+
+	/**
+	 * What the server has, as opposed to what's on screen. `responses` is written
+	 * optimistically so typing stays responsive, so counting it meant a save the server
+	 * refused still read as answered — the form showed 21/21 over a button that then
+	 * failed with those very questions listed as missing. The counter tracks the answers
+	 * submit will actually see.
+	 */
+	let savedResponses = $state<Record<string, string>>(
 		untrack(() => Object.fromEntries(data.responses.map((r) => [r.questionId, r.value])))
 	);
 
@@ -49,11 +64,10 @@
 
 	let requiredQuestions = $derived(filteredQuestions.filter((q) => q.required));
 
+	// `isAnswered` is submit's own rule, imported rather than restated: the page's old
+	// "non-blank" test disagreed with it about an unticked required checkbox.
 	let answeredRequiredCount = $derived(
-		requiredQuestions.filter((q) => {
-			const v = responses[q.id];
-			return v !== undefined && v.trim() !== '';
-		}).length
+		requiredQuestions.filter((q) => isAnswered(q.type, savedResponses[q.id])).length
 	);
 
 	let canSubmit = $derived(answeredRequiredCount === requiredQuestions.length);
@@ -70,6 +84,23 @@
 	let saveError = $state<string | null>(null);
 	let saveTimers = $state<Record<string, ReturnType<typeof setTimeout>>>({});
 
+	/**
+	 * Put the selected role on the record before any answer is written.
+	 *
+	 * `save` and the upload endpoint both read the audience of a question against the
+	 * *stored* role, so a role picked only in the page meant every role-specific answer
+	 * came back FORBIDDEN. Lazy rather than fired on click so switching between roles to
+	 * read the questions doesn't write anything; it also covers an UNDECLARED account,
+	 * which is in no question's audience at all and so could save nothing.
+	 */
+	async function syncRole() {
+		if (persistedRole === selectedRole) return;
+		const role = selectedRole;
+		await trpc.application.setRole.mutate({ role });
+		persistedRole = role;
+		user.role = role;
+	}
+
 	async function handleQuestionChange(questionId: string, value: string) {
 		// Belt and braces: the fields are already disabled outside the window. This exists
 		// so a stale page open since before the deadline cannot fire a burst of writes.
@@ -84,7 +115,9 @@
 		saveStatus = 'saving';
 		saveTimers[questionId] = setTimeout(async () => {
 			try {
+				await syncRole();
 				await trpc.application.save.mutate({ questionId, value });
+				savedResponses[questionId] = value;
 				saveStatus = 'saved';
 				saveError = null;
 			} catch (e) {
@@ -111,6 +144,7 @@
 
 		saveStatus = 'saving';
 		try {
+			await syncRole();
 			const body = new FormData();
 			body.append('file', file);
 			const res = await fetch(`/hacker/application/files/${questionId}`, { method: 'POST', body });
@@ -127,6 +161,7 @@
 
 			const { filename } = await res.json();
 			responses[questionId] = filename;
+			savedResponses[questionId] = filename;
 			saveStatus = 'saved';
 			saveError = null;
 		} catch (e) {

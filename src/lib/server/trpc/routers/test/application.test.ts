@@ -117,6 +117,73 @@ describe('application.getMyResponses', () => {
 	});
 });
 
+describe('application.setRole', () => {
+	it('puts the selected role on the record', async () => {
+		// The whole point: `save` reads a question's audience against the stored role, so
+		// picking Judge in the form has to land here before any judge answer is written.
+		const caller = createTestCaller(db, hackerUser);
+		db.user.findUniqueOrThrow.mockResolvedValue({ status: UserStatus.CREATED } as never);
+		db.settings.findFirst.mockResolvedValue(openWindow);
+		db.user.update.mockResolvedValue({ ...hackerUser, role: Role.JUDGE } as never);
+
+		await expect(caller.application.setRole({ role: Role.JUDGE })).resolves.toEqual({
+			role: Role.JUDGE
+		});
+		expect(db.user.update).toHaveBeenCalledWith(
+			expect.objectContaining({
+				where: { uid: hackerUser.uid },
+				data: { role: Role.JUDGE }
+			})
+		);
+	});
+
+	it.each([Role.ADMIN, Role.ORGANIZER, Role.UNDECLARED])(
+		'refuses to set %s, which is not a role you can apply as',
+		async (role) => {
+			// This and `submit` are the only two places a role changes without an admin, so a
+			// self-promotion to ADMIN has to be unreachable — checked before any read.
+			const caller = createTestCaller(db, hackerUser);
+
+			await expect(caller.application.setRole({ role })).rejects.toMatchObject({
+				code: 'BAD_REQUEST'
+			});
+			expect(db.user.update).not.toHaveBeenCalled();
+		}
+	);
+
+	it('refuses once the application has been submitted', async () => {
+		// Past submission the role is what an admin is reviewing against.
+		const caller = createTestCaller(db, hackerUser);
+		db.user.findUniqueOrThrow.mockResolvedValue({ status: UserStatus.APPLIED } as never);
+		db.settings.findFirst.mockResolvedValue(openWindow);
+
+		await expect(caller.application.setRole({ role: Role.JUDGE })).rejects.toMatchObject({
+			code: 'BAD_REQUEST',
+			message: expect.stringContaining('already been submitted')
+		});
+		expect(db.user.update).not.toHaveBeenCalled();
+	});
+
+	it('refuses outside the application window', async () => {
+		const caller = createTestCaller(db, hackerUser);
+		db.user.findUniqueOrThrow.mockResolvedValue({ status: UserStatus.CREATED } as never);
+		db.settings.findFirst.mockResolvedValue(closed);
+
+		await expect(caller.application.setRole({ role: Role.JUDGE })).rejects.toMatchObject({
+			code: 'BAD_REQUEST',
+			message: expect.stringContaining('Applications closed on')
+		});
+		expect(db.user.update).not.toHaveBeenCalled();
+	});
+
+	it('throws UNAUTHORIZED when not logged in', async () => {
+		const caller = createTestCaller(db, null);
+		await expect(caller.application.setRole({ role: Role.JUDGE })).rejects.toMatchObject({
+			code: 'UNAUTHORIZED'
+		});
+	});
+});
+
 describe('application.save', () => {
 	it('upserts on userId+questionId key', async () => {
 		const caller = createTestCaller(db, hackerUser);
@@ -200,6 +267,30 @@ describe('application.save', () => {
 			code: 'FORBIDDEN'
 		});
 		expect(db.applicationResponse.upsert).not.toHaveBeenCalled();
+	});
+
+	it('saves a judge question once the applicant has switched to JUDGE', async () => {
+		// The other half of the rule above, and what `setRole` exists to make reachable:
+		// with the role on the record, a judge-only question is theirs to answer.
+		const judgeUser = { ...hackerUser, role: Role.JUDGE };
+		const caller = createTestCaller(db, judgeUser);
+		db.user.findUniqueOrThrow.mockResolvedValue(judgeUser as never);
+		db.settings.findFirst.mockResolvedValue(openWindow);
+		db.question.findUnique.mockResolvedValue({
+			linkedField: null,
+			targetRole: [Role.JUDGE],
+			type: QuestionType.LONG_TEXT,
+			options: [],
+			min: null,
+			max: null,
+			regex: null,
+			optionPreset: null
+		} as never);
+		db.applicationResponse.upsert.mockResolvedValue(response as never);
+
+		await caller.application.save({ questionId: 'q-1', value: 'I have judged before.' });
+
+		expect(db.applicationResponse.upsert).toHaveBeenCalled();
 	});
 
 	it('refuses to save a FILE question as text', async () => {
