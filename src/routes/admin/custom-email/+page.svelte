@@ -76,7 +76,21 @@
 	let body = $state('');
 	let confirmText = $state('');
 
+	/**
+	 * Resend allows 10 requests/second per team and answers a burst past it with a 429.
+	 * The gap between sends targets roughly 8/s to leave headroom; the round trip usually
+	 * costs more than this anyway, so it is a floor on the interval, not the real rate.
+	 */
+	const SEND_INTERVAL_MS = 125;
+	/** Long enough for the rate-limit window to clear before a retried send goes again. */
+	const RETRY_BACKOFF_MS = 1000;
+	const MAX_ATTEMPTS = 3;
+
+	const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
 	let sending = $state(false);
+	/** Live count while the send loop runs; null when idle. */
+	let progress = $state<{ done: number; total: number } | null>(null);
 	let logs = $state(untrack(() => data.history.logs));
 	let debounceTimer: ReturnType<typeof setTimeout>;
 
@@ -155,8 +169,10 @@
 	});
 
 	// A draft here has nowhere to be saved to — it is composed and sent, or discarded —
-	// so the modal offers no save action.
-	const guard = createUnsavedGuard(() => isDirty && !sending);
+	// so the modal offers no save action. Guarding while `sending` matters more than the
+	// draft does: the send loop runs in this page, so leaving abandons the recipients it
+	// has not reached yet.
+	const guard = createUnsavedGuard(() => sending || isDirty);
 
 	/** Re-count against the same predicate the send will use. */
 	async function refreshCount() {
@@ -198,11 +214,24 @@
 		step = next;
 	}
 
+	/**
+	 * Mails the recipient list one message at a time.
+	 *
+	 * The pacing lives here rather than on the server because Resend caps a team at 10
+	 * requests/second: a few hundred recipients take longer than a serverless function
+	 * is allowed to run, while a browser tab can sit in the loop as long as it needs and
+	 * show a running count while it does.
+	 *
+	 * Closing the tab stops the send. `startSend` has already recorded the full recipient
+	 * list, and each delivery is marked against it, so what got out stays visible in the
+	 * history and a second run skips anyone already reached.
+	 */
 	async function send() {
 		if (confirmText !== CONFIRM_WORD || !count) return;
 		sending = true;
+		progress = null;
 		try {
-			const result = await trpc.email.sendCustom.mutate({
+			const started = await trpc.email.startSend.mutate({
 				subject,
 				body,
 				filters: filters as never,
@@ -212,11 +241,48 @@
 				expectedCount: count,
 				allowExternal: sendExternal
 			});
-			toast.success(
-				result.external > 0
-					? `Sent to ${pluralize(result.sent, 'recipient')}, ${result.external} external`
-					: `Sent to ${pluralize(result.sent, 'user')}`
-			);
+
+			const sendId = started.sendId;
+			if (sendId === null) {
+				toast.error('Nobody matched — nothing was sent.');
+				return;
+			}
+
+			const queue = started.recipients.map((recipient) => ({ recipient, attempt: 1 }));
+			progress = { done: 0, total: queue.length };
+
+			while (queue.length > 0) {
+				const job = queue.shift()!;
+				// A dropped connection is indistinguishable from a paced-out send from here, and
+				// both are worth another go, so a thrown request joins the retryable failures.
+				const result = await trpc.email.sendOne
+					.mutate({ sendId, recipient: job.recipient })
+					.catch(() => ({ ok: false, retryable: true }));
+
+				if (!result.ok && result.retryable && job.attempt < MAX_ATTEMPTS) {
+					// To the back, so one struggling recipient does not hold up the rest.
+					queue.push({ recipient: job.recipient, attempt: job.attempt + 1 });
+					await sleep(RETRY_BACKOFF_MS);
+					continue;
+				}
+
+				progress.done += 1;
+				if (queue.length > 0) await sleep(SEND_INTERVAL_MS);
+			}
+
+			const result = await trpc.email.finishSend.mutate({ sendId });
+			if (result.failed > 0) {
+				toast.error(
+					`Sent ${result.sent} of ${result.total} — ${result.failed} failed. See the send history.`
+				);
+			} else {
+				toast.success(
+					started.external > 0
+						? `Sent to ${pluralize(result.sent, 'recipient')}, ${started.external} external`
+						: `Sent to ${pluralize(result.sent, 'user')}`
+				);
+			}
+
 			const refreshed = await trpc.email.getLogs.query({ page: 1, pageSize: 10 });
 			logs = refreshed.logs;
 			subject = '';
@@ -227,6 +293,7 @@
 			toast.fromError(e, 'Failed to send');
 		} finally {
 			sending = false;
+			progress = null;
 		}
 	}
 </script>
@@ -317,6 +384,13 @@
 						Next: Confirm →
 					</Button>
 				{:else}
+					{#if progress}
+						<!-- A blast is paced at a few per second, so this is the only sign the page
+						     is still working. Keep it beside the button, not in a toast. -->
+						<span class="text-base text-muted-foreground" aria-live="polite">
+							Sending {progress.done} of {progress.total}…
+						</span>
+					{/if}
 					<Button
 						variant="danger"
 						class="ml-auto"

@@ -6,8 +6,13 @@
  * message and return. Preview used to send for real, fenced to `@yopmail.com`, which
  * was one predicate standing between a branch deploy and four hundred applicants.
  *
- * Failures throw. Bulk callers wrap each recipient in `Promise.allSettled` and record
- * the rejection count, which only works if a failure is distinguishable from a success.
+ * Failures throw, so that a rejected send is never mistaken for a delivered one. Bulk
+ * callers catch per recipient and record the outcome: `email.sendOne` returns it to the
+ * page driving the send, and the decision release counts rejections from
+ * `Promise.allSettled`.
+ *
+ * Nothing here paces itself. Resend allows a team 10 requests/second and answers a burst
+ * past that with a 429, so anything mailing a list has to space its own calls.
  */
 
 import { Resend } from 'resend';
@@ -102,7 +107,7 @@ export async function sendEmail(payload: EmailPayload): Promise<void> {
 
 	// The SDK reports delivery failures in the response rather than by throwing, so an
 	// unchecked call silently "succeeds" on a rejected send.
-	if (error) throw new Error(`Resend rejected the message: ${error.message}`);
+	if (error) throw new Error(`Resend rejected the message (${error.name}): ${error.message}`);
 }
 
 /** Substitutes `vars` into both halves of a stored template and sends it. */

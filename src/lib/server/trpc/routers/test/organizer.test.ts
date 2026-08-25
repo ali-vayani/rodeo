@@ -59,7 +59,8 @@ describe('organizer is denied everything holding user data', () => {
 		'filters.facets': (c) => c.filters.facets(),
 		'blacklist.add': (c) =>
 			c.blacklist.add({ firstName: 'A', lastName: 'B', email: 'a@b.com' } as never),
-		'email.sendCustom': (c) => c.email.sendCustom({ subject: 's', body: 'b' } as never),
+		'email.startSend': (c) => c.email.startSend({ subject: 's', body: 'b' } as never),
+		'email.sendOne': (c) => c.email.sendOne({ sendId: 'x', recipient: 'y' } as never),
 		'email.getLogs': (c) => c.email.getLogs({} as never),
 		'log.list': (c) => c.log.list({} as never),
 		'settings.update': (c) => c.settings.update(mockSettings as never),
