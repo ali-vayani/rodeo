@@ -115,7 +115,11 @@
 				<QRCard uid={user.uid} />
 				<!-- Below the QR, not inside it: QRCard is the fallback for anyone
 				 without a smartphone wallet and stays single-purpose. -->
-				<WalletPassCard availability={data.wallet} rsvpDeadline={settings?.RSVPDeadline} />
+				<WalletPassCard
+					availability={data.wallet}
+					rsvpDeadline={settings?.RSVPDeadline}
+					eventStart={settings?.hackathonStartDate}
+				/>
 			{/if}
 		</div>
 

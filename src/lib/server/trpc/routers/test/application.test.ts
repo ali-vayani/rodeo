@@ -406,6 +406,21 @@ describe('application.rsvp', () => {
 		expect(db.user.update).not.toHaveBeenCalled();
 	});
 
+	it('accepts an RSVP at any time when no deadline is configured', async () => {
+		// A null deadline means the event runs without one: confirmations never close.
+		const caller = createTestCaller(db, acceptedHacker);
+		db.user.findUniqueOrThrow.mockResolvedValue(acceptedHacker as never);
+		db.user.update.mockResolvedValue({
+			...acceptedHacker,
+			status: UserStatus.CONFIRMED
+		} as never);
+		db.settings.findFirst.mockResolvedValue({ ...openWindow, RSVPDeadline: null });
+
+		const result = await caller.application.rsvp();
+
+		expect(result.status).toBe(UserStatus.CONFIRMED);
+	});
+
 	it('reports the already-RSVPd state ahead of a passed deadline', async () => {
 		// Someone already CONFIRMED gains nothing from being told about a deadline that no
 		// longer concerns them.

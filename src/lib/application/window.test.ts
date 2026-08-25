@@ -68,6 +68,10 @@ describe('isRsvpClosed', () => {
 		expect(isRsvpClosed(null)).toBe(false);
 	});
 
+	it('reads a null deadline as open — confirmations never close', () => {
+		expect(isRsvpClosed({ RSVPDeadline: null }, new Date('2099-01-01T00:00:00Z'))).toBe(false);
+	});
+
 	it('falls open on an unparseable deadline', () => {
 		expect(isRsvpClosed({ RSVPDeadline: 'garbage' }, new Date('2026-04-20T00:00:00Z'))).toBe(false);
 	});

@@ -156,11 +156,13 @@ export function tokenizeTemplate(
  */
 export function buildEventVars(settings: {
 	hackathonStartDate: Date;
-	RSVPDeadline: Date;
+	RSVPDeadline: Date | null;
 }): Record<string, string> {
+	// No RSVP deadline means confirmations stay open until the event, so the event
+	// start is the honest date to put in its place.
 	return {
 		hackathon_start: settings.hackathonStartDate.toLocaleDateString(),
-		rsvp_deadline: settings.RSVPDeadline.toLocaleDateString()
+		rsvp_deadline: (settings.RSVPDeadline ?? settings.hackathonStartDate).toLocaleDateString()
 	};
 }
 
@@ -170,7 +172,7 @@ export function buildEventVars(settings: {
  */
 export function buildTemplateVars(
 	user: { name: string },
-	settings: { hackathonStartDate: Date; RSVPDeadline: Date },
+	settings: { hackathonStartDate: Date; RSVPDeadline: Date | null },
 	/**
 	 * The pre-rendered check-in block. Passed in rather than built here, because
 	 * producing it needs Prisma, the QR encoder and an inline attachment. Defaults to
@@ -193,7 +195,7 @@ export function buildTemplateVars(
  */
 export function buildExternalTemplateVars(settings: {
 	hackathonStartDate: Date;
-	RSVPDeadline: Date;
+	RSVPDeadline: Date | null;
 }): Record<string, string> {
 	return buildTemplateVars({ name: NAME_FALLBACK }, settings);
 }

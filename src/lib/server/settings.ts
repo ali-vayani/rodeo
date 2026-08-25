@@ -13,7 +13,7 @@
 export const DEFAULT_SETTINGS = {
 	applicationOpen: new Date(),
 	applicationDeadline: new Date(),
-	RSVPDeadline: new Date(),
+	RSVPDeadline: null as Date | null,
 	admissionsSend: null,
 	hackathonStartDate: new Date(),
 	scanActions: ['Check-In'],

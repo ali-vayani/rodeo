@@ -33,7 +33,7 @@ function reportSendFailure(kind: string, to: string) {
 type ApplicationWindow = {
 	applicationOpen: Date;
 	applicationDeadline: Date;
-	RSVPDeadline: Date;
+	RSVPDeadline: Date | null;
 };
 
 /**
@@ -65,7 +65,9 @@ function assertWithinApplicationWindow(settings: ApplicationWindow | null) {
 }
 
 /**
- * Guards `rsvp` — and deliberately not `rsvpDecline`. Same missing-row rule as above.
+ * Guards `rsvp` — and deliberately not `rsvpDecline`. Same missing-row rule as above,
+ * and a null deadline reads the same way: the event runs without one, so confirmations
+ * never close.
  *
  * The deadline exists to freeze the confirmed headcount. A late confirmation grows
  * that number after it was frozen; a late decline only shrinks it, and refusing one
@@ -73,7 +75,7 @@ function assertWithinApplicationWindow(settings: ApplicationWindow | null) {
  * is one-way: a hacker who declines late cannot re-confirm.
  */
 function assertBeforeRSVPDeadline(settings: ApplicationWindow | null) {
-	if (!settings) return;
+	if (!settings?.RSVPDeadline) return;
 
 	if (new Date() > settings.RSVPDeadline) {
 		throw new TRPCError({

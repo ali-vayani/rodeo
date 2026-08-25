@@ -115,6 +115,47 @@ describe('settings.update', () => {
 		expect(result.timezone).toBe('America/New_York');
 	});
 
+	it('stores a null RSVP deadline untouched', async () => {
+		// A bare z.coerce.date() would turn null into the 1970 epoch; the nullable
+		// wrapper must pass it through so "no deadline" survives the round trip.
+		const caller = createTestCaller(db, adminUser);
+		db.settings.findFirst.mockResolvedValue(mockSettings);
+		db.settings.update.mockResolvedValue({ ...mockSettings, RSVPDeadline: null });
+
+		await caller.settings.update({ ...mockSettings, RSVPDeadline: null });
+
+		expect(db.settings.update).toHaveBeenCalledWith(
+			expect.objectContaining({ data: expect.objectContaining({ RSVPDeadline: null }) })
+		);
+	});
+
+	it('names the offending field when a date is unusable', async () => {
+		// The form sends `new Date('')` for a date typed without a time. Before these
+		// messages the reader got a bare "Invalid date" with no clue which of the five
+		// controls it meant.
+		const caller = createTestCaller(db, adminUser);
+		db.settings.findFirst.mockResolvedValue(mockSettings);
+
+		await expect(
+			caller.settings.update({ ...mockSettings, hackathonStartDate: new Date('') } as never)
+		).rejects.toMatchObject({ message: expect.stringContaining('Event Start') });
+	});
+
+	it('names both sides when the dates are out of order', async () => {
+		const caller = createTestCaller(db, adminUser);
+		db.settings.findFirst.mockResolvedValue(mockSettings);
+
+		await expect(
+			caller.settings.update({
+				...mockSettings,
+				applicationDeadline: new Date('2026-05-01'),
+				RSVPDeadline: new Date('2026-04-01')
+			} as never)
+		).rejects.toMatchObject({
+			message: expect.stringContaining('RSVP Deadline must be on or after Applications Close')
+		});
+	});
+
 	it('creates row when none exists', async () => {
 		const caller = createTestCaller(db, adminUser);
 		db.settings.findFirst.mockResolvedValue(null);

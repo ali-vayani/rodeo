@@ -26,7 +26,8 @@ export type ApplicationWindowDates = {
 };
 
 export type RsvpWindowDates = {
-	RSVPDeadline: Date | string;
+	/** Nullable in the column: no deadline means confirmations never close. */
+	RSVPDeadline: Date | string | null;
 };
 
 /**

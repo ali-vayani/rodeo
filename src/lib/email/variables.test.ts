@@ -189,6 +189,13 @@ describe('buildEventVars / buildExternalTemplateVars', () => {
 		expect(buildExternalTemplateVars(settings).name).toBe(NAME_FALLBACK);
 	});
 
+	it('latches rsvp_deadline to the event start when no deadline is set', () => {
+		// A null deadline means confirmations stay open until the event, so the event
+		// start is the honest date — and a send must never crash on the null.
+		const vars = buildEventVars({ ...settings, RSVPDeadline: null });
+		expect(vars.rsvp_deadline).toBe(settings.hackathonStartDate.toLocaleDateString());
+	});
+
 	it('reads as a sentence in the salutation it has to survive', () => {
 		// "Hi hacker," is the whole reason the fallback is a filler and not a name.
 		expect(substituteVariables('Hi {{name}},', buildExternalTemplateVars(settings))).toBe(

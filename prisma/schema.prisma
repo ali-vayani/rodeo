@@ -141,7 +141,7 @@ model Settings {
   id                  String   @id @default(cuid())
   applicationOpen     DateTime
   applicationDeadline DateTime
-  RSVPDeadline        DateTime
+  RSVPDeadline        DateTime?
   admissionsSend      DateTime?
   hackathonStartDate  DateTime
   scanActions         String[]
