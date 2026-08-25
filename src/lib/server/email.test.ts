@@ -98,6 +98,17 @@ describe('production', () => {
 		expect(sent.from).toBe('hello@freetailhackers.com');
 	});
 
+	it('renders a single newline as a line break', async () => {
+		// The composer's preview shows the body pre-wrap, so one Enter reads as a new
+		// line there. Without `breaks: true` marked would collapse it to a space and
+		// the delivered mail would contradict the preview.
+		configureResend();
+
+		await sendEmail({ ...message, body: 'line one\nline two' });
+
+		expect(resendSend.mock.calls[0][0].html).toContain('line one<br>line two');
+	});
+
 	it('honours EMAIL_FROM when set', async () => {
 		configureResend();
 		env.EMAIL_FROM = 'rodeo@freetailhackers.com';
