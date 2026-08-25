@@ -92,19 +92,17 @@
 	   apart from the neutrals above on purpose: the admin console stays
 	   monochrome, and nothing here appears outside a hacker-facing surface.
 
-	   Every accent is sampled from the house gradient, which runs
-	   brand-purple -> brand-orange. `brand-canvas` below is that gradient. */
+	   Purple carries the brand surfaces; orange is kept for the one accent that
+	   still uses it, the required-field asterisk. The four ramp steps between
+	   them (violet, mauve, rose, terra) were only ever sampled to build the
+	   canvas gradient, and went with it — the brand sheet still has them. */
 	--color-brand-ink: #231f20;
 	--color-brand-purple: #513e99;
 	--color-brand-purple-hover: #5f4baf;
-	--color-brand-violet: #664a8b;
-	--color-brand-mauve: #7c567d;
-	--color-brand-rose: #91616f;
-	--color-brand-terra: #a76d61;
 	--color-brand-orange: #bc7953;
 
 	/* Ink at low alpha, for hairlines and wells on the warm surfaces. Tinted
-	   rather than gray so they sit with the gradient instead of on top of it. */
+	   rather than gray so they sit with the brand colour instead of on top of it. */
 	--color-brand-line: #e6e2de;
 	--color-brand-line-subtle: #ede9e5;
 	--color-brand-well: #faf9f8;
@@ -176,8 +174,8 @@
 	--shadow-md: 0 2px 4px rgb(25 25 25 / 0.05), 0 8px 20px rgb(25 25 25 / 0.06);
 	--shadow-lg: 0 8px 32px rgb(25 25 25 / 0.14), 0 2px 8px rgb(25 25 25 / 0.06);
 
-	/* A card lifted off the gradient canvas needs more separation than one on
-	   the admin's flat gray, or its edge disappears into the mid-tones. */
+	/* A card lifted off the brand canvas needs more separation than one on the
+	   admin's flat gray, or its edge disappears into the purple. */
 	--shadow-float: 0 18px 40px rgb(35 31 32 / 0.16), 0 2px 6px rgb(35 31 32 / 0.06);
 	--shadow-panel: 0 26px 60px rgb(35 31 32 / 0.26);
 
@@ -304,33 +302,17 @@ body {
 /* ═══════════════════════════════════════════════════════════════════════════
    BRAND SURFACES
 
-   The gradient can't live in @theme — there is no namespace that turns a
-   `linear-gradient()` into a utility — so the two surfaces that carry it are
-   named here instead of being pasted at call sites.
+   Named here rather than pasted at call sites, so the portal's canvas and its
+   rules move together. Both were a purple -> orange gradient and are now flat
+   purple; the names outlive the fill, which is why the call sites didn't change.
    ═══════════════════════════════════════════════════════════════════════════ */
 
-/* The hacker portal's canvas: purple at the top left running to orange at the
-   bottom right, through every accent on the sheet. */
+/* The hacker portal's canvas: flat brand purple. */
 @utility brand-canvas {
-	background-image: linear-gradient(
-		160deg,
-		var(--color-brand-purple) 0%,
-		var(--color-brand-violet) 28%,
-		var(--color-brand-mauve) 50%,
-		var(--color-brand-rose) 68%,
-		var(--color-brand-terra) 84%,
-		var(--color-brand-orange) 100%
-	);
+	background-color: var(--color-brand-purple);
 }
 
-/* The same ramp turned on its side, for hairlines and progress fills. */
+/* The same colour for hairlines and progress fills. */
 @utility brand-rule {
-	background-image: linear-gradient(
-		90deg,
-		var(--color-brand-purple),
-		var(--color-brand-violet),
-		var(--color-brand-mauve),
-		var(--color-brand-rose),
-		var(--color-brand-orange)
-	);
+	background-color: var(--color-brand-purple);
 }

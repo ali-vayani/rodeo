@@ -22,7 +22,7 @@
 	<HackerRail {links} />
 
 	<!--
-		The gradient canvas. It lives on <main> rather than on <body> so the admin
+		The brand canvas. It lives on <main> rather than on <body> so the admin
 		console, which shares the same stylesheet, keeps its flat gray page.
 	-->
 	<main
