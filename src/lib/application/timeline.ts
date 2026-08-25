@@ -28,7 +28,8 @@ const MILESTONES: { key: MilestoneKey; label: string; detail: string }[] = [
 	{
 		key: 'open',
 		label: 'Applications open',
-		detail: 'Submit your application any time before the deadline. Your progress is saved automatically.'
+		detail:
+			'Submit your application any time before the deadline. Your progress is saved automatically.'
 	},
 	{
 		key: 'close',
@@ -43,7 +44,8 @@ const MILESTONES: { key: MilestoneKey; label: string; detail: string }[] = [
 	{
 		key: 'rsvp',
 		label: 'RSVP due',
-		detail: 'Confirm your participation by this date. Unconfirmed spots may be offered to applicants on the waitlist.'
+		detail:
+			'Confirm your participation by this date. Unconfirmed spots may be offered to applicants on the waitlist.'
 	},
 	{
 		key: 'event',
