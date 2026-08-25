@@ -90,7 +90,9 @@ export async function sendEmail(payload: EmailPayload): Promise<void> {
 		to: payload.to,
 		from: emailFrom(),
 		subject: payload.subject,
-		html: await marked.parse(payload.body),
+		// `breaks: true` so a single Enter becomes a `<br>` — the composer's preview
+		// renders the body pre-wrap, and the sent mail has to match what it showed.
+		html: await marked.parse(payload.body, { breaks: true }),
 		// Resend names the header `content_id` and infers inline placement from
 		// the body referencing it, so there is no `inline` flag to pass here.
 		...(attachments.length
