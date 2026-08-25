@@ -171,11 +171,11 @@ describe('homePathFor', () => {
 		expect(homePathFor(Role.ORGANIZER)).toBe('/admin/dashboard');
 	});
 
-	it('sends everyone else to their application', () => {
-		expect(homePathFor(Role.HACKER)).toBe('/hacker/application');
-		expect(homePathFor(Role.JUDGE)).toBe('/hacker/application');
-		expect(homePathFor(Role.MENTOR)).toBe('/hacker/application');
-		expect(homePathFor(Role.VOLUNTEER)).toBe('/hacker/application');
-		expect(homePathFor(Role.UNDECLARED)).toBe('/hacker/application');
+	it('sends everyone else to the portal home', () => {
+		expect(homePathFor(Role.HACKER)).toBe('/hacker');
+		expect(homePathFor(Role.JUDGE)).toBe('/hacker');
+		expect(homePathFor(Role.MENTOR)).toBe('/hacker');
+		expect(homePathFor(Role.VOLUNTEER)).toBe('/hacker');
+		expect(homePathFor(Role.UNDECLARED)).toBe('/hacker');
 	});
 });

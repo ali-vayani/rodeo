@@ -82,7 +82,7 @@ export function hasPortalAccess(role: Role): boolean {
  * bounce someone between portals.
  */
 export function homePathFor(role: Role): string {
-	return isStaff(role) ? '/admin/dashboard' : '/hacker/application';
+	return isStaff(role) ? '/admin/dashboard' : '/hacker';
 }
 
 export function canAccess(role: Role, section: AdminSection): boolean {
