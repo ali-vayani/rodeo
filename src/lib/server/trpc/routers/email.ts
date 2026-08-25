@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { TRPCError } from '@trpc/server';
 import { router, adminProcedure } from '../init';
-import { sendEmail } from '$lib/server/email';
+import { sendEmail, type EmailAttachment } from '$lib/server/email';
 import { emailSettings } from '$lib/server/settings';
 import {
 	resolveRecipientWhere,
@@ -116,7 +116,18 @@ export const emailRouter = router({
 	}),
 
 	/**
-	 * Sends a hand-written email to the selected recipients.
+	 * Resolves the recipient set, records the send, and hands the list to the client.
+	 *
+	 * Delivery is driven from the browser, one `sendOne` per recipient, because Resend
+	 * caps a team at 10 requests/second. Mailing N people therefore takes at least N/10
+	 * seconds, and a server-side loop over a few hundred outlives the request. Pacing in
+	 * the page keeps every function invocation to a single message and gives the admin a
+	 * live count instead of a spinner.
+	 *
+	 * The EmailLog row is written here, before anything is sent, rather than after the
+	 * last message. A send that stops early — closed tab, dead laptop — must still leave
+	 * a record naming who was reached, or the only safe recovery is to mail everyone a
+	 * second time.
 	 *
 	 * With `allowExternal` this reaches addresses that have no portal account, the same
 	 * capability `sendTest` had its `to` field removed for. What makes it acceptable here
@@ -127,7 +138,7 @@ export const emailRouter = router({
 	 * - TRPCError BAD_REQUEST — an explicit address is malformed; the whole send is refused
 	 * - TRPCError CONFLICT — the recipient set no longer matches `expectedCount`
 	 */
-	sendCustom: adminProcedure
+	startSend: adminProcedure
 		.input(
 			z.object({
 				subject: z.string().min(1).max(200),
@@ -156,7 +167,7 @@ export const emailRouter = router({
 			// Same resolver as previewRecipients, including the fuzzy-search expansion, so the
 			// drift check below only ever fires on a set that genuinely changed.
 			const { where } = await resolveRecipientWhere(ctx.prisma, filters);
-			const users = await ctx.prisma.user.findMany({ where });
+			const users = await ctx.prisma.user.findMany({ where, select: { uid: true } });
 
 			// Resolved by membership in the User table, not against `users`. Deriving it from
 			// the filtered set would call a real hacker "external" whenever a filter excluded them.
@@ -180,76 +191,187 @@ export const emailRouter = router({
 			}
 
 			if (total === 0) {
-				return { sent: 0, external: 0 };
+				return { sendId: null, recipients: [], users: 0, external: 0 };
 			}
 
-			// Personalise per recipient, so {{name}} in a custom blast behaves like it does in
-			// the lifecycle templates. The raw row goes to buildEmailPersonalization, which
-			// defaults the email half itself so the check-in block's wallet gate fails closed.
-			const settingsRow = await ctx.prisma.settings.findFirst();
-			const externalVars = buildExternalTemplateVars(emailSettings(settingsRow));
-			const results = await Promise.allSettled([
-				...users.map(async (u) => {
-					// Per recipient: the check-in block embeds that hacker's own QR as an
-					// inline attachment, and is empty for anyone who hasn't confirmed.
-					const { vars, attachments } = await buildEmailPersonalization(u, settingsRow);
-					return sendEmail({
-						to: u.email,
-						subject: substituteVariables(subject, vars, { dropRawValues: true }),
-						body: substituteVariables(body, vars, { escapeValues: true }),
-						attachments
-					});
-				}),
-				...external.map((email) =>
-					sendEmail({
-						to: email,
-						subject: substituteVariables(subject, externalVars, { dropRawValues: true }),
-						body: substituteVariables(body, externalVars, { escapeValues: true })
-					})
-				)
-			]);
-			const failed = results.filter((r) => r.status === 'rejected').length;
+			// One identifier per recipient, in the spelling EmailLog already stores: a uid for
+			// an account holder, a prefixed address for everyone else. `sendOne` refuses
+			// anything absent from this list, which is what stops it being an open relay.
+			const recipients = [
+				...users.map((u) => u.uid),
+				...external.map((email) => `${EXTERNAL_RECIPIENT_PREFIX}${email}`)
+			];
 
-			// Store the raw template, not a rendered copy: one row covers N recipients. External
-			// addresses are recorded prefixed rather than omitted.
+			// Stores the raw template, not a rendered copy: one row covers N recipients, and
+			// `sendOne` reads the body back from here so it cannot be rewritten mid-send.
 			const emailLog = await ctx.prisma.emailLog.create({
-				data: {
-					subject,
-					body,
-					userIds: [
-						...users.map((u) => u.uid),
-						...external.map((email) => `${EXTERNAL_RECIPIENT_PREFIX}${email}`)
-					],
-					sentAt: new Date()
-				}
+				data: { subject, body, userIds: recipients }
 			});
 
-			// EmailLog already holds the body and recipient list. The audit entry records the
-			// act and points at that row. Reaching outside the portal goes in the sentence as
-			// well as the metadata, since that is what a reader needs without opening the row.
 			const reached =
 				external.length > 0
 					? `${total} ${total === 1 ? 'recipient' : 'recipients'} ` +
 						`(${users.length} with accounts, ${external.length} external)`
 					: `${users.length} ${users.length === 1 ? 'user' : 'users'}`;
 
+			// Logged at the start, not the end. `finishSend` records the outcome, but a blast
+			// abandoned half-way never gets there — and that is exactly the case where an
+			// audit trail matters, so the attempt goes in the log the moment it is committed.
 			await logAction(ctx, {
-				action: 'email.custom.send',
-				summary:
-					`Sent a custom email "${subject}" to ${reached}` +
-					(failed > 0 ? ` — ${failed} failed to send` : ''),
+				action: 'email.custom.start',
+				summary: `Started a custom email "${subject}" to ${reached}`,
 				target: { id: emailLog.id, label: subject },
 				metadata: {
 					recipients: total,
 					users: users.length,
 					external: external.length,
 					externalAllowed: allowExternal,
-					failed,
 					subject
 				}
 			});
 
-			return { sent: total, external: external.length };
+			return {
+				sendId: emailLog.id,
+				recipients,
+				users: users.length,
+				external: external.length
+			};
+		}),
+
+	/**
+	 * Delivers one message from a started send.
+	 *
+	 * Never throws on a delivery failure. The page walks the recipient list one call at a
+	 * time, so a rejection that propagated would end the whole blast on the first bad
+	 * address — the failure is recorded, returned, and the loop carries on.
+	 *
+	 * `retryable` marks the failures worth another attempt: a 429 means the send was
+	 * paced too fast, not that the address is bad.
+	 *
+	 * Throws:
+	 * - TRPCError NOT_FOUND — no such send, or its recipient has since been deleted
+	 * - TRPCError FORBIDDEN — the recipient is not part of this send
+	 */
+	sendOne: adminProcedure
+		.input(z.object({ sendId: z.string(), recipient: z.string() }))
+		.mutation(async ({ ctx, input }) => {
+			const log = await ctx.prisma.emailLog.findUnique({ where: { id: input.sendId } });
+			if (!log) {
+				throw new TRPCError({ code: 'NOT_FOUND', message: 'That send no longer exists.' });
+			}
+
+			// Subject, body and the recipient set all come from the stored row. Nothing the
+			// caller passes can retarget a send or change what it says after it was recorded.
+			if (!log.userIds.includes(input.recipient)) {
+				throw new TRPCError({
+					code: 'FORBIDDEN',
+					message: 'That recipient is not part of this send.'
+				});
+			}
+
+			// Idempotent by recipient, so a resumed or retried loop cannot put a second copy
+			// in an inbox that already has one.
+			if (log.sent.includes(input.recipient)) {
+				return { ok: true, skipped: true, error: null, retryable: false };
+			}
+
+			const settings = await ctx.prisma.settings.findFirst();
+
+			let to: string;
+			let vars: Record<string, string>;
+			let attachments: EmailAttachment[] = [];
+
+			if (input.recipient.startsWith(EXTERNAL_RECIPIENT_PREFIX)) {
+				to = input.recipient.slice(EXTERNAL_RECIPIENT_PREFIX.length);
+				vars = buildExternalTemplateVars(emailSettings(settings));
+			} else {
+				const user = await ctx.prisma.user.findUnique({ where: { uid: input.recipient } });
+				if (!user) {
+					throw new TRPCError({
+						code: 'NOT_FOUND',
+						message: 'That recipient no longer has an account.'
+					});
+				}
+				to = user.email;
+				// Raw row, not `emailSettings(...)`: the check-in block embeds this hacker's own
+				// QR as an inline attachment and its wallet gate must fail closed on an
+				// unconfigured install. See buildEmailPersonalization.
+				({ vars, attachments } = await buildEmailPersonalization(user, settings));
+			}
+
+			try {
+				await sendEmail({
+					to,
+					// `dropRawValues` in the subject because it is plain text; `escapeValues` in
+					// the body because it is rendered to HTML. Same split as sendTemplatedEmail.
+					subject: substituteVariables(log.subject, vars, { dropRawValues: true }),
+					body: substituteVariables(log.body, vars, { escapeValues: true }),
+					attachments
+				});
+			} catch (error) {
+				const message = error instanceof Error ? error.message : String(error);
+				await ctx.prisma.emailLog.update({
+					where: { id: log.id },
+					data: log.failed.includes(input.recipient) ? {} : { failed: { push: input.recipient } }
+				});
+				return {
+					ok: false,
+					skipped: false,
+					error: message,
+					// Resend names its rate-limit rejection `rate_limit_exceeded`, which
+					// `sendEmail` carries through into the message.
+					retryable: /rate_limit|rate limit|429/i.test(message)
+				};
+			}
+
+			await ctx.prisma.emailLog.update({
+				where: { id: log.id },
+				data: {
+					sent: { push: input.recipient },
+					// Clears an earlier attempt, so a recipient who failed and then succeeded is
+					// not counted in both columns.
+					...(log.failed.includes(input.recipient)
+						? { failed: { set: log.failed.filter((r) => r !== input.recipient) } }
+						: {})
+				}
+			});
+
+			return { ok: true, skipped: false, error: null, retryable: false };
+		}),
+
+	/**
+	 * Closes out a send with the tallies the row accumulated.
+	 *
+	 * Counts are read back from EmailLog rather than taken from the client, so the audit
+	 * entry reports what the server actually did. A blast abandoned mid-way never reaches
+	 * here; the `email.custom.start` entry and the row's own columns cover that case.
+	 *
+	 * Throws:
+	 * - TRPCError NOT_FOUND — no such send
+	 */
+	finishSend: adminProcedure
+		.input(z.object({ sendId: z.string() }))
+		.mutation(async ({ ctx, input }) => {
+			const log = await ctx.prisma.emailLog.findUnique({ where: { id: input.sendId } });
+			if (!log) {
+				throw new TRPCError({ code: 'NOT_FOUND', message: 'That send no longer exists.' });
+			}
+
+			const sent = log.sent.length;
+			const failed = log.failed.length;
+			const total = log.userIds.length;
+
+			await logAction(ctx, {
+				action: 'email.custom.send',
+				summary:
+					`Sent a custom email "${log.subject}" to ${sent} of ${total} ` +
+					`${total === 1 ? 'recipient' : 'recipients'}` +
+					(failed > 0 ? ` — ${failed} failed to send` : ''),
+				target: { id: log.id, label: log.subject },
+				metadata: { recipients: total, sent, failed, subject: log.subject }
+			});
+
+			return { sent, failed, total };
 		}),
 
 	/**

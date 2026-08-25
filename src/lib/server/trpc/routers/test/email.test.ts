@@ -43,16 +43,77 @@ const emailLog = {
 	subject: emailInput.subject,
 	body: emailInput.body,
 	userIds: [hackerUser.uid],
-	sentAt: new Date()
+	sentAt: new Date(),
+	sent: [] as string[],
+	failed: [] as string[]
 };
 
-describe('email.sendCustom', () => {
+/**
+ * The filter query, plus the per-uid lookup `sendOne` makes for each account holder.
+ * Both are served from one list so the two halves of a send cannot disagree about who
+ * is being mailed.
+ */
+function mockUsers(users: unknown[]) {
+	db.user.findMany.mockResolvedValue(users as never);
+	db.user.findUnique.mockImplementation(
+		(async ({ where }: { where: { uid?: string } }) =>
+			(users as { uid: string }[]).find((u) => u.uid === where.uid) ?? null) as never
+	);
+}
+
+/**
+ * An EmailLog row that behaves like the stored one across a send.
+ *
+ * `sendOne` reads the subject, body and recipient list back from the row, and checks
+ * `sent` to stay idempotent — against a fixed mock it would happily deliver to the same
+ * person twice and no test would notice.
+ */
+function stubSendLog() {
+	let row: Record<string, unknown> | null = null;
+	db.emailLog.create.mockImplementation((async ({ data }: { data: object }) => {
+		row = { ...emailLog, ...data, sent: [], failed: [] };
+		return row;
+	}) as never);
+	db.emailLog.findUnique.mockImplementation((async () => row) as never);
+	type ListUpdate = {
+		sent?: { push: string };
+		failed?: { push?: string; set?: string[] };
+	};
+	db.emailLog.update.mockImplementation((async ({ data }: { data: ListUpdate }) => {
+		if (!row) return null;
+		if (data.sent?.push) row.sent = [...(row.sent as string[]), data.sent.push];
+		if (data.failed?.push) row.failed = [...(row.failed as string[]), data.failed.push];
+		if (data.failed?.set) row.failed = data.failed.set;
+		return row;
+	}) as never);
+	return () => row;
+}
+
+/**
+ * Drives a send the way the compose page does: `startSend`, then one `sendOne` per
+ * recipient, then `finishSend`. Returns what the page reports, so a test can assert on
+ * the outcome rather than on the N+2 calls it took to get there.
+ */
+async function runSend(
+	caller: ReturnType<typeof createTestCaller>,
+	input: Record<string, unknown>
+) {
+	const started = await caller.email.startSend(input as never);
+	if (started.sendId === null) return { sent: 0, external: 0 };
+	for (const recipient of started.recipients) {
+		await caller.email.sendOne({ sendId: started.sendId, recipient });
+	}
+	const done = await caller.email.finishSend({ sendId: started.sendId });
+	return { sent: done.sent, external: started.external };
+}
+
+describe('email.startSend + sendOne', () => {
 	it('sends email to each matching user and creates log', async () => {
 		const caller = createTestCaller(db, adminUser);
-		db.user.findMany.mockResolvedValue([hackerUser, appliedHacker] as never);
-		db.emailLog.create.mockResolvedValue(emailLog as never);
+		mockUsers([hackerUser, appliedHacker] as never);
+		stubSendLog();
 
-		const result = await caller.email.sendCustom({ ...emailInput, expectedCount: 2 });
+		const result = await runSend(caller, { ...emailInput, expectedCount: 2 });
 
 		expect(result).toEqual({ sent: 2, external: 0 });
 		expect(sendEmail).toHaveBeenCalledTimes(2);
@@ -67,11 +128,11 @@ describe('email.sendCustom', () => {
 		// What organizers actually received: with no Settings row this passed an empty var
 		// map, so the literal `{{name}}` went out in the subject and body of a real send.
 		const caller = createTestCaller(db, adminUser);
-		db.user.findMany.mockResolvedValue([hackerUser] as never);
+		mockUsers([hackerUser] as never);
 		db.settings.findFirst.mockResolvedValue(null);
-		db.emailLog.create.mockResolvedValue(emailLog as never);
+		stubSendLog();
 
-		await caller.email.sendCustom({
+		await runSend(caller, {
 			subject: 'Hi {{name}}',
 			body: 'Hello {{name}}, see you soon.',
 			filters: {},
@@ -87,10 +148,10 @@ describe('email.sendCustom', () => {
 
 	it('falls back to the filler salutation for a user with a blank name', async () => {
 		const caller = createTestCaller(db, adminUser);
-		db.user.findMany.mockResolvedValue([{ ...hackerUser, name: '' }] as never);
-		db.emailLog.create.mockResolvedValue(emailLog as never);
+		mockUsers([{ ...hackerUser, name: '' }] as never);
+		stubSendLog();
 
-		await caller.email.sendCustom({
+		await runSend(caller, {
 			subject: 'Hi {{name}}',
 			body: 'Hi {{name}},',
 			filters: {},
@@ -104,10 +165,10 @@ describe('email.sendCustom', () => {
 
 	it('filters users by role', async () => {
 		const caller = createTestCaller(db, adminUser);
-		db.user.findMany.mockResolvedValue([hackerUser] as never);
-		db.emailLog.create.mockResolvedValue(emailLog as never);
+		mockUsers([hackerUser] as never);
+		stubSendLog();
 
-		await caller.email.sendCustom({
+		await runSend(caller, {
 			...emailInput,
 			filters: { roles: [Role.HACKER] },
 			expectedCount: 1
@@ -122,10 +183,10 @@ describe('email.sendCustom', () => {
 
 	it('filters users by status', async () => {
 		const caller = createTestCaller(db, adminUser);
-		db.user.findMany.mockResolvedValue([appliedHacker] as never);
-		db.emailLog.create.mockResolvedValue(emailLog as never);
+		mockUsers([appliedHacker] as never);
+		stubSendLog();
 
-		await caller.email.sendCustom({
+		await runSend(caller, {
 			...emailInput,
 			filters: { statuses: [UserStatus.APPLIED] },
 			expectedCount: 1
@@ -140,9 +201,9 @@ describe('email.sendCustom', () => {
 
 	it('returns sent=0 when no users match filters', async () => {
 		const caller = createTestCaller(db, adminUser);
-		db.user.findMany.mockResolvedValue([] as never);
+		mockUsers([] as never);
 
-		const result = await caller.email.sendCustom({ ...emailInput, expectedCount: 0 });
+		const result = await runSend(caller, { ...emailInput, expectedCount: 0 });
 
 		expect(result).toEqual({ sent: 0, external: 0 });
 		expect(sendEmail).not.toHaveBeenCalled();
@@ -151,20 +212,18 @@ describe('email.sendCustom', () => {
 
 	it('throws FORBIDDEN for non-admin', async () => {
 		const caller = createTestCaller(db, hackerUser);
-		await expect(
-			caller.email.sendCustom({ ...emailInput, expectedCount: 0 })
-		).rejects.toMatchObject({
+		await expect(runSend(caller, { ...emailInput, expectedCount: 0 })).rejects.toMatchObject({
 			code: 'FORBIDDEN'
 		});
 	});
 
 	it('substitutes variables per recipient in both subject and body', async () => {
 		const caller = createTestCaller(db, adminUser);
-		db.user.findMany.mockResolvedValue([hackerUser, appliedHacker] as never);
+		mockUsers([hackerUser, appliedHacker] as never);
 		db.settings.findFirst.mockResolvedValue(mockSettings);
-		db.emailLog.create.mockResolvedValue(emailLog as never);
+		stubSendLog();
 
-		await caller.email.sendCustom({
+		await runSend(caller, {
 			subject: 'Hi {{name}}',
 			body: 'We start {{hackathon_start}}, {{name}}.',
 			filters: {},
@@ -191,11 +250,11 @@ describe('email.sendCustom', () => {
 		// One EmailLog row covers N recipients, so storing a rendered body would
 		// arbitrarily pick one recipient's values and misrepresent the rest.
 		const caller = createTestCaller(db, adminUser);
-		db.user.findMany.mockResolvedValue([hackerUser] as never);
+		mockUsers([hackerUser] as never);
 		db.settings.findFirst.mockResolvedValue(mockSettings);
-		db.emailLog.create.mockResolvedValue(emailLog as never);
+		stubSendLog();
 
-		await caller.email.sendCustom({
+		await runSend(caller, {
 			subject: 'Hi {{name}}',
 			body: 'Body {{name}}',
 			filters: {},
@@ -211,20 +270,20 @@ describe('email.sendCustom', () => {
 
 	it('refuses when the recipient set drifted since the preview', async () => {
 		const caller = createTestCaller(db, adminUser);
-		db.user.findMany.mockResolvedValue([hackerUser, appliedHacker] as never);
+		mockUsers([hackerUser, appliedHacker] as never);
 
-		await expect(
-			caller.email.sendCustom({ ...emailInput, expectedCount: 1 })
-		).rejects.toMatchObject({ code: 'CONFLICT' });
+		await expect(runSend(caller, { ...emailInput, expectedCount: 1 })).rejects.toMatchObject({
+			code: 'CONFLICT'
+		});
 		expect(sendEmail).not.toHaveBeenCalled();
 	});
 
 	it('sends nothing when the decision filter is engaged but empty', async () => {
 		// The mass-mail regression: this used to drop the clause and match everyone.
 		const caller = createTestCaller(db, adminUser);
-		db.user.findMany.mockResolvedValue([] as never);
+		mockUsers([] as never);
 
-		const result = await caller.email.sendCustom({
+		const result = await runSend(caller, {
 			...emailInput,
 			filters: { decisions: [], includeNoDecision: false },
 			expectedCount: 0
@@ -237,7 +296,7 @@ describe('email.sendCustom', () => {
 	});
 });
 
-describe('email.sendCustom — external recipients', () => {
+describe('email.startSend + sendOne — external recipients', () => {
 	const GHOST = 'ghost@yopmail.com';
 	const listInput = {
 		subject: 'Hi {{name}}',
@@ -245,18 +304,22 @@ describe('email.sendCustom — external recipients', () => {
 		filters: { emails: [hackerUser.email, GHOST] }
 	};
 
-	/** The filtered set, then the membership lookup sendCustom runs for externals. */
+	/** The filtered set, then the membership lookup startSend runs for externals. */
 	function mockList(users: unknown[], matched: unknown[]) {
 		db.user.findMany.mockResolvedValueOnce(users as never).mockResolvedValueOnce(matched as never);
+		db.user.findUnique.mockImplementation(
+			(async ({ where }: { where: { uid?: string } }) =>
+				(users as { uid: string }[]).find((u) => u.uid === where.uid) ?? null) as never
+		);
 		db.settings.findFirst.mockResolvedValue(mockSettings);
-		db.emailLog.create.mockResolvedValue(emailLog as never);
+		stubSendLog();
 	}
 
 	it('mails an address with no account when the toggle is on', async () => {
 		const caller = createTestCaller(db, adminUser);
 		mockList([hackerUser], [{ email: hackerUser.email }]);
 
-		const result = await caller.email.sendCustom({
+		const result = await runSend(caller, {
 			...listInput,
 			expectedCount: 2,
 			allowExternal: true
@@ -270,11 +333,13 @@ describe('email.sendCustom — external recipients', () => {
 			body: `Body ${hackerUser.name}`,
 			attachments: []
 		});
-		// The nameless fallback, identical to what the compose preview shows.
+		// The nameless fallback, identical to what the compose preview shows. No
+		// attachments: the check-in block needs a User row, and this address has none.
 		expect(sendEmail).toHaveBeenCalledWith({
 			to: GHOST,
 			subject: `Hi ${NAME_FALLBACK}`,
-			body: `Body ${NAME_FALLBACK}`
+			body: `Body ${NAME_FALLBACK}`,
+			attachments: []
 		});
 	});
 
@@ -282,11 +347,11 @@ describe('email.sendCustom — external recipients', () => {
 		// The unchanged path: an explicit list is a lookup into the User table, and a
 		// miss is reported by previewRecipients rather than mailed.
 		const caller = createTestCaller(db, adminUser);
-		db.user.findMany.mockResolvedValue([hackerUser] as never);
+		mockUsers([hackerUser] as never);
 		db.settings.findFirst.mockResolvedValue(mockSettings);
-		db.emailLog.create.mockResolvedValue(emailLog as never);
+		stubSendLog();
 
-		const result = await caller.email.sendCustom({ ...listInput, expectedCount: 1 });
+		const result = await runSend(caller, { ...listInput, expectedCount: 1 });
 
 		expect(result).toEqual({ sent: 1, external: 0 });
 		expect(sendEmail).toHaveBeenCalledTimes(1);
@@ -300,10 +365,10 @@ describe('email.sendCustom — external recipients', () => {
 
 	it('refuses a malformed address with the toggle off, before touching the database', async () => {
 		const caller = createTestCaller(db, adminUser);
-		db.user.findMany.mockResolvedValue([hackerUser] as never);
+		mockUsers([hackerUser] as never);
 
 		await expect(
-			caller.email.sendCustom({
+			runSend(caller, {
 				...listInput,
 				filters: { emails: [hackerUser.email, 'nope', 'no@domain'] },
 				expectedCount: 1
@@ -322,7 +387,7 @@ describe('email.sendCustom — external recipients', () => {
 		mockList([hackerUser], [{ email: hackerUser.email }]);
 
 		await expect(
-			caller.email.sendCustom({
+			runSend(caller, {
 				...listInput,
 				filters: { emails: ['nope'] },
 				expectedCount: 1,
@@ -338,7 +403,7 @@ describe('email.sendCustom — external recipients', () => {
 
 		// 2 recipients now (1 user + 1 external) against a preview that saw 1.
 		await expect(
-			caller.email.sendCustom({ ...listInput, expectedCount: 1, allowExternal: true })
+			runSend(caller, { ...listInput, expectedCount: 1, allowExternal: true })
 		).rejects.toMatchObject({ code: 'CONFLICT', message: expect.stringContaining('2 now') });
 		expect(sendEmail).not.toHaveBeenCalled();
 		expect(db.emailLog.create).not.toHaveBeenCalled();
@@ -350,7 +415,7 @@ describe('email.sendCustom — external recipients', () => {
 		mockList([hackerUser], [{ email: hackerUser.email }]);
 
 		await expect(
-			caller.email.sendCustom({ ...listInput, expectedCount: 2, allowExternal: true })
+			runSend(caller, { ...listInput, expectedCount: 2, allowExternal: true })
 		).resolves.toEqual({ sent: 2, external: 1 });
 	});
 
@@ -358,7 +423,7 @@ describe('email.sendCustom — external recipients', () => {
 		const caller = createTestCaller(db, adminUser);
 		mockList([hackerUser], [{ email: hackerUser.email }]);
 
-		const result = await caller.email.sendCustom({
+		const result = await runSend(caller, {
 			...listInput,
 			filters: { emails: [hackerUser.email] },
 			expectedCount: 1,
@@ -376,7 +441,7 @@ describe('email.sendCustom — external recipients', () => {
 		const caller = createTestCaller(db, adminUser);
 		mockList([hackerUser], [{ email: hackerUser.email }]);
 
-		await caller.email.sendCustom({ ...listInput, expectedCount: 2, allowExternal: true });
+		await runSend(caller, { ...listInput, expectedCount: 2, allowExternal: true });
 
 		expect(db.emailLog.create).toHaveBeenCalledWith(
 			expect.objectContaining({
@@ -388,15 +453,17 @@ describe('email.sendCustom — external recipients', () => {
 	});
 
 	it('names the external count in the audit entry', async () => {
+		// On the start entry, which is written before anything goes out: a send abandoned
+		// half-way never reaches `finishSend`, and that is exactly when the trail matters.
 		const caller = createTestCaller(db, adminUser);
 		mockList([hackerUser], [{ email: hackerUser.email }]);
 
-		await caller.email.sendCustom({ ...listInput, expectedCount: 2, allowExternal: true });
+		await runSend(caller, { ...listInput, expectedCount: 2, allowExternal: true });
 
 		expect(db.log.create).toHaveBeenCalledWith(
 			expect.objectContaining({
 				data: expect.objectContaining({
-					action: 'email.custom.send',
+					action: 'email.custom.start',
 					summary: expect.stringContaining('1 external'),
 					metadata: expect.objectContaining({
 						recipients: 2,
@@ -409,15 +476,31 @@ describe('email.sendCustom — external recipients', () => {
 		);
 	});
 
+	it('reports the delivered tally on the completion entry', async () => {
+		const caller = createTestCaller(db, adminUser);
+		mockList([hackerUser], [{ email: hackerUser.email }]);
+
+		await runSend(caller, { ...listInput, expectedCount: 2, allowExternal: true });
+
+		expect(db.log.create).toHaveBeenCalledWith(
+			expect.objectContaining({
+				data: expect.objectContaining({
+					action: 'email.custom.send',
+					metadata: expect.objectContaining({ recipients: 2, sent: 2, failed: 0 })
+				})
+			})
+		);
+	});
+
 	it('ignores the toggle when no explicit address list was given', async () => {
 		// Filter mode has no unmatched addresses for the toggle to admit, so it must
 		// not open a second path to the whole database.
 		const caller = createTestCaller(db, adminUser);
-		db.user.findMany.mockResolvedValue([hackerUser] as never);
+		mockUsers([hackerUser] as never);
 		db.settings.findFirst.mockResolvedValue(mockSettings);
-		db.emailLog.create.mockResolvedValue(emailLog as never);
+		stubSendLog();
 
-		const result = await caller.email.sendCustom({
+		const result = await runSend(caller, {
 			...emailInput,
 			filters: { roles: [Role.HACKER] },
 			expectedCount: 1,
@@ -432,7 +515,7 @@ describe('email.sendCustom — external recipients', () => {
 		// The mitigation that makes an outbound relay acceptable at all.
 		const caller = createTestCaller(db, hackerUser);
 		await expect(
-			caller.email.sendCustom({ ...listInput, expectedCount: 2, allowExternal: true })
+			runSend(caller, { ...listInput, expectedCount: 2, allowExternal: true })
 		).rejects.toMatchObject({ code: 'FORBIDDEN' });
 	});
 });
@@ -441,7 +524,7 @@ describe('email.previewRecipients', () => {
 	it('returns the count and a sample without sending', async () => {
 		const caller = createTestCaller(db, adminUser);
 		db.user.count.mockResolvedValue(42 as never);
-		db.user.findMany.mockResolvedValue([hackerUser] as never);
+		mockUsers([hackerUser] as never);
 
 		const result = await caller.email.previewRecipients({ roles: [Role.HACKER] });
 
@@ -453,7 +536,7 @@ describe('email.previewRecipients', () => {
 	it('uses the same predicate sendCustom would use', async () => {
 		const caller = createTestCaller(db, adminUser);
 		db.user.count.mockResolvedValue(0 as never);
-		db.user.findMany.mockResolvedValue([] as never);
+		mockUsers([] as never);
 
 		await caller.email.previewRecipients({ decisions: [], includeNoDecision: false });
 
@@ -564,7 +647,7 @@ describe('email.previewRecipients', () => {
 	it('skips the existence check when no address list was given', async () => {
 		const caller = createTestCaller(db, adminUser);
 		db.user.count.mockResolvedValue(3 as never);
-		db.user.findMany.mockResolvedValue([hackerUser] as never);
+		mockUsers([hackerUser] as never);
 
 		const result = await caller.email.previewRecipients({ roles: [Role.HACKER] });
 
@@ -784,7 +867,11 @@ describe('previewRecipients and sendCustom agree on the recipient set', () => {
 			const found = roster.filter((u) => matches(u, args?.where));
 			return args?.distinct ? found.map((u) => ({ name: u.name })) : found;
 		}) as never);
-		db.emailLog.create.mockResolvedValue(emailLog as never);
+		db.user.findUnique.mockImplementation(
+			(async ({ where }: { where: { uid?: string } }) =>
+				roster.find((u) => u.uid === where.uid) ?? null) as never
+		);
+		stubSendLog();
 	}
 
 	beforeEach(stubRoster);
@@ -798,7 +885,7 @@ describe('previewRecipients and sendCustom agree on the recipient set', () => {
 		db.user.count.mockClear();
 		db.user.findMany.mockClear();
 
-		const sent = await caller.email.sendCustom({
+		const sent = await runSend(caller, {
 			subject: 'Hello',
 			body: 'Body',
 			filters,
@@ -900,7 +987,7 @@ describe('email recipient filters — linked application fields', () => {
 	it('matches nobody when a linked filter is engaged but empty', async () => {
 		// The failure mode recipients.ts was written to prevent: a UI showing "0
 		// recipients" must not be able to mail the whole database.
-		db.user.findMany.mockResolvedValue([] as never);
+		mockUsers([] as never);
 		db.user.count.mockResolvedValue(0 as never);
 
 		const caller = createTestCaller(db, adminUser);
@@ -912,10 +999,10 @@ describe('email recipient filters — linked application fields', () => {
 	});
 
 	it('sends to exactly the selected values', async () => {
-		db.user.findMany.mockResolvedValue([hackerUser] as never);
-		db.emailLog.create.mockResolvedValue(emailLog as never);
+		mockUsers([hackerUser] as never);
+		stubSendLog();
 
-		await createTestCaller(db, adminUser).email.sendCustom({
+		await runSend(createTestCaller(db, adminUser), {
 			subject: 'Hello',
 			body: 'Body',
 			filters: { universities: ['Rice University'] },
