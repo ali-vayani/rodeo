@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { TRPCError } from '@trpc/server';
 import type { Prisma } from '$lib/generated/prisma/client';
-import { Role, DecisionStatus } from '$lib/generated/prisma/client';
+import { Role, DecisionStatus, UserStatus } from '$lib/generated/prisma/client';
 import { router, adminProcedure } from '../init';
 import { logAction } from '$lib/server/log';
 import { sendTemplatedEmail } from '$lib/server/email';
@@ -57,6 +57,13 @@ const UNDECIDED: Prisma.UserWhereInput = {
 	activeDecision: null
 };
 
+/**
+ * Applicants who submitted. `CREATED` is the pre-submit state and every later status
+ * follows a submit, so ruling it out is exactly "applied" — an account that signed up
+ * and stopped is not something to review.
+ */
+const SUBMITTED: Prisma.UserWhereInput = { status: { not: UserStatus.CREATED } };
+
 export const admissionsRouter = router({
 	/**
 	 * Lists applicants (never staff) with optional filters. `blacklistMatch` is computed
@@ -100,7 +107,7 @@ export const admissionsRouter = router({
 
 			// Stacked under AND: the decision and search filters each contribute an `OR`, and
 			// spreading both into one object literal silently drops the first.
-			const conditions: Prisma.UserWhereInput[] = [{ role: { in: applicantRoles } }];
+			const conditions: Prisma.UserWhereInput[] = [{ role: { in: applicantRoles } }, SUBMITTED];
 			if (noDecision) conditions.push(UNDECIDED);
 			if (scored !== undefined) conditions.push({ score: scored ? { not: null } : null });
 			if (decision !== undefined) {
@@ -456,7 +463,7 @@ export const admissionsRouter = router({
 	 * value (pending if set, else released), matching what the page's list shows.
 	 */
 	stats: adminProcedure.query(async ({ ctx }) => {
-		const applicants = { role: { in: APPLICANT_ROLES } };
+		const applicants = { role: { in: APPLICANT_ROLES }, ...SUBMITTED };
 
 		const [rows, scored, unscored] = await Promise.all([
 			ctx.prisma.user.groupBy({
@@ -496,11 +503,11 @@ export const admissionsRouter = router({
 		const [roleGroups, scoreAgg] = await Promise.all([
 			ctx.prisma.user.groupBy({
 				by: ['role', 'pendingDecision', 'activeDecision'],
-				where: { role: { in: APPLICANT_ROLES } },
+				where: { role: { in: APPLICANT_ROLES }, ...SUBMITTED },
 				_count: { _all: true }
 			}),
 			ctx.prisma.user.aggregate({
-				where: { role: { in: APPLICANT_ROLES }, score: { not: null } },
+				where: { role: { in: APPLICANT_ROLES }, ...SUBMITTED, score: { not: null } },
 				_avg: { score: true },
 				_min: { score: true },
 				_max: { score: true },
@@ -547,7 +554,7 @@ export const admissionsRouter = router({
 	 */
 	reconsidering: adminProcedure.query(async ({ ctx }) => {
 		const users = await ctx.prisma.user.findMany({
-			where: { role: { in: APPLICANT_ROLES }, activeDecision: { not: null } },
+			where: { role: { in: APPLICANT_ROLES }, ...SUBMITTED, activeDecision: { not: null } },
 			include: {
 				application: { include: { question: true } },
 				scorer: { select: { name: true } }

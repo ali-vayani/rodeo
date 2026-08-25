@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { mockReset, type DeepMockProxy } from 'vitest-mock-extended';
 import type { PrismaClient } from '$lib/generated/prisma/client';
-import { Role, DecisionStatus } from '$lib/generated/prisma/client';
+import { Role, DecisionStatus, UserStatus } from '$lib/generated/prisma/client';
 import { CLAIM_TTL_MS } from '$lib/admissions/lock';
 import { APPLICANT_ROLES } from '$lib/admissions/roles';
 import { NO_VALUE } from '$lib/facets';
@@ -149,6 +149,20 @@ describe('admissions.list', () => {
 		);
 		expect(APPLICANT_ROLES).not.toContain(Role.ORGANIZER);
 		expect(APPLICANT_ROLES).not.toContain(Role.ADMIN);
+	});
+
+	it('leaves out accounts that never submitted an application', async () => {
+		// Signing up leaves the account at CREATED; only a submit moves it off.
+		const caller = createTestCaller(db, adminUser);
+		db.user.findMany.mockResolvedValue([hackerUser] as never);
+		await caller.admissions.list({});
+		expect(db.user.findMany).toHaveBeenCalledWith(
+			expect.objectContaining({
+				where: {
+					AND: expect.arrayContaining([{ status: { not: UserStatus.CREATED } }])
+				}
+			})
+		);
 	});
 
 	it('drops staff roles from an explicit filter', async () => {
@@ -1104,6 +1118,22 @@ describe('admissions.stats', () => {
 		);
 		db.user.count.mockResolvedValueOnce(scored as never).mockResolvedValueOnce(unscored as never);
 	}
+
+	it('counts only accounts that submitted an application', async () => {
+		const caller = createTestCaller(db, adminUser);
+		mockStats([{ pendingDecision: null, activeDecision: null, count: 1 }]);
+
+		await caller.admissions.stats();
+
+		expect(db.user.groupBy).toHaveBeenCalledWith(
+			expect.objectContaining({
+				where: expect.objectContaining({ status: { not: UserStatus.CREATED } })
+			})
+		);
+		for (const call of db.user.count.mock.calls) {
+			expect(call[0]?.where).toMatchObject({ status: { not: UserStatus.CREATED } });
+		}
+	});
 
 	it('counts a decision at its effective value — pending shadows active', async () => {
 		const caller = createTestCaller(db, adminUser);
