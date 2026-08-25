@@ -8,6 +8,7 @@
 
 	// resolve() here keeps the href literals typechecked against real routes.
 	const links = [
+		{ href: resolve('/hacker'), label: 'Home' },
 		{ href: resolve('/hacker/application'), label: 'Application' },
 		{ href: resolve('/hacker/account'), label: 'Account' }
 	];

@@ -29,8 +29,13 @@ export type RsvpWindowDates = {
 	RSVPDeadline: Date | string;
 };
 
-/** A usable Date, or null for anything that isn't one. */
-function toDate(value: Date | string | null | undefined): Date | null {
+/**
+ * A usable Date, or null for anything that isn't one.
+ *
+ * Exported for `timeline.ts`, which has to read the same Settings columns and must
+ * agree with the guards here on what counts as a date.
+ */
+export function toDate(value: Date | string | null | undefined): Date | null {
 	if (value == null) return null;
 	const date = value instanceof Date ? value : new Date(value);
 	return Number.isNaN(date.getTime()) ? null : date;
