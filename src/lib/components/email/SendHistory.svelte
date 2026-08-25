@@ -11,13 +11,15 @@
 
 	let { logs }: { logs: LogRow[] } = $props();
 
-	/** Distinct failure reasons with counts, biggest first, for the cell tooltip. */
+	/** Distinct failure reasons with counts, biggest first, for the cell tooltip.
+	    A plain object, not a Map: it never outlives the call, and the lint rule
+	    reads any Map in a component as reactive state wanting SvelteMap. */
 	function failureReasons(log: LogRow): string {
-		const counts = new Map<string, number>();
+		const counts: Record<string, number> = {};
 		for (const message of Object.values((log.errors ?? {}) as Record<string, string>)) {
-			counts.set(message, (counts.get(message) ?? 0) + 1);
+			counts[message] = (counts[message] ?? 0) + 1;
 		}
-		return [...counts]
+		return Object.entries(counts)
 			.sort((a, b) => b[1] - a[1])
 			.map(([message, count]) => `${count}× ${message}`)
 			.join('\n');
