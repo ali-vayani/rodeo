@@ -4,11 +4,19 @@
 	let {
 		label,
 		subject = $bindable(),
-		body = $bindable()
+		body = $bindable(),
+		unavailable = new Map()
 	}: {
 		label: string;
 		subject: string;
 		body: string;
+		/**
+		 * Variables with no value under the current settings, mapped to why — from
+		 * `unavailableVariables`. Their chips are shown greyed and refuse to insert:
+		 * hiding them would leave an organizer wondering where a variable went, and the
+		 * send paths refuse a template that uses one anyway.
+		 */
+		unavailable?: ReadonlyMap<string, string>;
 	} = $props();
 
 	let subjectEl = $state<HTMLInputElement | undefined>(undefined);
@@ -70,11 +78,19 @@
 			Insert
 		</span>
 		{#each TEMPLATE_VARIABLES as v (v.key)}
+			{@const blockedReason = unavailable.get(v.key)}
 			<button
 				type="button"
 				onclick={() => insertVariable(v.key)}
-				title={'hint' in v ? `${v.label} — ${v.hint}` : v.label}
-				class="cursor-pointer rounded-md border border-border bg-muted px-1.5 py-0.5 font-mono text-xs text-foreground hover:bg-neutral-100"
+				disabled={blockedReason !== undefined}
+				title={blockedReason
+					? `${v.label} — unavailable because ${blockedReason}. An email using it cannot be sent.`
+					: 'hint' in v
+						? `${v.label} — ${v.hint}`
+						: v.label}
+				class="rounded-md border border-border bg-muted px-1.5 py-0.5 font-mono text-xs text-foreground
+					enabled:cursor-pointer enabled:hover:bg-neutral-100
+					disabled:cursor-not-allowed disabled:text-foreground-tertiary disabled:line-through disabled:opacity-50"
 			>
 				{'{{' + v.key + '}}'}
 			</button>

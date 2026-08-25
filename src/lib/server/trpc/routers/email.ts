@@ -15,6 +15,7 @@ import {
 	buildEventVars,
 	buildExternalTemplateVars,
 	substituteVariables,
+	templateBlockers,
 	SAMPLE_VARS
 } from '$lib/email/variables';
 import { buildEmailPersonalization } from '$lib/server/wallet/email-block';
@@ -162,6 +163,17 @@ export const emailRouter = router({
 					code: 'BAD_REQUEST',
 					message: `Not valid email addresses: ${malformed.join(', ')}`
 				});
+			}
+
+			// A variable with no value would mail a sentence with a hole in it, so the draft
+			// is refused whole rather than sent to N people and noticed afterwards. Checked
+			// before the recipient query: it costs one row and cannot depend on who matches.
+			const blocked = templateBlockers(
+				[subject, body],
+				emailSettings(await ctx.prisma.settings.findFirst())
+			);
+			if (blocked) {
+				throw new TRPCError({ code: 'BAD_REQUEST', message: blocked.message });
 			}
 
 			// Same resolver as previewRecipients, including the fuzzy-search expansion, so the
@@ -395,6 +407,14 @@ export const emailRouter = router({
 			// to anyone, with the body deliberately never written to EmailLog.
 			const to = ctx.user.email;
 			const settings = await ctx.prisma.settings.findFirst();
+
+			// Same refusal a real send would give, so the proofreading step is where the
+			// organizer finds out. Only once a Settings row exists: with none, the render
+			// below falls back to placeholders and every variable is unconfigured anyway.
+			const blocked = settings && templateBlockers([input.subject, input.body], settings);
+			if (blocked) {
+				throw new TRPCError({ code: 'BAD_REQUEST', message: blocked.message });
+			}
 
 			// No Settings row yet on a fresh install, so fall back to the preview samples for the
 			// dates. `name` is overridden with the real recipient regardless: this lands in the

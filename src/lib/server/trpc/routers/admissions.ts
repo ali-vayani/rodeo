@@ -6,6 +6,7 @@ import { router, adminProcedure } from '../init';
 import { logAction } from '$lib/server/log';
 import { sendTemplatedEmail } from '$lib/server/email';
 import { buildEmailPersonalization } from '$lib/server/wallet/email-block';
+import { templateBlockers } from '$lib/email/variables';
 import { emailSettings } from '$lib/server/settings';
 import { CLAIM_TTL_MS } from '$lib/admissions/lock';
 import { effectiveDecision } from '$lib/admissions/decision';
@@ -643,6 +644,41 @@ export const admissionsRouter = router({
 
 			const settings = await ctx.prisma.settings.findFirst();
 
+			// Defaults on an unconfigured install, so a release never decides fates silently.
+			const mail = emailSettings(settings);
+			const templateMap: Record<string, { subject: string; body: string }> = {
+				[DecisionStatus.ACCEPTED]: {
+					subject: mail.acceptSubject,
+					body: mail.acceptTemplate
+				},
+				[DecisionStatus.REJECTED]: {
+					subject: mail.rejectSubject,
+					body: mail.rejectTemplate
+				},
+				[DecisionStatus.WAITLISTED]: {
+					subject: mail.waitlistSubject,
+					body: mail.waitlistTemplate
+				},
+				[DecisionStatus.PENDING]: { subject: '', body: '' }
+			};
+
+			// Before the transaction, deliberately. Releasing is irreversible, so a template
+			// that cannot be rendered has to stop the batch while stopping it is still free —
+			// skipping the send afterwards would leave accepted applicants decided and
+			// unmailed, which is the one outcome worse than not releasing.
+			for (const decision of new Set(users.map((u) => u.pendingDecision))) {
+				if (!decision) continue;
+				const template = templateMap[decision];
+				if (!template?.body) continue;
+				const blocked = templateBlockers([template.subject, template.body], mail);
+				if (blocked) {
+					throw new TRPCError({
+						code: 'BAD_REQUEST',
+						message: `The ${decision.toLowerCase()} email cannot be sent. ${blocked.message}`
+					});
+				}
+			}
+
 			// CAS on the value read above: a decision changed since then is dropped from the
 			// batch rather than emailed as a stale, irreversible outcome.
 			const swaps = await ctx.prisma.$transaction(
@@ -661,24 +697,6 @@ export const admissionsRouter = router({
 			);
 
 			const releasedUsers = users.filter((_, i) => swaps[i].count === 1);
-
-			// Defaults on an unconfigured install, so a release never decides fates silently.
-			const mail = emailSettings(settings);
-			const templateMap: Record<string, { subject: string; body: string }> = {
-				[DecisionStatus.ACCEPTED]: {
-					subject: mail.acceptSubject,
-					body: mail.acceptTemplate
-				},
-				[DecisionStatus.REJECTED]: {
-					subject: mail.rejectSubject,
-					body: mail.rejectTemplate
-				},
-				[DecisionStatus.WAITLISTED]: {
-					subject: mail.waitlistSubject,
-					body: mail.waitlistTemplate
-				},
-				[DecisionStatus.PENDING]: { subject: '', body: '' }
-			};
 
 			const recipients = releasedUsers.filter(
 				(u) => u.pendingDecision && templateMap[u.pendingDecision].body

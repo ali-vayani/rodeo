@@ -10,6 +10,7 @@ import { acceptsWriteIn, isOptionsType } from '$lib/questions/options';
 import { decodeMultiSelect } from '$lib/questions/multiSelect';
 import { sendTemplatedEmail } from '$lib/server/email';
 import { buildEmailPersonalization } from '$lib/server/wallet/email-block';
+import { templateBlockers } from '$lib/email/variables';
 import { emailSettings } from '$lib/server/settings';
 import { formatDateLong } from '$lib/format';
 
@@ -191,6 +192,33 @@ function isAnswered(type: QuestionType, value: string | undefined): boolean {
 	return true;
 }
 
+/**
+ * Whether a lifecycle template can go out, reporting it when it cannot.
+ *
+ * These sends follow a hacker's own action, so an unrenderable template must not fail
+ * that action — someone cannot be stopped from RSVPing because an organizer left
+ * `{{rsvp_deadline}}` in a template. The send is dropped and the reason logged, the
+ * same shape as a template an admin has deliberately blanked. The admin-initiated
+ * paths (`email.startSend`, `admissions.release`) refuse up front instead.
+ */
+function sendableTemplate(
+	kind: string,
+	template: { subject: string; body: string },
+	settings: { RSVPDeadline: Date | null } | null,
+	recipient: string
+): boolean {
+	if (!template.body) return false;
+
+	const blocked = templateBlockers(
+		[template.subject, template.body],
+		settings ?? { RSVPDeadline: null }
+	);
+	if (!blocked) return true;
+
+	console.error(`Skipped the ${kind} email to ${recipient}: ${blocked.message}`);
+	return false;
+}
+
 export const applicationRouter = router({
 	/** Get all responses for the current user. */
 	getMyResponses: authedProcedure.query(async ({ ctx }) => {
@@ -350,7 +378,14 @@ export const applicationRouter = router({
 		// Defaults when no row exists — an unconfigured install still confirms an RSVP.
 		// A template an admin has deliberately blanked still opts out.
 		const mail = emailSettings(settings);
-		if (mail.confirmTemplate) {
+		if (
+			sendableTemplate(
+				'RSVP confirmation',
+				{ subject: mail.confirmSubject, body: mail.confirmTemplate },
+				settings,
+				user.email
+			)
+		) {
 			// The RSVP confirmation is where a hacker wants their pass, so this send carries the
 			// check-in block. Personalization takes the raw row so the wallet gate fails closed.
 			const { vars, attachments } = await buildEmailPersonalization(updated, settings);
@@ -402,7 +437,14 @@ export const applicationRouter = router({
 
 		const settings = await ctx.prisma.settings.findFirst();
 		const mail = emailSettings(settings);
-		if (mail.declineTemplate) {
+		if (
+			sendableTemplate(
+				'RSVP decline',
+				{ subject: mail.declineSubject, body: mail.declineTemplate },
+				settings,
+				user.email
+			)
+		) {
 			await sendTemplatedEmail(
 				user.email,
 				{ subject: mail.declineSubject, body: mail.declineTemplate },
@@ -505,7 +547,14 @@ export const applicationRouter = router({
 			// Defaults when no Settings row exists — the window guards read that as
 			// "unconfigured, allow through", and an application allowed through gets acknowledged.
 			const mail = emailSettings(settings);
-			if (mail.submitTemplate) {
+			if (
+				sendableTemplate(
+					'application submitted',
+					{ subject: mail.submitSubject, body: mail.submitTemplate },
+					settings,
+					user.email
+				)
+			) {
 				const { vars, attachments } = await buildEmailPersonalization(updatedUser, settings);
 				await sendTemplatedEmail(
 					user.email,
