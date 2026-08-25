@@ -80,7 +80,10 @@
 										CELL,
 										'h-9 py-2',
 										column.align === 'right' && 'text-right',
-										column.nowrap && 'whitespace-nowrap'
+										column.nowrap && 'whitespace-nowrap',
+										// `max-w-0` lets the flexible column shrink below its content's
+										// intrinsic width; without it the ellipsis never engages.
+										column.truncate && 'max-w-0 truncate'
 									)}
 								>
 									{#if cell}
