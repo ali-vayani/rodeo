@@ -7,7 +7,7 @@ export type Milestone = {
 	key: MilestoneKey;
 	label: string;
 	detail: string;
-	/** Null only for `decisions`, whose Settings column is nullable. */
+	/** Null for `decisions` and `rsvp`, whose Settings columns are nullable. */
 	date: Date | null;
 	/** The date is in the past. */
 	done: boolean;
@@ -20,7 +20,7 @@ export type TimelineDates = {
 	applicationOpen: Date | string;
 	applicationDeadline: Date | string;
 	admissionsSend: Date | string | null;
-	RSVPDeadline: Date | string;
+	RSVPDeadline: Date | string | null;
 	hackathonStartDate: Date | string;
 };
 

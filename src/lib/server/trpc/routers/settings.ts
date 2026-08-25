@@ -15,7 +15,9 @@ const settingsInput = z
 	.object({
 		applicationOpen: z.coerce.date(),
 		applicationDeadline: z.coerce.date(),
-		RSVPDeadline: z.coerce.date(),
+		// Null means "no deadline": confirmations never close and the wallet unlock
+		// latches onto the event start.
+		RSVPDeadline: z.coerce.date().nullable(),
 		admissionsSend: z.coerce.date().optional(),
 		hackathonStartDate: z.coerce.date(),
 		scanActions: z.array(z.string().min(1).max(100)).max(50),
@@ -45,7 +47,7 @@ const settingsInput = z
 		message: 'Applications must open before they close.',
 		path: ['applicationDeadline']
 	})
-	.refine((s) => s.applicationDeadline <= s.RSVPDeadline, {
+	.refine((s) => s.RSVPDeadline == null || s.applicationDeadline <= s.RSVPDeadline, {
 		message: 'The RSVP deadline must be on or after the application deadline.',
 		path: ['RSVPDeadline']
 	});

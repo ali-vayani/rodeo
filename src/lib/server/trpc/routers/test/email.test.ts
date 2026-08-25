@@ -674,7 +674,8 @@ describe('email.eventVars', () => {
 
 		await expect(caller.email.eventVars()).resolves.toEqual({
 			hackathon_start: DEFAULT_SETTINGS.hackathonStartDate.toLocaleDateString(),
-			rsvp_deadline: DEFAULT_SETTINGS.RSVPDeadline.toLocaleDateString()
+			// The default row has no RSVP deadline, so the var latches to the event start.
+			rsvp_deadline: DEFAULT_SETTINGS.hackathonStartDate.toLocaleDateString()
 		});
 	});
 });

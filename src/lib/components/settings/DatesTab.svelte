@@ -14,14 +14,14 @@
 		applicationOpen: Date;
 		applicationDeadline: Date;
 		admissionsSend: Date | null;
-		RSVPDeadline: Date;
+		RSVPDeadline: Date | null;
 		hackathonStartDate: Date;
 		saving: boolean;
 		onSave: (updates: {
 			applicationOpen: Date;
 			applicationDeadline: Date;
 			admissionsSend: Date | null;
-			RSVPDeadline: Date;
+			RSVPDeadline: Date | null;
 			hackathonStartDate: Date;
 		}) => void;
 	} = $props();
@@ -64,7 +64,7 @@
 			applicationOpen: new Date(appOpen),
 			applicationDeadline: new Date(appClose),
 			admissionsSend: decisionRelease ? new Date(decisionRelease) : null,
-			RSVPDeadline: new Date(rsvpDeadline),
+			RSVPDeadline: rsvpDeadline ? new Date(rsvpDeadline) : null,
 			hackathonStartDate: new Date(eventStart)
 		});
 	}
@@ -124,6 +124,12 @@
 		<div>
 			<div class="mb-1.5 text-[10px] font-bold tracking-widest text-muted-foreground uppercase">
 				RSVP Deadline
+				<span class="font-normal tracking-normal text-muted-foreground normal-case">
+					— optional</span
+				>
+			</div>
+			<div class="mb-1.5 text-xs text-muted-foreground">
+				Leave blank to keep RSVPs open; wallet passes then unlock at Event Start.
 			</div>
 			<input
 				type="datetime-local"

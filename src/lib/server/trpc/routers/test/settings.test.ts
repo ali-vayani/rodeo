@@ -115,6 +115,20 @@ describe('settings.update', () => {
 		expect(result.timezone).toBe('America/New_York');
 	});
 
+	it('stores a null RSVP deadline untouched', async () => {
+		// A bare z.coerce.date() would turn null into the 1970 epoch; the nullable
+		// wrapper must pass it through so "no deadline" survives the round trip.
+		const caller = createTestCaller(db, adminUser);
+		db.settings.findFirst.mockResolvedValue(mockSettings);
+		db.settings.update.mockResolvedValue({ ...mockSettings, RSVPDeadline: null });
+
+		await caller.settings.update({ ...mockSettings, RSVPDeadline: null });
+
+		expect(db.settings.update).toHaveBeenCalledWith(
+			expect.objectContaining({ data: expect.objectContaining({ RSVPDeadline: null }) })
+		);
+	});
+
 	it('creates row when none exists', async () => {
 		const caller = createTestCaller(db, adminUser);
 		db.settings.findFirst.mockResolvedValue(null);
