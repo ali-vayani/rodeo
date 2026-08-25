@@ -56,6 +56,7 @@ export const LOG_ACTIONS = [
 	{ key: 'scan.record', label: 'Scan recorded', group: 'Scan' },
 
 	// Email
+	{ key: 'email.custom.start', label: 'Custom email started', group: 'Email' },
 	{ key: 'email.custom.send', label: 'Custom email sent', group: 'Email' },
 	{ key: 'email.test.send', label: 'Test email sent', group: 'Email' },
 

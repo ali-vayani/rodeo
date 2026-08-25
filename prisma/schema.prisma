@@ -247,6 +247,11 @@ model EmailLog {
   body     String
   userIds  String[]
   sentAt   DateTime @default(now())
+  // Written before the first message goes out, then filled in as the client drives
+  // the send. A closed tab leaves a row saying exactly how far it got, and a rerun
+  // skips `sent` rather than mailing anyone twice.
+  sent     String[]
+  failed   String[]
 }
 
 model Group {
