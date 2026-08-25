@@ -272,9 +272,11 @@
 
 			const result = await trpc.email.finishSend.mutate({ sendId });
 			if (result.failed > 0) {
-				toast.error(
-					`Sent ${result.sent} of ${result.total} — ${result.failed} failed. See the send history.`
-				);
+				// The most common error explains most blasts (quota, bad domain) in one line.
+				const reason = result.failures[0]
+					? ` Most common error: ${result.failures[0].message}`
+					: '';
+				toast.error(`Sent ${result.sent} of ${result.total} — ${result.failed} failed.${reason}`);
 			} else {
 				toast.success(
 					started.external > 0

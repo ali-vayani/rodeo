@@ -45,7 +45,8 @@ const emailLog = {
 	userIds: [hackerUser.uid],
 	sentAt: new Date(),
 	sent: [] as string[],
-	failed: [] as string[]
+	failed: [] as string[],
+	errors: {} as Record<string, string>
 };
 
 /**
@@ -71,19 +72,21 @@ function mockUsers(users: unknown[]) {
 function stubSendLog() {
 	let row: Record<string, unknown> | null = null;
 	db.emailLog.create.mockImplementation((async ({ data }: { data: object }) => {
-		row = { ...emailLog, ...data, sent: [], failed: [] };
+		row = { ...emailLog, ...data, sent: [], failed: [], errors: {} };
 		return row;
 	}) as never);
 	db.emailLog.findUnique.mockImplementation((async () => row) as never);
 	type ListUpdate = {
 		sent?: { push: string };
 		failed?: { push?: string; set?: string[] };
+		errors?: Record<string, string>;
 	};
 	db.emailLog.update.mockImplementation((async ({ data }: { data: ListUpdate }) => {
 		if (!row) return null;
 		if (data.sent?.push) row.sent = [...(row.sent as string[]), data.sent.push];
 		if (data.failed?.push) row.failed = [...(row.failed as string[]), data.failed.push];
 		if (data.failed?.set) row.failed = data.failed.set;
+		if (data.errors) row.errors = data.errors;
 		return row;
 	}) as never);
 	return () => row;
@@ -122,6 +125,74 @@ describe('email.startSend + sendOne', () => {
 				data: expect.objectContaining({ subject: emailInput.subject, body: emailInput.body })
 			})
 		);
+	});
+
+	it('records why a delivery failed, on the row and in the server log', async () => {
+		const caller = createTestCaller(db, adminUser);
+		mockUsers([hackerUser] as never);
+		const getRow = stubSendLog();
+		const reason =
+			'Resend rejected the message (daily_quota_exceeded): You have reached your daily email sending quota.';
+		vi.mocked(sendEmail).mockRejectedValueOnce(new Error(reason));
+		const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+		const started = await caller.email.startSend({ ...emailInput, expectedCount: 1 } as never);
+		const result = await caller.email.sendOne({
+			sendId: started.sendId!,
+			recipient: hackerUser.uid
+		});
+
+		expect(result).toMatchObject({ ok: false, error: reason, retryable: false });
+		expect(getRow()).toMatchObject({
+			failed: [hackerUser.uid],
+			errors: { [hackerUser.uid]: reason }
+		});
+		// The browser tab is the only other place the error goes; ops needs it in the logs.
+		expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining(reason));
+		errorSpy.mockRestore();
+	});
+
+	it('clears the recorded error when a retry succeeds', async () => {
+		const caller = createTestCaller(db, adminUser);
+		mockUsers([hackerUser] as never);
+		const getRow = stubSendLog();
+		vi.mocked(sendEmail).mockRejectedValueOnce(new Error('boom'));
+		const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+		const started = await caller.email.startSend({ ...emailInput, expectedCount: 1 } as never);
+		await caller.email.sendOne({ sendId: started.sendId!, recipient: hackerUser.uid });
+		await caller.email.sendOne({ sendId: started.sendId!, recipient: hackerUser.uid });
+
+		expect(getRow()).toMatchObject({ sent: [hackerUser.uid], failed: [], errors: {} });
+		errorSpy.mockRestore();
+	});
+
+	it('groups failure reasons into the completion audit entry', async () => {
+		const caller = createTestCaller(db, adminUser);
+		mockUsers([hackerUser, appliedHacker] as never);
+		stubSendLog();
+		vi.mocked(sendEmail).mockRejectedValue(new Error('boom'));
+		const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+		const started = await caller.email.startSend({ ...emailInput, expectedCount: 2 } as never);
+		for (const recipient of started.recipients) {
+			await caller.email.sendOne({ sendId: started.sendId!, recipient });
+		}
+		const done = await caller.email.finishSend({ sendId: started.sendId! });
+
+		// One line per distinct reason, so the audit entry says why, not just how many.
+		expect(done.failures).toEqual([{ message: 'boom', count: 2 }]);
+		expect(db.log.create).toHaveBeenCalledWith(
+			expect.objectContaining({
+				data: expect.objectContaining({
+					action: 'email.custom.send',
+					summary: expect.stringContaining('2 failed to send (2× boom)'),
+					metadata: expect.objectContaining({ failures: ['2× boom'] })
+				})
+			})
+		);
+		vi.mocked(sendEmail).mockResolvedValue(undefined);
+		errorSpy.mockRestore();
 	});
 
 	it('substitutes {{name}} even when no settings row exists', async () => {
@@ -674,7 +745,8 @@ describe('email.eventVars', () => {
 
 		await expect(caller.email.eventVars()).resolves.toEqual({
 			hackathon_start: DEFAULT_SETTINGS.hackathonStartDate.toLocaleDateString(),
-			rsvp_deadline: DEFAULT_SETTINGS.RSVPDeadline.toLocaleDateString()
+			// The default row has no RSVP deadline, so the var latches to the event start.
+			rsvp_deadline: DEFAULT_SETTINGS.hackathonStartDate.toLocaleDateString()
 		});
 	});
 });
