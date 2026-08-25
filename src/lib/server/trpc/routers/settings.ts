@@ -13,13 +13,21 @@ const templateBody = z.string().max(20000);
 
 const settingsInput = z
 	.object({
-		applicationOpen: z.coerce.date(),
-		applicationDeadline: z.coerce.date(),
+		// Each message names its own field: `formatTRPCError` joins issue messages and
+		// drops the path, so a bare "Invalid date" would leave the reader guessing which
+		// of the five it meant.
+		applicationOpen: z.coerce.date('Applications Open needs a full date and time.'),
+		applicationDeadline: z.coerce.date('Applications Close needs a full date and time.'),
 		// Null means "no deadline": confirmations never close and the wallet unlock
-		// latches onto the event start.
-		RSVPDeadline: z.coerce.date().nullable(),
-		admissionsSend: z.coerce.date().optional(),
-		hackathonStartDate: z.coerce.date(),
+		// latches onto the event start. A half-typed value is not null, so the message
+		// covers what the form should already have caught.
+		RSVPDeadline: z.coerce
+			.date('RSVP Deadline needs a full date and time, or leave it blank.')
+			.nullable(),
+		admissionsSend: z.coerce
+			.date('Decision Release needs a full date and time, or leave it blank.')
+			.optional(),
+		hackathonStartDate: z.coerce.date('Event Start needs a full date and time.'),
 		scanActions: z.array(z.string().min(1).max(100)).max(50),
 		submitTemplate: templateBody,
 		submitSubject: subject,
@@ -44,11 +52,11 @@ const settingsInput = z
 	})
 	// Out-of-order dates make the window guards lock every applicant out.
 	.refine((s) => s.applicationOpen <= s.applicationDeadline, {
-		message: 'Applications must open before they close.',
+		message: 'Applications Open must come before Applications Close.',
 		path: ['applicationDeadline']
 	})
 	.refine((s) => s.RSVPDeadline == null || s.applicationDeadline <= s.RSVPDeadline, {
-		message: 'The RSVP deadline must be on or after the application deadline.',
+		message: 'RSVP Deadline must be on or after Applications Close.',
 		path: ['RSVPDeadline']
 	});
 

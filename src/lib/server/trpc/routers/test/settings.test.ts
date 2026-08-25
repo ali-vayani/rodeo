@@ -129,6 +129,33 @@ describe('settings.update', () => {
 		);
 	});
 
+	it('names the offending field when a date is unusable', async () => {
+		// The form sends `new Date('')` for a date typed without a time. Before these
+		// messages the reader got a bare "Invalid date" with no clue which of the five
+		// controls it meant.
+		const caller = createTestCaller(db, adminUser);
+		db.settings.findFirst.mockResolvedValue(mockSettings);
+
+		await expect(
+			caller.settings.update({ ...mockSettings, hackathonStartDate: new Date('') } as never)
+		).rejects.toMatchObject({ message: expect.stringContaining('Event Start') });
+	});
+
+	it('names both sides when the dates are out of order', async () => {
+		const caller = createTestCaller(db, adminUser);
+		db.settings.findFirst.mockResolvedValue(mockSettings);
+
+		await expect(
+			caller.settings.update({
+				...mockSettings,
+				applicationDeadline: new Date('2026-05-01'),
+				RSVPDeadline: new Date('2026-04-01')
+			} as never)
+		).rejects.toMatchObject({
+			message: expect.stringContaining('RSVP Deadline must be on or after Applications Close')
+		});
+	});
+
 	it('creates row when none exists', async () => {
 		const caller = createTestCaller(db, adminUser);
 		db.settings.findFirst.mockResolvedValue(null);
