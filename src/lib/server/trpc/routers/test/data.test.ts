@@ -48,7 +48,10 @@ beforeEach(() => {
 		db.emailLog,
 		db.group,
 		db.team,
-		db.invitation
+		db.invitation,
+		db.rubricCriterion,
+		db.rubricLevel,
+		db.rubricSelection
 	]) {
 		(model as { findMany: { mockResolvedValue: (v: unknown) => void } }).findMany.mockResolvedValue(
 			[]
@@ -106,6 +109,9 @@ describe('data.exportAll', () => {
 				'invitation',
 				'log',
 				'question',
+				'rubricCriterion',
+				'rubricLevel',
+				'rubricSelection',
 				'scan',
 				'schedule',
 				'settings',
@@ -196,6 +202,9 @@ describe('data.wipe', () => {
 			db.emailLog,
 			db.log,
 			db.question,
+			db.rubricCriterion,
+			db.rubricLevel,
+			db.rubricSelection,
 			db.schedule,
 			db.settings,
 			db.team,

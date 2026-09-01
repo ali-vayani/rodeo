@@ -13,6 +13,7 @@
 export const LOG_ACTIONS = [
 	// Admissions
 	{ key: 'admissions.score.set', label: 'Application scored', group: 'Admissions' },
+	{ key: 'admissions.rubric.save', label: 'Scoring rubric saved', group: 'Admissions' },
 	{ key: 'admissions.decision.set', label: 'Decision set', group: 'Admissions' },
 	{ key: 'admissions.decision.bulk', label: 'Decisions set in bulk', group: 'Admissions' },
 	{ key: 'admissions.decision.blocked', label: 'Decision blocked by lock', group: 'Admissions' },

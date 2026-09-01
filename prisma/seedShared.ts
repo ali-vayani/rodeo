@@ -335,6 +335,89 @@ export async function seedQuestions(prisma: PrismaClient): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
+// Scoring rubric
+// ---------------------------------------------------------------------------
+
+const RUBRIC_LEVEL_LABELS = ['1 - Poor', '2 - Fair', '3 - Good', '4 - Very Good'];
+
+/** A criterion whose four levels are worth 1–4 points under the standard labels. */
+function rubricRow(title: string, descriptions: [string, string, string, string]) {
+	return {
+		title,
+		levels: descriptions.map((description, i) => ({
+			label: RUBRIC_LEVEL_LABELS[i],
+			description,
+			points: i + 1
+		}))
+	};
+}
+
+export const rubric = [
+	rubricRow('Why do you want to attend?', [
+		'No motivation, or not serious',
+		'Very vague, or only here for the swag',
+		'Clear but basic',
+		'Specific and enthusiastic, tied to an experience or skill'
+	]),
+	rubricRow('Project ideas or focus areas', [
+		'No ideas, or "anything is fine"',
+		'Very generic',
+		'A clear topic or a problem they care about',
+		'A creative, specific idea with thought behind it'
+	]),
+	rubricRow('A project they are proud of', [
+		'No answer, or unrelated',
+		'Brief mention with no detail',
+		'Describes what they built and their role',
+		'Shows curiosity, leadership, or meaningful reflection'
+	]),
+	rubricRow('Overall effort and clarity', [
+		'Very short or unclear',
+		'Minimal effort, hard to follow',
+		'Clear and complete',
+		'Polished, enthusiastic, exceptional effort'
+	])
+];
+
+/**
+ * Upserts the demo scoring rubric. Matched on row and cell order, not text: both are
+ * editable in the rubric editor, so matching on them would duplicate a reworded row.
+ * Never deletes, so criteria an organizer added by hand survive a re-seed.
+ *
+ * Inputs:
+ * - prisma: PrismaClient
+ *
+ * Side effects:
+ * - Creates or updates one RubricCriterion row per entry in `rubric`, with its levels.
+ */
+export async function seedRubric(prisma: PrismaClient): Promise<void> {
+	console.log('\nSeeding scoring rubric...');
+	for (const [order, criterion] of rubric.entries()) {
+		const existing = await prisma.rubricCriterion.findFirst({ where: { order } });
+		const row = existing
+			? await prisma.rubricCriterion.update({
+					where: { id: existing.id },
+					data: { title: criterion.title }
+				})
+			: await prisma.rubricCriterion.create({ data: { title: criterion.title, order } });
+
+		for (const [levelOrder, level] of criterion.levels.entries()) {
+			const existingLevel = await prisma.rubricLevel.findFirst({
+				where: { criterionId: row.id, order: levelOrder }
+			});
+			if (existingLevel) {
+				await prisma.rubricLevel.update({ where: { id: existingLevel.id }, data: level });
+			} else {
+				await prisma.rubricLevel.create({
+					data: { ...level, criterionId: row.id, order: levelOrder }
+				});
+			}
+		}
+		console.log(`  ${existing ? '~' : '✓'} ${criterion.title}`);
+	}
+}
+
+// ---------------------------------------------------------------------------
 // Settings
 //
 // Every seed writes this row. Without one the window guards read "no window

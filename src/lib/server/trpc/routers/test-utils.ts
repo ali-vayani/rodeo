@@ -39,6 +39,7 @@ export const adminUser: User = {
 	decidedBy: null,
 	decidedAt: null,
 	score: null,
+	scoreDelta: null,
 	notes: null,
 	scoredBy: null,
 	scoredAt: null
@@ -70,6 +71,7 @@ export const organizerUser: User = {
 	decidedBy: null,
 	decidedAt: null,
 	score: null,
+	scoreDelta: null,
 	notes: null,
 	scoredBy: null,
 	scoredAt: null
@@ -93,6 +95,7 @@ export const hackerUser: User = {
 	decidedBy: null,
 	decidedAt: null,
 	score: null,
+	scoreDelta: null,
 	notes: null,
 	scoredBy: null,
 	scoredAt: null

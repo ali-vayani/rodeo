@@ -3,13 +3,16 @@
 	import ApplicationResponses from './ApplicationResponses.svelte';
 	import BlacklistBadge from './BlacklistBadge.svelte';
 	import type { ReviewPhase } from '$lib/admissions/reviewSession.svelte';
-	import { MAX_SCORE } from '$lib/admissions/score';
+	import type { RubricCriterion } from '$lib/admissions/rubric';
 	import { humanizeEnum } from '$lib/format';
 	import type { BlacklistMatch } from '$lib/blacklist/match';
 
 	let {
 		applicant,
+		rubric,
+		maxScore,
 		onSaveScore,
+		onSaveRubricScore,
 		scoreLoading,
 		hasPrev,
 		hasNext,
@@ -30,6 +33,8 @@
 			pendingDecision: string | null;
 			activeDecision: string | null;
 			score: number | null;
+			scoreDelta: number | null;
+			rubricSelections: Array<{ criterionId: string; levelId: string }>;
 			notes: string | null;
 			scoredAt: Date | string | null;
 			scorer: { name: string } | null;
@@ -42,7 +47,14 @@
 				question: { title: string; order: number; type: string };
 			}>;
 		};
+		rubric: RubricCriterion[];
+		maxScore: number;
 		onSaveScore: (score: number, notes: string) => void;
+		onSaveRubricScore: (
+			selections: Array<{ criterionId: string; levelId: string }>,
+			delta: number,
+			notes: string
+		) => void;
 		scoreLoading: boolean;
 		hasPrev: boolean;
 		hasNext: boolean;
@@ -142,7 +154,7 @@
 					<span
 						class="inline-block rounded bg-[#eef2ff] px-2 py-[3px] font-mono text-[11px] font-semibold text-[#3730a3] tabular-nums"
 					>
-						{applicant.score}/{MAX_SCORE}
+						{applicant.score}/{maxScore}
 					</span>
 				{/if}
 				<span
@@ -199,7 +211,12 @@
 			notes={applicant.notes}
 			scorerName={applicant.scorer?.name ?? null}
 			scoredAt={applicant.scoredAt}
+			{rubric}
+			savedSelections={applicant.rubricSelections}
+			savedDelta={applicant.scoreDelta}
+			{maxScore}
 			onSave={onSaveScore}
+			onSaveRubric={onSaveRubricScore}
 			saving={scoreLoading}
 			{hasPrev}
 			{hasNext}

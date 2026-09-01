@@ -2,7 +2,6 @@
 	import { SvelteSet } from 'svelte/reactivity';
 	import ApplicationResponses from './ApplicationResponses.svelte';
 	import BlacklistBadge from './BlacklistBadge.svelte';
-	import { MAX_SCORE } from '$lib/admissions/score';
 	import { effectiveDecision } from '$lib/admissions/decision';
 	import { Badge, Button, Checkbox, Modal } from '$lib/components/ui';
 	import { ConfirmDialog, DataTable } from '$lib/components/patterns';
@@ -37,6 +36,7 @@
 		deciding,
 		releasingOne,
 		unscoredCount,
+		maxScore,
 		onDecide,
 		onClear,
 		onReleaseOne
@@ -46,6 +46,7 @@
 		loading: boolean;
 		deciding: boolean;
 		releasingOne: boolean;
+		maxScore: number;
 		/** Unscored applicants cannot appear here; the count is shown so the list is not mistaken for complete. */
 		unscoredCount: number;
 		onDecide: (uids: string[], decision: DecisionStatus) => void;
@@ -326,7 +327,7 @@
 >
 	{#if open}
 		<div class="mb-5 flex flex-wrap items-center gap-2">
-			<Badge tone="info">{open.score}/{MAX_SCORE}</Badge>
+			<Badge tone="info">{open.score}/{maxScore}</Badge>
 			<span class="text-2xs text-foreground-tertiary">
 				{humanizeEnum(open.role)}{open.scorer ? ` · scored by ${open.scorer.name}` : ''}
 			</span>

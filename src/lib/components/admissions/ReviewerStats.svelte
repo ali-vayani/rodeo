@@ -2,7 +2,6 @@
 	import { DataTable, StatCard } from '$lib/components/patterns';
 	import type { Column } from '$lib/components/ui/types';
 	import { formatRelativeTime, humanizeEnum } from '$lib/format';
-	import { MAX_SCORE } from '$lib/admissions/score';
 
 	type Reviewer = {
 		uid: string;
@@ -38,12 +37,14 @@
 		reviewers,
 		loading,
 		stats,
-		decisionStats
+		decisionStats,
+		maxScore
 	}: {
 		reviewers: Reviewer[];
 		loading: boolean;
 		stats: Stats;
 		decisionStats: DecisionStats;
+		maxScore: number;
 	} = $props();
 
 	const totalApplicants = $derived(
@@ -129,7 +130,7 @@
 				value={decisionStats?.scores.avg !== null && decisionStats?.scores.avg !== undefined
 					? decisionStats.scores.avg
 					: '—'}
-				hint="out of {MAX_SCORE}"
+				hint="out of {maxScore}"
 			/>
 			<StatCard
 				label="Range"

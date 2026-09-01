@@ -1,7 +1,6 @@
 <script lang="ts">
 	import ApplicationResponses from './ApplicationResponses.svelte';
 	import BlacklistBadge from './BlacklistBadge.svelte';
-	import { MAX_SCORE } from '$lib/admissions/score';
 	import { Badge, Button, Modal } from '$lib/components/ui';
 	import { DataTable } from '$lib/components/patterns';
 	import type { Column } from '$lib/components/ui/types';
@@ -34,6 +33,7 @@
 		loading,
 		deciding,
 		releasingOne,
+		maxScore,
 		onDecide,
 		onClear,
 		onReleaseOne
@@ -42,6 +42,7 @@
 		loading: boolean;
 		deciding: boolean;
 		releasingOne: boolean;
+		maxScore: number;
 		onDecide: (uids: string[], decision: DecisionStatus) => void;
 		onClear: (uid: string) => void;
 		onReleaseOne: (uid: string) => void;
@@ -237,7 +238,7 @@
 	{#if open}
 		<div class="mb-5 flex flex-wrap items-center gap-2">
 			{#if open.score !== null}
-				<Badge tone="info">{open.score}/{MAX_SCORE}</Badge>
+				<Badge tone="info">{open.score}/{maxScore}</Badge>
 			{/if}
 			<span class="text-2xs text-foreground-tertiary">
 				{humanizeEnum(open.role)}{open.scorer ? ` · scored by ${open.scorer.name}` : ''}

@@ -106,6 +106,10 @@ model User {
   claimer         User?               @relation("ApplicationClaims", fields: [claimedBy], references: [uid])
   claims          User[]              @relation("ApplicationClaims")
   score           Int?
+  /// The reviewer's adjustment on top of the rubric subtotal. `score` already includes
+  /// it; kept so reopening the rubric modal can show the split.
+  scoreDelta      Int?
+  rubricSelections RubricSelection[]
   notes           String?
   scoredBy        String?
   scoredAt        DateTime?
@@ -163,6 +167,47 @@ model Settings {
   timezone            String
 
   homeState           String?
+}
+
+/// A scoring-rubric row: one criterion with its levels as cells. Rows are criteria,
+/// columns are levels; criteria may have different numbers of levels.
+model RubricCriterion {
+  id         String            @id @default(cuid())
+  title      String
+  order      Int               @default(0)
+  levels     RubricLevel[]
+  selections RubricSelection[]
+}
+
+model RubricLevel {
+  id          String            @id @default(cuid())
+  criterionId String
+  criterion   RubricCriterion   @relation(fields: [criterionId], references: [id], onDelete: Cascade)
+  /// Column heading, e.g. "1 - Poor".
+  label       String
+  description String
+  points      Int
+  order       Int               @default(0)
+  selections  RubricSelection[]
+
+  @@index([criterionId])
+}
+
+/// The cell a reviewer picked for one applicant × criterion. The applicant's `score`
+/// is frozen at save time, so a later rubric edit cascades stale selections away
+/// without touching the saved total.
+model RubricSelection {
+  id          String          @id @default(cuid())
+  userId      String
+  user        User            @relation(fields: [userId], references: [uid], onDelete: Cascade)
+  criterionId String
+  criterion   RubricCriterion @relation(fields: [criterionId], references: [id], onDelete: Cascade)
+  levelId     String
+  level       RubricLevel     @relation(fields: [levelId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, criterionId])
+  @@index([criterionId])
+  @@index([levelId])
 }
 
 model Blacklist {

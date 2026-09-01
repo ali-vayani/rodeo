@@ -1083,6 +1083,156 @@ describe('admissions.setScore', () => {
 	});
 });
 
+describe('admissions.setRubricScore', () => {
+	/** Routes the interactive transaction straight at the mock client. */
+	const runInTransaction = () =>
+		db.$transaction.mockImplementation(((arg: unknown) =>
+			typeof arg === 'function'
+				? (arg as (tx: typeof db) => unknown)(db)
+				: Promise.resolve([])) as never);
+
+	const rubric = [
+		{
+			id: 'c1',
+			title: 'Motivation',
+			order: 0,
+			levels: [
+				{ id: 'c1l1', criterionId: 'c1', label: '1', description: '', points: 1, order: 0 },
+				{ id: 'c1l2', criterionId: 'c1', label: '2', description: '', points: 4, order: 1 }
+			]
+		},
+		{
+			id: 'c2',
+			title: 'Project',
+			order: 1,
+			levels: [
+				{ id: 'c2l1', criterionId: 'c2', label: '1', description: '', points: 2, order: 0 },
+				{ id: 'c2l2', criterionId: 'c2', label: '2', description: '', points: 6, order: 1 }
+			]
+		}
+	];
+
+	const fullSelection = [
+		{ criterionId: 'c1', levelId: 'c1l2' },
+		{ criterionId: 'c2', levelId: 'c2l2' }
+	];
+
+	it('computes the total server-side, replaces the selections, and releases the claim', async () => {
+		const caller = createTestCaller(db, adminUser);
+		runInTransaction();
+		db.rubricCriterion.findMany.mockResolvedValue(rubric as never);
+		db.user.update.mockResolvedValue({ ...hackerUser, score: 7, scoreDelta: -3 } as never);
+		db.log.create.mockResolvedValue({} as never);
+
+		// Picked 4 + 6, delta -3 → 7. The client never sends a total to trust.
+		const result = await caller.admissions.setRubricScore({
+			uid: hackerUser.uid,
+			selections: fullSelection,
+			delta: -3,
+			notes: 'Solid'
+		});
+
+		expect(result.score).toBe(7);
+		expect(db.user.update).toHaveBeenCalledWith({
+			where: claimableWhere(hackerUser.uid, adminUser.uid),
+			data: {
+				score: 7,
+				scoreDelta: -3,
+				notes: 'Solid',
+				scoredBy: adminUser.uid,
+				scoredAt: new Date(),
+				claimedBy: null,
+				claimedAt: null
+			}
+		});
+		expect(db.rubricSelection.deleteMany).toHaveBeenCalledWith({
+			where: { userId: hackerUser.uid }
+		});
+		expect(db.rubricSelection.createMany).toHaveBeenCalledWith({
+			data: fullSelection.map((s) => ({ userId: hackerUser.uid, ...s }))
+		});
+	});
+
+	it('logs the total, the rubric subtotal, and the delta', async () => {
+		const caller = createTestCaller(db, adminUser);
+		runInTransaction();
+		db.rubricCriterion.findMany.mockResolvedValue(rubric as never);
+		db.user.update.mockResolvedValue({ ...hackerUser, score: 12 } as never);
+		db.log.create.mockResolvedValue({} as never);
+
+		await caller.admissions.setRubricScore({
+			uid: hackerUser.uid,
+			selections: fullSelection,
+			delta: 2
+		});
+
+		expect(db.log.create).toHaveBeenCalledWith(
+			expect.objectContaining({
+				data: expect.objectContaining({
+					action: 'admissions.score.set',
+					metadata: expect.objectContaining({ score: 12, rubricScore: 10, delta: 2 })
+				})
+			})
+		);
+	});
+
+	it('rejects when a criterion has no selection', async () => {
+		const caller = createTestCaller(db, adminUser);
+		db.rubricCriterion.findMany.mockResolvedValue(rubric as never);
+
+		await expect(
+			caller.admissions.setRubricScore({
+				uid: hackerUser.uid,
+				selections: [{ criterionId: 'c1', levelId: 'c1l1' }]
+			})
+		).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+		expect(db.user.update).not.toHaveBeenCalled();
+	});
+
+	it('rejects a level that belongs to a different criterion', async () => {
+		const caller = createTestCaller(db, adminUser);
+		db.rubricCriterion.findMany.mockResolvedValue(rubric as never);
+
+		await expect(
+			caller.admissions.setRubricScore({
+				uid: hackerUser.uid,
+				selections: [
+					{ criterionId: 'c1', levelId: 'c2l1' },
+					{ criterionId: 'c2', levelId: 'c2l2' }
+				]
+			})
+		).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+		expect(db.user.update).not.toHaveBeenCalled();
+	});
+
+	it('rejects when no rubric is defined', async () => {
+		const caller = createTestCaller(db, adminUser);
+		db.rubricCriterion.findMany.mockResolvedValue([] as never);
+
+		await expect(
+			caller.admissions.setRubricScore({ uid: hackerUser.uid, selections: [] })
+		).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+	});
+
+	it('throws CONFLICT naming the holder when another admin has it locked', async () => {
+		const caller = createTestCaller(db, adminUser);
+		runInTransaction();
+		db.rubricCriterion.findMany.mockResolvedValue(rubric as never);
+		db.user.update.mockRejectedValue(recordNotFound());
+		db.user.findUnique.mockResolvedValue({
+			name: claimedHacker.name,
+			claimer: { name: adminUser2.name }
+		} as never);
+
+		await expect(
+			caller.admissions.setRubricScore({ uid: claimedHacker.uid, selections: fullSelection })
+		).rejects.toMatchObject({
+			code: 'CONFLICT',
+			message: expect.stringContaining('Second Admin')
+		});
+	});
+});
+
 describe('admissions.setDecisions', () => {
 	it('applies one decision to many, guarded by claim and role', async () => {
 		const caller = createTestCaller(db, adminUser);

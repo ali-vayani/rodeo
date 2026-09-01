@@ -9,6 +9,7 @@
 	import ApplicantDetail from '$lib/components/admissions/ApplicantDetail.svelte';
 	import IdleWarningModal from '$lib/components/admissions/IdleWarningModal.svelte';
 	import RankedList from '$lib/components/admissions/RankedList.svelte';
+	import RubricEditorModal from '$lib/components/admissions/RubricEditorModal.svelte';
 	import ReconsiderList from '$lib/components/admissions/ReconsiderList.svelte';
 	import ReviewerStats from '$lib/components/admissions/ReviewerStats.svelte';
 	import Toast from '$lib/components/legacy/Toast.svelte';
@@ -17,6 +18,7 @@
 	import { createReviewSession, pickNextUnlocked } from '$lib/admissions/reviewSession.svelte';
 	import { PRESENCE_POLL_MS } from '$lib/admissions/lock';
 	import { MAX_SCORE, type ScoreFilter } from '$lib/admissions/score';
+	import { rubricMaxScore, type CriterionDraft } from '$lib/admissions/rubric';
 	import { facetParams } from '$lib/admin/filters';
 	import { linkedFacetKey, type FacetState } from '$lib/facets';
 
@@ -39,6 +41,12 @@
 	let search = $state('');
 	let scoreFilter = $state<ScoreFilter>('unscored');
 	let stats = $state(untrack(() => data.stats));
+
+	let rubric = $state(untrack(() => data.rubric));
+	let showRubricEditor = $state(false);
+	let rubricSaving = $state(false);
+	/** With a rubric, the scale is its best possible total; without one, the flat 0–20. */
+	let maxScore = $derived(rubric.length > 0 ? rubricMaxScore(rubric) : MAX_SCORE);
 
 	// Fetched on arrival at the Decide tab, never eagerly. It carries every scored
 	// applicant's answers, and scores keep moving while the decision pass is open.
@@ -386,6 +394,76 @@
 		}
 	}
 
+	/** Rubric counterpart of `handleSaveScore`; the server computes the total itself. */
+	async function handleSaveRubricScore(
+		selections: Array<{ criterionId: string; levelId: string }>,
+		delta: number,
+		notes: string
+	) {
+		if (!selectedUid || !session.canDecide) return;
+		const uid = selectedUid;
+		const idx = applicants.findIndex((a) => a.uid === uid);
+
+		session.noteActivity();
+		scoreLoading = true;
+		try {
+			const saved = await trpc.admissions.setRubricScore.mutate({ uid, selections, delta, notes });
+			session.markClaimCleared(uid);
+			if (selectedUid !== uid) return;
+
+			if (scoreFilter === 'unscored') {
+				applicants = applicants.filter((a) => a.uid !== uid);
+				rollToNextUnlocked(idx, uid);
+			} else {
+				applicants = applicants.map((a) =>
+					a.uid === uid
+						? {
+								...a,
+								score: saved.score,
+								scoreDelta: saved.scoreDelta,
+								rubricSelections: selections,
+								notes: saved.notes,
+								scoredAt: saved.scoredAt,
+								scorer: { name: data.adminName }
+							}
+						: a
+				);
+				selectNext();
+			}
+			showToast(`Saved ${saved.score}/${maxScore}`);
+			void refreshStats();
+		} catch (e) {
+			if (isTRPCErrorCode(e, 'CONFLICT')) {
+				session.reclaim();
+			}
+			showToast(errorMessage(e, 'Failed to save score'), 'error');
+		} finally {
+			scoreLoading = false;
+		}
+	}
+
+	async function handleSaveRubric(criteria: CriterionDraft[]) {
+		rubricSaving = true;
+		try {
+			rubric = await trpc.rubric.save.mutate({
+				// The editor's validity gate guarantees points are filled; the map is for the types.
+				criteria: criteria.map((c) => ({
+					...c,
+					levels: c.levels.map((l) => ({ ...l, points: l.points ?? 0 }))
+				}))
+			});
+			showRubricEditor = false;
+			showToast('Rubric saved');
+			// A removed criterion or level cascades its selections away; refetch so reopened
+			// applicants show what actually survived.
+			void loadApplicants();
+		} catch (e) {
+			showToast(errorMessage(e, 'Failed to save rubric'), 'error');
+		} finally {
+			rubricSaving = false;
+		}
+	}
+
 	/**
 	 * Apply a pending decision from the ranked list, one row or a selection.
 	 *
@@ -562,12 +640,17 @@
 	}
 </script>
 
-<div class="mb-4">
-	<h1 class="text-[22px] font-bold text-primary">Admissions</h1>
-	<span class="mt-0.5 block text-[13px] text-muted-foreground">
-		{stats.unscored} left to score · {stats.accepted} accepted · {stats.rejected} rejected ·
-		{stats.waitlisted} waitlisted · {pendingCount} pending release
-	</span>
+<div class="mb-4 flex items-start justify-between gap-3">
+	<div>
+		<h1 class="text-[22px] font-bold text-primary">Admissions</h1>
+		<span class="mt-0.5 block text-[13px] text-muted-foreground">
+			{stats.unscored} left to score · {stats.accepted} accepted · {stats.rejected} rejected ·
+			{stats.waitlisted} waitlisted · {pendingCount} pending release
+		</span>
+	</div>
+	<Button size="sm" onclick={() => (showRubricEditor = true)}>
+		{rubric.length > 0 ? 'Edit rubric' : 'Set up rubric'}
+	</Button>
 </div>
 
 <!--
@@ -627,7 +710,10 @@
 				{#if selected}
 					<ApplicantDetail
 						applicant={selected}
+						{rubric}
+						{maxScore}
 						onSaveScore={handleSaveScore}
+						onSaveRubricScore={handleSaveRubricScore}
 						{scoreLoading}
 						{hasPrev}
 						{hasNext}
@@ -674,6 +760,7 @@
 				{deciding}
 				{releasingOne}
 				unscoredCount={stats.unscored}
+				{maxScore}
 				onDecide={handleDecide}
 				onClear={handleClear}
 				onReleaseOne={handleReleaseOne}
@@ -698,6 +785,7 @@
 				loading={reconsiderLoading}
 				{deciding}
 				{releasingOne}
+				{maxScore}
 				onDecide={handleReconsiderDecide}
 				onClear={handleReconsiderClear}
 				onReleaseOne={handleReconsiderReleaseOne}
@@ -705,10 +793,22 @@
 		</div>
 	{:else}
 		<div class="md:min-h-0 md:flex-1 md:overflow-y-auto">
-			<ReviewerStats {reviewers} loading={reviewersLoading} {stats} {decisionStats} />
+			<ReviewerStats {reviewers} loading={reviewersLoading} {stats} {decisionStats} {maxScore} />
 		</div>
 	{/if}
 </div>
+
+<!-- Mounted per editing session so the draft reseeds from the saved rubric each open. -->
+{#if showRubricEditor}
+	<RubricEditorModal
+		criteria={rubric}
+		saving={rubricSaving}
+		onSave={handleSaveRubric}
+		onClose={() => {
+			if (!rubricSaving) showRubricEditor = false;
+		}}
+	/>
+{/if}
 
 <!-- Idle warning: lock is still held while this counts down -->
 {#if session.showIdleModal && selected}
