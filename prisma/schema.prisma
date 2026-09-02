@@ -170,13 +170,17 @@ model Settings {
 }
 
 /// A scoring-rubric row: one criterion with its levels as cells. Rows are criteria,
-/// columns are levels; criteria may have different numbers of levels.
+/// columns are levels; criteria may have different numbers of levels. Each applicant
+/// role has its own rubric — a criterion belongs to exactly one.
 model RubricCriterion {
   id         String            @id @default(cuid())
+  role       Role
   title      String
   order      Int               @default(0)
   levels     RubricLevel[]
   selections RubricSelection[]
+
+  @@index([role])
 }
 
 model RubricLevel {

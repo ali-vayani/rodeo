@@ -14,8 +14,7 @@
 		selections = $bindable(),
 		delta = $bindable(),
 		saving,
-		onSave,
-		saveLabel
+		onSave
 	}: {
 		open?: boolean;
 		criteria: RubricCriterion[];
@@ -25,7 +24,6 @@
 		delta: number | undefined;
 		saving: boolean;
 		onSave: () => void;
-		saveLabel: string;
 	} = $props();
 
 	let maxLevels = $derived(Math.max(0, ...criteria.map((c) => c.levels.length)));
@@ -134,7 +132,7 @@
 			</span>
 		</div>
 		<Button variant="primary" loading={saving} disabled={!canSave} onclick={onSave}>
-			{saveLabel}
+			Save score
 		</Button>
 	{/snippet}
 </Modal>

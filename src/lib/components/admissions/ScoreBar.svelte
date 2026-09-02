@@ -18,7 +18,9 @@
 		maxScore,
 		onSave,
 		onSaveRubric,
+		onDecide,
 		saving,
+		deciding,
 		hasPrev,
 		hasNext,
 		onPrev,
@@ -44,7 +46,10 @@
 			delta: number,
 			notes: string
 		) => void;
+		/** Sets a pending decision straight from the review pane, score or no score. */
+		onDecide: (decision: 'ACCEPTED' | 'REJECTED' | 'WAITLISTED') => void;
 		saving: boolean;
+		deciding: boolean;
 		hasPrev: boolean;
 		hasNext: boolean;
 		onPrev: () => void;
@@ -168,56 +173,91 @@
 				<Button size="sm" onclick={onNext} disabled={!hasNext || busy}>Next →</Button>
 			</div>
 
-			{#if hasRubric}
-				<div class="flex items-center gap-2.5 max-md:w-full">
-					<span class="font-mono text-xs text-foreground-secondary tabular-nums">
-						{rubricDone ? rubricTotal : '—'} / {maxScore}
-					</span>
+			<div class="flex flex-wrap items-center gap-2.5 max-md:w-full">
+				<!-- Obvious calls get decided right here, score or no score; the ranked
+				     pass remains for everyone else. -->
+				<div class="flex items-center gap-1.5">
 					<Button
-						variant="primary"
 						size="sm"
-						loading={saving}
-						disabled={busy}
-						onclick={() => (rubricOpen = true)}
-						class="max-md:flex-1"
+						variant="primary"
+						disabled={busy || deciding}
+						onclick={() => onDecide('ACCEPTED')}
 					>
-						Score
+						Accept
+					</Button>
+					<Button
+						size="sm"
+						class="border-transparent bg-warning-500 font-semibold text-white hover:bg-warning-700 active:bg-warning-700"
+						disabled={busy || deciding}
+						onclick={() => onDecide('WAITLISTED')}
+					>
+						Waitlist
+					</Button>
+					<Button
+						size="sm"
+						variant="danger"
+						disabled={busy || deciding}
+						onclick={() => onDecide('REJECTED')}
+					>
+						Reject
 					</Button>
 				</div>
-			{:else}
-				<div class="flex items-center gap-2.5 max-md:w-full">
-					<!-- A number field, not 21 buttons or a slider: the reviewer is on the keyboard. -->
-					<label for="score-input" class="text-xs font-semibold whitespace-nowrap text-foreground">
-						Score
-					</label>
-					<input
-						id="score-input"
-						type="number"
-						inputmode="numeric"
-						min={MIN_SCORE}
-						max={MAX_SCORE}
-						step="1"
-						bind:value={scoreDraft}
-						onkeydown={onScoreKeydown}
-						disabled={busy}
-						aria-invalid={!empty && !valid}
-						class="w-18 rounded-md border bg-card px-2.5 py-1.5 text-center font-mono text-touch
+				<div aria-hidden="true" class="h-5 w-px bg-border max-md:hidden"></div>
+
+				{#if hasRubric}
+					<div class="flex items-center gap-2.5 max-md:w-full">
+						<span class="font-mono text-xs text-foreground-secondary tabular-nums">
+							{rubricDone ? rubricTotal : '—'} / {maxScore}
+						</span>
+						<Button
+							variant="primary"
+							size="sm"
+							loading={saving}
+							disabled={busy}
+							onclick={() => (rubricOpen = true)}
+							class="max-md:flex-1"
+						>
+							Score
+						</Button>
+					</div>
+				{:else}
+					<div class="flex items-center gap-2.5 max-md:w-full">
+						<!-- A number field, not 21 buttons or a slider: the reviewer is on the keyboard. -->
+						<label
+							for="score-input"
+							class="text-xs font-semibold whitespace-nowrap text-foreground"
+						>
+							Score
+						</label>
+						<input
+							id="score-input"
+							type="number"
+							inputmode="numeric"
+							min={MIN_SCORE}
+							max={MAX_SCORE}
+							step="1"
+							bind:value={scoreDraft}
+							onkeydown={onScoreKeydown}
+							disabled={busy}
+							aria-invalid={!empty && !valid}
+							class="w-18 rounded-md border bg-card px-2.5 py-1.5 text-center font-mono text-touch
 						       tabular-nums outline-none focus-visible:shadow-ring sm:text-base
 						       {!empty && !valid ? 'border-danger-500' : 'border-border'}"
-					/>
-					<span class="font-mono text-2xs text-foreground-tertiary">/ {MAX_SCORE}</span>
-					<Button
-						variant="primary"
-						size="sm"
-						loading={saving}
-						disabled={!valid || busy}
-						onclick={save}
-						class="max-md:flex-1"
-					>
-						{hasNext ? 'Save & next' : 'Save score'}
-					</Button>
-				</div>
-			{/if}
+						/>
+						<span class="font-mono text-2xs text-foreground-tertiary">/ {MAX_SCORE}</span>
+						<Button
+							variant="primary"
+							size="sm"
+							loading={saving}
+							disabled={!valid || busy}
+							onclick={save}
+							class="max-md:flex-1"
+						>
+							Save score
+						</Button>
+					</div>
+				{/if}
+			</div>
 		</div>
 
 		<!-- Re-scoring overwrites attribution, so say whose number this is first. -->
@@ -237,6 +277,5 @@
 		bind:delta={deltaDraft}
 		{saving}
 		onSave={saveRubric}
-		saveLabel={hasNext ? 'Save & next' : 'Save score'}
 	/>
 {/if}

@@ -18,7 +18,8 @@
 	import { createReviewSession, pickNextUnlocked } from '$lib/admissions/reviewSession.svelte';
 	import { PRESENCE_POLL_MS } from '$lib/admissions/lock';
 	import { MAX_SCORE, type ScoreFilter } from '$lib/admissions/score';
-	import { rubricMaxScore, type CriterionDraft } from '$lib/admissions/rubric';
+	import { rubricForRole, rubricMaxScore, type CriterionDraft } from '$lib/admissions/rubric';
+	import { APPLICANT_ROLES } from '$lib/admissions/roles';
 	import { facetParams } from '$lib/admin/filters';
 	import { linkedFacetKey, type FacetState } from '$lib/facets';
 
@@ -45,8 +46,18 @@
 	let rubric = $state(untrack(() => data.rubric));
 	let showRubricEditor = $state(false);
 	let rubricSaving = $state(false);
-	/** With a rubric, the scale is its best possible total; without one, the flat 0–20. */
-	let maxScore = $derived(rubric.length > 0 ? rubricMaxScore(rubric) : MAX_SCORE);
+
+	/** A role with a rubric scores out of its best total; one without, out of the flat 0–20. */
+	let maxScoreFor = $derived((role: string) => {
+		const roleRubric = rubricForRole(rubric, role);
+		return roleRubric.length > 0 ? rubricMaxScore(roleRubric) : MAX_SCORE;
+	});
+
+	/** For the Stats tab, where one average spans every role's scale. */
+	let scaleHint = $derived.by(() => {
+		const maxes = new Set(APPLICANT_ROLES.map((role) => maxScoreFor(role)));
+		return maxes.size === 1 ? `out of ${[...maxes][0]}` : 'scales vary by role';
+	});
 
 	// Fetched on arrival at the Decide tab, never eagerly. It carries every scored
 	// applicant's answers, and scores keep moving while the decision pass is open.
@@ -346,8 +357,6 @@
 	async function handleSaveScore(score: number, notes: string) {
 		if (!selectedUid || !session.canDecide) return;
 		const uid = selectedUid;
-		const idx = applicants.findIndex((a) => a.uid === uid);
-
 		// Saving is activity — don't let a slow request time out into the idle modal.
 		session.noteActivity();
 		scoreLoading = true;
@@ -360,27 +369,22 @@
 			// Navigated away mid-flight; don't clobber the new selection
 			if (selectedUid !== uid) return;
 
-			if (scoreFilter === 'unscored') {
-				// Scoring is what takes an applicant out of this view, so the row leaves and the
-				// queue closes up behind it, skipping anyone another admin holds.
-				applicants = applicants.filter((a) => a.uid !== uid);
-				rollToNextUnlocked(idx, uid);
-			} else {
-				// Revisiting a scored applicant: the row stays put and updates in place,
-				// because removing it would be the view contradicting its own filter.
-				applicants = applicants.map((a) =>
-					a.uid === uid
-						? {
-								...a,
-								score: saved.score,
-								notes: saved.notes,
-								scoredAt: saved.scoredAt,
-								scorer: { name: data.adminName }
-							}
-						: a
-				);
-				selectNext();
-			}
+			// The row updates in place and stays selected — in the "To score" view it now
+			// mismatches the filter until the next refetch, but yanking the reviewer to the
+			// next applicant was worse. Moving on is the Next button's job.
+			applicants = applicants.map((a) =>
+				a.uid === uid
+					? {
+							...a,
+							score: saved.score,
+							notes: saved.notes,
+							scoredAt: saved.scoredAt,
+							scorer: { name: data.adminName }
+						}
+					: a
+			);
+			// Saving released the claim; take it straight back so the applicant stays held.
+			session.reclaim();
 			showToast(`Saved ${score}/${MAX_SCORE}`);
 			void refreshStats();
 		} catch (e) {
@@ -402,7 +406,6 @@
 	) {
 		if (!selectedUid || !session.canDecide) return;
 		const uid = selectedUid;
-		const idx = applicants.findIndex((a) => a.uid === uid);
 
 		session.noteActivity();
 		scoreLoading = true;
@@ -411,26 +414,22 @@
 			session.markClaimCleared(uid);
 			if (selectedUid !== uid) return;
 
-			if (scoreFilter === 'unscored') {
-				applicants = applicants.filter((a) => a.uid !== uid);
-				rollToNextUnlocked(idx, uid);
-			} else {
-				applicants = applicants.map((a) =>
-					a.uid === uid
-						? {
-								...a,
-								score: saved.score,
-								scoreDelta: saved.scoreDelta,
-								rubricSelections: selections,
-								notes: saved.notes,
-								scoredAt: saved.scoredAt,
-								scorer: { name: data.adminName }
-							}
-						: a
-				);
-				selectNext();
-			}
-			showToast(`Saved ${saved.score}/${maxScore}`);
+			// Stays put and stays selected, like handleSaveScore.
+			applicants = applicants.map((a) =>
+				a.uid === uid
+					? {
+							...a,
+							score: saved.score,
+							scoreDelta: saved.scoreDelta,
+							rubricSelections: selections,
+							notes: saved.notes,
+							scoredAt: saved.scoredAt,
+							scorer: { name: data.adminName }
+						}
+					: a
+			);
+			session.reclaim();
+			showToast(`Saved ${saved.score}/${maxScoreFor(saved.role)}`);
 			void refreshStats();
 		} catch (e) {
 			if (isTRPCErrorCode(e, 'CONFLICT')) {
@@ -442,18 +441,21 @@
 		}
 	}
 
-	async function handleSaveRubric(criteria: CriterionDraft[]) {
+	async function handleSaveRubric(rubrics: Array<{ role: Role; criteria: CriterionDraft[] }>) {
 		rubricSaving = true;
 		try {
 			rubric = await trpc.rubric.save.mutate({
 				// The editor's validity gate guarantees points are filled; the map is for the types.
-				criteria: criteria.map((c) => ({
-					...c,
-					levels: c.levels.map((l) => ({ ...l, points: l.points ?? 0 }))
+				rubrics: rubrics.map((r) => ({
+					role: r.role,
+					criteria: r.criteria.map((c) => ({
+						...c,
+						levels: c.levels.map((l) => ({ ...l, points: l.points ?? 0 }))
+					}))
 				}))
 			});
 			showRubricEditor = false;
-			showToast('Rubric saved');
+			showToast('Rubrics saved');
 			// A removed criterion or level cascades its selections away; refetch so reopened
 			// applicants show what actually survived.
 			void loadApplicants();
@@ -461,6 +463,59 @@
 			showToast(errorMessage(e, 'Failed to save rubric'), 'error');
 		} finally {
 			rubricSaving = false;
+		}
+	}
+
+	let reviewDeciding = $state(false);
+
+	/**
+	 * Sets a pending decision straight from the review pane. The queue only holds
+	 * undecided applicants, so the row always leaves and the pane rolls to the next,
+	 * mirroring what saving a score does. `setDecision` clears the claim server-side.
+	 */
+	async function handleReviewDecide(decision: 'ACCEPTED' | 'REJECTED' | 'WAITLISTED') {
+		if (!selectedUid || !session.canDecide) return;
+		const uid = selectedUid;
+		const idx = applicants.findIndex((a) => a.uid === uid);
+
+		session.noteActivity();
+		reviewDeciding = true;
+		try {
+			await trpc.admissions.setDecision.mutate({ uid, decision });
+			session.markClaimCleared(uid);
+			if (selectedUid !== uid) return;
+
+			applicants = applicants.filter((a) => a.uid !== uid);
+			rollToNextUnlocked(idx, uid);
+			showToast(`Set to ${decision.toLowerCase()}`);
+			void refreshStats();
+		} catch (e) {
+			if (isTRPCErrorCode(e, 'CONFLICT')) {
+				session.reclaim();
+			}
+			showToast(errorMessage(e, 'Failed to set decision'), 'error');
+		} finally {
+			reviewDeciding = false;
+		}
+	}
+
+	/**
+	 * Reopens a decided applicant in the review pane for a fresh score. The review
+	 * queue excludes anyone with a decision, so the row is carried over from the list
+	 * it came from rather than refetched; selecting it engages the claim lock through
+	 * the normal path, and saving overwrites score and attribution as usual.
+	 */
+	async function handleRescore(uid: string) {
+		const applicant = ranked.find((a) => a.uid === uid) ?? reconsider.find((a) => a.uid === uid);
+		if (!applicant) return;
+		tab = 'review';
+		scoreFilter = 'scored';
+		// Shown immediately; the refetch below replaces the list around it.
+		applicants = [applicant];
+		selectedUid = uid;
+		await loadApplicants();
+		if (!applicants.some((a) => a.uid === uid)) {
+			applicants = [applicant, ...applicants];
 		}
 	}
 
@@ -649,7 +704,7 @@
 		</span>
 	</div>
 	<Button size="sm" onclick={() => (showRubricEditor = true)}>
-		{rubric.length > 0 ? 'Edit rubric' : 'Set up rubric'}
+		{rubric.length > 0 ? 'Edit rubrics' : 'Set up rubrics'}
 	</Button>
 </div>
 
@@ -710,11 +765,13 @@
 				{#if selected}
 					<ApplicantDetail
 						applicant={selected}
-						{rubric}
-						{maxScore}
+						rubric={rubricForRole(rubric, selected.role)}
+						maxScore={maxScoreFor(selected.role)}
 						onSaveScore={handleSaveScore}
 						onSaveRubricScore={handleSaveRubricScore}
+						onDecide={handleReviewDecide}
 						{scoreLoading}
+						decideLoading={reviewDeciding}
 						{hasPrev}
 						{hasNext}
 						onPrev={selectPrev}
@@ -760,10 +817,11 @@
 				{deciding}
 				{releasingOne}
 				unscoredCount={stats.unscored}
-				{maxScore}
+				{maxScoreFor}
 				onDecide={handleDecide}
 				onClear={handleClear}
 				onReleaseOne={handleReleaseOne}
+				onRescore={handleRescore}
 			/>
 		</div>
 	{:else if tab === 'reconsider'}
@@ -785,15 +843,16 @@
 				loading={reconsiderLoading}
 				{deciding}
 				{releasingOne}
-				{maxScore}
+				{maxScoreFor}
 				onDecide={handleReconsiderDecide}
 				onClear={handleReconsiderClear}
 				onReleaseOne={handleReconsiderReleaseOne}
+				onRescore={handleRescore}
 			/>
 		</div>
 	{:else}
 		<div class="md:min-h-0 md:flex-1 md:overflow-y-auto">
-			<ReviewerStats {reviewers} loading={reviewersLoading} {stats} {decisionStats} {maxScore} />
+			<ReviewerStats {reviewers} loading={reviewersLoading} {stats} {decisionStats} {scaleHint} />
 		</div>
 	{/if}
 </div>

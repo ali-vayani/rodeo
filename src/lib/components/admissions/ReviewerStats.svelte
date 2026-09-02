@@ -38,13 +38,14 @@
 		loading,
 		stats,
 		decisionStats,
-		maxScore
+		scaleHint
 	}: {
 		reviewers: Reviewer[];
 		loading: boolean;
 		stats: Stats;
 		decisionStats: DecisionStats;
-		maxScore: number;
+		/** "out of 16", or a caveat when per-role rubrics give the roles different maxes. */
+		scaleHint: string;
 	} = $props();
 
 	const totalApplicants = $derived(
@@ -130,7 +131,7 @@
 				value={decisionStats?.scores.avg !== null && decisionStats?.scores.avg !== undefined
 					? decisionStats.scores.avg
 					: '—'}
-				hint="out of {maxScore}"
+				hint={scaleHint}
 			/>
 			<StatCard
 				label="Range"

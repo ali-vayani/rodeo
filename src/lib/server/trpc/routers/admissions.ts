@@ -418,8 +418,8 @@ export const admissionsRouter = router({
 	 * attribution as `setScore`; the two writes are alternatives, not layers.
 	 *
 	 * Throws:
-	 * - TRPCError BAD_REQUEST — no rubric defined, or the selections don't cover the
-	 *   current rubric exactly (also catches a rubric edited mid-review)
+	 * - TRPCError BAD_REQUEST — no rubric for the applicant's role, or the selections
+	 *   don't cover that rubric exactly (also catches a rubric edited mid-review)
 	 */
 	setRubricScore: adminProcedure
 		.input(
@@ -431,11 +431,24 @@ export const admissionsRouter = router({
 			})
 		)
 		.mutation(async ({ ctx, input }) => {
+			// The role picks which rubric applies, so it has to be read before validation.
+			const target = await ctx.prisma.user.findUnique({
+				where: { uid: input.uid },
+				select: { role: true }
+			});
+			if (!target) {
+				throw new TRPCError({ code: 'NOT_FOUND', message: 'Applicant not found.' });
+			}
+
 			const criteria = await ctx.prisma.rubricCriterion.findMany({
+				where: { role: target.role },
 				include: { levels: true }
 			});
 			if (criteria.length === 0) {
-				throw new TRPCError({ code: 'BAD_REQUEST', message: 'No scoring rubric is defined.' });
+				throw new TRPCError({
+					code: 'BAD_REQUEST',
+					message: `No scoring rubric is defined for the ${target.role.toLowerCase()} role.`
+				});
 			}
 
 			const chosen = new Map(input.selections.map((s) => [s.criterionId, s.levelId]));
@@ -668,7 +681,9 @@ export const admissionsRouter = router({
 			where: { role: { in: APPLICANT_ROLES }, ...SUBMITTED, activeDecision: { not: null } },
 			include: {
 				application: { include: { question: true } },
-				scorer: { select: { name: true } }
+				scorer: { select: { name: true } },
+				// Same shape as `list`, so a row can be carried into the review pane to rescore.
+				rubricSelections: { select: { criterionId: true, levelId: true } }
 			}
 		});
 

@@ -1091,9 +1091,14 @@ describe('admissions.setRubricScore', () => {
 				? (arg as (tx: typeof db) => unknown)(db)
 				: Promise.resolve([])) as never);
 
+	/** The applicant's role picks the rubric, so the fetch precedes validation. */
+	const mockRole = (role: Role = Role.HACKER) =>
+		db.user.findUnique.mockResolvedValueOnce({ role } as never);
+
 	const rubric = [
 		{
 			id: 'c1',
+			role: Role.HACKER,
 			title: 'Motivation',
 			order: 0,
 			levels: [
@@ -1103,6 +1108,7 @@ describe('admissions.setRubricScore', () => {
 		},
 		{
 			id: 'c2',
+			role: Role.HACKER,
 			title: 'Project',
 			order: 1,
 			levels: [
@@ -1120,6 +1126,7 @@ describe('admissions.setRubricScore', () => {
 	it('computes the total server-side, replaces the selections, and releases the claim', async () => {
 		const caller = createTestCaller(db, adminUser);
 		runInTransaction();
+		mockRole();
 		db.rubricCriterion.findMany.mockResolvedValue(rubric as never);
 		db.user.update.mockResolvedValue({ ...hackerUser, score: 7, scoreDelta: -3 } as never);
 		db.log.create.mockResolvedValue({} as never);
@@ -1153,9 +1160,26 @@ describe('admissions.setRubricScore', () => {
 		});
 	});
 
+	it("validates against the applicant's own role's rubric only", async () => {
+		const caller = createTestCaller(db, adminUser);
+		runInTransaction();
+		mockRole(Role.MENTOR);
+		db.rubricCriterion.findMany.mockResolvedValue(rubric as never);
+		db.user.update.mockResolvedValue({ ...hackerUser, score: 12 } as never);
+		db.log.create.mockResolvedValue({} as never);
+
+		await caller.admissions.setRubricScore({ uid: hackerUser.uid, selections: fullSelection });
+
+		expect(db.rubricCriterion.findMany).toHaveBeenCalledWith({
+			where: { role: Role.MENTOR },
+			include: { levels: true }
+		});
+	});
+
 	it('logs the total, the rubric subtotal, and the delta', async () => {
 		const caller = createTestCaller(db, adminUser);
 		runInTransaction();
+		mockRole();
 		db.rubricCriterion.findMany.mockResolvedValue(rubric as never);
 		db.user.update.mockResolvedValue({ ...hackerUser, score: 12 } as never);
 		db.log.create.mockResolvedValue({} as never);
@@ -1178,6 +1202,7 @@ describe('admissions.setRubricScore', () => {
 
 	it('rejects when a criterion has no selection', async () => {
 		const caller = createTestCaller(db, adminUser);
+		mockRole();
 		db.rubricCriterion.findMany.mockResolvedValue(rubric as never);
 
 		await expect(
@@ -1191,6 +1216,7 @@ describe('admissions.setRubricScore', () => {
 
 	it('rejects a level that belongs to a different criterion', async () => {
 		const caller = createTestCaller(db, adminUser);
+		mockRole();
 		db.rubricCriterion.findMany.mockResolvedValue(rubric as never);
 
 		await expect(
@@ -1205,21 +1231,34 @@ describe('admissions.setRubricScore', () => {
 		expect(db.user.update).not.toHaveBeenCalled();
 	});
 
-	it('rejects when no rubric is defined', async () => {
+	it("rejects when the applicant's role has no rubric", async () => {
 		const caller = createTestCaller(db, adminUser);
+		mockRole(Role.VOLUNTEER);
 		db.rubricCriterion.findMany.mockResolvedValue([] as never);
 
 		await expect(
 			caller.admissions.setRubricScore({ uid: hackerUser.uid, selections: [] })
-		).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+		).rejects.toMatchObject({ code: 'BAD_REQUEST', message: expect.stringContaining('volunteer') });
+	});
+
+	it('throws NOT_FOUND when the applicant does not exist', async () => {
+		const caller = createTestCaller(db, adminUser);
+		db.user.findUnique.mockResolvedValue(null as never);
+
+		await expect(
+			caller.admissions.setRubricScore({ uid: 'ghost-uid', selections: fullSelection })
+		).rejects.toMatchObject({ code: 'NOT_FOUND' });
+		expect(db.rubricCriterion.findMany).not.toHaveBeenCalled();
 	});
 
 	it('throws CONFLICT naming the holder when another admin has it locked', async () => {
 		const caller = createTestCaller(db, adminUser);
 		runInTransaction();
+		mockRole();
 		db.rubricCriterion.findMany.mockResolvedValue(rubric as never);
 		db.user.update.mockRejectedValue(recordNotFound());
-		db.user.findUnique.mockResolvedValue({
+		// Second findUnique call: the conflict path re-reads to name the claim holder.
+		db.user.findUnique.mockResolvedValueOnce({
 			name: claimedHacker.name,
 			claimer: { name: adminUser2.name }
 		} as never);

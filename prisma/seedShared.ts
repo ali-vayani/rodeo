@@ -380,9 +380,11 @@ export const rubric = [
 ];
 
 /**
- * Upserts the demo scoring rubric. Matched on row and cell order, not text: both are
- * editable in the rubric editor, so matching on them would duplicate a reworded row.
- * Never deletes, so criteria an organizer added by hand survive a re-seed.
+ * Upserts the demo scoring rubric, as the hacker rubric — its criteria describe the
+ * hacker application; other roles fall back to the plain 0–20 score. Matched on
+ * role + row + cell order, not text: those are editable in the rubric editor, so
+ * matching on them would duplicate a reworded row. Never deletes, so criteria an
+ * organizer added by hand survive a re-seed.
  *
  * Inputs:
  * - prisma: PrismaClient
@@ -393,13 +395,17 @@ export const rubric = [
 export async function seedRubric(prisma: PrismaClient): Promise<void> {
 	console.log('\nSeeding scoring rubric...');
 	for (const [order, criterion] of rubric.entries()) {
-		const existing = await prisma.rubricCriterion.findFirst({ where: { order } });
+		const existing = await prisma.rubricCriterion.findFirst({
+			where: { role: Role.HACKER, order }
+		});
 		const row = existing
 			? await prisma.rubricCriterion.update({
 					where: { id: existing.id },
 					data: { title: criterion.title }
 				})
-			: await prisma.rubricCriterion.create({ data: { title: criterion.title, order } });
+			: await prisma.rubricCriterion.create({
+					data: { role: Role.HACKER, title: criterion.title, order }
+				});
 
 		for (const [levelOrder, level] of criterion.levels.entries()) {
 			const existingLevel = await prisma.rubricLevel.findFirst({

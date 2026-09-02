@@ -36,23 +36,27 @@
 		deciding,
 		releasingOne,
 		unscoredCount,
-		maxScore,
+		maxScoreFor,
 		onDecide,
 		onClear,
-		onReleaseOne
+		onReleaseOne,
+		onRescore
 	}: {
 		/** Already ranked by the server; never reordered here. */
 		applicants: Applicant[];
 		loading: boolean;
 		deciding: boolean;
 		releasingOne: boolean;
-		maxScore: number;
+		/** Per-role rubrics mean per-role maxes; each row shows its own scale. */
+		maxScoreFor: (role: string) => number;
 		/** Unscored applicants cannot appear here; the count is shown so the list is not mistaken for complete. */
 		unscoredCount: number;
 		onDecide: (uids: string[], decision: DecisionStatus) => void;
 		onClear: (uid: string) => void;
 		/** Releases and emails immediately. */
 		onReleaseOne: (uid: string) => void;
+		/** Sends the applicant back to the review pane for a fresh score. */
+		onRescore: (uid: string) => void;
 	} = $props();
 
 	let selected = new SvelteSet<string>();
@@ -65,15 +69,27 @@
 
 	let releaseTarget = $state<(typeof rows)[number] | null>(null);
 
-	// Rank is a property of position in this list, not of the applicant.
-	let rows = $derived(applicants.map((applicant, i) => ({ ...applicant, rank: i + 1 })));
+	let roleFilter = $state<string | null>(null);
+
+	/** No tabs for roles nobody in the list holds. */
+	let availableRoles = $derived([...new Set(applicants.map((a) => a.role))].sort());
+
+	// Rank is a property of position in the visible list, not of the applicant: with
+	// per-role maxes, cross-role raw scores aren't comparable, so a role tab re-ranks
+	// within that role rather than showing global positions full of gaps.
+	let rows = $derived(
+		applicants
+			.filter((a) => !roleFilter || a.role === roleFilter)
+			.map((applicant, i) => ({ ...applicant, rank: i + 1 }))
+	);
 	type Row = (typeof rows)[number];
 
 	let allSelected = $derived(rows.length > 0 && selected.size === rows.length);
 
-	// Prunes uids that dropped out on refetch before a bulk action can send them.
+	// Prunes uids no longer visible — dropped by a refetch or hidden by the role tab —
+	// so a bulk action can never touch rows the operator can't see.
 	$effect(() => {
-		const present = new Set(applicants.map((a) => a.uid));
+		const present = new Set(rows.map((a) => a.uid));
 		for (const uid of selected) if (!present.has(uid)) selected.delete(uid);
 	});
 
@@ -137,6 +153,29 @@
 </script>
 
 <div class="mb-3 flex flex-wrap items-center gap-x-3 gap-y-2">
+	{#if availableRoles.length > 1}
+		<div class="flex items-center gap-1">
+			<button
+				type="button"
+				onclick={() => (roleFilter = null)}
+				class="rounded px-2 py-0.5 text-xs font-medium transition-colors
+				       {roleFilter === null ? 'bg-primary text-white' : 'text-foreground-secondary hover:bg-muted'}"
+			>
+				All
+			</button>
+			{#each availableRoles as role (role)}
+				<button
+					type="button"
+					onclick={() => (roleFilter = roleFilter === role ? null : role)}
+					class="rounded px-2 py-0.5 text-xs font-medium transition-colors
+					       {roleFilter === role ? 'bg-primary text-white' : 'text-foreground-secondary hover:bg-muted'}"
+				>
+					{humanizeEnum(role)}
+				</button>
+			{/each}
+		</div>
+	{/if}
+
 	<Button size="sm" onclick={toggleAll} disabled={rows.length === 0}>
 		{allSelected ? 'Clear selection' : 'Select all'}
 	</Button>
@@ -227,7 +266,11 @@
 				<span class="text-2xs text-foreground-tertiary">—</span>
 			{/if}
 		{:else if column.key === 'score'}
-			<span class="font-mono text-base font-medium tabular-nums">{row.score}</span>
+			<span class="font-mono text-base font-medium tabular-nums">
+				{row.score}<span class="text-2xs font-normal text-foreground-tertiary"
+					>/{maxScoreFor(row.role)}</span
+				>
+			</span>
 		{:else if column.key === 'notes'}
 			{#if row.notes}
 				<!-- Clamped so the score and decision stay on screen together; full text on hover. -->
@@ -327,7 +370,7 @@
 >
 	{#if open}
 		<div class="mb-5 flex flex-wrap items-center gap-2">
-			<Badge tone="info">{open.score}/{maxScore}</Badge>
+			<Badge tone="info">{open.score}/{maxScoreFor(open.role)}</Badge>
 			<span class="text-2xs text-foreground-tertiary">
 				{humanizeEnum(open.role)}{open.scorer ? ` · scored by ${open.scorer.name}` : ''}
 			</span>
@@ -348,6 +391,16 @@
 	{#snippet footer()}
 		{#if open}
 			{@const applicant = open}
+			<Button
+				class="mr-auto"
+				disabled={deciding}
+				onclick={() => {
+					onRescore(applicant.uid);
+					open = null;
+				}}
+			>
+				Rescore
+			</Button>
 			<Button
 				variant="primary"
 				disabled={deciding}

@@ -13,10 +13,17 @@ export type RubricLevel = {
 
 export type RubricCriterion = {
 	id: string;
+	/** The applicant role whose rubric this criterion belongs to. */
+	role: string;
 	title: string;
 	order: number;
 	levels: RubricLevel[];
 };
+
+/** One role's rubric. `[]` means that role has none and scores on the plain 0–20. */
+export function rubricForRole(criteria: RubricCriterion[], role: string): RubricCriterion[] {
+	return criteria.filter((c) => c.role === role);
+}
 
 /** Best possible rubric total: the highest level of every criterion. */
 export function rubricMaxScore(criteria: RubricCriterion[]): number {

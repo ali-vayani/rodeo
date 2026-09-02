@@ -13,7 +13,9 @@
 		maxScore,
 		onSaveScore,
 		onSaveRubricScore,
+		onDecide,
 		scoreLoading,
+		decideLoading,
 		hasPrev,
 		hasNext,
 		onPrev,
@@ -55,7 +57,9 @@
 			delta: number,
 			notes: string
 		) => void;
+		onDecide: (decision: 'ACCEPTED' | 'REJECTED' | 'WAITLISTED') => void;
 		scoreLoading: boolean;
+		decideLoading: boolean;
 		hasPrev: boolean;
 		hasNext: boolean;
 		onPrev: () => void;
@@ -217,7 +221,9 @@
 			{maxScore}
 			onSave={onSaveScore}
 			onSaveRubric={onSaveRubricScore}
+			{onDecide}
 			saving={scoreLoading}
+			deciding={decideLoading}
 			{hasPrev}
 			{hasNext}
 			{onPrev}

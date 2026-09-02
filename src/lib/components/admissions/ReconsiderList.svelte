@@ -33,19 +33,23 @@
 		loading,
 		deciding,
 		releasingOne,
-		maxScore,
+		maxScoreFor,
 		onDecide,
 		onClear,
-		onReleaseOne
+		onReleaseOne,
+		onRescore
 	}: {
 		applicants: Applicant[];
 		loading: boolean;
 		deciding: boolean;
 		releasingOne: boolean;
-		maxScore: number;
+		/** Per-role rubrics mean per-role maxes; each row shows its own scale. */
+		maxScoreFor: (role: string) => number;
 		onDecide: (uids: string[], decision: DecisionStatus) => void;
 		onClear: (uid: string) => void;
 		onReleaseOne: (uid: string) => void;
+		/** Sends the applicant back to the review pane for a fresh score. */
+		onRescore: (uid: string) => void;
 	} = $props();
 
 	let open = $state<Applicant | null>(null);
@@ -238,7 +242,7 @@
 	{#if open}
 		<div class="mb-5 flex flex-wrap items-center gap-2">
 			{#if open.score !== null}
-				<Badge tone="info">{open.score}/{maxScore}</Badge>
+				<Badge tone="info">{open.score}/{maxScoreFor(open.role)}</Badge>
 			{/if}
 			<span class="text-2xs text-foreground-tertiary">
 				{humanizeEnum(open.role)}{open.scorer ? ` · scored by ${open.scorer.name}` : ''}
@@ -260,6 +264,16 @@
 	{#snippet footer()}
 		{#if open}
 			{@const applicant = open}
+			<Button
+				class="mr-auto"
+				disabled={deciding}
+				onclick={() => {
+					onRescore(applicant.uid);
+					open = null;
+				}}
+			>
+				Rescore
+			</Button>
 			<Button
 				variant="primary"
 				disabled={applicant.activeDecision === 'ACCEPTED' || deciding}
