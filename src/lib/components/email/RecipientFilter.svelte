@@ -11,6 +11,7 @@
 		roleFilter = $bindable(),
 		statusFilter = $bindable(),
 		decisionFilter = $bindable(),
+		pendingFilter = $bindable(),
 		/** Application-answer facets. Empty means no filter — see `facetParams`. */
 		selection = $bindable({}),
 		facets = [],
@@ -31,6 +32,7 @@
 		roleFilter: FilterState;
 		statusFilter: FilterState;
 		decisionFilter: FilterState;
+		pendingFilter: FilterState;
 		selection?: FacetState;
 		facets?: Facet[];
 		emailText: string;
@@ -136,6 +138,7 @@
 			{roleFilter}
 			{statusFilter}
 			{decisionFilter}
+			{pendingFilter}
 			{facets}
 			bind:selection
 			onSelectionChange={onChange}
@@ -161,6 +164,14 @@
 			}}
 			onClearDecision={() => {
 				decisionFilter = clear(decisionFilter);
+				onChange();
+			}}
+			onTogglePending={(d) => {
+				pendingFilter = toggle(pendingFilter, d);
+				onChange();
+			}}
+			onClearPending={() => {
+				pendingFilter = clear(pendingFilter);
 				onChange();
 			}}
 		/>

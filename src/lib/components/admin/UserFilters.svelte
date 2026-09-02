@@ -13,6 +13,9 @@
 		decisionFilter,
 		onToggleDecision,
 		onClearDecision,
+		pendingFilter,
+		onTogglePending,
+		onClearPending,
 		// Users-page sidebar default; the custom-email wizard overrides it to render inline.
 		// md:w-60, not narrower: the facet combobox popover is anchored to the control
 		// width, and at 168px every university row truncated.
@@ -34,6 +37,9 @@
 		decisionFilter: Record<string, boolean>;
 		onToggleDecision: (d: string) => void;
 		onClearDecision: () => void;
+		pendingFilter: Record<string, boolean>;
+		onTogglePending: (d: string) => void;
+		onClearPending: () => void;
 		class?: string;
 		/** Side by side instead of stacked. */
 		columns?: boolean;
@@ -80,9 +86,19 @@
 			onClear: onClearStatus,
 			optionLabel: label
 		},
+		// Pending before released, matching the order decisions move through.
+		{
+			key: 'pending',
+			title: 'Pending decision',
+			options: DECISIONS as readonly string[],
+			state: pendingFilter,
+			onToggle: onTogglePending,
+			onClear: onClearPending,
+			optionLabel: (d: string) => (d === 'NONE' ? 'None' : label(d))
+		},
 		{
 			key: 'decision',
-			title: 'Decision',
+			title: 'Released decision',
 			options: DECISIONS as readonly string[],
 			state: decisionFilter,
 			onToggle: onToggleDecision,

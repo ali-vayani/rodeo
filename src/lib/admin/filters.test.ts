@@ -11,8 +11,8 @@ import {
 import {
 	ALL_ROLES,
 	ALL_STATUSES,
+	DECIDABLE_VALUES,
 	DECISION_OPTIONS,
-	DECISION_VALUES,
 	NO_DECISION,
 	allChecked,
 	buildRecipientParams,
@@ -27,7 +27,12 @@ const UNIVERSITY = linkedFacetKey('UNIVERSITY');
 const YEAR = linkedFacetKey('YEAR');
 
 const everything = () =>
-	[allChecked(ALL_ROLES), allChecked(ALL_STATUSES), allChecked(DECISION_OPTIONS)] as const;
+	[
+		allChecked(ALL_ROLES),
+		allChecked(ALL_STATUSES),
+		allChecked(DECISION_OPTIONS),
+		allChecked(DECISION_OPTIONS)
+	] as const;
 
 /** Every box in the group unticked. The panels' `clear` resets to all ticked instead,
  * but the state is still reachable by unticking boxes one at a time. */
@@ -173,11 +178,12 @@ describe('buildRecipientParams — application facets', () => {
 	it('ANDs a facet filter with an engaged checkbox group', () => {
 		// Two independent filters in one params object: the server ANDs them, so both
 		// have to survive the translation.
-		const [, statuses, decisions] = everything();
+		const [, statuses, decisions, pending] = everything();
 		const params = buildRecipientParams(
 			Object.fromEntries(ALL_ROLES.map((r) => [r, r === Role.HACKER])),
 			statuses,
 			decisions,
+			pending,
 			'',
 			{ [YEAR]: { values: ['Senior'] } }
 		);
@@ -204,7 +210,9 @@ describe('buildRecipientParams — checkbox groups', () => {
 			roles: undefined,
 			statuses: undefined,
 			decisions: undefined,
-			includeNoDecision: undefined
+			includeNoDecision: undefined,
+			pendingDecisions: undefined,
+			includeNoPending: undefined
 		});
 	});
 
@@ -250,7 +258,9 @@ describe('buildRecipientParams — checkbox groups', () => {
 			roles: [Role.ORGANIZER],
 			statuses: undefined,
 			decisions: undefined,
-			includeNoDecision: undefined
+			includeNoDecision: undefined,
+			pendingDecisions: undefined,
+			includeNoPending: undefined
 		});
 	});
 
@@ -275,9 +285,33 @@ describe('buildRecipientParams — checkbox groups', () => {
 	it('separates the synthetic no-decision option from the real statuses', () => {
 		const [roles, statuses, decisions] = everything();
 		const params = buildRecipientParams(roles, statuses, { ...decisions, [NO_DECISION]: false });
-		expect(params.decisions).toEqual(DECISION_VALUES);
+		expect(params.decisions).toEqual(DECIDABLE_VALUES);
 		expect(params.includeNoDecision).toBe(false);
 		expect(params.decisions).not.toContain(NO_DECISION as unknown as DecisionStatus);
+	});
+
+	/** The pending group narrows independently of the released one. */
+	it('sends a partial pending-decision selection without touching the released keys', () => {
+		const [roles, statuses, decisions] = everything();
+		const params = buildRecipientParams(roles, statuses, decisions, {
+			...cleared(DECISION_OPTIONS),
+			[DecisionStatus.ACCEPTED]: true
+		});
+		expect(params.pendingDecisions).toEqual([DecisionStatus.ACCEPTED]);
+		expect(params.includeNoPending).toBe(false);
+		expect(params.decisions).toBeUndefined();
+		expect(params.includeNoDecision).toBeUndefined();
+	});
+
+	it('omits the pending keys when that group is cleared or untouched', () => {
+		const [roles, statuses, decisions] = everything();
+		const untouched = buildRecipientParams(roles, statuses, decisions);
+		expect(untouched.pendingDecisions).toBeUndefined();
+		expect(untouched.includeNoPending).toBeUndefined();
+
+		const emptied = buildRecipientParams(roles, statuses, decisions, cleared(DECISION_OPTIONS));
+		expect(emptied.pendingDecisions).toBeUndefined();
+		expect(emptied.includeNoPending).toBeUndefined();
 	});
 
 	it('trims the search term and omits it when blank', () => {

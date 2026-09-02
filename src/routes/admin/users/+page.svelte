@@ -53,6 +53,7 @@
 	let roleFilter = $state(allChecked(ALL_ROLES));
 	let statusFilter = $state(allChecked(ALL_STATUSES));
 	let decisionFilter = $state(allChecked(DECISION_OPTIONS));
+	let pendingFilter = $state(allChecked(DECISION_OPTIONS));
 	let search = $state('');
 
 	/**
@@ -72,7 +73,14 @@
 		return {
 			page: p,
 			pageSize: PAGE_SIZE,
-			...buildRecipientParams(roleFilter, statusFilter, decisionFilter, search, facetSelection)
+			...buildRecipientParams(
+				roleFilter,
+				statusFilter,
+				decisionFilter,
+				pendingFilter,
+				search,
+				facetSelection
+			)
 		};
 	}
 
@@ -119,6 +127,10 @@
 		decisionFilter = { ...decisionFilter, [d]: !decisionFilter[d] };
 		loadPage(1);
 	}
+	function togglePending(d: string) {
+		pendingFilter = { ...pendingFilter, [d]: !pendingFilter[d] };
+		loadPage(1);
+	}
 
 	// `clear` resets a group to its all-ticked "no filter" default. None ticked also
 	// means "no filter", so clearing to empty would show every row above a panel
@@ -133,6 +145,10 @@
 	}
 	function clearDecision() {
 		decisionFilter = allChecked(DECISION_OPTIONS);
+		loadPage(1);
+	}
+	function clearPending() {
+		pendingFilter = allChecked(DECISION_OPTIONS);
 		loadPage(1);
 	}
 
@@ -334,6 +350,9 @@
 		{decisionFilter}
 		onToggleDecision={toggleDecision}
 		onClearDecision={clearDecision}
+		{pendingFilter}
+		onTogglePending={togglePending}
+		onClearPending={clearPending}
 		facets={data.facets}
 		bind:selection={facetSelection}
 		onSelectionChange={() => loadPage(1)}

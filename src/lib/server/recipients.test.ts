@@ -192,6 +192,41 @@ describe('buildRecipientWhere — predicate shapes', () => {
 		]);
 	});
 
+	it('filters pending decisions on pendingDecision, independent of the released filter', () => {
+		const cond = conditions(buildRecipientWhere({ pendingDecisions: [DecisionStatus.ACCEPTED] }));
+		expect(cond).toEqual([{ pendingDecision: { in: [DecisionStatus.ACCEPTED] } }]);
+		expect(JSON.stringify(cond)).not.toContain('activeDecision');
+	});
+
+	it('reads a literal PENDING as "no pending decision" alongside null', () => {
+		// PENDING is the enum's starting value; setDecision refuses to write it, so it
+		// means the same thing as an untouched null.
+		expect(
+			conditions(
+				buildRecipientWhere({ pendingDecisions: [DecisionStatus.ACCEPTED], includeNoPending: true })
+			)
+		).toEqual([
+			{
+				OR: [
+					{ pendingDecision: { in: [DecisionStatus.ACCEPTED] } },
+					{ pendingDecision: null },
+					{ pendingDecision: DecisionStatus.PENDING }
+				]
+			}
+		]);
+	});
+
+	it('ANDs the pending and released filters so "pending accept" can be isolated', () => {
+		expect(
+			conditions(
+				buildRecipientWhere({
+					pendingDecisions: [DecisionStatus.ACCEPTED],
+					includeNoDecision: true
+				})
+			)
+		).toEqual([{ activeDecision: null }, { pendingDecision: { in: [DecisionStatus.ACCEPTED] } }]);
+	});
+
 	it('searches name and email case-insensitively', () => {
 		expect(conditions(buildRecipientWhere({ search: 'ada' }))).toEqual([
 			{
