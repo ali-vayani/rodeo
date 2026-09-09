@@ -22,18 +22,19 @@ import { substituteVariables } from '$lib/email/variables';
 import { deployEnv, emailFrom, resendConfigured, NO_EMAIL_MESSAGE } from './env';
 
 /**
- * A file carried inside the message. Exists for inline images: the check-in QR
- * referenced as `cid:<contentId>` rather than hosted where a proxy could cache it.
+ * A file carried inside the message. Two kinds share the shape: inline images — the
+ * check-in QR referenced as `cid:<contentId>` rather than hosted where a proxy could
+ * cache it — and plain attachments the client offers as a download, which have no cid.
  * Transport-neutral; `sendEmail` translates it to Resend's spelling.
  */
 export interface EmailAttachment {
 	filename: string;
 	content: Buffer;
 	contentType: string;
-	/** The `cid:` the body references. */
-	contentId: string;
+	/** The `cid:` the body references. Absent on a plain (download) attachment. */
+	contentId?: string;
 	/** `inline` renders in place; otherwise the client offers it as a download. */
-	inline: boolean;
+	inline?: boolean;
 }
 
 export interface EmailPayload {
@@ -74,7 +75,8 @@ export async function sendEmail(payload: EmailPayload): Promise<void> {
 		console.log(`[email] Body:\n${payload.body}`);
 		for (const a of payload.attachments ?? []) {
 			console.log(
-				`[email] Attachment: ${a.filename} (${a.contentType}, ${a.content.length} bytes, cid:${a.contentId})`
+				`[email] Attachment: ${a.filename} (${a.contentType}, ${a.content.length} bytes` +
+					`${a.contentId ? `, cid:${a.contentId}` : ''})`
 			);
 		}
 		return;
@@ -99,7 +101,9 @@ export async function sendEmail(payload: EmailPayload): Promise<void> {
 						filename: a.filename,
 						content: a.content,
 						contentType: a.contentType,
-						content_id: a.contentId
+						// Only inline images carry one; a cid on a plain attachment would
+						// hide it from clients that treat cid parts as inline-only.
+						...(a.contentId ? { content_id: a.contentId } : {})
 					}))
 				}
 			: {})

@@ -19,8 +19,30 @@ import {
 	SAMPLE_VARS
 } from '$lib/email/variables';
 import { buildEmailPersonalization } from '$lib/server/wallet/email-block';
+import {
+	attachmentRefSchema,
+	storedAttachmentRefs,
+	MAX_EMAIL_ATTACHMENTS,
+	type EmailAttachmentRef
+} from '$lib/server/emailAttachments';
+import { getObject, storageFailureReason } from '$lib/server/storage';
 import { UserStatus } from '$lib/generated/prisma/enums';
 import { logAction } from '$lib/server/log';
+
+/**
+ * Storage refs resolved to sendable attachments. Bytes are read fresh each call:
+ * `sendOne` runs once per recipient in its own invocation, so there is nowhere for a
+ * blast-wide copy to live.
+ */
+async function loadAttachments(refs: EmailAttachmentRef[]): Promise<EmailAttachment[]> {
+	return Promise.all(
+		refs.map(async (ref) => ({
+			filename: ref.filename,
+			content: await getObject(ref.key),
+			contentType: ref.contentType
+		}))
+	);
+}
 
 /**
  * Whether addresses with no account are recipients or mistakes.
@@ -149,11 +171,14 @@ export const emailRouter = router({
 				// `filters: {}` matches everyone, so a client bug or a replay that lost the filters
 				// would otherwise blast the whole database.
 				expectedCount: z.number().int().min(0),
-				allowExternal: allowExternalSchema
+				allowExternal: allowExternalSchema,
+				// Refs from the compose-step upload endpoint. The schema only passes keys that
+				// endpoint mints, so a send cannot attach an arbitrary bucket object.
+				attachments: z.array(attachmentRefSchema).max(MAX_EMAIL_ATTACHMENTS).default([])
 			})
 		)
 		.mutation(async ({ ctx, input }) => {
-			const { subject, body, filters, expectedCount, allowExternal } = input;
+			const { subject, body, filters, expectedCount, allowExternal, attachments } = input;
 
 			// Before any query, and whatever the toggle says. The page strips malformed entries,
 			// so reaching this means a caller bypassed it — refuse rather than mail the rest.
@@ -206,6 +231,20 @@ export const emailRouter = router({
 				return { sendId: null, recipients: [], users: 0, external: 0 };
 			}
 
+			// Read every attachment once before anyone is mailed. A ref whose object has
+			// vanished — a deleted draft, a cleaned bucket — would otherwise fail all N
+			// recipients one at a time, after the send was committed to the log.
+			try {
+				await loadAttachments(attachments);
+			} catch (e) {
+				const reason = storageFailureReason(e);
+				console.error(`[email] Attachment check failed before send: ${reason}`);
+				throw new TRPCError({
+					code: 'BAD_REQUEST',
+					message: 'An attachment could not be read. Remove and re-attach it, then try again.'
+				});
+			}
+
 			// One identifier per recipient, in the spelling EmailLog already stores: a uid for
 			// an account holder, a prefixed address for everyone else. `sendOne` refuses
 			// anything absent from this list, which is what stops it being an open relay.
@@ -216,8 +255,10 @@ export const emailRouter = router({
 
 			// Stores the raw template, not a rendered copy: one row covers N recipients, and
 			// `sendOne` reads the body back from here so it cannot be rewritten mid-send.
+			// Attachment refs ride on the row for the same reason — a resumed send must
+			// attach the same files, whatever the client now claims.
 			const emailLog = await ctx.prisma.emailLog.create({
-				data: { subject, body, userIds: recipients }
+				data: { subject, body, userIds: recipients, attachments }
 			});
 
 			const reached =
@@ -238,7 +279,8 @@ export const emailRouter = router({
 					users: users.length,
 					external: external.length,
 					externalAllowed: allowExternal,
-					subject
+					subject,
+					...(attachments.length ? { attachments: attachments.map((a) => a.filename) } : {})
 				}
 			});
 
@@ -312,13 +354,16 @@ export const emailRouter = router({
 			}
 
 			try {
+				// Inside the try: a vanished object fails this recipient the same way a
+				// rejected send does — recorded against the row, and the loop carries on.
+				const files = await loadAttachments(storedAttachmentRefs(log.attachments));
 				await sendEmail({
 					to,
 					// `dropRawValues` in the subject because it is plain text; `escapeValues` in
 					// the body because it is rendered to HTML. Same split as sendTemplatedEmail.
 					subject: substituteVariables(log.subject, vars, { dropRawValues: true }),
 					body: substituteVariables(log.body, vars, { escapeValues: true }),
-					attachments
+					attachments: [...attachments, ...files]
 				});
 			} catch (error) {
 				const message = error instanceof Error ? error.message : String(error);

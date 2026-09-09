@@ -137,6 +137,31 @@ describe('production', () => {
 	it('throws when no transport is configured', async () => {
 		await expect(sendEmail(message)).rejects.toThrow('No email transport configured');
 	});
+
+	it('carries a content_id only for inline attachments', async () => {
+		configureResend();
+
+		await sendEmail({
+			...message,
+			attachments: [
+				{
+					filename: 'qr.png',
+					content: Buffer.from('png'),
+					contentType: 'image/png',
+					contentId: 'qr',
+					inline: true
+				},
+				// A plain attachment: a cid here would hide it from clients that treat
+				// cid parts as inline-only.
+				{ filename: 'schedule.pdf', content: Buffer.from('pdf'), contentType: 'application/pdf' }
+			]
+		});
+
+		const [inline, plain] = resendSend.mock.calls[0][0].attachments;
+		expect(inline.content_id).toBe('qr');
+		expect(plain.filename).toBe('schedule.pdf');
+		expect('content_id' in plain).toBe(false);
+	});
 });
 
 describe('sendTemplatedEmail', () => {
