@@ -15,13 +15,13 @@
 			label: 'Name Blacklisted',
 			title:
 				'Name matches a blacklist entry exactly. No decision was made automatically -- verify this is the same person.',
-			class: 'bg-[#fef3c7] text-[#92400e]'
+			class: 'border border-white/60 bg-black/85 text-white'
 		},
 		NAME_FUZZY: {
 			label: 'Possible Blacklist',
 			title:
 				'Name closely resembles a blacklist entry and may be a misspelling. No decision was made automatically -- verify before acting.',
-			class: 'border border-[#fde68a] bg-[#fffbeb] text-[#b45309]'
+			class: 'border border-white/60 bg-black/85 text-white'
 		}
 	};
 

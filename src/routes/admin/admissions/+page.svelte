@@ -319,7 +319,6 @@
 				...facetParams(decideFacetSelection)
 			});
 			ranked = result.applicants;
-			rankedLoaded = true;
 			// Only update the unfiltered total when no facet filters are active,
 			// so the tab badge doesn't change when the operator narrows the list.
 			if (decideActiveFilterCount === 0) {
