@@ -15,7 +15,7 @@ export const load: PageServerLoad = async (event) => {
 	// The ranked list is deliberately NOT loaded here. It is the second tab, it carries
 	// every scored applicant's full application, and it has to be refetched on arrival
 	// anyway, since scores move while the decision pass is open.
-	const [queue, facets, stats, rubric] = await Promise.all([
+const [queue, facets, stats, rubric] = await Promise.all([
 		caller.admissions.list({ noDecision: true, scored: false }),
 		caller.filters.facets(),
 		caller.admissions.stats(),
