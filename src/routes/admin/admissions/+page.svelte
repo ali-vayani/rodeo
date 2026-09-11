@@ -62,6 +62,7 @@
 	// Fetched on arrival at the Decide tab, never eagerly. It carries every scored
 	// applicant's answers, and scores keep moving while the decision pass is open.
 	let ranked = $state<Applicant[]>([]);
+	let rankedLoaded = $state(false);
 	let rankedLoading = $state(false);
 	let deciding = $state(false);
 	let releasingOne = $state(false);
@@ -250,6 +251,7 @@
 				sort: 'score'
 			});
 			ranked = result.applicants;
+			rankedLoaded = true;
 		} catch (e) {
 			showToast(errorMessage(e, 'Failed to load the ranked list'), 'error');
 		} finally {
@@ -651,6 +653,7 @@
 	}
 
 	let decidePending = $derived(ranked.filter(hasPendingDecision).length);
+	let decideTotal = $derived(ranked.filter((a) => !a.activeDecision).length);
 	let reconsiderPending = $derived(reconsider.filter(hasPendingDecision).length);
 
 	async function handleRelease() {
@@ -723,7 +726,7 @@
 	<Tabs
 		tabs={[
 			{ value: 'review', label: 'Review', badge: stats.unscored },
-			{ value: 'decide', label: 'Pending Decisions', badge: stats.scored },
+			{ value: 'decide', label: 'Pending Decisions', badge: rankedLoaded ? decideTotal : stats.scored + stats.pending },
 			{ value: 'reconsider', label: 'Reconsider' },
 			{ value: 'stats', label: 'Stats' }
 		]}
@@ -804,7 +807,7 @@
 		<div class="md:min-h-0 md:flex-1 md:overflow-y-auto">
 			<div class="mb-3 flex items-center justify-between">
 				<span class="text-xs text-foreground-secondary">
-					{decidePending} pending decision{decidePending === 1 ? '' : 's'}
+					{decideTotal} pending or scored
 				</span>
 				<button
 					onclick={() => openReleaseModal('decide')}
