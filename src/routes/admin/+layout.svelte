@@ -43,7 +43,9 @@
 	<main class="mt-topbar min-h-screen min-w-0 flex-1 bg-muted p-4 md:mt-0 md:ml-sidebar md:p-8">
 		{#if $navigating}
 			<div class="flex h-full items-center justify-center py-32">
-				<div class="h-8 w-8 animate-spin rounded-full border-4 border-border border-t-primary"></div>
+				<div
+					class="h-8 w-8 animate-spin rounded-full border-4 border-border border-t-primary"
+				></div>
 			</div>
 		{:else}
 			{@render children()}

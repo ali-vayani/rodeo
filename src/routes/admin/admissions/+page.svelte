@@ -726,7 +726,11 @@
 	<Tabs
 		tabs={[
 			{ value: 'review', label: 'Review', badge: stats.unscored },
-			{ value: 'decide', label: 'Pending Decisions', badge: rankedLoaded ? decideTotal : stats.scored + stats.pending },
+			{
+				value: 'decide',
+				label: 'Pending Decisions',
+				badge: rankedLoaded ? decideTotal : stats.scored + stats.pending
+			},
 			{ value: 'reconsider', label: 'Reconsider' },
 			{ value: 'stats', label: 'Stats' }
 		]}
