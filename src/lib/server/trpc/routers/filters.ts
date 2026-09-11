@@ -1,5 +1,6 @@
-import type { PrismaClient, Question } from '$lib/generated/prisma/client';
-import { QuestionType, Role } from '$lib/generated/prisma/client';
+import { z } from 'zod';
+import type { Prisma, PrismaClient, Question } from '$lib/generated/prisma/client';
+import { DecisionStatus, QuestionType, Role } from '$lib/generated/prisma/client';
 import { router, adminProcedure } from '../init';
 import {
 	FILTERABLE_LINKED_FIELDS,
@@ -71,13 +72,15 @@ function linkedControlFor(question: Pick<Question, 'type' | 'optionPreset'>): Fa
 /** How many users hold each distinct value of a linked column, plus the absent count. */
 async function observedValues(
 	prisma: Pick<PrismaClient, 'user'>,
-	field: LinkedField
+	field: LinkedField,
+	userWhere?: Prisma.UserWhereInput
 ): Promise<{ counts: Map<string, number>; noneCount: number }> {
 	// `groupBy`'s return type is keyed on the `by` tuple, which a runtime-chosen column
 	// can't produce. `LINKED_FIELD_COLUMN` keeps the set closed.
 	const column = LINKED_FIELD_COLUMN[field];
 	const rows = (await (prisma.user.groupBy as unknown as (args: unknown) => Promise<unknown[]>)({
 		by: [column],
+		where: userWhere,
 		_count: { _all: true }
 	})) as ({ _count: { _all: number } } & Record<string, string | null>)[];
 
@@ -170,7 +173,25 @@ export const filtersRouter = router({
 	 * this value", and no recompute on every keystroke. Four queries regardless of form
 	 * size, plus one `groupBy` per linked facet.
 	 */
-	facets: adminProcedure.query(async ({ ctx }): Promise<Facet[]> => {
+	facets: adminProcedure
+		.input(z.object({ scoredOrPending: z.boolean().optional() }).optional())
+		.query(async ({ ctx, input }): Promise<Facet[]> => {
+		// When scoped to the Pending Decisions pass, only count users who are scored or
+		// have a real pending decision — so the filter badges reflect that population.
+		const userWhere: Prisma.UserWhereInput = input?.scoredOrPending
+			? {
+					OR: [
+						{ score: { not: null } },
+						{
+							AND: [
+								{ pendingDecision: { not: null } },
+								{ pendingDecision: { not: DecisionStatus.PENDING } }
+							]
+						}
+					]
+				}
+			: {};
+
 		const [questions, roleRows, totalUsers, settings] = await Promise.all([
 			ctx.prisma.question.findMany({
 				select: {
@@ -185,8 +206,8 @@ export const filtersRouter = router({
 				// Two questions may link the same column; the first on the form wins.
 				orderBy: { order: 'asc' }
 			}),
-			ctx.prisma.user.groupBy({ by: ['role'], _count: { _all: true } }),
-			ctx.prisma.user.count(),
+			ctx.prisma.user.groupBy({ by: ['role'], where: userWhere, _count: { _all: true } }),
+			ctx.prisma.user.count({ where: userWhere }),
 			ctx.prisma.settings.findFirst({ select: { homeState: true } })
 		]);
 
@@ -207,7 +228,7 @@ export const filtersRouter = router({
 			if (!question) continue;
 
 			const control = linkedControlFor(question);
-			const { counts, noneCount } = await observedValues(ctx.prisma, field);
+			const { counts, noneCount } = await observedValues(ctx.prisma, field, userWhere);
 
 			// A select's list is bounded by the question, so it is never truncated.
 			const { options, truncated } =
@@ -226,7 +247,7 @@ export const filtersRouter = router({
 
 			// State is University read through a dataset, so it sits directly under it.
 			if (field === 'UNIVERSITY') {
-				const state = await stateFacet(ctx.prisma, settings?.homeState ?? null);
+				const state = await stateFacet(ctx.prisma, settings?.homeState ?? null, userWhere);
 				if (state) facets.push(state);
 			}
 		}
@@ -244,7 +265,11 @@ export const filtersRouter = router({
 		const valueRows = tallied.length
 			? await ctx.prisma.applicationResponse.groupBy({
 					by: ['questionId', 'value'],
-					where: { questionId: { in: tallied.map((q) => q.question.id) } },
+					where: {
+						questionId: { in: tallied.map((q) => q.question.id) },
+						// When scoped, only count responses from users in the target population.
+						...(Object.keys(userWhere).length > 0 ? { user: userWhere } : {})
+					},
 					_count: { _all: true }
 				})
 			: [];

@@ -21,7 +21,8 @@
 	import { rubricForRole, rubricMaxScore, type CriterionDraft } from '$lib/admissions/rubric';
 	import { APPLICANT_ROLES } from '$lib/admissions/roles';
 	import { facetParams } from '$lib/admin/filters';
-	import { linkedFacetKey, type FacetState } from '$lib/facets';
+	import { isEngaged, linkedFacetKey, type FacetState } from '$lib/facets';
+	import FacetFilters from '$lib/components/admin/FacetFilters.svelte';
 
 	let { data }: { data: PageData } = $props();
 
@@ -53,6 +54,9 @@
 		return roleRubric.length > 0 ? rubricMaxScore(roleRubric) : MAX_SCORE;
 	});
 
+	/** Curried version for passing to child components that don't hold the rubric state. */
+	let rubricForRoleLocal = $derived((role: string) => rubricForRole(rubric, role));
+
 	/** For the Stats tab, where one average spans every role's scale. */
 	let scaleHint = $derived.by(() => {
 		const maxes = new Set(APPLICANT_ROLES.map((role) => maxScoreFor(role)));
@@ -64,8 +68,12 @@
 	let ranked = $state<Applicant[]>([]);
 	let rankedLoaded = $state(false);
 	let rankedLoading = $state(false);
+	/** Unfiltered total for the tab badge — updated only when no facet filters are active. */
+	let rankedUnfilteredTotal = $state<number | null>(null);
 	let deciding = $state(false);
 	let releasingOne = $state(false);
+	/** UIDs currently checked in the Pending Decisions ranked list. */
+	let rankedSelected = $state<string[]>([]);
 
 	type Reviewer = Awaited<ReturnType<typeof trpc.admissions.reviewerStats.query>>[number];
 	let reviewers = $state<Reviewer[]>([]);
@@ -80,6 +88,14 @@
 
 	/** What each application-answer facet's controls hold, keyed by `Facet.key`. */
 	let facetSelection = $state<FacetState>({});
+
+	/** Facet filters for the Pending Decisions tab — separate state so the two tabs don't share. */
+	let decideFacets = $state(untrack(() => data.facets));
+	let decideFacetSelection = $state<FacetState>({});
+	let decideFiltersOpen = $state(false);
+	let decideActiveFilterCount = $derived(
+		Object.values(decideFacetSelection).filter((s) => isEngaged(s)).length
+	);
 
 	/** The Name facet, which the did-you-mean chips drive directly. See `onSuggestionSelect`. */
 	const NAME_FACET = linkedFacetKey('NAME');
@@ -243,15 +259,29 @@
 		}
 	}
 
+	async function loadDecideFacets() {
+		try {
+			decideFacets = await trpc.filters.facets.query({ scoredOrPending: true });
+		} catch {
+			// keep the last known facets
+		}
+	}
+
 	async function loadRanked() {
 		rankedLoading = true;
 		try {
 			const result = await trpc.admissions.list.query({
 				scoredOrPending: true,
-				sort: 'score'
+				sort: 'score',
+				...facetParams(decideFacetSelection)
 			});
 			ranked = result.applicants;
 			rankedLoaded = true;
+			// Only update the unfiltered total when no facet filters are active,
+			// so the tab badge doesn't change when the operator narrows the list.
+			if (decideActiveFilterCount === 0) {
+				rankedUnfilteredTotal = result.applicants.filter((a) => !a.activeDecision).length;
+			}
 		} catch (e) {
 			showToast(errorMessage(e, 'Failed to load the ranked list'), 'error');
 		} finally {
@@ -304,6 +334,7 @@
 			// Refetched on every arrival, not just the first: whatever was scored
 			// since the last visit is exactly what the operator came back to see.
 			void loadRanked();
+			void loadDecideFacets();
 			void refreshStats();
 		} else if (tab === 'stats') {
 			void loadReviewerStats();
@@ -443,6 +474,36 @@
 			showToast(errorMessage(e, 'Failed to save score'), 'error');
 		} finally {
 			scoreLoading = false;
+		}
+	}
+
+	/** Rescores an applicant directly from the Pending Decisions ranked list. */
+	async function handleRankedRubricScore(
+		uid: string,
+		selections: Array<{ criterionId: string; levelId: string }>,
+		delta: number
+	) {
+		rankedLoading = true;
+		try {
+			const saved = await trpc.admissions.setRubricScore.mutate({ uid, selections, delta });
+			ranked = ranked.map((a) =>
+				a.uid === uid
+					? {
+							...a,
+							score: saved.score,
+							scoreDelta: saved.scoreDelta,
+							rubricSelections: selections,
+							scorer: { name: data.adminName }
+						}
+					: a
+			);
+			showToast(`Saved ${saved.score}/${maxScoreFor(saved.role)}`);
+			void refreshStats();
+		} catch (e) {
+			showToast(errorMessage(e, 'Failed to save score'), 'error');
+			throw e;
+		} finally {
+			rankedLoading = false;
 		}
 	}
 
@@ -653,6 +714,9 @@
 	}
 
 	let decidePending = $derived(ranked.filter(hasPendingDecision).length);
+	let selectedWithPending = $derived(
+		rankedSelected.filter((uid) => ranked.some((a) => a.uid === uid && hasPendingDecision(a)))
+	);
 	let decideTotal = $derived(ranked.filter((a) => !a.activeDecision).length);
 	let reconsiderPending = $derived(reconsider.filter(hasPendingDecision).length);
 
@@ -686,10 +750,18 @@
 		}
 	}
 
-	function openReleaseModal(scope: 'decide' | 'reconsider') {
-		const list = scope === 'decide' ? ranked : reconsider;
-		releaseUids = list.filter(hasPendingDecision).map((a) => a.uid);
-		releaseScope = scope;
+	function openReleaseModal(scope: 'decide' | 'reconsider' | 'selected') {
+		if (scope === 'selected') {
+			const selectedSet = new Set(rankedSelected);
+			releaseUids = ranked
+				.filter((a) => selectedSet.has(a.uid) && hasPendingDecision(a))
+				.map((a) => a.uid);
+			releaseScope = 'decide';
+		} else {
+			const list = scope === 'decide' ? ranked : reconsider;
+			releaseUids = list.filter(hasPendingDecision).map((a) => a.uid);
+			releaseScope = scope;
+		}
 		releaseConfirmText = '';
 		showReleaseModal = true;
 	}
@@ -729,7 +801,7 @@
 			{
 				value: 'decide',
 				label: 'Pending Decisions',
-				badge: rankedLoaded ? decideTotal : stats.scored + stats.pending
+				badge: rankedUnfilteredTotal ?? stats.scored + stats.pending
 			},
 			{ value: 'reconsider', label: 'Reconsider' },
 			{ value: 'stats', label: 'Stats' }
@@ -813,14 +885,82 @@
 				<span class="text-xs text-foreground-secondary">
 					{decideTotal} pending or scored
 				</span>
-				<button
-					onclick={() => openReleaseModal('decide')}
-					disabled={decidePending === 0}
-					class="cursor-pointer rounded-md border-none bg-destructive px-[14px] py-[7px] text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40"
-				>
-					Release Decisions
-				</button>
+				<div class="flex gap-2">
+					<button
+						onclick={() => openReleaseModal('selected')}
+						disabled={selectedWithPending.length === 0}
+						class="cursor-pointer rounded-md border border-destructive bg-transparent px-[14px] py-[7px] text-xs font-semibold text-destructive disabled:cursor-not-allowed disabled:opacity-40"
+					>
+						Release Selected
+					</button>
+					<button
+						onclick={() => openReleaseModal('decide')}
+						disabled={decidePending === 0}
+						class="cursor-pointer rounded-md border-none bg-destructive px-[14px] py-[7px] text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40"
+					>
+						Release All
+					</button>
+				</div>
 			</div>
+
+			{#if decideFacets.length > 0}
+				<div class="mb-3 rounded-md border border-border bg-white">
+					<div class="flex items-stretch">
+						<button
+							type="button"
+							onclick={() => (decideFiltersOpen = !decideFiltersOpen)}
+							aria-expanded={decideFiltersOpen}
+							class="flex flex-1 cursor-pointer items-center justify-between gap-2 border-none
+							       bg-transparent px-3 py-2 text-left text-xs text-foreground-secondary
+							       transition-colors hover:text-foreground focus-visible:shadow-ring"
+						>
+							<span class="flex items-center gap-1.5">
+								Filters
+								{#if decideActiveFilterCount > 0}
+									<span
+										class="rounded-sm bg-primary px-1 font-mono text-2xs text-primary-foreground tabular-nums"
+									>
+										{decideActiveFilterCount}
+									</span>
+								{/if}
+							</span>
+							<span
+								aria-hidden="true"
+								class="inline-block text-md leading-none transition-transform duration-150 ease-out-quick {decideFiltersOpen
+									? ''
+									: '-rotate-90'}">▾</span
+							>
+						</button>
+						{#if decideActiveFilterCount > 0}
+							<button
+								type="button"
+								onclick={() => {
+									decideFacetSelection = {};
+									loadRanked();
+								}}
+								class="shrink-0 cursor-pointer border-none bg-transparent px-3 text-2xs
+								       text-foreground-tertiary underline transition-colors hover:text-foreground
+								       focus-visible:shadow-ring"
+							>
+								Clear
+							</button>
+						{/if}
+					</div>
+					{#if decideFiltersOpen}
+						<div class="max-h-64 overflow-y-auto border-t border-border-subtle px-3 py-3">
+							<FacetFilters
+								facets={decideFacets}
+								selected={decideFacetSelection}
+								onChange={(next) => {
+									decideFacetSelection = next;
+									loadRanked();
+								}}
+							/>
+						</div>
+					{/if}
+				</div>
+			{/if}
+
 			<RankedList
 				applicants={ranked.filter((a) => !a.activeDecision)}
 				loading={rankedLoading}
@@ -828,10 +968,13 @@
 				{releasingOne}
 				unscoredCount={stats.unscored}
 				{maxScoreFor}
+				rubricForRole={rubricForRoleLocal}
 				onDecide={handleDecide}
 				onClear={handleClear}
 				onReleaseOne={handleReleaseOne}
 				onRescore={handleRescore}
+				onSaveRubricScore={handleRankedRubricScore}
+				onSelectionChange={(uids) => (rankedSelected = uids)}
 			/>
 		</div>
 	{:else if tab === 'reconsider'}
