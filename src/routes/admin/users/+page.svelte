@@ -197,7 +197,9 @@
 	let editRole = $state<Role>(Role.UNDECLARED);
 	let editStatus = $state<UserStatus>(UserStatus.CREATED);
 	let editPending = $state<DecisionStatus | ''>('');
+	let editNotes = $state('');
 	let saving = $state(false);
+	let savingNotes = $state(false);
 
 	/**
 	 * Released means the applicant has been emailed an outcome, so both decision controls
@@ -222,6 +224,7 @@
 		editRole = user.role;
 		editStatus = user.status;
 		editPending = user.pendingDecision ?? '';
+		editNotes = user.notes ?? '';
 		detailOpen = true;
 		loadProfile(user.uid);
 	}
@@ -256,6 +259,23 @@
 		profileLoading = false;
 		// Invalidate any in-flight fetch so it can't repopulate a closed modal.
 		profileToken++;
+	}
+
+	async function saveNotes() {
+		if (!selectedUser) return;
+		savingNotes = true;
+		try {
+			const updated = await trpc.user.updateNotes.mutate({
+				uid: selectedUser.uid,
+				notes: editNotes
+			});
+			users = users.map((u) => (u.uid === updated.uid ? { ...u, notes: updated.notes } : u));
+			showToast('Notes saved');
+		} catch (e) {
+			showToast(errorMessage(e, 'Failed to save notes'), 'error');
+		} finally {
+			savingNotes = false;
+		}
 	}
 
 	async function saveAll() {
@@ -697,6 +717,23 @@
 					{selectedUser.activeDecision ? decLabel(selectedUser.activeDecision) : 'None'}
 				</div>
 				<div class="mt-1 text-2xs text-muted-foreground">Set by releasing decisions</div>
+			</div>
+		</div>
+
+		<!-- Admin notes: freeform per-user annotations visible only to admins. -->
+		<div>
+			<div class="mb-1.5 text-2xs font-bold tracking-eyebrow text-muted-foreground uppercase">
+				Admin Notes
+			</div>
+			<textarea
+				bind:value={editNotes}
+				placeholder="Add notes about this user…"
+				rows={4}
+				maxlength={5000}
+				class="w-full resize-y rounded-md border border-border bg-muted px-3 py-2.5 text-base text-foreground placeholder:text-foreground-tertiary outline-none focus:border-primary focus:bg-white"
+			></textarea>
+			<div class="mt-2">
+				<Button variant="secondary" loading={savingNotes} onclick={saveNotes}>Save Notes</Button>
 			</div>
 		</div>
 
