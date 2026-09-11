@@ -28,7 +28,10 @@
 
 	const trpc = createClient();
 
-	type Applicant = (typeof data.applicants)[number];
+	type ListResult = Awaited<ReturnType<typeof trpc.admissions.list.query>>;
+	type Applicant = ListResult['applicants'][number];
+	type StatsResult = Awaited<ReturnType<typeof trpc.admissions.stats.query>>;
+	type FacetsResult = Awaited<ReturnType<typeof trpc.filters.facets.query>>;
 
 	/**
 	 * The two passes, in the order they happen: score the whole queue, then work the
@@ -37,14 +40,25 @@
 	 */
 	let tab = $state<'review' | 'decide' | 'stats' | 'reconsider'>('review');
 
-	let applicants = $state<Applicant[]>(untrack(() => [...data.applicants]));
+	const DEFAULT_STATS: StatsResult = {
+		accepted: 0,
+		rejected: 0,
+		waitlisted: 0,
+		undecided: 0,
+		pending: 0,
+		scored: 0,
+		unscored: 0
+	};
+
+	let pageLoading = $state(true);
+	let applicants = $state<Applicant[]>([]);
 	let selectedUid = $state<string | null>(null);
 	let roleTab = $state<Role | 'ALL'>('ALL');
 	let search = $state('');
 	let scoreFilter = $state<ScoreFilter>('unscored');
-	let stats = $state(untrack(() => data.stats));
+	let stats = $state<StatsResult>(DEFAULT_STATS);
 
-	let rubric = $state(untrack(() => data.rubric));
+	let rubric = $state<Awaited<ReturnType<typeof trpc.rubric.get.query>>>([]);
 	let showRubricEditor = $state(false);
 	let rubricSaving = $state(false);
 
@@ -89,8 +103,10 @@
 	/** What each application-answer facet's controls hold, keyed by `Facet.key`. */
 	let facetSelection = $state<FacetState>({});
 
+	let reviewFacets = $state<FacetsResult>([]);
+
 	/** Facet filters for the Pending Decisions tab — separate state so the two tabs don't share. */
-	let decideFacets = $state(untrack(() => data.facets));
+	let decideFacets = $state<FacetsResult>([]);
 	let decideFacetSelection = $state<FacetState>({});
 	let decideFiltersOpen = $state(false);
 	let decideActiveFilterCount = $derived(
@@ -101,7 +117,12 @@
 	const NAME_FACET = linkedFacetKey('NAME');
 
 	/** What the last list query did with the search term — drives the "did you mean" strip. */
-	let searchInfo = $state<typeof data.search>(untrack(() => data.search));
+	let searchInfo = $state<ListResult['search']>({
+		names: [],
+		fuzzy: false,
+		capped: false,
+		exact: 0
+	});
 
 	/**
 	 * Whether the current `name` selection came from a suggestion chip rather than the
@@ -202,6 +223,30 @@
 		}
 		selectedUid = uid;
 	}
+
+	$effect(() => {
+		async function initialLoad() {
+			try {
+				const [listResult, fetchedFacets, fetchedStats, fetchedRubric] = await Promise.all([
+					trpc.admissions.list.query({ noDecision: true, scored: false }),
+					trpc.filters.facets.query(),
+					trpc.admissions.stats.query(),
+					trpc.rubric.get.query()
+				]);
+				applicants = listResult.applicants;
+				searchInfo = listResult.search;
+				reviewFacets = fetchedFacets;
+				decideFacets = fetchedFacets;
+				stats = fetchedStats;
+				rubric = fetchedRubric;
+			} catch (e) {
+				showToast(errorMessage(e, 'Failed to load admissions data'), 'error');
+			} finally {
+				pageLoading = false;
+			}
+		}
+		void initialLoad();
+	});
 
 	$effect(() => {
 		const adminUid = data.adminUid;
@@ -773,20 +818,25 @@
 	}
 </script>
 
-<div class="mb-4 flex items-start justify-between gap-3">
-	<div>
-		<h1 class="text-[22px] font-bold text-primary">Admissions</h1>
-		<span class="mt-0.5 block text-[13px] text-muted-foreground">
-			{stats.unscored} left to score | {stats.accepted} accepted · {stats.rejected} rejected ·
-			{stats.waitlisted} waitlisted | {pendingCount} pending release
-		</span>
+{#if pageLoading}
+	<div class="flex h-full items-center justify-center py-32">
+		<div class="h-8 w-8 animate-spin rounded-full border-4 border-border border-t-primary"></div>
 	</div>
-	<Button size="sm" onclick={() => (showRubricEditor = true)}>
-		{rubric.length > 0 ? 'Edit rubrics' : 'Set up rubrics'}
-	</Button>
-</div>
+{:else}
+	<div class="mb-4 flex items-start justify-between gap-3">
+		<div>
+			<h1 class="text-[22px] font-bold text-primary">Admissions</h1>
+			<span class="mt-0.5 block text-[13px] text-muted-foreground">
+				{stats.unscored} left to score | {stats.accepted} accepted · {stats.rejected} rejected ·
+				{stats.waitlisted} waitlisted | {pendingCount} pending release
+			</span>
+		</div>
+		<Button size="sm" onclick={() => (showRubricEditor = true)}>
+			{rubric.length > 0 ? 'Edit rubrics' : 'Set up rubrics'}
+		</Button>
+	</div>
 
-<!--
+	<!--
 	The tabs are a fixed-size row of a column exactly one workspace tall, and the pane
 	below takes whatever is left. Stacking them above a `workspace-h` pane instead
 	would push the score field off the screen.
@@ -794,221 +844,224 @@
 	The counts that used to sit here as four tiles now live on one line under the page
 	title. They cost 118px of reviewing surface to say what fits in a sentence.
 -->
-<div class="flex flex-col md:workspace-h md:overflow-hidden">
-	<Tabs
-		tabs={[
-			{ value: 'review', label: 'Review', badge: stats.unscored },
-			{
-				value: 'decide',
-				label: 'Pending Decisions',
-				badge: rankedUnfilteredTotal ?? stats.scored + stats.pending
-			},
-			{ value: 'reconsider', label: 'Reconsider' },
-			{ value: 'stats', label: 'Stats' }
-		]}
-		active={tab}
-		onChange={onTabChange}
-		class="mb-4 shrink-0"
-	/>
+	<div class="flex flex-col md:workspace-h md:overflow-hidden">
+		<Tabs
+			tabs={[
+				{ value: 'review', label: 'Review', badge: stats.unscored },
+				{
+					value: 'decide',
+					label: 'Pending Decisions',
+					badge: rankedUnfilteredTotal ?? stats.scored + stats.pending
+				},
+				{ value: 'reconsider', label: 'Reconsider' },
+				{ value: 'stats', label: 'Stats' }
+			]}
+			active={tab}
+			onChange={onTabChange}
+			class="mb-4 shrink-0"
+		/>
 
-	{#if tab === 'review'}
-		<!-- Split pane from md up; stacked list ⇄ detail navigation below md -->
-		<div
-			class="flex rounded-md border border-border bg-white md:min-h-0 md:flex-1 md:overflow-hidden"
-		>
-			<ApplicantList
-				{applicants}
-				{selectedUid}
-				onSelect={(uid) => (selectedUid = uid)}
-				{roleTab}
-				{onRoleTabChange}
-				{search}
-				{onSearchInput}
-				{scoreFilter}
-				{onScoreFilterChange}
-				facets={data.facets}
-				{facetSelection}
-				{onFacetsChange}
-				{searchInfo}
-				{onSuggestionSelect}
-				{loading}
-				collapsed={sidebarCollapsed}
-				onToggleCollapse={() => (sidebarCollapsed = !sidebarCollapsed)}
-				{presenceMap}
-				selfClaimUid={session.phase === 'owned' || session.phase === 'warning' ? selectedUid : null}
-			/>
-
-			<!-- Right detail pane. Below md it replaces the list when an applicant is selected,
-					     and disappears entirely when none is. -->
+		{#if tab === 'review'}
+			<!-- Split pane from md up; stacked list ⇄ detail navigation below md -->
 			<div
-				bind:this={paneEl}
-				class="min-w-0 flex-1 flex-col md:flex md:overflow-hidden {selected ? 'flex' : 'hidden'}"
+				class="flex rounded-md border border-border bg-white md:min-h-0 md:flex-1 md:overflow-hidden"
 			>
-				{#if selected}
-					<ApplicantDetail
-						applicant={selected}
-						rubric={rubricForRole(rubric, selected.role)}
-						maxScore={maxScoreFor(selected.role)}
-						onSaveScore={handleSaveScore}
-						onSaveRubricScore={handleSaveRubricScore}
-						onDecide={handleReviewDecide}
-						{scoreLoading}
-						decideLoading={reviewDeciding}
-						{hasPrev}
-						{hasNext}
-						onPrev={selectPrev}
-						onNext={selectNext}
-						onBack={() => (selectedUid = null)}
-						lockState={session.phase}
-						claimerName={session.claimerName}
-						lockFreed={session.lockFreed}
-						onReclaim={session.reclaim}
-					/>
-				{:else}
-					<div class="flex flex-1 items-center justify-center text-[13px] text-muted-foreground">
-						{applicants.length === 0
-							? scoreFilter === 'unscored'
-								? 'Every application here has been scored — head to Decide'
-								: 'No applicants in this view'
-							: Object.keys(presenceMap).length >= applicants.length
-								? 'Everyone in this view is being reviewed. Try another role tab or clear your search.'
-								: 'Select an applicant to score their application'}
-					</div>
-				{/if}
-			</div>
-		</div>
-	{:else if tab === 'decide'}
-		<!-- The ranked list scrolls inside the same remaining height, so the bulk
-		     toolbar stays put while the table moves under it. -->
-		<div class="md:min-h-0 md:flex-1 md:overflow-y-auto">
-			<div class="mb-3 flex items-center justify-between">
-				<span class="text-xs text-foreground-secondary">
-					{decideTotal} pending or scored
-				</span>
-				<div class="flex gap-2">
-					<button
-						onclick={() => openReleaseModal('selected')}
-						disabled={selectedWithPending.length === 0}
-						class="cursor-pointer rounded-md border border-destructive bg-transparent px-[14px] py-[7px] text-xs font-semibold text-destructive disabled:cursor-not-allowed disabled:opacity-40"
-					>
-						Release Selected
-					</button>
-					<button
-						onclick={() => openReleaseModal('decide')}
-						disabled={decidePending === 0}
-						class="cursor-pointer rounded-md border-none bg-destructive px-[14px] py-[7px] text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40"
-					>
-						Release All
-					</button>
-				</div>
-			</div>
+				<ApplicantList
+					{applicants}
+					{selectedUid}
+					onSelect={(uid) => (selectedUid = uid)}
+					{roleTab}
+					{onRoleTabChange}
+					{search}
+					{onSearchInput}
+					{scoreFilter}
+					{onScoreFilterChange}
+					facets={reviewFacets}
+					{facetSelection}
+					{onFacetsChange}
+					{searchInfo}
+					{onSuggestionSelect}
+					{loading}
+					collapsed={sidebarCollapsed}
+					onToggleCollapse={() => (sidebarCollapsed = !sidebarCollapsed)}
+					{presenceMap}
+					selfClaimUid={session.phase === 'owned' || session.phase === 'warning'
+						? selectedUid
+						: null}
+				/>
 
-			{#if decideFacets.length > 0}
-				<div class="mb-3 rounded-md border border-border bg-white">
-					<div class="flex items-stretch">
-						<button
-							type="button"
-							onclick={() => (decideFiltersOpen = !decideFiltersOpen)}
-							aria-expanded={decideFiltersOpen}
-							class="flex flex-1 cursor-pointer items-center justify-between gap-2 border-none
-							       bg-transparent px-3 py-2 text-left text-xs text-foreground-secondary
-							       transition-colors hover:text-foreground focus-visible:shadow-ring"
-						>
-							<span class="flex items-center gap-1.5">
-								Filters
-								{#if decideActiveFilterCount > 0}
-									<span
-										class="rounded-sm bg-primary px-1 font-mono text-2xs text-primary-foreground tabular-nums"
-									>
-										{decideActiveFilterCount}
-									</span>
-								{/if}
-							</span>
-							<span
-								aria-hidden="true"
-								class="inline-block text-md leading-none transition-transform duration-150 ease-out-quick {decideFiltersOpen
-									? ''
-									: '-rotate-90'}">▾</span
-							>
-						</button>
-						{#if decideActiveFilterCount > 0}
-							<button
-								type="button"
-								onclick={() => {
-									decideFacetSelection = {};
-									loadRanked();
-								}}
-								class="shrink-0 cursor-pointer border-none bg-transparent px-3 text-2xs
-								       text-foreground-tertiary underline transition-colors hover:text-foreground
-								       focus-visible:shadow-ring"
-							>
-								Clear
-							</button>
-						{/if}
-					</div>
-					{#if decideFiltersOpen}
-						<div class="max-h-64 overflow-y-auto border-t border-border-subtle px-3 py-3">
-							<FacetFilters
-								facets={decideFacets}
-								selected={decideFacetSelection}
-								onChange={(next) => {
-									decideFacetSelection = next;
-									loadRanked();
-								}}
-							/>
+				<!-- Right detail pane. Below md it replaces the list when an applicant is selected,
+					     and disappears entirely when none is. -->
+				<div
+					bind:this={paneEl}
+					class="min-w-0 flex-1 flex-col md:flex md:overflow-hidden {selected ? 'flex' : 'hidden'}"
+				>
+					{#if selected}
+						<ApplicantDetail
+							applicant={selected}
+							rubric={rubricForRole(rubric, selected.role)}
+							maxScore={maxScoreFor(selected.role)}
+							onSaveScore={handleSaveScore}
+							onSaveRubricScore={handleSaveRubricScore}
+							onDecide={handleReviewDecide}
+							{scoreLoading}
+							decideLoading={reviewDeciding}
+							{hasPrev}
+							{hasNext}
+							onPrev={selectPrev}
+							onNext={selectNext}
+							onBack={() => (selectedUid = null)}
+							lockState={session.phase}
+							claimerName={session.claimerName}
+							lockFreed={session.lockFreed}
+							onReclaim={session.reclaim}
+						/>
+					{:else}
+						<div class="flex flex-1 items-center justify-center text-[13px] text-muted-foreground">
+							{applicants.length === 0
+								? scoreFilter === 'unscored'
+									? 'Every application here has been scored — head to Decide'
+									: 'No applicants in this view'
+								: Object.keys(presenceMap).length >= applicants.length
+									? 'Everyone in this view is being reviewed. Try another role tab or clear your search.'
+									: 'Select an applicant to score their application'}
 						</div>
 					{/if}
 				</div>
-			{/if}
-
-			<RankedList
-				applicants={ranked.filter((a) => !a.activeDecision)}
-				loading={rankedLoading}
-				{deciding}
-				{releasingOne}
-				unscoredCount={stats.unscored}
-				{maxScoreFor}
-				rubricForRole={rubricForRoleLocal}
-				onDecide={handleDecide}
-				onClear={handleClear}
-				onReleaseOne={handleReleaseOne}
-				onRescore={handleRescore}
-				onSaveRubricScore={handleRankedRubricScore}
-				onSelectionChange={(uids) => (rankedSelected = uids)}
-			/>
-		</div>
-	{:else if tab === 'reconsider'}
-		<div class="md:min-h-0 md:flex-1 md:overflow-y-auto">
-			<div class="mb-3 flex items-center justify-between">
-				<span class="text-xs text-foreground-secondary">
-					{reconsiderPending} pending decision{reconsiderPending === 1 ? '' : 's'}
-				</span>
-				<button
-					onclick={() => openReleaseModal('reconsider')}
-					disabled={reconsiderPending === 0}
-					class="cursor-pointer rounded-md border-none bg-destructive px-[14px] py-[7px] text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40"
-				>
-					Release Decisions
-				</button>
 			</div>
-			<ReconsiderList
-				applicants={reconsider}
-				loading={reconsiderLoading}
-				{deciding}
-				{releasingOne}
-				{maxScoreFor}
-				onDecide={handleReconsiderDecide}
-				onClear={handleReconsiderClear}
-				onReleaseOne={handleReconsiderReleaseOne}
-				onRescore={handleRescore}
-			/>
-		</div>
-	{:else}
-		<div class="md:min-h-0 md:flex-1 md:overflow-y-auto">
-			<ReviewerStats {reviewers} loading={reviewersLoading} {stats} {decisionStats} {scaleHint} />
-		</div>
-	{/if}
-</div>
+		{:else if tab === 'decide'}
+			<!-- The ranked list scrolls inside the same remaining height, so the bulk
+		     toolbar stays put while the table moves under it. -->
+			<div class="md:min-h-0 md:flex-1 md:overflow-y-auto">
+				<div class="mb-3 flex items-center justify-between">
+					<span class="text-xs text-foreground-secondary">
+						{decideTotal} pending or scored
+					</span>
+					<div class="flex gap-2">
+						<button
+							onclick={() => openReleaseModal('selected')}
+							disabled={selectedWithPending.length === 0}
+							class="cursor-pointer rounded-md border border-destructive bg-transparent px-[14px] py-[7px] text-xs font-semibold text-destructive disabled:cursor-not-allowed disabled:opacity-40"
+						>
+							Release Selected
+						</button>
+						<button
+							onclick={() => openReleaseModal('decide')}
+							disabled={decidePending === 0}
+							class="cursor-pointer rounded-md border-none bg-destructive px-[14px] py-[7px] text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40"
+						>
+							Release All
+						</button>
+					</div>
+				</div>
+
+				{#if decideFacets.length > 0}
+					<div class="mb-3 rounded-md border border-border bg-white">
+						<div class="flex items-stretch">
+							<button
+								type="button"
+								onclick={() => (decideFiltersOpen = !decideFiltersOpen)}
+								aria-expanded={decideFiltersOpen}
+								class="flex flex-1 cursor-pointer items-center justify-between gap-2 border-none
+							       bg-transparent px-3 py-2 text-left text-xs text-foreground-secondary
+							       transition-colors hover:text-foreground focus-visible:shadow-ring"
+							>
+								<span class="flex items-center gap-1.5">
+									Filters
+									{#if decideActiveFilterCount > 0}
+										<span
+											class="rounded-sm bg-primary px-1 font-mono text-2xs text-primary-foreground tabular-nums"
+										>
+											{decideActiveFilterCount}
+										</span>
+									{/if}
+								</span>
+								<span
+									aria-hidden="true"
+									class="inline-block text-md leading-none transition-transform duration-150 ease-out-quick {decideFiltersOpen
+										? ''
+										: '-rotate-90'}">▾</span
+								>
+							</button>
+							{#if decideActiveFilterCount > 0}
+								<button
+									type="button"
+									onclick={() => {
+										decideFacetSelection = {};
+										loadRanked();
+									}}
+									class="shrink-0 cursor-pointer border-none bg-transparent px-3 text-2xs
+								       text-foreground-tertiary underline transition-colors hover:text-foreground
+								       focus-visible:shadow-ring"
+								>
+									Clear
+								</button>
+							{/if}
+						</div>
+						{#if decideFiltersOpen}
+							<div class="max-h-64 overflow-y-auto border-t border-border-subtle px-3 py-3">
+								<FacetFilters
+									facets={decideFacets}
+									selected={decideFacetSelection}
+									onChange={(next) => {
+										decideFacetSelection = next;
+										loadRanked();
+									}}
+								/>
+							</div>
+						{/if}
+					</div>
+				{/if}
+
+				<RankedList
+					applicants={ranked.filter((a) => !a.activeDecision)}
+					loading={rankedLoading}
+					{deciding}
+					{releasingOne}
+					unscoredCount={stats.unscored}
+					{maxScoreFor}
+					rubricForRole={rubricForRoleLocal}
+					onDecide={handleDecide}
+					onClear={handleClear}
+					onReleaseOne={handleReleaseOne}
+					onRescore={handleRescore}
+					onSaveRubricScore={handleRankedRubricScore}
+					onSelectionChange={(uids) => (rankedSelected = uids)}
+				/>
+			</div>
+		{:else if tab === 'reconsider'}
+			<div class="md:min-h-0 md:flex-1 md:overflow-y-auto">
+				<div class="mb-3 flex items-center justify-between">
+					<span class="text-xs text-foreground-secondary">
+						{reconsiderPending} pending decision{reconsiderPending === 1 ? '' : 's'}
+					</span>
+					<button
+						onclick={() => openReleaseModal('reconsider')}
+						disabled={reconsiderPending === 0}
+						class="cursor-pointer rounded-md border-none bg-destructive px-[14px] py-[7px] text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40"
+					>
+						Release Decisions
+					</button>
+				</div>
+				<ReconsiderList
+					applicants={reconsider}
+					loading={reconsiderLoading}
+					{deciding}
+					{releasingOne}
+					{maxScoreFor}
+					onDecide={handleReconsiderDecide}
+					onClear={handleReconsiderClear}
+					onReleaseOne={handleReconsiderReleaseOne}
+					onRescore={handleRescore}
+				/>
+			</div>
+		{:else}
+			<div class="md:min-h-0 md:flex-1 md:overflow-y-auto">
+				<ReviewerStats {reviewers} loading={reviewersLoading} {stats} {decisionStats} {scaleHint} />
+			</div>
+		{/if}
+	</div>
+{/if}
 
 <!-- Mounted per editing session so the draft reseeds from the saved rubric each open. -->
 {#if showRubricEditor}
