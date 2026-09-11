@@ -26,6 +26,7 @@ export const LOG_ACTIONS = [
 	{ key: 'user.roles.update', label: 'Role changed', group: 'Users' },
 	{ key: 'user.status.update', label: 'Status changed', group: 'Users' },
 	{ key: 'user.decision.override', label: 'Decision overridden', group: 'Users' },
+	{ key: 'user.notes.update', label: 'Notes updated', group: 'Users' },
 	{ key: 'user.export', label: 'User list exported', group: 'Users' },
 
 	// Application editor

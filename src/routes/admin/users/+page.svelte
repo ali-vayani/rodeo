@@ -730,7 +730,7 @@
 				placeholder="Add notes about this user…"
 				rows={4}
 				maxlength={5000}
-				class="w-full resize-y rounded-md border border-border bg-muted px-3 py-2.5 text-base text-foreground placeholder:text-foreground-tertiary outline-none focus:border-primary focus:bg-white"
+				class="w-full resize-y rounded-md border border-border bg-muted px-3 py-2.5 text-base text-foreground outline-none placeholder:text-foreground-tertiary focus:border-primary focus:bg-white"
 			></textarea>
 			<div class="mt-2">
 				<Button variant="secondary" loading={savingNotes} onclick={saveNotes}>Save Notes</Button>
