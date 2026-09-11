@@ -29,6 +29,10 @@ export function allChecked(options: readonly string[]): FilterState {
 	return Object.fromEntries(options.map((o) => [o, true]));
 }
 
+export function allCleared(options: readonly string[]): FilterState {
+	return Object.fromEntries(options.map((o) => [o, false]));
+}
+
 export type LinkedParams = {
 	names?: string[];
 	universities?: string[];

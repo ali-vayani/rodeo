@@ -14,6 +14,7 @@
 		DECISION_VALUES,
 		DECISION_OPTIONS,
 		allChecked,
+		allCleared,
 		buildRecipientParams
 	} from '$lib/admin/filters';
 	import { linkedFacetKey, type FacetState } from '$lib/facets';
@@ -136,19 +137,19 @@
 	// means "no filter", so clearing to empty would show every row above a panel
 	// claiming nothing is selected.
 	function clearRole() {
-		roleFilter = allChecked(ALL_ROLES);
+		roleFilter = allCleared(ALL_ROLES);
 		loadPage(1);
 	}
 	function clearStatus() {
-		statusFilter = allChecked(ALL_STATUSES);
+		statusFilter = allCleared(ALL_STATUSES);
 		loadPage(1);
 	}
 	function clearDecision() {
-		decisionFilter = allChecked(DECISION_OPTIONS);
+		decisionFilter = allCleared(DECISION_OPTIONS);
 		loadPage(1);
 	}
 	function clearPending() {
-		pendingFilter = allChecked(DECISION_OPTIONS);
+		pendingFilter = allCleared(DECISION_OPTIONS);
 		loadPage(1);
 	}
 
