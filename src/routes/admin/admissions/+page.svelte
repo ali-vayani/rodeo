@@ -1,7 +1,6 @@
 <script lang="ts">
 	import type { Role, DecisionStatus } from '$lib/generated/prisma/enums';
 	import { errorMessage, isTRPCErrorCode } from '$lib/ui/errors';
-	import { untrack } from 'svelte';
 	import { fly } from 'svelte/transition';
 	import { createClient } from '$lib/trpc/client';
 	import type { PageData } from './$types';
@@ -80,7 +79,6 @@
 	// Fetched on arrival at the Decide tab, never eagerly. It carries every scored
 	// applicant's answers, and scores keep moving while the decision pass is open.
 	let ranked = $state<Applicant[]>([]);
-	let rankedLoaded = $state(false);
 	let rankedLoading = $state(false);
 	/** Unfiltered total for the tab badge — updated only when no facet filters are active. */
 	let rankedUnfilteredTotal = $state<number | null>(null);
