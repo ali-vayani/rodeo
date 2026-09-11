@@ -18,7 +18,7 @@ export const load: PageServerLoad = async (event) => {
 	// down. They come back null instead.
 	const admin = isAdmin(event.locals.user?.role ?? Role.UNDECLARED);
 
-const [stats, funnel, trend, activity, adminStats, demographics] = await Promise.all([
+	const [stats, funnel, trend, activity, adminStats, demographics] = await Promise.all([
 		caller.dashboard.stats(),
 		caller.dashboard.funnel(),
 		caller.dashboard.overTime({ window: DEFAULT_WINDOW }),
