@@ -94,6 +94,9 @@ export const admissionsRouter = router({
 				decision: z.nativeEnum(DecisionStatus).optional(),
 				noDecision: z.boolean().optional(),
 				scored: z.boolean().optional(),
+				pending: z.boolean().optional(),
+				/** Match applicants who are scored OR have a real pending decision (or both). */
+				scoredOrPending: z.boolean().optional(),
 				sort: z.enum(['recent', 'score']).default('recent'),
 				search: z.string().optional(),
 				...linkedFieldFilterSchema.shape,
@@ -101,7 +104,7 @@ export const admissionsRouter = router({
 			})
 		)
 		.query(async ({ ctx, input }) => {
-			const { roles, decision, noDecision, scored, sort, search } = input;
+			const { roles, decision, noDecision, scored, pending, scoredOrPending, sort, search } = input;
 
 			// The "All" tab sends no role filter; staff must still stay out.
 			const applicantRoles = narrowToApplicants(roles);
@@ -112,6 +115,22 @@ export const admissionsRouter = router({
 			const conditions: Prisma.UserWhereInput[] = [{ role: { in: applicantRoles } }, SUBMITTED];
 			if (noDecision) conditions.push(UNDECIDED);
 			if (scored !== undefined) conditions.push({ score: scored ? { not: null } : null });
+			if (pending !== undefined)
+				conditions.push({ pendingDecision: pending ? { not: null } : null });
+			if (scoredOrPending) {
+				// A real pending decision excludes the PENDING enum default, which means "none set".
+				conditions.push({
+					OR: [
+						{ score: { not: null } },
+						{
+							AND: [
+								{ pendingDecision: { not: null } },
+								{ pendingDecision: { not: DecisionStatus.PENDING } }
+							]
+						}
+					]
+				});
+			}
 			if (decision !== undefined) {
 				conditions.push({ OR: [{ pendingDecision: decision }, { activeDecision: decision }] });
 			}

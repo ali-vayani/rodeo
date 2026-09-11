@@ -245,7 +245,10 @@
 	async function loadRanked() {
 		rankedLoading = true;
 		try {
-			const result = await trpc.admissions.list.query({ scored: true, sort: 'score' });
+			const result = await trpc.admissions.list.query({
+				scoredOrPending: true,
+				sort: 'score'
+			});
 			ranked = result.applicants;
 		} catch (e) {
 			showToast(errorMessage(e, 'Failed to load the ranked list'), 'error');
@@ -699,8 +702,8 @@
 	<div>
 		<h1 class="text-[22px] font-bold text-primary">Admissions</h1>
 		<span class="mt-0.5 block text-[13px] text-muted-foreground">
-			{stats.unscored} left to score · {stats.accepted} accepted · {stats.rejected} rejected ·
-			{stats.waitlisted} waitlisted · {pendingCount} pending release
+			{stats.unscored} left to score | {stats.accepted} accepted · {stats.rejected} rejected ·
+			{stats.waitlisted} waitlisted | {pendingCount} pending release
 		</span>
 	</div>
 	<Button size="sm" onclick={() => (showRubricEditor = true)}>
