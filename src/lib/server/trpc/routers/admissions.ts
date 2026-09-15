@@ -823,24 +823,36 @@ export const admissionsRouter = router({
 				}
 			}
 
-			// CAS on the value read above: a decision changed since then is dropped from the
-			// batch rather than emailed as a stale, irreversible outcome.
+			// CAS on the value read above: a decision changed since then falls out of its
+			// group's `pendingDecision` filter and is dropped from the batch rather than
+			// emailed as a stale, irreversible outcome. Grouped by decision value — one
+			// statement per value, not per user — because per-user statements expire the
+			// 5s transaction timeout above ~1000 decisions and release nothing (#38).
+			const releaseGroups = new Map<DecisionStatus, string[]>();
+			for (const u of users) {
+				releaseGroups.set(u.pendingDecision!, [
+					...(releaseGroups.get(u.pendingDecision!) ?? []),
+					u.uid
+				]);
+			}
 			const swaps = await ctx.prisma.$transaction(
-				users.map((u) =>
-					ctx.prisma.user.updateMany({
-						where: { uid: u.uid, pendingDecision: u.pendingDecision },
+				[...releaseGroups.entries()].map(([decision, uids]) =>
+					ctx.prisma.user.updateManyAndReturn({
+						where: { uid: { in: uids }, pendingDecision: decision },
 						data: {
-							activeDecision: u.pendingDecision,
+							activeDecision: decision,
 							pendingDecision: null,
 							// `decidedBy`/`decidedAt` untouched: release publishes other admins' work.
 							claimedBy: null,
 							claimedAt: null
-						}
+						},
+						select: { uid: true }
 					})
 				)
 			);
 
-			const releasedUsers = users.filter((_, i) => swaps[i].count === 1);
+			const releasedUids = new Set(swaps.flat().map((r) => r.uid));
+			const releasedUsers = users.filter((u) => releasedUids.has(u.uid));
 
 			const recipients = releasedUsers.filter(
 				(u) => u.pendingDecision && templateMap[u.pendingDecision].body
