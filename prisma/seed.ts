@@ -8,6 +8,7 @@ import {
 	SEED_WINDOWS
 } from './seedShared';
 import { generateUsers, pruneUnmanagedUsers, seedUsers, summarize } from './seedUsers';
+import { DecisionStatus, Role, UserStatus } from '../src/lib/generated/prisma/client';
 
 const connectionString = process.env.DATABASE_URL;
 if (!connectionString) {
@@ -34,6 +35,26 @@ async function main() {
 	const { users, responses } = await seedUsers(prisma);
 	console.log(summarize(generateUsers()).join('\n'));
 	console.log(`\n  ${users.length} accounts, ${responses} application responses.`);
+
+	// Probe branch only (issue #38): 3,000 extra staged decisions so release crosses
+	// the transaction-timeout cliff. No application responses — release never reads them.
+	const PROBE_DECISIONS = [
+		DecisionStatus.ACCEPTED,
+		DecisionStatus.REJECTED,
+		DecisionStatus.WAITLISTED
+	];
+	await prisma.user.createMany({
+		data: Array.from({ length: 3000 }, (_, i) => ({
+			name: `Probe ${i + 1}`,
+			email: `probe38-${i + 1}@yopmail.com`,
+			role: Role.HACKER,
+			status: UserStatus.APPLIED,
+			pendingDecision: PROBE_DECISIONS[i % 3]
+		})),
+		skipDuplicates: true
+	});
+	const staged = await prisma.user.count({ where: { pendingDecision: { not: null } } });
+	console.log(`\n  Probe: 3000 extra pending users seeded; ${staged} total staged decisions.`);
 
 	console.log('\nDone. Log in at /login with any address above.');
 }
