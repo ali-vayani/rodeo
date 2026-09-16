@@ -6,6 +6,7 @@
 		id: string;
 		name: string;
 		pool: 'DIETARY_RESTRICTION' | 'NO_RESTRICTION';
+		releasedAt: Date | null;
 		members: Array<{ user: { uid: string; name: string; team: { teamName: string } | null } }>;
 	};
 
@@ -64,6 +65,25 @@
 			saving = false;
 		}
 	}
+
+	async function release() {
+		saving = true;
+		try {
+			const result = await trpc.lunchGroups.release.mutate();
+			await refresh();
+			onToast(
+				result.count
+					? `Released ${result.count} lunch groups to attendees`
+					: 'Lunch groups are already released'
+			);
+		} catch (error) {
+			onToast(errorMessage(error, 'Could not release lunch groups'), 'error');
+		} finally {
+			saving = false;
+		}
+	}
+
+	let hasUnreleasedGroups = $derived(groups.some((group) => group.releasedAt === null));
 </script>
 
 <div class="max-w-[720px] space-y-5">
@@ -106,6 +126,15 @@
 	>
 		Generate lunch groups
 	</button>
+	{#if groups.length}
+		<button
+			onclick={release}
+			disabled={saving || !hasUnreleasedGroups}
+			class="ml-2 cursor-pointer rounded-md border border-primary bg-white px-4 py-2 text-sm font-semibold text-primary disabled:opacity-50"
+		>
+			{hasUnreleasedGroups ? 'Release to attendees' : 'Released to attendees'}
+		</button>
+	{/if}
 
 	{#if groups.length}
 		<div class="space-y-3 border-t border-border pt-5">

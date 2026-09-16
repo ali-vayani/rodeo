@@ -120,5 +120,20 @@ export const lunchGroupsRouter = router({
 				target: { id: group.id, label: group.name }
 			});
 			return group;
-		})
+		}),
+
+	/** Makes the current set of generated group assignments visible to attendees. */
+	release: adminProcedure.mutation(async ({ ctx }) => {
+		const releasedAt = new Date();
+		const result = await ctx.prisma.lunchGroup.updateMany({
+			where: { releasedAt: null },
+			data: { releasedAt }
+		});
+		await logAction(ctx, {
+			action: 'lunch.groups.release',
+			summary: `Released ${result.count} lunch groups to attendees`,
+			metadata: { groups: result.count, releasedAt: releasedAt.toISOString() }
+		});
+		return { count: result.count, releasedAt };
+	})
 });

@@ -43,6 +43,7 @@ export const LOG_ACTIONS = [
 	{ key: 'settings.templates.update', label: 'Email templates updated', group: 'Settings' },
 	{ key: 'lunch.groups.generate', label: 'Lunch groups generated', group: 'Settings' },
 	{ key: 'lunch.groups.rename', label: 'Lunch group renamed', group: 'Settings' },
+	{ key: 'lunch.groups.release', label: 'Lunch groups released', group: 'Settings' },
 
 	// Schedule
 	{ key: 'schedule.create', label: 'Event added', group: 'Schedule' },

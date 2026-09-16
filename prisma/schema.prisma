@@ -297,6 +297,8 @@ model LunchGroup {
   name      String
   pool      LunchGroupPool
   createdAt DateTime       @default(now())
+  /// Null until an admin explicitly makes this group's assignments visible to attendees.
+  releasedAt DateTime?
   members   LunchGroupMember[]
 }
 

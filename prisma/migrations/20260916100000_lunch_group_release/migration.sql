@@ -1,0 +1,1 @@
+ALTER TABLE "LunchGroup" ADD COLUMN "releasedAt" TIMESTAMP(3);

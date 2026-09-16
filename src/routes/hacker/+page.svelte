@@ -142,6 +142,14 @@
 						<span class="font-display text-xl font-bold text-brand-purple">{statusLabel}</span>
 					</div>
 				{/if}
+				{#if data.lunchGroup}
+					<div class="flex items-baseline justify-between gap-3 border-b border-brand-line py-3">
+						<span class="font-mono text-2xs tracking-eyebrow text-foreground-tertiary uppercase">
+							Lunch group
+						</span>
+						<span class="font-display text-xl font-bold text-brand-purple">{data.lunchGroup}</span>
+					</div>
+				{/if}
 				<p class="mt-4 text-md leading-relaxed text-foreground-secondary">
 					Signed in as <span class="font-semibold text-foreground">{data.user.name}</span>.
 				</p>
