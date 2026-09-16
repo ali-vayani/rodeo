@@ -1,5 +1,5 @@
 import { Role, UserStatus, DecisionStatus } from '$lib/generated/prisma/enums';
-import type { LinkedField } from '$lib/linkedFields';
+import { isUserLinkedField, type LinkedField } from '$lib/linkedFields';
 import { isEngaged, parseFacetKey, type FacetState } from '$lib/facets';
 import { parseCsv } from '$lib/csv';
 import { isValidEmail } from '$lib/email/address';
@@ -76,6 +76,9 @@ export function facetParams(selection: FacetState = {}): LinkedParams & AnswerPa
 		if (!parsed) continue;
 
 		if (parsed.kind === 'linked') {
+			// Only the linked fields with their own `User` column have a wire param;
+			// DIETARY_RESTRICTION is filtered like any other question instead.
+			if (!isUserLinkedField(parsed.field)) continue;
 			// Copied, not aliased: these params travel to a tRPC call while the caller's
 			// state keeps mutating under the filter panel.
 			if (chosen.values?.length) params[LINKED_PARAM_KEY[parsed.field]] = [...chosen.values];

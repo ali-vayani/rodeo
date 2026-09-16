@@ -71,7 +71,7 @@ function linkedControlFor(question: Pick<Question, 'type' | 'optionPreset'>): Fa
 /** How many users hold each distinct value of a linked column, plus the absent count. */
 async function observedValues(
 	prisma: Pick<PrismaClient, 'user'>,
-	field: LinkedField
+	field: Exclude<LinkedField, 'DIETARY_RESTRICTION'>
 ): Promise<{ counts: Map<string, number>; noneCount: number }> {
 	// `groupBy`'s return type is keyed on the `by` tuple, which a runtime-chosen column
 	// can't produce. `LINKED_FIELD_COLUMN` keeps the set closed.
