@@ -7,7 +7,7 @@
 	import UserFilters from '$lib/components/admin/UserFilters.svelte';
 	import UserProfile, { type ProfileData } from '$lib/components/admin/UserProfile.svelte';
 	import Toast from '$lib/components/legacy/Toast.svelte';
-	import { Button, Combobox, Modal } from '$lib/components/ui';
+	import { Button, Checkbox, Combobox, Modal, Spinner } from '$lib/components/ui';
 	import {
 		ALL_ROLES,
 		ALL_STATUSES,
@@ -17,6 +17,7 @@
 		allCleared,
 		buildRecipientParams
 	} from '$lib/admin/filters';
+	import { USER_EXPORT_COLUMNS, USER_EXPORT_COLUMN_LABELS } from '$lib/admin/exportColumns';
 	import { linkedFacetKey, type FacetState } from '$lib/facets';
 	import { Role, UserStatus, DecisionStatus } from '$lib/generated/prisma/enums';
 	import { STAFF_ROLES } from '$lib/auth/permissions';
@@ -159,19 +160,94 @@
 		searchTimer = setTimeout(() => loadPage(1), 400);
 	}
 
-	let exporting = $state(false);
+	function downloadCsv(csv: string, filename: string) {
+		const blob = new Blob([csv], { type: 'text/csv' });
+		const url = URL.createObjectURL(blob);
+		const a = document.createElement('a');
+		a.href = url;
+		a.download = filename;
+		a.click();
+		URL.revokeObjectURL(url);
+	}
 
-	async function exportCsv() {
-		exporting = true;
+	let exportingAll = $state(false);
+
+	/** The plain, one-click export: every user, every field, no dialog. */
+	async function exportAllCsv() {
+		exportingAll = true;
 		try {
 			const csv = await trpc.user.exportCsv.query();
-			const blob = new Blob([csv], { type: 'text/csv' });
-			const url = URL.createObjectURL(blob);
-			const a = document.createElement('a');
-			a.href = url;
-			a.download = 'users.csv';
-			a.click();
-			URL.revokeObjectURL(url);
+			downloadCsv(csv, 'users.csv');
+		} catch (e) {
+			showToast(errorMessage(e, 'Failed to export CSV'), 'error');
+		} finally {
+			exportingAll = false;
+		}
+	}
+
+	// --- Custom export dialog: pick which rows and which columns go in the file. ---
+
+	let exportModalOpen = $state(false);
+	let exportColumnSelection = $state<Record<string, boolean>>(allChecked(USER_EXPORT_COLUMNS));
+
+	type ExportQuestion = { id: string; title: string };
+	let exportQuestions = $state<ExportQuestion[]>([]);
+	let exportQuestionSelection = $state<Record<string, boolean>>({});
+	let exportQuestionsLoading = $state(false);
+
+	let exporting = $state(false);
+
+	/**
+	 * The question list is fetched once, lazily, rather than loaded with the rest of the
+	 * page: it is only ever needed once an admin opens the export dialog.
+	 */
+	async function openExportModal() {
+		exportModalOpen = true;
+		if (exportQuestions.length > 0 || exportQuestionsLoading) return;
+		exportQuestionsLoading = true;
+		try {
+			const questions = await trpc.questions.listAll.query();
+			exportQuestions = questions;
+			exportQuestionSelection = allChecked(questions.map((q) => q.id));
+		} catch (e) {
+			showToast(errorMessage(e, 'Failed to load application questions'), 'error');
+		} finally {
+			exportQuestionsLoading = false;
+		}
+	}
+
+	function toggleExportColumn(key: string) {
+		exportColumnSelection = { ...exportColumnSelection, [key]: !exportColumnSelection[key] };
+	}
+	function toggleExportQuestion(id: string) {
+		exportQuestionSelection = { ...exportQuestionSelection, [id]: !exportQuestionSelection[id] };
+	}
+	function setAllExportColumns(value: boolean) {
+		exportColumnSelection = Object.fromEntries(USER_EXPORT_COLUMNS.map((c) => [c, value]));
+	}
+	function setAllExportQuestions(value: boolean) {
+		exportQuestionSelection = Object.fromEntries(exportQuestions.map((q) => [q.id, value]));
+	}
+
+	let selectedExportColumns = $derived(USER_EXPORT_COLUMNS.filter((c) => exportColumnSelection[c]));
+	let selectedExportQuestions = $derived(
+		exportQuestions.filter((q) => exportQuestionSelection[q.id])
+	);
+	let exportNothingSelected = $derived(
+		selectedExportColumns.length === 0 && selectedExportQuestions.length === 0
+	);
+
+	async function runExport() {
+		exporting = true;
+		try {
+			const csv = await trpc.user.exportCsv.query({
+				columns: [...selectedExportColumns],
+				questionIds: selectedExportQuestions.map((q) => q.id)
+			});
+			downloadCsv(csv, 'users.csv');
+			exportModalOpen = false;
+		} catch (e) {
+			showToast(errorMessage(e, 'Failed to export CSV'), 'error');
 		} finally {
 			exporting = false;
 		}
@@ -347,14 +423,24 @@
 
 <div class="mb-6 flex items-center justify-between">
 	<h1 class="text-[22px] font-bold text-primary">Users</h1>
-	<button
-		onclick={exportCsv}
-		disabled={exporting}
-		class="cursor-pointer rounded-md border border-border bg-white px-[14px] py-[7px] text-[13px] font-medium text-primary"
-		class:opacity-60={exporting}
-	>
-		{exporting ? 'Exporting…' : 'Export CSV'}
-	</button>
+	<div class="flex items-center gap-2">
+		<button
+			onclick={openExportModal}
+			title="Pick which rows and columns to include"
+			class="cursor-pointer rounded-md border border-border bg-white px-[14px] py-[7px] text-[13px] font-medium text-primary"
+		>
+			Filter CSV
+		</button>
+		<button
+			onclick={exportAllCsv}
+			disabled={exportingAll}
+			title="Export every user and every field, including application answers"
+			class="cursor-pointer rounded-md border border-border bg-white px-[14px] py-[7px] text-[13px] font-medium text-primary"
+			class:opacity-60={exportingAll}
+		>
+			{exportingAll ? 'Exporting…' : 'Export All'}
+		</button>
+	</div>
 </div>
 
 <!-- Below md the filter rail becomes a collapsible strip stacked on top and the table
@@ -744,6 +830,109 @@
 
 	{#snippet footer()}
 		<Button variant="primary" loading={saving} onclick={saveAll}>Save Changes</Button>
+	{/snippet}
+</Modal>
+
+<!-- Export dialog: which rows and which columns. Both start fully selected, since the
+     common case is "everything" and narrowing is the exception. -->
+<Modal
+	bind:open={exportModalOpen}
+	title="Export CSV"
+	description="Choose which columns to include in the file."
+	size="lg"
+	bodyClass="flex flex-col gap-5"
+>
+	<div>
+		<div class="mb-2 flex items-center justify-between">
+			<div class="text-2xs font-bold tracking-eyebrow text-muted-foreground uppercase">
+				User fields
+			</div>
+			<div class="flex gap-3 text-xs text-primary">
+				<button
+					type="button"
+					class="cursor-pointer border-none bg-transparent p-0 underline"
+					onclick={() => setAllExportColumns(true)}
+				>
+					Select all
+				</button>
+				<button
+					type="button"
+					class="cursor-pointer border-none bg-transparent p-0 underline"
+					onclick={() => setAllExportColumns(false)}
+				>
+					Clear
+				</button>
+			</div>
+		</div>
+		<div class="grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-3">
+			{#each USER_EXPORT_COLUMNS as column (column)}
+				<Checkbox
+					checked={exportColumnSelection[column] ?? false}
+					onCheckedChange={() => toggleExportColumn(column)}
+					label={USER_EXPORT_COLUMN_LABELS[column]}
+				/>
+			{/each}
+		</div>
+	</div>
+
+	<div>
+		<div class="mb-2 flex items-center justify-between">
+			<div class="text-2xs font-bold tracking-eyebrow text-muted-foreground uppercase">
+				Application questions
+			</div>
+			{#if exportQuestions.length > 0}
+				<div class="flex gap-3 text-xs text-primary">
+					<button
+						type="button"
+						class="cursor-pointer border-none bg-transparent p-0 underline"
+						onclick={() => setAllExportQuestions(true)}
+					>
+						Select all
+					</button>
+					<button
+						type="button"
+						class="cursor-pointer border-none bg-transparent p-0 underline"
+						onclick={() => setAllExportQuestions(false)}
+					>
+						Clear
+					</button>
+				</div>
+			{/if}
+		</div>
+		{#if exportQuestionsLoading}
+			<div class="flex items-center gap-2 py-2 text-sm text-foreground-secondary">
+				<Spinner label="" />
+				Loading questions…
+			</div>
+		{:else if exportQuestions.length === 0}
+			<div class="text-sm text-muted-foreground">No application questions.</div>
+		{:else}
+			<div class="flex max-h-52 flex-col gap-2 overflow-y-auto pr-1">
+				{#each exportQuestions as question (question.id)}
+					<Checkbox
+						checked={exportQuestionSelection[question.id] ?? false}
+						onCheckedChange={() => toggleExportQuestion(question.id)}
+						label={question.title}
+					/>
+				{/each}
+			</div>
+		{/if}
+	</div>
+
+	{#if exportNothingSelected}
+		<div class="text-xs text-danger-700">Select at least one field or question to export.</div>
+	{/if}
+
+	{#snippet footer()}
+		<Button variant="secondary" onclick={() => (exportModalOpen = false)}>Cancel</Button>
+		<Button
+			variant="primary"
+			loading={exporting}
+			disabled={exportNothingSelected}
+			onclick={runExport}
+		>
+			Export
+		</Button>
 	{/snippet}
 </Modal>
 

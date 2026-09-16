@@ -241,6 +241,10 @@ describe('user.updateStatus', () => {
 });
 
 describe('user.exportCsv', () => {
+	beforeEach(() => {
+		db.question.findMany.mockResolvedValue([]);
+	});
+
 	it('returns CSV with header row', async () => {
 		const caller = createTestCaller(db, adminUser);
 		db.user.findMany.mockResolvedValue([hackerUser] as never);
@@ -248,10 +252,108 @@ describe('user.exportCsv', () => {
 		const csv = await caller.user.exportCsv();
 		const lines = csv.split('\n');
 		expect(lines[0]).toBe(
-			'uid,name,email,role,status,pendingDecision,activeDecision,teamId,createdAt'
+			'"uid","name","email","role","status","pendingDecision","activeDecision","teamId","createdAt"'
 		);
 		expect(lines[1]).toContain(hackerUser.uid);
 		expect(lines[1]).toContain(hackerUser.email);
+	});
+
+	it('exports every user when no filter is given', async () => {
+		const caller = createTestCaller(db, adminUser);
+		db.user.findMany.mockResolvedValue([hackerUser] as never);
+
+		await caller.user.exportCsv();
+
+		expect(db.user.findMany).toHaveBeenCalledWith(
+			expect.objectContaining({ where: {}, include: { application: true } })
+		);
+	});
+
+	it('scopes the export to the given recipient filter', async () => {
+		const caller = createTestCaller(db, adminUser);
+		db.user.findMany.mockResolvedValue([hackerUser] as never);
+
+		await caller.user.exportCsv({ filters: { roles: [Role.HACKER] } });
+
+		expect(db.user.findMany).toHaveBeenCalledWith(
+			expect.objectContaining({
+				where: { AND: [{ role: { in: [Role.HACKER] } }] },
+				include: { application: true }
+			})
+		);
+	});
+
+	it('exports only the requested columns, in canonical order', async () => {
+		const caller = createTestCaller(db, adminUser);
+		db.user.findMany.mockResolvedValue([hackerUser] as never);
+
+		const csv = await caller.user.exportCsv({ columns: ['email', 'name'] });
+		const lines = csv.split('\n');
+
+		expect(lines[0]).toBe('"name","email"');
+		expect(lines[1]).toBe(`"${hackerUser.name}","${hackerUser.email}"`);
+	});
+
+	it('exports only the requested questions', async () => {
+		const caller = createTestCaller(db, adminUser);
+		db.question.findMany.mockResolvedValue([
+			{ id: 'q1', title: 'Why us?', type: 'SHORT_TEXT', order: 0 },
+			{ id: 'q2', title: 'Skills', type: 'SHORT_TEXT', order: 1 }
+		] as never);
+		db.user.findMany.mockResolvedValue([
+			{
+				...hackerUser,
+				application: [
+					{ questionId: 'q1', value: 'Because.' },
+					{ questionId: 'q2', value: 'Go' }
+				]
+			}
+		] as never);
+
+		const csv = await caller.user.exportCsv({ columns: [], questionIds: ['q2'] });
+		const lines = csv.split('\n');
+
+		expect(lines[0]).toBe('"Skills"');
+		expect(lines[1]).toBe('"Go"');
+	});
+
+	it('adds one column per question, populated from each user’s answers', async () => {
+		const caller = createTestCaller(db, adminUser);
+		db.question.findMany.mockResolvedValue([
+			{ id: 'q1', title: 'Why us?', type: 'SHORT_TEXT', order: 0 },
+			{ id: 'q2', title: 'Skills', type: 'MULTI_SELECT', order: 1 }
+		] as never);
+		db.user.findMany.mockResolvedValue([
+			{
+				...hackerUser,
+				application: [
+					{ questionId: 'q1', value: 'Because.' },
+					{ questionId: 'q2', value: '["Go","Rust"]' }
+				]
+			}
+		] as never);
+
+		const csv = await caller.user.exportCsv();
+		const lines = csv.split('\n');
+
+		expect(lines[0]).toBe(
+			'"uid","name","email","role","status","pendingDecision","activeDecision","teamId","createdAt","Why us?","Skills"'
+		);
+		expect(lines[1]).toContain('"Because."');
+		expect(lines[1]).toContain('"Go, Rust"');
+	});
+
+	it('leaves an unanswered question’s column blank', async () => {
+		const caller = createTestCaller(db, adminUser);
+		db.question.findMany.mockResolvedValue([
+			{ id: 'q1', title: 'Why us?', type: 'SHORT_TEXT', order: 0 }
+		] as never);
+		db.user.findMany.mockResolvedValue([{ ...hackerUser, application: [] }] as never);
+
+		const csv = await caller.user.exportCsv();
+		const row = csv.split('\n')[1];
+
+		expect(row.endsWith('""')).toBe(true);
 	});
 
 	it('escapes double quotes in names', async () => {
