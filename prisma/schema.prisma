@@ -56,6 +56,13 @@ enum LinkedField {
   NAME
   UNIVERSITY
   YEAR
+  /// A response-only link. Unlike profile fields, a person can hold several values.
+  DIETARY_RESTRICTION
+}
+
+enum LunchGroupPool {
+  DIETARY_RESTRICTION
+  NO_RESTRICTION
 }
 
 /// A bundled option list a question draws its choices from, instead of `options`.
@@ -94,6 +101,7 @@ model User {
   team            Team?               @relation(fields: [teamId], references: [id])
   groupId         String?
   group           Group?              @relation(fields: [groupId], references: [id])
+  lunchGroupMember LunchGroupMember?
   pendingDecision DecisionStatus?
   activeDecision  DecisionStatus?
   role            Role                @default(UNDECLARED)
@@ -280,4 +288,26 @@ model Invitation {
   userId String?
   user   User?            @relation(fields: [userId], references: [uid], onDelete: SetNull)
   status InvitationStatus @default(PENDING)
+}
+
+/// An admin-created lunch group. Membership is separate from User profile data so
+/// groups can be regenerated or adjusted without changing an application.
+model LunchGroup {
+  id        String         @id @default(cuid())
+  name      String
+  pool      LunchGroupPool
+  createdAt DateTime       @default(now())
+  members   LunchGroupMember[]
+}
+
+/// A user belongs to at most one current lunch group. A join model keeps that
+/// assignment out of the User model while allowing group metadata to grow later.
+model LunchGroupMember {
+  id           String     @id @default(cuid())
+  lunchGroupId String
+  lunchGroup   LunchGroup @relation(fields: [lunchGroupId], references: [id], onDelete: Cascade)
+  userId       String     @unique
+  user         User       @relation(fields: [userId], references: [uid], onDelete: Cascade)
+
+  @@unique([lunchGroupId, userId])
 }

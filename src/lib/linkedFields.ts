@@ -18,7 +18,8 @@ import type { LinkedField, User } from '$lib/generated/prisma/client';
 export const LINKED_FIELDS = [
 	'NAME',
 	'UNIVERSITY',
-	'YEAR'
+	'YEAR',
+	'DIETARY_RESTRICTION'
 ] as const satisfies readonly LinkedField[];
 
 export type { LinkedField };
@@ -27,17 +28,21 @@ export type { LinkedField };
  * The `User` column each linked field writes through to. The allowlist for a computed
  * property assignment into a Prisma `update`, so it must stay a closed set.
  */
-export const LINKED_FIELD_COLUMN = {
+export const USER_LINKED_FIELD_COLUMN = {
 	NAME: 'name',
 	UNIVERSITY: 'university',
 	YEAR: 'year'
-} as const satisfies Record<LinkedField, keyof Pick<User, 'name' | 'university' | 'year'>>;
+} as const satisfies Record<
+	'NAME' | 'UNIVERSITY' | 'YEAR',
+	keyof Pick<User, 'name' | 'university' | 'year'>
+>;
 
 /** How a linked field is written where a person reads it. */
 export const LINKED_FIELD_LABEL = {
 	NAME: 'Name',
 	UNIVERSITY: 'University',
-	YEAR: 'Year'
+	YEAR: 'Year',
+	DIETARY_RESTRICTION: 'Dietary restriction'
 } as const satisfies Record<LinkedField, string>;
 
 /**
@@ -53,4 +58,11 @@ export const FILTERABLE_LINKED_FIELDS = ['UNIVERSITY', 'YEAR'] as const satisfie
 
 export function isLinkedField(value: string | null | undefined): value is LinkedField {
 	return value != null && (LINKED_FIELDS as readonly string[]).includes(value);
+}
+
+/** True only for links that mirror an answer into a scalar User column. */
+export function isUserLinkedField(
+	value: string | null | undefined
+): value is keyof typeof USER_LINKED_FIELD_COLUMN {
+	return value != null && value in USER_LINKED_FIELD_COLUMN;
 }

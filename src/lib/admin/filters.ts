@@ -51,7 +51,7 @@ const LINKED_PARAM_KEY = {
 	NAME: 'names',
 	UNIVERSITY: 'universities',
 	YEAR: 'years'
-} as const satisfies Record<LinkedField, keyof LinkedParams>;
+} as const satisfies Record<Exclude<LinkedField, 'DIETARY_RESTRICTION'>, keyof LinkedParams>;
 
 /**
  * Translates facet panel state into the wire params `$lib/server/recipients` reads.

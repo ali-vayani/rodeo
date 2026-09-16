@@ -7,7 +7,10 @@ const createCaller = createCallerFactory(appRouter);
 
 export const load: PageServerLoad = async (event) => {
 	const caller = createCaller(createContext(event));
-	const settings = await caller.settings.get();
+	const [settings, lunchGroups] = await Promise.all([
+		caller.settings.get(),
+		caller.lunchGroups.list()
+	]);
 
 	// Straight off the session rather than through a `me` procedure: the hook has already
 	// resolved this row to decide the request was allowed in. Only the fields the card
@@ -20,5 +23,5 @@ export const load: PageServerLoad = async (event) => {
 		createdAt: user.createdAt
 	};
 
-	return { settings, me };
+	return { settings, me, lunchGroups };
 };

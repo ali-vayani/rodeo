@@ -3,8 +3,8 @@ import { QuestionType, Role } from '$lib/generated/prisma/client';
 import { router, adminProcedure } from '../init';
 import {
 	FILTERABLE_LINKED_FIELDS,
-	LINKED_FIELD_COLUMN,
-	isLinkedField,
+	USER_LINKED_FIELD_COLUMN,
+	isUserLinkedField,
 	type LinkedField
 } from '$lib/linkedFields';
 import {
@@ -75,7 +75,7 @@ async function observedValues(
 ): Promise<{ counts: Map<string, number>; noneCount: number }> {
 	// `groupBy`'s return type is keyed on the `by` tuple, which a runtime-chosen column
 	// can't produce. `LINKED_FIELD_COLUMN` keeps the set closed.
-	const column = LINKED_FIELD_COLUMN[field];
+	const column = USER_LINKED_FIELD_COLUMN[field];
 	const rows = (await (prisma.user.groupBy as unknown as (args: unknown) => Promise<unknown[]>)({
 		by: [column],
 		_count: { _all: true }
@@ -196,7 +196,7 @@ export const filtersRouter = router({
 
 		const byField = new Map<LinkedField, FacetQuestion>();
 		for (const question of questions) {
-			if (!isLinkedField(question.linkedField)) continue;
+			if (!isUserLinkedField(question.linkedField)) continue;
 			if (!byField.has(question.linkedField)) byField.set(question.linkedField, question);
 		}
 
@@ -234,7 +234,7 @@ export const filtersRouter = router({
 		// Everything else on the form. Linked questions are skipped: they already have a
 		// facet above reading the column their answers were copied into.
 		const answerQuestions = questions
-			.filter((q) => q.linkedField === null)
+			.filter((q) => !isUserLinkedField(q.linkedField))
 			.map((q) => ({ question: q, control: controlFor(q) }))
 			.filter((q): q is { question: FacetQuestion; control: FacetControl } => q.control !== null);
 

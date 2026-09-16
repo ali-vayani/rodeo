@@ -5,7 +5,7 @@ import { UserStatus, DecisionStatus, QuestionType, Role } from '$lib/generated/p
 import { router, authedProcedure } from '../init';
 import { APPLICANT_ROLES } from '$lib/admissions/roles';
 import { normalizeEmail } from '$lib/blacklist/match';
-import { LINKED_FIELD_COLUMN, isLinkedField } from '$lib/linkedFields';
+import { USER_LINKED_FIELD_COLUMN, isUserLinkedField } from '$lib/linkedFields';
 import { acceptsWriteIn, isOptionsType } from '$lib/questions/options';
 import { decodeMultiSelect } from '$lib/questions/multiSelect';
 import { isAnswered } from '$lib/questions/isAnswered';
@@ -339,12 +339,13 @@ export const applicationRouter = router({
 				assertAnswerValid(question, input.value);
 			}
 
-			// Write through to the user record for linked fields. The allowlist lives in
-			// `$lib/linkedFields` because the admin filter panels share the same three columns.
-			if (isLinkedField(question.linkedField)) {
+			// Only scalar profile links write through to User. Dietary restrictions stay on
+			// ApplicationResponse: one person may select several, and lunch grouping queries
+			// those answers directly.
+			if (isUserLinkedField(question.linkedField)) {
 				await ctx.prisma.user.update({
 					where: { uid: ctx.user.uid },
-					data: { [LINKED_FIELD_COLUMN[question.linkedField]]: input.value }
+					data: { [USER_LINKED_FIELD_COLUMN[question.linkedField]]: input.value }
 				});
 			}
 
