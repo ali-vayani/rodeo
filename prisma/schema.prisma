@@ -150,6 +150,18 @@ model Settings {
   hackathonStartDate  DateTime
   scanActions         String[]
 
+  /// Per-role deadline overrides. When null, falls back to the global applicationOpen /
+  /// applicationDeadline. Set either or both independently — a null open means the role
+  /// inherits the global open date even when a role-specific close is set.
+  hackerApplicationOpen      DateTime?
+  hackerApplicationDeadline  DateTime?
+  mentorApplicationOpen      DateTime?
+  mentorApplicationDeadline  DateTime?
+  judgeApplicationOpen       DateTime?
+  judgeApplicationDeadline   DateTime?
+  volunteerApplicationOpen   DateTime?
+  volunteerApplicationDeadline DateTime?
+
   submitTemplate      String
   submitSubject       String   @default("We received your application")
   acceptTemplate      String

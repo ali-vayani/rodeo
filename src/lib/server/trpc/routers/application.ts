@@ -29,13 +29,33 @@ function reportSendFailure(kind: string, to: string) {
 }
 
 /**
- * The three columns that gate everything in this router. Structurally typed so a
- * Prisma `Settings` row passes and the guards can be exercised on a literal.
+ * The columns that gate everything in this router. Structurally typed so a Prisma
+ * `Settings` row passes and the guards can be exercised on a literal.
+ *
+ * The per-role fields are optional so this type is satisfied by a Settings row that
+ * predates the migration (all new columns default to NULL in Postgres, which Prisma
+ * surfaces as undefined on a partial select and as null on a full one).
  */
 type ApplicationWindow = {
 	applicationOpen: Date;
 	applicationDeadline: Date;
 	RSVPDeadline: Date | null;
+	hackerApplicationOpen?: Date | null;
+	hackerApplicationDeadline?: Date | null;
+	mentorApplicationOpen?: Date | null;
+	mentorApplicationDeadline?: Date | null;
+	judgeApplicationOpen?: Date | null;
+	judgeApplicationDeadline?: Date | null;
+	volunteerApplicationOpen?: Date | null;
+	volunteerApplicationDeadline?: Date | null;
+};
+
+/** Maps a Role enum string to the settings key prefix for per-role overrides. */
+const ROLE_KEY: Record<string, string | undefined> = {
+	HACKER: 'hacker',
+	MENTOR: 'mentor',
+	JUDGE: 'judge',
+	VOLUNTEER: 'volunteer'
 };
 
 /**
@@ -45,23 +65,36 @@ type ApplicationWindow = {
  * applicants out of an event nobody has set up yet. One save of /admin/settings turns
  * enforcement on.
  *
+ * When a role is supplied, the role-specific open/deadline override the global pair.
+ * Either override may be null (inherits the global), so partial overrides work.
+ *
  * Applicant-facing only — `admissions.setDecision` is deliberately unaffected, so
  * closing applications doesn't also stop organizers working through the ones already in.
  */
-function assertWithinApplicationWindow(settings: ApplicationWindow | null) {
+function assertWithinApplicationWindow(settings: ApplicationWindow | null, role?: string) {
 	if (!settings) return;
 
+	const prefix = role ? ROLE_KEY[role] : undefined;
+	const s = settings as Record<string, unknown>;
+
+	const opens =
+		(prefix ? (s[`${prefix}ApplicationOpen`] as Date | null | undefined) : null) ??
+		settings.applicationOpen;
+	const closes =
+		(prefix ? (s[`${prefix}ApplicationDeadline`] as Date | null | undefined) : null) ??
+		settings.applicationDeadline;
+
 	const now = new Date();
-	if (now < settings.applicationOpen) {
+	if (now < opens) {
 		throw new TRPCError({
 			code: 'BAD_REQUEST',
-			message: `Applications don't open until ${formatDateLong(settings.applicationOpen)}.`
+			message: `Applications don't open until ${formatDateLong(opens)}.`
 		});
 	}
-	if (now > settings.applicationDeadline) {
+	if (now > closes) {
 		throw new TRPCError({
 			code: 'BAD_REQUEST',
-			message: `Applications closed on ${formatDateLong(settings.applicationDeadline)}. Contact the organizers if you believe this is a mistake.`
+			message: `Applications closed on ${formatDateLong(closes)}. Contact the organizers if you believe this is a mistake.`
 		});
 	}
 }
@@ -248,7 +281,7 @@ export const applicationRouter = router({
 				});
 			}
 
-			assertWithinApplicationWindow(settings);
+			assertWithinApplicationWindow(settings, input.role);
 
 			await ctx.prisma.user.update({
 				where: { uid: ctx.user.uid },
@@ -295,7 +328,7 @@ export const applicationRouter = router({
 				});
 			}
 
-			assertWithinApplicationWindow(settings);
+			assertWithinApplicationWindow(settings, user.role);
 
 			// eslint-disable-next-line @typescript-eslint/no-explicit-any
 			const question = (await (ctx.prisma.question.findUnique as any)({
@@ -515,11 +548,11 @@ export const applicationRouter = router({
 				});
 			}
 
-			assertWithinApplicationWindow(settings);
-
 			// Decides which required questions apply, and is written onto the user below.
 			// Falls back to their stored role so older callers keep working.
 			const applicationRole = submittedRole ?? user.role;
+
+			assertWithinApplicationWindow(settings, applicationRole);
 
 			// Validate all required questions are answered
 			const questions = await ctx.prisma.question.findMany({

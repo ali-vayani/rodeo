@@ -11,6 +11,9 @@ import { logAction, listOrNone } from '$lib/server/log';
 const subject = z.string().min(1).max(200);
 const templateBody = z.string().max(20000);
 
+/** An optional nullable date for per-role overrides — absent or null both mean "use global". */
+const roleDate = z.coerce.date().nullable().optional();
+
 const settingsInput = z
 	.object({
 		// Each message names its own field: `formatTRPCError` joins issue messages and
@@ -48,7 +51,17 @@ const settingsInput = z
 			.string()
 			.refine((code) => code in US_STATES, { message: 'Not a US state.' })
 			.nullable()
-			.optional()
+			.optional(),
+
+		// Per-role deadline overrides. Null / absent → inherit global dates.
+		hackerApplicationOpen: roleDate,
+		hackerApplicationDeadline: roleDate,
+		mentorApplicationOpen: roleDate,
+		mentorApplicationDeadline: roleDate,
+		judgeApplicationOpen: roleDate,
+		judgeApplicationDeadline: roleDate,
+		volunteerApplicationOpen: roleDate,
+		volunteerApplicationDeadline: roleDate
 	})
 	// Out-of-order dates make the window guards lock every applicant out.
 	.refine((s) => s.applicationOpen <= s.applicationDeadline, {
@@ -58,7 +71,39 @@ const settingsInput = z
 	.refine((s) => s.RSVPDeadline == null || s.applicationDeadline <= s.RSVPDeadline, {
 		message: 'RSVP Deadline must be on or after Applications Close.',
 		path: ['RSVPDeadline']
-	});
+	})
+	// Per-role: when both are set, open must precede close.
+	.refine(
+		(s) =>
+			s.hackerApplicationOpen == null ||
+			s.hackerApplicationDeadline == null ||
+			s.hackerApplicationOpen <= s.hackerApplicationDeadline,
+		{ message: 'Hacker: open must come before close.', path: ['hackerApplicationDeadline'] }
+	)
+	.refine(
+		(s) =>
+			s.mentorApplicationOpen == null ||
+			s.mentorApplicationDeadline == null ||
+			s.mentorApplicationOpen <= s.mentorApplicationDeadline,
+		{ message: 'Mentor: open must come before close.', path: ['mentorApplicationDeadline'] }
+	)
+	.refine(
+		(s) =>
+			s.judgeApplicationOpen == null ||
+			s.judgeApplicationDeadline == null ||
+			s.judgeApplicationOpen <= s.judgeApplicationDeadline,
+		{ message: 'Judge: open must come before close.', path: ['judgeApplicationDeadline'] }
+	)
+	.refine(
+		(s) =>
+			s.volunteerApplicationOpen == null ||
+			s.volunteerApplicationDeadline == null ||
+			s.volunteerApplicationOpen <= s.volunteerApplicationDeadline,
+		{
+			message: 'Volunteer: open must come before close.',
+			path: ['volunteerApplicationDeadline']
+		}
+	);
 
 // Re-exported for existing importers; lives in `$lib/server/settings` so the senders
 // resolve the same values the editor sees.
