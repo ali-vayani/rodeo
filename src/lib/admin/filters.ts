@@ -47,6 +47,8 @@ export type RecipientParams = {
 } & LinkedParams &
 	AnswerParams;
 
+// DIETARY_RESTRICTION excluded: its wire filter has nowhere to put an array-valued
+// answer, so it travels as a normal per-question `answers` entry instead.
 const LINKED_PARAM_KEY = {
 	NAME: 'names',
 	UNIVERSITY: 'universities',
@@ -76,8 +78,9 @@ export function facetParams(selection: FacetState = {}): LinkedParams & AnswerPa
 		if (!parsed) continue;
 
 		if (parsed.kind === 'linked') {
-			// Only the linked fields with their own `User` column have a wire param;
-			// DIETARY_RESTRICTION is filtered like any other question instead.
+			// Only the linked fields with a scalar (single-valued) `User` column have a
+			// dedicated wire param. DIETARY_RESTRICTION mirrors onto an array column and is
+			// filtered like any other question instead — see `isUserLinkedField`.
 			if (!isUserLinkedField(parsed.field)) continue;
 			// Copied, not aliased: these params travel to a tRPC call while the caller's
 			// state keeps mutating under the filter panel.

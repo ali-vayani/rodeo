@@ -68,7 +68,14 @@ function linkedControlFor(question: Pick<Question, 'type' | 'optionPreset'>): Fa
 	return control === 'select' ? 'select' : 'combobox';
 }
 
-/** How many users hold each distinct value of a linked column, plus the absent count. */
+/**
+ * How many users hold each distinct value of a linked column, plus the absent count.
+ *
+ * Scalar linked fields only: `groupBy` here counts one row per distinct column value,
+ * which is meaningless for DIETARY_RESTRICTION's array column (it would group by
+ * exact array equality, not by individual restriction) — that one is filtered like
+ * any other question instead. See `FILTERABLE_LINKED_FIELDS`.
+ */
 async function observedValues(
 	prisma: Pick<PrismaClient, 'user'>,
 	field: Exclude<LinkedField, 'DIETARY_RESTRICTION'>

@@ -1,5 +1,19 @@
 import { describe, expect, it } from 'vitest';
-import { splitLunchPool } from './groups';
+import { splitLunchPool, lunchPoolFor } from './groups';
+
+describe('lunchPoolFor', () => {
+	it('puts a user with no selected restrictions in NO_RESTRICTION', () => {
+		expect(lunchPoolFor([])).toBe('NO_RESTRICTION');
+	});
+
+	it('puts a user with one restriction in DIETARY_RESTRICTION', () => {
+		expect(lunchPoolFor(['Vegetarian'])).toBe('DIETARY_RESTRICTION');
+	});
+
+	it('puts a user with several restrictions in DIETARY_RESTRICTION', () => {
+		expect(lunchPoolFor(['Vegetarian', 'Nut allergy'])).toBe('DIETARY_RESTRICTION');
+	});
+});
 
 describe('splitLunchPool', () => {
 	it('keeps teammates together while putting each unit in the smallest group', () => {

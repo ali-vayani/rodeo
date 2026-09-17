@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { LunchGroupPool, UserStatus } from '$lib/generated/prisma/client';
 import { router, adminProcedure } from '../init';
 import { logAction } from '$lib/server/log';
-import { splitLunchPool } from '$lib/lunch/groups';
+import { splitLunchPool, lunchPoolFor } from '$lib/lunch/groups';
 
 const eligibleStatuses = [UserStatus.CONFIRMED, UserStatus.CHECKED_IN];
 
@@ -23,9 +23,7 @@ export const lunchGroupsRouter = router({
 			ctx.prisma.user.count({
 				where: {
 					status: { in: eligibleStatuses },
-					application: {
-						some: { question: { linkedField: 'DIETARY_RESTRICTION' }, value: { not: '' } }
-					}
+					dietaryRestriction: { isEmpty: false }
 				}
 			}),
 			ctx.prisma.user.count({ where: { status: { in: eligibleStatuses } } })
@@ -51,14 +49,15 @@ export const lunchGroupsRouter = router({
 					uid: true,
 					name: true,
 					teamId: true,
-					application: {
-						where: { question: { linkedField: 'DIETARY_RESTRICTION' }, value: { not: '' } },
-						select: { id: true }
-					}
+					dietaryRestriction: true
 				}
 			});
-			const dietary = users.filter((user) => user.application.length > 0);
-			const noRestriction = users.filter((user) => user.application.length === 0);
+			const dietary = users.filter(
+				(user) => lunchPoolFor(user.dietaryRestriction) === 'DIETARY_RESTRICTION'
+			);
+			const noRestriction = users.filter(
+				(user) => lunchPoolFor(user.dietaryRestriction) === 'NO_RESTRICTION'
+			);
 
 			const created = await ctx.prisma.$transaction(async (tx) => {
 				await tx.lunchGroup.deleteMany();

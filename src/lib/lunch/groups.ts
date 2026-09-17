@@ -5,6 +5,20 @@ export type LunchGroupCandidate = {
 	teamId: string | null;
 };
 
+/**
+ * Which pool an attendee belongs in, based on `User.dietaryRestriction`.
+ *
+ * Any selected restriction is enough to need the dietary pool; the specific values
+ * matter for catering, not for grouping. Returns the literal `LunchGroupPool` values
+ * rather than importing the Prisma enum, since this module stays free of generated
+ * client code.
+ */
+export function lunchPoolFor(
+	dietaryRestriction: readonly string[]
+): 'DIETARY_RESTRICTION' | 'NO_RESTRICTION' {
+	return dietaryRestriction.length > 0 ? 'DIETARY_RESTRICTION' : 'NO_RESTRICTION';
+}
+
 export function splitLunchPool(
 	users: LunchGroupCandidate[],
 	groupCount: number

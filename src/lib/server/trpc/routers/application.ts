@@ -339,13 +339,19 @@ export const applicationRouter = router({
 				assertAnswerValid(question, input.value);
 			}
 
-			// Only scalar profile links write through to User. Dietary restrictions stay on
-			// ApplicationResponse: one person may select several, and lunch grouping queries
-			// those answers directly.
+			// Every linked field writes through to User. Scalar links (name/university/year)
+			// copy the answer as-is; DIETARY_RESTRICTION is MULTI_SELECT, so its answer is a
+			// JSON-encoded set that must be decoded into an array before it lands on the
+			// column — an empty or cleared answer decodes to `[]`, never null.
 			if (isUserLinkedField(question.linkedField)) {
 				await ctx.prisma.user.update({
 					where: { uid: ctx.user.uid },
 					data: { [USER_LINKED_FIELD_COLUMN[question.linkedField]]: input.value }
+				});
+			} else if (question.linkedField === 'DIETARY_RESTRICTION') {
+				await ctx.prisma.user.update({
+					where: { uid: ctx.user.uid },
+					data: { dietaryRestriction: decodeMultiSelect(input.value) }
 				});
 			}
 

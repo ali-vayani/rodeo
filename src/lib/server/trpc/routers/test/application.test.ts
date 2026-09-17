@@ -385,6 +385,98 @@ describe('application.save', () => {
 		);
 	});
 
+	it('mirrors a single dietary restriction onto User.dietaryRestriction as an array', async () => {
+		const caller = createTestCaller(db, hackerUser);
+		db.user.findUniqueOrThrow.mockResolvedValue(hackerUser as never);
+		db.settings.findFirst.mockResolvedValue(openWindow);
+		db.question.findUnique.mockResolvedValue({
+			linkedField: 'DIETARY_RESTRICTION',
+			targetRole: [],
+			type: QuestionType.MULTI_SELECT,
+			options: ['Vegetarian', 'Vegan', 'Gluten-free'],
+			min: null,
+			max: null,
+			regex: null,
+			optionPreset: null,
+			allowOther: false
+		} as never);
+		db.user.update.mockResolvedValue(hackerUser as never);
+		db.applicationResponse.upsert.mockResolvedValue(response as never);
+
+		await caller.application.save({
+			questionId: 'q-1',
+			value: JSON.stringify(['Vegetarian'])
+		});
+
+		expect(db.user.update).toHaveBeenCalledWith(
+			expect.objectContaining({
+				where: { uid: hackerUser.uid },
+				data: { dietaryRestriction: ['Vegetarian'] }
+			})
+		);
+	});
+
+	it('mirrors several selected dietary restrictions', async () => {
+		const caller = createTestCaller(db, hackerUser);
+		db.user.findUniqueOrThrow.mockResolvedValue(hackerUser as never);
+		db.settings.findFirst.mockResolvedValue(openWindow);
+		db.question.findUnique.mockResolvedValue({
+			linkedField: 'DIETARY_RESTRICTION',
+			targetRole: [],
+			type: QuestionType.MULTI_SELECT,
+			options: ['Vegetarian', 'Vegan', 'Gluten-free', 'Nut allergy'],
+			min: null,
+			max: null,
+			regex: null,
+			optionPreset: null,
+			allowOther: false
+		} as never);
+		db.user.update.mockResolvedValue(hackerUser as never);
+		db.applicationResponse.upsert.mockResolvedValue(response as never);
+
+		await caller.application.save({
+			questionId: 'q-1',
+			value: JSON.stringify(['Vegetarian', 'Nut allergy'])
+		});
+
+		expect(db.user.update).toHaveBeenCalledWith(
+			expect.objectContaining({
+				where: { uid: hackerUser.uid },
+				data: { dietaryRestriction: ['Vegetarian', 'Nut allergy'] }
+			})
+		);
+	});
+
+	it('clears User.dietaryRestriction to an empty array when the answer is cleared', async () => {
+		const caller = createTestCaller(db, hackerUser);
+		db.user.findUniqueOrThrow.mockResolvedValue(hackerUser as never);
+		db.settings.findFirst.mockResolvedValue(openWindow);
+		db.question.findUnique.mockResolvedValue({
+			linkedField: 'DIETARY_RESTRICTION',
+			targetRole: [],
+			type: QuestionType.MULTI_SELECT,
+			options: ['Vegetarian', 'Vegan', 'Gluten-free'],
+			min: null,
+			max: null,
+			regex: null,
+			optionPreset: null,
+			allowOther: false
+		} as never);
+		db.user.update.mockResolvedValue(hackerUser as never);
+		db.applicationResponse.upsert.mockResolvedValue(response as never);
+
+		// A blank draft field is allowed regardless of question type — see `save`'s
+		// input validation gate for non-empty values only.
+		await caller.application.save({ questionId: 'q-1', value: '' });
+
+		expect(db.user.update).toHaveBeenCalledWith(
+			expect.objectContaining({
+				where: { uid: hackerUser.uid },
+				data: { dietaryRestriction: [] }
+			})
+		);
+	});
+
 	it('rejects a save before applications open', async () => {
 		const caller = createTestCaller(db, hackerUser);
 		db.user.findUniqueOrThrow.mockResolvedValue(hackerUser as never);

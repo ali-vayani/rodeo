@@ -56,7 +56,8 @@ enum LinkedField {
   NAME
   UNIVERSITY
   YEAR
-  /// A response-only link. Unlike profile fields, a person can hold several values.
+  /// Unlike the other profile fields, a person can hold several values, so this
+  /// mirrors onto `User.dietaryRestriction`, an array column, rather than a scalar one.
   DIETARY_RESTRICTION
 }
 
@@ -95,6 +96,9 @@ model User {
   email           String              @unique
   university      String?
   year            String?
+  /// Mirrors the selected options of the DIETARY_RESTRICTION question, kept in sync
+  /// on every `application.save`. `[]` means no restriction, never null.
+  dietaryRestriction String[]         @default([])
   application     ApplicationResponse[]
   scans           Scan[]
   teamId          String?
