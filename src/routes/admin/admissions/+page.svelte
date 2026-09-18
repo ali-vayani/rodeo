@@ -57,6 +57,14 @@
 	let scoreFilter = $state<ScoreFilter>('unscored');
 	let stats = $state<StatsResult>(DEFAULT_STATS);
 
+	/** Review queue pagination — this is the list that can run into the thousands. */
+	const APPLICANTS_PAGE_SIZE = 100;
+	let applicantsPage = $state(1);
+	let applicantsTotal = $state(0);
+	let applicantsTotalPages = $derived(
+		Math.max(1, Math.ceil(applicantsTotal / APPLICANTS_PAGE_SIZE))
+	);
+
 	let rubric = $state<Awaited<ReturnType<typeof trpc.rubric.get.query>>>([]);
 	let showRubricEditor = $state(false);
 	let rubricSaving = $state(false);
@@ -226,13 +234,19 @@
 		async function initialLoad() {
 			try {
 				const [listResult, fetchedFacets, fetchedStats, fetchedRubric] = await Promise.all([
-					trpc.admissions.list.query({ noDecision: true, scored: false }),
+					trpc.admissions.list.query({
+						noDecision: true,
+						scored: false,
+						page: applicantsPage,
+						pageSize: APPLICANTS_PAGE_SIZE
+					}),
 					trpc.filters.facets.query(),
 					trpc.admissions.stats.query(),
 					trpc.rubric.get.query()
 				]);
 				applicants = listResult.applicants;
 				searchInfo = listResult.search;
+				applicantsTotal = listResult.total;
 				reviewFacets = fetchedFacets;
 				decideFacets = fetchedFacets;
 				stats = fetchedStats;
@@ -287,6 +301,8 @@
 				scored: scoreFilter === 'all' ? undefined : scoreFilter === 'scored',
 				roles: roleTab !== 'ALL' ? [roleTab] : undefined,
 				search: search.trim() || undefined,
+				page: applicantsPage,
+				pageSize: APPLICANTS_PAGE_SIZE,
 				// `facetParams` omits an untouched or cleared facet's key rather than sending `[]`.
 				// The predicate reads an omitted key as "no filter" and an empty array as "match
 				// nobody", so forwarding `{ values: [] }` verbatim would empty the queue the moment
@@ -295,11 +311,25 @@
 			});
 			applicants = result.applicants;
 			searchInfo = result.search;
+			applicantsTotal = result.total;
 		} catch (e) {
 			showToast(errorMessage(e, 'Failed to load applicants'), 'error');
 		} finally {
 			loading = false;
 		}
+	}
+
+	/** Any filter/search/role change invalidates the current page — it may not exist in the new result set. */
+	function loadApplicantsFromStart() {
+		applicantsPage = 1;
+		loadApplicants();
+	}
+
+	function goToApplicantsPage(next: number) {
+		if (next < 1 || next > applicantsTotalPages || next === applicantsPage) return;
+		applicantsPage = next;
+		selectedUid = null;
+		loadApplicants();
 	}
 
 	async function loadDecideFacets() {
@@ -389,7 +419,7 @@
 
 	function onRoleTabChange(tab: Role | 'ALL') {
 		roleTab = tab;
-		loadApplicants();
+		loadApplicantsFromStart();
 	}
 
 	let searchTimer: ReturnType<typeof setTimeout>;
@@ -399,6 +429,7 @@
 			nameFromSuggestion = false;
 			facetSelection = { ...facetSelection, [NAME_FACET]: { values: [] } };
 		}
+		applicantsPage = 1;
 		clearTimeout(searchTimer);
 		searchTimer = setTimeout(loadApplicants, 400);
 	}
@@ -408,7 +439,7 @@
 	function onFacetsChange(next: FacetState) {
 		facetSelection = next;
 		nameFromSuggestion = false;
-		loadApplicants();
+		loadApplicantsFromStart();
 	}
 
 	function onScoreFilterChange(next: ScoreFilter) {
@@ -416,7 +447,7 @@
 		// The selected applicant is very likely about to leave the list, and leaving the
 		// detail pane on them would strand their claim until it went stale.
 		selectedUid = null;
-		loadApplicants();
+		loadApplicantsFromStart();
 	}
 
 	/**
@@ -429,7 +460,7 @@
 		const next = facetSelection[NAME_FACET]?.values?.includes(name) ? [] : [name];
 		facetSelection = { ...facetSelection, [NAME_FACET]: { values: next } };
 		nameFromSuggestion = next.length > 0;
-		loadApplicants();
+		loadApplicantsFromStart();
 	}
 
 	async function handleSaveScore(score: number, notes: string) {
@@ -618,6 +649,7 @@
 		if (!applicant) return;
 		tab = 'review';
 		scoreFilter = 'scored';
+		applicantsPage = 1;
 		// Shown immediately; the refetch below replaces the list around it.
 		applicants = [applicant];
 		selectedUid = uid;
@@ -885,6 +917,10 @@
 					selfClaimUid={session.phase === 'owned' || session.phase === 'warning'
 						? selectedUid
 						: null}
+					page={applicantsPage}
+					totalPages={applicantsTotalPages}
+					total={applicantsTotal}
+					onPageChange={goToApplicantsPage}
 				/>
 
 				<!-- Right detail pane. Below md it replaces the list when an applicant is selected,

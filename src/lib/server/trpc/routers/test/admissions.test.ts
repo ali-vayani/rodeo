@@ -81,6 +81,46 @@ describe('admissions.list', () => {
 		expect(result.applicants).toHaveLength(2);
 	});
 
+	it('fetches everything and skips the count query when no page is requested', async () => {
+		// The ranked decision pass needs the whole queue for bulk release, so it calls
+		// `list` without `pageSize` and must keep getting every match back.
+		const caller = createTestCaller(db, adminUser);
+		db.user.findMany.mockResolvedValue([hackerUser, pendingUser] as never);
+		const result = await caller.admissions.list({});
+		expect(db.user.findMany).toHaveBeenCalledWith(
+			expect.not.objectContaining({ skip: expect.anything(), take: expect.anything() })
+		);
+		expect(db.user.count).not.toHaveBeenCalled();
+		expect(result.total).toBe(2);
+	});
+
+	it('paginates when page and pageSize are given', async () => {
+		const caller = createTestCaller(db, adminUser);
+		db.user.count.mockResolvedValue(250);
+		db.user.findMany.mockResolvedValue([hackerUser] as never);
+
+		const result = await caller.admissions.list({ page: 3, pageSize: 100 });
+
+		expect(db.user.findMany).toHaveBeenCalledWith(
+			expect.objectContaining({ skip: 200, take: 100 })
+		);
+		expect(result.total).toBe(250);
+		expect(result.page).toBe(3);
+		expect(result.pageSize).toBe(100);
+	});
+
+	it('counts against the same filters used to fetch the page', async () => {
+		const caller = createTestCaller(db, adminUser);
+		db.user.count.mockResolvedValue(1);
+		db.user.findMany.mockResolvedValue([hackerUser] as never);
+
+		await caller.admissions.list({ roles: [Role.HACKER], page: 1, pageSize: 100 });
+
+		const findManyWhere = db.user.findMany.mock.calls[0][0]?.where;
+		const countWhere = db.user.count.mock.calls[0][0]?.where;
+		expect(countWhere).toEqual(findManyWhere);
+	});
+
 	it('reports no blacklist match when the table is empty', async () => {
 		const caller = createTestCaller(db, adminUser);
 		db.user.findMany.mockResolvedValue([hackerUser] as never);

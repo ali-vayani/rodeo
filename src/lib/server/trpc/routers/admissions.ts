@@ -82,10 +82,13 @@ export const admissionsRouter = router({
 	 * - sort: 'recent' | 'score' — `score` ranks highest-first for the decision pass
 	 * - search: string — name or email, with a typo-tolerant fallback
 	 * - names/universities/years, answers/states — see $lib/server/recipients; `[]` matches nobody
+	 * - page/pageSize — omitted entirely, this returns every match (the ranked decision
+	 *   pass needs the whole queue for bulk release); given, it paginates and adds `total`
 	 *
 	 * Outputs:
-	 * - { applicants, search } — `search` reports the fallback so a misspelling doesn't
-	 *   look like an empty queue
+	 * - { applicants, search, total, page, pageSize } — `search` reports the fallback so a
+	 *   misspelling doesn't look like an empty queue; `total` reflects every matching row,
+	 *   not just the ones on this page
 	 */
 	list: adminProcedure
 		.input(
@@ -99,16 +102,24 @@ export const admissionsRouter = router({
 				scoredOrPending: z.boolean().optional(),
 				sort: z.enum(['recent', 'score']).default('recent'),
 				search: z.string().optional(),
+				page: z.number().int().min(1).optional(),
+				pageSize: z.number().int().min(1).max(500).optional(),
 				...linkedFieldFilterSchema.shape,
 				...answerFilterSchema.shape
 			})
 		)
 		.query(async ({ ctx, input }) => {
 			const { roles, decision, noDecision, scored, pending, scoredOrPending, sort, search } = input;
+			const pageSize = input.pageSize;
+			const page = input.page ?? 1;
+			// Paginating is opt-in: a caller that never sends `pageSize` gets the full match
+			// set back, exactly like before this was added.
+			const paginate = pageSize !== undefined;
 
 			// The "All" tab sends no role filter; staff must still stay out.
 			const applicantRoles = narrowToApplicants(roles);
-			if (applicantRoles.length === 0) return { applicants: [], search: NO_EXPANSION };
+			if (applicantRoles.length === 0)
+				return { applicants: [], search: NO_EXPANSION, total: 0, page, pageSize: pageSize ?? 0 };
 
 			// Stacked under AND: the decision and search filters each contribute an `OR`, and
 			// spreading both into one object literal silently drops the first.
@@ -143,34 +154,43 @@ export const admissionsRouter = router({
 			const searchClause = searchCondition(search, expansion);
 			if (searchClause) conditions.push(searchClause);
 
-			const users = await ctx.prisma.user.findMany({
-				where: { AND: conditions },
-				include: {
-					application: { include: { question: true } },
-					scorer: { select: { name: true } },
-					// So reopening the rubric modal shows the cells behind a saved score.
-					rubricSelections: { select: { criterionId: true, levelId: true } }
-				},
-				// Ties break on earliest applied so the ranked list is stable between reloads.
-				orderBy:
-					sort === 'score'
-						? [{ score: { sort: 'desc', nulls: 'last' } }, { createdAt: 'asc' }]
-						: { createdAt: 'desc' }
-			});
+			const where: Prisma.UserWhereInput = { AND: conditions };
 
-			// Fuzzy name matching can't be a WHERE clause; the table is a few hundred rows.
-			const blacklist = prepareBlacklist(
-				await ctx.prisma.blacklist.findMany({
+			const [users, total, blacklist] = await Promise.all([
+				ctx.prisma.user.findMany({
+					where,
+					include: {
+						application: { include: { question: true } },
+						scorer: { select: { name: true } },
+						// So reopening the rubric modal shows the cells behind a saved score.
+						rubricSelections: { select: { criterionId: true, levelId: true } }
+					},
+					// Ties break on earliest applied so the ranked list is stable between reloads.
+					orderBy:
+						sort === 'score'
+							? [{ score: { sort: 'desc', nulls: 'last' } }, { createdAt: 'asc' }]
+							: { createdAt: 'desc' },
+					...(paginate ? { skip: (page - 1) * pageSize, take: pageSize } : {})
+				}),
+				// Only the page changed, not the match count, so this is skipped when the
+				// caller isn't paginating and already has every row in `users`.
+				paginate ? ctx.prisma.user.count({ where }) : null,
+				// Fuzzy name matching can't be a WHERE clause; the table is a few hundred rows.
+				ctx.prisma.blacklist.findMany({
 					select: { firstName: true, lastName: true, email: true }
 				})
-			);
+			]);
+			const preparedBlacklist = prepareBlacklist(blacklist);
 
 			return {
 				applicants: users.map((user) => ({
 					...user,
-					blacklistMatch: matchApplicant(user, blacklist)
+					blacklistMatch: matchApplicant(user, preparedBlacklist)
 				})),
-				search: expansion
+				search: expansion,
+				total: total ?? users.length,
+				page,
+				pageSize: pageSize ?? users.length
 			};
 		}),
 
