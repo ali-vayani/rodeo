@@ -58,6 +58,14 @@
 	let scoreFilter = $state<ScoreFilter>('unscored');
 	let stats = $state<StatsResult>(DEFAULT_STATS);
 
+	/** Review queue pagination — this is the list that can run into the thousands. */
+	const APPLICANTS_PAGE_SIZE = 100;
+	let applicantsPage = $state(1);
+	let applicantsTotal = $state(0);
+	let applicantsTotalPages = $derived(
+		Math.max(1, Math.ceil(applicantsTotal / APPLICANTS_PAGE_SIZE))
+	);
+
 	let rubric = $state<Awaited<ReturnType<typeof trpc.rubric.get.query>>>([]);
 	let showRubricEditor = $state(false);
 	let rubricSaving = $state(false);
@@ -269,6 +277,8 @@
 				scored: scoreFilter === 'all' ? undefined : scoreFilter === 'scored',
 				roles: roleTab !== 'ALL' ? [roleTab] : undefined,
 				search: search.trim() || undefined,
+				page: applicantsPage,
+				pageSize: APPLICANTS_PAGE_SIZE,
 				// `facetParams` omits an untouched or cleared facet's key rather than sending `[]`.
 				// The predicate reads an omitted key as "no filter" and an empty array as "match
 				// nobody", so forwarding `{ values: [] }` verbatim would empty the queue the moment
@@ -277,12 +287,26 @@
 			});
 			if (request !== applicantsRequest) return;
 			applicants = result.applicants;
+			applicantsTotal = result.total;
 		} catch (e) {
 			if (request === applicantsRequest)
 				showToast(errorMessage(e, 'Failed to load applicants'), 'error');
 		} finally {
 			if (request === applicantsRequest) loading = false;
 		}
+	}
+
+	/** Any filter/search/role change invalidates the current page — it may not exist in the new result set. */
+	function loadApplicantsFromStart() {
+		applicantsPage = 1;
+		loadApplicants();
+	}
+
+	function goToApplicantsPage(next: number) {
+		if (next < 1 || next > applicantsTotalPages || next === applicantsPage) return;
+		applicantsPage = next;
+		selectedUid = null;
+		loadApplicants();
 	}
 
 	async function loadDecideFacets() {
@@ -372,12 +396,13 @@
 
 	function onRoleTabChange(tab: Role | 'ALL') {
 		roleTab = tab;
-		loadApplicants();
+		loadApplicantsFromStart();
 	}
 
 	let searchTimer: ReturnType<typeof setTimeout>;
 	function onSearchInput(value: string) {
 		search = value;
+		applicantsPage = 1;
 		applicantsRequest++;
 		loading = true;
 
@@ -389,7 +414,7 @@
 	// immediately — the 400ms debounce exists for keystrokes, which these are not.
 	function onFacetsChange(next: FacetState) {
 		facetSelection = next;
-		loadApplicants();
+		loadApplicantsFromStart();
 	}
 
 	function onScoreFilterChange(next: ScoreFilter) {
@@ -397,7 +422,7 @@
 		// The selected applicant is very likely about to leave the list, and leaving the
 		// detail pane on them would strand their claim until it went stale.
 		selectedUid = null;
-		loadApplicants();
+		loadApplicantsFromStart();
 	}
 
 	onDestroy(() => {
@@ -591,6 +616,7 @@
 		if (!applicant) return;
 		tab = 'review';
 		scoreFilter = 'scored';
+		applicantsPage = 1;
 		// Shown immediately; the refetch below replaces the list around it.
 		applicants = [applicant];
 		selectedUid = uid;
@@ -856,6 +882,10 @@
 					selfClaimUid={session.phase === 'owned' || session.phase === 'warning'
 						? selectedUid
 						: null}
+					page={applicantsPage}
+					totalPages={applicantsTotalPages}
+					total={applicantsTotal}
+					onPageChange={goToApplicantsPage}
 				/>
 
 				<!-- Right detail pane. Below md it replaces the list when an applicant is selected,

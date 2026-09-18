@@ -24,7 +24,11 @@
 		collapsed,
 		onToggleCollapse,
 		presenceMap,
-		selfClaimUid
+		selfClaimUid,
+		page,
+		totalPages,
+		total,
+		onPageChange
 	}: {
 		applicants: Array<{
 			uid: string;
@@ -55,6 +59,12 @@
 		presenceMap: Record<string, string>;
 		/** presenceMap excludes yourself, so this is the only signal that you hold a lock. */
 		selfClaimUid: string | null;
+		/** 1-indexed. The queue is paginated server-side, so `applicants` is only this page's rows. */
+		page: number;
+		totalPages: number;
+		/** Every matching row across all pages, for the "X–Y of Z" readout. */
+		total: number;
+		onPageChange: (page: number) => void;
 	} = $props();
 
 	// Same 48rem breakpoint as `md:`, so a desktop collapse never leaves a shrunken list
@@ -127,7 +137,7 @@
 			<span
 				class="mt-2 text-[10px] font-semibold tracking-widest text-muted-foreground uppercase [writing-mode:vertical-rl]"
 			>
-				{applicants.length}
+				{total}
 			</span>
 		</div>
 	{:else}
@@ -309,5 +319,31 @@
 				{/each}
 			{/if}
 		</div>
+
+		{#if totalPages > 1}
+			<div
+				class="flex shrink-0 items-center justify-between gap-2 border-t border-border px-3 py-2"
+			>
+				<button
+					type="button"
+					onclick={() => onPageChange(page - 1)}
+					disabled={page <= 1}
+					class="cursor-pointer rounded border border-border bg-card px-2 py-1 text-2xs text-foreground disabled:cursor-not-allowed disabled:opacity-40"
+				>
+					‹ Prev
+				</button>
+				<span class="text-2xs text-muted-foreground tabular-nums">
+					Page {page} of {totalPages} · {total} applicant{total === 1 ? '' : 's'}
+				</span>
+				<button
+					type="button"
+					onclick={() => onPageChange(page + 1)}
+					disabled={page >= totalPages}
+					class="cursor-pointer rounded border border-border bg-card px-2 py-1 text-2xs text-foreground disabled:cursor-not-allowed disabled:opacity-40"
+				>
+					Next ›
+				</button>
+			</div>
+		{/if}
 	{/if}
 </div>
