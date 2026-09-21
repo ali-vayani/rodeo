@@ -1,6 +1,12 @@
 import { z } from 'zod';
 import { TRPCError } from '@trpc/server';
-import { Role, UserStatus, DecisionStatus, InvitationStatus } from '$lib/generated/prisma/client';
+import {
+	Role,
+	UserStatus,
+	DecisionStatus,
+	InvitationStatus,
+	LinkedField
+} from '$lib/generated/prisma/client';
 import { router, authedProcedure, adminProcedure } from '../init';
 import { resolveRecipientWhere, recipientFilterSchema } from '$lib/server/recipients';
 import { logAction, valueOrNone } from '$lib/server/log';
@@ -55,6 +61,31 @@ export const userRouter = router({
 			}
 		});
 	}),
+
+	updateName: authedProcedure
+		.input(z.object({ name: z.string().trim().min(1).max(100) }))
+		.mutation(async ({ ctx, input }) => {
+			const nameQuestions = await ctx.prisma.question.findMany({
+				where: { linkedField: LinkedField.NAME },
+				select: { id: true }
+			});
+			const [user] = await ctx.prisma.$transaction([
+				ctx.prisma.user.update({
+					where: { uid: ctx.user.uid },
+					data: { name: input.name },
+					select: { name: true }
+				}),
+				// Keep the application answer and the profile projection from drifting apart.
+				ctx.prisma.applicationResponse.updateMany({
+					where: {
+						userId: ctx.user.uid,
+						questionId: { in: nameQuestions.map(({ id }) => id) }
+					},
+					data: { value: input.name }
+				})
+			]);
+			return user;
+		}),
 
 	list: adminProcedure
 		.input(

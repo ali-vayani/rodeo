@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { mockReset, type DeepMockProxy } from 'vitest-mock-extended';
 import type { PrismaClient } from '$lib/generated/prisma/client';
-import { Role, UserStatus, DecisionStatus } from '$lib/generated/prisma/client';
+import { Role, UserStatus, DecisionStatus, LinkedField } from '$lib/generated/prisma/client';
 import { createTestCaller, adminUser, hackerUser, appliedHacker } from '../test-utils';
 import { NO_VALUE } from '$lib/facets';
 import { EXACT_MATCH_FLOOR } from '$lib/server/recipients';
@@ -27,6 +27,52 @@ describe('user.me', () => {
 	it('throws UNAUTHORIZED when no user', async () => {
 		const caller = createTestCaller(db, null);
 		await expect(caller.user.me()).rejects.toMatchObject({ code: 'UNAUTHORIZED' });
+	});
+});
+
+describe('user.updateName', () => {
+	it('updates only the caller and keeps the linked application answer in sync', async () => {
+		const caller = createTestCaller(db, hackerUser);
+		db.question.findMany.mockResolvedValue([{ id: 'name-question' }] as never);
+		db.user.update.mockResolvedValue({ name: 'New Name' } as never);
+		db.applicationResponse.updateMany.mockResolvedValue({ count: 1 });
+		db.$transaction.mockResolvedValue([{ name: 'New Name' }, { count: 1 }] as never);
+
+		const result = await caller.user.updateName({ name: '  New Name  ' });
+
+		expect(result).toEqual({ name: 'New Name' });
+		expect(db.question.findMany).toHaveBeenCalledWith({
+			where: { linkedField: LinkedField.NAME },
+			select: { id: true }
+		});
+		expect(db.user.update).toHaveBeenCalledWith({
+			where: { uid: hackerUser.uid },
+			data: { name: 'New Name' },
+			select: { name: true }
+		});
+		expect(db.applicationResponse.updateMany).toHaveBeenCalledWith({
+			where: { userId: hackerUser.uid, questionId: { in: ['name-question'] } },
+			data: { value: 'New Name' }
+		});
+	});
+
+	it('rejects empty and overlong names', async () => {
+		const caller = createTestCaller(db, hackerUser);
+
+		await expect(caller.user.updateName({ name: '   ' })).rejects.toMatchObject({
+			code: 'BAD_REQUEST'
+		});
+		await expect(caller.user.updateName({ name: 'a'.repeat(101) })).rejects.toMatchObject({
+			code: 'BAD_REQUEST'
+		});
+		expect(db.user.update).not.toHaveBeenCalled();
+	});
+
+	it('requires authentication', async () => {
+		const caller = createTestCaller(db, null);
+		await expect(caller.user.updateName({ name: 'New Name' })).rejects.toMatchObject({
+			code: 'UNAUTHORIZED'
+		});
 	});
 });
 

@@ -10,11 +10,39 @@
 	import ApplicationStateView from '$lib/components/application/ApplicationStateView.svelte';
 	import { createRsvpHandler } from '$lib/application/rsvp.svelte';
 	import { createDeclineHandler } from '$lib/application/decline.svelte';
+	import { createClient } from '$lib/trpc/client';
+	import { Button, Input } from '$lib/components/ui';
+	import { toast } from '$lib/ui/toast.svelte';
 
 	let { data }: { data: PageData } = $props();
 
 	const { user: initialUser, settings } = untrack(() => data);
 	let user = $state({ ...initialUser });
+	let name = $state(initialUser.name);
+	let savingName = $state(false);
+	const trpc = createClient();
+
+	let trimmedName = $derived(name.trim());
+	let canSaveName = $derived(
+		trimmedName.length > 0 && trimmedName.length <= 100 && trimmedName !== user.name
+	);
+
+	async function saveName(event: SubmitEvent) {
+		event.preventDefault();
+		if (!canSaveName) return;
+
+		savingName = true;
+		try {
+			const updated = await trpc.user.updateName.mutate({ name: trimmedName });
+			user.name = updated.name;
+			name = updated.name;
+			toast.success('Name updated');
+		} catch (error) {
+			toast.fromError(error, 'Failed to update name');
+		} finally {
+			savingName = false;
+		}
+	}
 
 	const decisionLabel = $derived(getApplicationStateLabel(user));
 
@@ -83,6 +111,20 @@
 						</p>
 						<p class="mt-1 text-base break-words text-foreground-secondary">{user.email}</p>
 					</div>
+
+					<form class="mb-5 flex items-end gap-3" onsubmit={saveName}>
+						<Input
+							bind:value={name}
+							label="Display name"
+							required
+							maxlength={100}
+							autocomplete="name"
+							fieldClass="min-w-0 flex-1"
+						/>
+						<Button type="submit" variant="primary" loading={savingName} disabled={!canSaveName}>
+							Save
+						</Button>
+					</form>
 
 					<dl class="border-t border-brand-line-subtle">
 						<div
