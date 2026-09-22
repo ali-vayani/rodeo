@@ -170,7 +170,7 @@
 			const takenName = applicants.find((a) => a.uid === uid)?.name ?? 'That applicant';
 			// Optimistically mark it held so the next pick can't land on it again.
 			presenceMap = { ...presenceMap, [uid]: takenBy ?? 'Another admin' };
-			rollToNextUnlocked(
+			void rollToNextUnlocked(
 				applicants.findIndex((a) => a.uid === uid),
 				uid,
 				takenName,
@@ -183,13 +183,23 @@
 	// scrolling inside the detail pane's own scroll container counts.
 	$effect(() => (paneEl ? session.observePane(paneEl) : undefined));
 
-	function rollToNextUnlocked(
+	async function rollToNextUnlocked(
 		fromIndex: number,
 		excludeUid: string | null,
 		takenName?: string,
 		takenBy?: string | null
 	) {
-		const uid = pickNextUnlocked(applicants, presenceMap, fromIndex, excludeUid);
+		let uid = pickNextUnlocked(applicants, presenceMap, fromIndex, excludeUid);
+
+		// `applicants` is only the current page, not the whole queue — exhausting it
+		// locally (everyone decided, or everyone left is locked) doesn't mean the queue
+		// is actually empty. Refetch before reporting "done" so a fuller page 2 doesn't
+		// get reported as "no more applicants".
+		if (!uid) {
+			await loadApplicants();
+			uid = pickNextUnlocked(applicants, presenceMap, 0, excludeUid);
+		}
+
 		if (!uid) {
 			selectedUid = null;
 			showToast(
@@ -592,7 +602,7 @@
 			if (selectedUid !== uid) return;
 
 			applicants = applicants.filter((a) => a.uid !== uid);
-			rollToNextUnlocked(idx, uid);
+			await rollToNextUnlocked(idx, uid);
 			showToast(`Set to ${decision.toLowerCase()}`);
 			void refreshStats();
 		} catch (e) {
