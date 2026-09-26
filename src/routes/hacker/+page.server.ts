@@ -9,13 +9,13 @@ const createCaller = createCallerFactory(appRouter);
 
 export const load: PageServerLoad = async (event) => {
 	const caller = createCaller(createContext(event));
-	const [rawSettings, lunchGroupMember] = await Promise.all([
+	const [rawSettings, foodGroupMember] = await Promise.all([
 		caller.settings.get(),
 		// The release check belongs in the server query, never only in the page markup:
 		// an unreleased group name is attendee-private data.
-		prisma.lunchGroupMember.findUnique({
+		prisma.foodGroupMember.findUnique({
 			where: { userId: event.locals.user!.uid },
-			select: { lunchGroup: { select: { name: true, releasedAt: true } } }
+			select: { foodGroup: { select: { name: true, releasedAt: true } } }
 		})
 	]);
 
@@ -27,6 +27,6 @@ export const load: PageServerLoad = async (event) => {
 	return {
 		user: toSelfUser(event.locals.user!),
 		settings,
-		lunchGroup: lunchGroupMember?.lunchGroup.releasedAt ? lunchGroupMember.lunchGroup.name : null
+		foodGroup: foodGroupMember?.foodGroup.releasedAt ? foodGroupMember.foodGroup.name : null
 	};
 };

@@ -447,6 +447,106 @@ describe('application.save', () => {
 		);
 	});
 
+	it('excludes "No dietary restrictions" from the mirrored set', async () => {
+		const caller = createTestCaller(db, hackerUser);
+		db.user.findUniqueOrThrow.mockResolvedValue(hackerUser as never);
+		db.settings.findFirst.mockResolvedValue(openWindow);
+		db.question.findUnique.mockResolvedValue({
+			linkedField: 'DIETARY_RESTRICTION',
+			targetRole: [],
+			type: QuestionType.MULTI_SELECT,
+			options: ['No dietary restrictions', 'Vegetarian', 'Vegan', 'Gluten-free'],
+			min: null,
+			max: null,
+			regex: null,
+			optionPreset: null,
+			allowOther: false
+		} as never);
+		db.user.update.mockResolvedValue(hackerUser as never);
+		db.applicationResponse.upsert.mockResolvedValue(response as never);
+
+		await caller.application.save({
+			questionId: 'q-1',
+			value: JSON.stringify(['No dietary restrictions'])
+		});
+
+		expect(db.user.update).toHaveBeenCalledWith(
+			expect.objectContaining({
+				where: { uid: hackerUser.uid },
+				data: { dietaryRestriction: [] }
+			})
+		);
+	});
+
+	it('keeps a real restriction selected alongside "No dietary restrictions"', async () => {
+		// Only reachable via a hand-built payload — the two are mutually exclusive in the
+		// UI — but the mirror should still drop just the placeholder, not the real answer.
+		const caller = createTestCaller(db, hackerUser);
+		db.user.findUniqueOrThrow.mockResolvedValue(hackerUser as never);
+		db.settings.findFirst.mockResolvedValue(openWindow);
+		db.question.findUnique.mockResolvedValue({
+			linkedField: 'DIETARY_RESTRICTION',
+			targetRole: [],
+			type: QuestionType.MULTI_SELECT,
+			options: ['No dietary restrictions', 'Vegetarian', 'Vegan', 'Gluten-free'],
+			min: null,
+			max: null,
+			regex: null,
+			optionPreset: null,
+			allowOther: false
+		} as never);
+		db.user.update.mockResolvedValue(hackerUser as never);
+		db.applicationResponse.upsert.mockResolvedValue(response as never);
+
+		await caller.application.save({
+			questionId: 'q-1',
+			value: JSON.stringify(['No dietary restrictions', 'Vegetarian'])
+		});
+
+		expect(db.user.update).toHaveBeenCalledWith(
+			expect.objectContaining({
+				where: { uid: hackerUser.uid },
+				data: { dietaryRestriction: ['Vegetarian'] }
+			})
+		);
+	});
+
+	it('excludes the "none" option case-insensitively when its configured text differs in case', async () => {
+		// The router validates a saved value against `question.options`, so a case
+		// mismatch between the *answer* and the configured option is rejected upstream
+		// before mirroring ever runs. What this test covers instead: an admin-configured
+		// option whose casing differs from the canonical NO_DIETARY_RESTRICTION_OPTION
+		// text should still be recognized and dropped.
+		const caller = createTestCaller(db, hackerUser);
+		db.user.findUniqueOrThrow.mockResolvedValue(hackerUser as never);
+		db.settings.findFirst.mockResolvedValue(openWindow);
+		db.question.findUnique.mockResolvedValue({
+			linkedField: 'DIETARY_RESTRICTION',
+			targetRole: [],
+			type: QuestionType.MULTI_SELECT,
+			options: [' NO DIETARY RESTRICTIONS ', 'Vegetarian', 'Vegan', 'Gluten-free'],
+			min: null,
+			max: null,
+			regex: null,
+			optionPreset: null,
+			allowOther: false
+		} as never);
+		db.user.update.mockResolvedValue(hackerUser as never);
+		db.applicationResponse.upsert.mockResolvedValue(response as never);
+
+		await caller.application.save({
+			questionId: 'q-1',
+			value: JSON.stringify([' NO DIETARY RESTRICTIONS '])
+		});
+
+		expect(db.user.update).toHaveBeenCalledWith(
+			expect.objectContaining({
+				where: { uid: hackerUser.uid },
+				data: { dietaryRestriction: [] }
+			})
+		);
+	});
+
 	it('clears User.dietaryRestriction to an empty array when the answer is cleared', async () => {
 		const caller = createTestCaller(db, hackerUser);
 		db.user.findUniqueOrThrow.mockResolvedValue(hackerUser as never);

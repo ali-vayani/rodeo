@@ -6,6 +6,7 @@ import { router, authedProcedure } from '../init';
 import { APPLICANT_ROLES } from '$lib/admissions/roles';
 import { normalizeEmail } from '$lib/blacklist/match';
 import { USER_LINKED_FIELD_COLUMN, isUserLinkedField } from '$lib/linkedFields';
+import { normalizeDietaryRestriction } from '$lib/dietaryRestriction';
 import { acceptsWriteIn, isOptionsType } from '$lib/questions/options';
 import { decodeMultiSelect } from '$lib/questions/multiSelect';
 import { isAnswered } from '$lib/questions/isAnswered';
@@ -349,9 +350,14 @@ export const applicationRouter = router({
 					data: { [USER_LINKED_FIELD_COLUMN[question.linkedField]]: input.value }
 				});
 			} else if (question.linkedField === 'DIETARY_RESTRICTION') {
+				// "No dietary restrictions" is an offered option, not an actual restriction —
+				// keeping it out of the mirrored set is what lets food grouping tell the two
+				// apart with a plain `length > 0` (see `foodPoolFor`). Matched case- and
+				// whitespace-insensitively; a real restriction selected alongside it is kept.
+				const restrictions = normalizeDietaryRestriction(decodeMultiSelect(input.value));
 				await ctx.prisma.user.update({
 					where: { uid: ctx.user.uid },
-					data: { dietaryRestriction: decodeMultiSelect(input.value) }
+					data: { dietaryRestriction: restrictions }
 				});
 			}
 

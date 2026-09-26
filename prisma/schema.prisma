@@ -61,7 +61,7 @@ enum LinkedField {
   DIETARY_RESTRICTION
 }
 
-enum LunchGroupPool {
+enum FoodGroupPool {
   DIETARY_RESTRICTION
   NO_RESTRICTION
 }
@@ -105,7 +105,7 @@ model User {
   team            Team?               @relation(fields: [teamId], references: [id])
   groupId         String?
   group           Group?              @relation(fields: [groupId], references: [id])
-  lunchGroupMember LunchGroupMember?
+  foodGroupMember FoodGroupMember?
   pendingDecision DecisionStatus?
   activeDecision  DecisionStatus?
   role            Role                @default(UNDECLARED)
@@ -294,26 +294,26 @@ model Invitation {
   status InvitationStatus @default(PENDING)
 }
 
-/// An admin-created lunch group. Membership is separate from User profile data so
+/// An admin-created food group. Membership is separate from User profile data so
 /// groups can be regenerated or adjusted without changing an application.
-model LunchGroup {
-  id        String         @id @default(cuid())
+model FoodGroup {
+  id        String        @id @default(cuid())
   name      String
-  pool      LunchGroupPool
-  createdAt DateTime       @default(now())
+  pool      FoodGroupPool
+  createdAt DateTime      @default(now())
   /// Null until an admin explicitly makes this group's assignments visible to attendees.
   releasedAt DateTime?
-  members   LunchGroupMember[]
+  members   FoodGroupMember[]
 }
 
-/// A user belongs to at most one current lunch group. A join model keeps that
+/// A user belongs to at most one current food group. A join model keeps that
 /// assignment out of the User model while allowing group metadata to grow later.
-model LunchGroupMember {
-  id           String     @id @default(cuid())
-  lunchGroupId String
-  lunchGroup   LunchGroup @relation(fields: [lunchGroupId], references: [id], onDelete: Cascade)
-  userId       String     @unique
-  user         User       @relation(fields: [userId], references: [uid], onDelete: Cascade)
+model FoodGroupMember {
+  id          String    @id @default(cuid())
+  foodGroupId String
+  foodGroup   FoodGroup @relation(fields: [foodGroupId], references: [id], onDelete: Cascade)
+  userId      String    @unique
+  user        User      @relation(fields: [userId], references: [uid], onDelete: Cascade)
 
-  @@unique([lunchGroupId, userId])
+  @@unique([foodGroupId, userId])
 }

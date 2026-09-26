@@ -142,12 +142,12 @@
 						<span class="font-display text-xl font-bold text-brand-purple">{statusLabel}</span>
 					</div>
 				{/if}
-				{#if data.lunchGroup}
+				{#if data.foodGroup}
 					<div class="flex items-baseline justify-between gap-3 border-b border-brand-line py-3">
 						<span class="font-mono text-2xs tracking-eyebrow text-foreground-tertiary uppercase">
-							Lunch group
+							Food group
 						</span>
-						<span class="font-display text-xl font-bold text-brand-purple">{data.lunchGroup}</span>
+						<span class="font-display text-xl font-bold text-brand-purple">{data.foodGroup}</span>
 					</div>
 				{/if}
 				<p class="mt-4 text-md leading-relaxed text-foreground-secondary">

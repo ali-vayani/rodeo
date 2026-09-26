@@ -10,7 +10,7 @@
 	import ScanGroupsTab from '$lib/components/settings/ScanGroupsTab.svelte';
 	import DataExportTab from '$lib/components/settings/DataExportTab.svelte';
 	import DangerZoneTab from '$lib/components/settings/DangerZoneTab.svelte';
-	import LunchGroupsTab from '$lib/components/settings/LunchGroupsTab.svelte';
+	import FoodGroupsTab from '$lib/components/settings/FoodGroupsTab.svelte';
 	import Toast from '$lib/components/legacy/Toast.svelte';
 	import { Tabs } from '$lib/components/patterns';
 
@@ -32,7 +32,7 @@
 		'general',
 		'dates',
 		'scan-groups',
-		'lunch-groups',
+		'food-groups',
 		'data',
 		'danger'
 	];
@@ -42,7 +42,7 @@
 		{ id: 'general', label: 'General' },
 		{ id: 'dates', label: 'Dates' },
 		{ id: 'scan-groups', label: 'Scan Groups' },
-		{ id: 'lunch-groups', label: 'Lunch Groups' },
+		{ id: 'food-groups', label: 'Food Groups' },
 		{ id: 'data', label: 'Data Export' },
 		{ id: 'danger', label: 'Danger Zone' }
 	];
@@ -220,18 +220,18 @@
 		<!-- Data Export section. Above the danger zone rather than inside it: taking a
 				     backup is routine, and the wipe below is what is not. -->
 		<div
-			id="section-lunch-groups"
+			id="section-food-groups"
 			class="scroll-mt-topbar overflow-hidden rounded-md border border-border md:scroll-mt-0"
 		>
 			<div class="border-b border-border bg-muted px-4 py-[9px]">
 				<span class="text-[10px] font-bold tracking-widest text-muted-foreground uppercase">
-					Lunch Groups
+					Food Groups
 				</span>
 			</div>
 			<div class="p-4 md:p-6">
-				<LunchGroupsTab
-					initialGroups={data.lunchGroups.groups}
-					pools={data.lunchGroups.pools}
+				<FoodGroupsTab
+					initialGroups={data.foodGroups.groups}
+					pools={data.foodGroups.pools}
 					onToast={showToast}
 				/>
 			</div>

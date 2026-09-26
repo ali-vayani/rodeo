@@ -7,9 +7,9 @@ const createCaller = createCallerFactory(appRouter);
 
 export const load: PageServerLoad = async (event) => {
 	const caller = createCaller(createContext(event));
-	const [settings, lunchGroups] = await Promise.all([
+	const [settings, foodGroups] = await Promise.all([
 		caller.settings.get(),
-		caller.lunchGroups.list()
+		caller.foodGroups.list()
 	]);
 
 	// Straight off the session rather than through a `me` procedure: the hook has already
@@ -23,5 +23,5 @@ export const load: PageServerLoad = async (event) => {
 		createdAt: user.createdAt
 	};
 
-	return { settings, me, lunchGroups };
+	return { settings, me, foodGroups };
 };

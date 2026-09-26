@@ -30,7 +30,7 @@
 	);
 
 	async function refresh() {
-		const result = await trpc.lunchGroups.list.query();
+		const result = await trpc.foodGroups.list.query();
 		groups = result.groups;
 		names = Object.fromEntries(result.groups.map((group) => [group.id, group.name]));
 	}
@@ -38,14 +38,14 @@
 	async function generate() {
 		saving = true;
 		try {
-			const result = await trpc.lunchGroups.generate.mutate({
+			const result = await trpc.foodGroups.generate.mutate({
 				dietaryGroupCount: dietaryCount,
 				noRestrictionGroupCount: noRestrictionCount
 			});
 			await refresh();
-			onToast(`Generated ${result.count} lunch groups`);
+			onToast(`Generated ${result.count} food groups`);
 		} catch (error) {
-			onToast(errorMessage(error, 'Could not generate lunch groups'), 'error');
+			onToast(errorMessage(error, 'Could not generate food groups'), 'error');
 		} finally {
 			saving = false;
 		}
@@ -56,11 +56,11 @@
 		if (!name || name === group.name) return;
 		saving = true;
 		try {
-			await trpc.lunchGroups.rename.mutate({ id: group.id, name });
+			await trpc.foodGroups.rename.mutate({ id: group.id, name });
 			await refresh();
-			onToast('Lunch group renamed');
+			onToast('Food group renamed');
 		} catch (error) {
-			onToast(errorMessage(error, 'Could not rename lunch group'), 'error');
+			onToast(errorMessage(error, 'Could not rename food group'), 'error');
 		} finally {
 			saving = false;
 		}
@@ -69,15 +69,15 @@
 	async function release() {
 		saving = true;
 		try {
-			const result = await trpc.lunchGroups.release.mutate();
+			const result = await trpc.foodGroups.release.mutate();
 			await refresh();
 			onToast(
 				result.count
-					? `Released ${result.count} lunch groups to attendees`
-					: 'Lunch groups are already released'
+					? `Released ${result.count} food groups to attendees`
+					: 'Food groups are already released'
 			);
 		} catch (error) {
-			onToast(errorMessage(error, 'Could not release lunch groups'), 'error');
+			onToast(errorMessage(error, 'Could not release food groups'), 'error');
 		} finally {
 			saving = false;
 		}
@@ -124,7 +124,7 @@
 		disabled={saving}
 		class="cursor-pointer rounded-md border-none bg-primary px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
 	>
-		Generate lunch groups
+		Generate food groups
 	</button>
 	{#if groups.length}
 		<button
@@ -143,7 +143,7 @@
 					<div class="flex flex-wrap items-center gap-2">
 						<input
 							bind:value={names[group.id]}
-							aria-label="Lunch group name"
+							aria-label="Food group name"
 							class="min-w-[180px] flex-1 rounded border border-border px-2 py-1.5 text-sm"
 						/>
 						<span class="text-xs text-muted-foreground">{group.members.length} attendees</span>
@@ -161,6 +161,6 @@
 			{/each}
 		</div>
 	{:else}
-		<p class="text-xs text-muted-foreground italic">No lunch groups have been generated yet.</p>
+		<p class="text-xs text-muted-foreground italic">No food groups have been generated yet.</p>
 	{/if}
 </div>

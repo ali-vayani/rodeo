@@ -15,7 +15,7 @@ import { walletRouter } from './routers/wallet';
 import { filtersRouter } from './routers/filters';
 import { statsRouter } from './routers/stats';
 import { dataRouter } from './routers/data';
-import { lunchGroupsRouter } from './routers/lunchGroups';
+import { foodGroupsRouter } from './routers/foodGroups';
 
 export const appRouter = router({
 	user: userRouter,
@@ -34,7 +34,7 @@ export const appRouter = router({
 	filters: filtersRouter,
 	stats: statsRouter,
 	data: dataRouter,
-	lunchGroups: lunchGroupsRouter
+	foodGroups: foodGroupsRouter
 });
 
 export type AppRouter = typeof appRouter;
