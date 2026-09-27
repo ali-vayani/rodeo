@@ -22,11 +22,22 @@ const PAGE_SIZE = 50;
  */
 export const load: PageServerLoad = async (event) => {
 	const caller = createCaller(createContext(event));
-	const [list, facets] = await Promise.all([
+	const [list, facets, foodGroups] = await Promise.all([
 		caller.user.list({ page: 1, pageSize: PAGE_SIZE }),
-		caller.filters.facets()
+		caller.filters.facets(),
+		// For the manual food-group override in the user detail modal. Reuses the same
+		// procedure the Food Groups settings tab lists from, rather than a second
+		// admin-only query that returns the same rows with a narrower select.
+		caller.foodGroups.list()
 	]);
 	// `search` comes back so the did-you-mean strip reads its shape from the procedure
 	// rather than the page re-declaring an empty expansion of its own.
-	return { users: list.users, total: list.total, search: list.search, facets, pageSize: PAGE_SIZE };
+	return {
+		users: list.users,
+		total: list.total,
+		search: list.search,
+		facets,
+		pageSize: PAGE_SIZE,
+		foodGroups: foodGroups.groups.map((g) => ({ id: g.id, name: g.name, pool: g.pool }))
+	};
 };
