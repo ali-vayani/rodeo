@@ -56,6 +56,7 @@
 	let roleFilter = $state(allChecked(ALL_ROLES));
 	let statusFilter = $state(allChecked(ALL_STATUSES));
 	let decisionFilter = $state(allChecked(DECISION_OPTIONS));
+	let pendingFilter = $state(allChecked(DECISION_OPTIONS));
 	// The application-answer facets run the other way round: nothing selected is the
 	// "everyone" default, and `buildRecipientParams` omits an untouched facet's key
 	// rather than sending `[]`, which the send path would read as "nobody".
@@ -107,7 +108,14 @@
 				// in the UI instead. An empty list stays an empty array, which the
 				// where-builder reads as "nobody" rather than "everybody".
 				{ emails: parsedEmails.filter((e) => !badEmails.includes(e)) }
-			: buildRecipientParams(roleFilter, statusFilter, decisionFilter, '', facetSelection)
+			: buildRecipientParams(
+					roleFilter,
+					statusFilter,
+					decisionFilter,
+					pendingFilter,
+					'',
+					facetSelection
+				)
 	);
 	let composeReady = $derived(subject.trim().length > 0 && body.trim().length > 0);
 	let isDirty = $derived(subject.length > 0 || body.length > 0);
@@ -330,6 +338,7 @@
 					bind:roleFilter
 					bind:statusFilter
 					bind:decisionFilter
+					bind:pendingFilter
 					bind:selection={facetSelection}
 					facets={data.facets}
 					bind:emailText

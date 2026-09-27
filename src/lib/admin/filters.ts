@@ -8,14 +8,29 @@ export const ALL_ROLES: Role[] = Object.values(Role);
 export const ALL_STATUSES: UserStatus[] = Object.values(UserStatus);
 export const DECISION_VALUES: DecisionStatus[] = Object.values(DecisionStatus);
 
+/**
+ * The outcomes a filter can match. PENDING is excluded: it is the enum's starting
+ * value, never a released decision, and reads as "none" on the pending side.
+ */
+export const DECIDABLE_VALUES: DecisionStatus[] = [
+	DecisionStatus.ACCEPTED,
+	DecisionStatus.REJECTED,
+	DecisionStatus.WAITLISTED
+];
+
 export const NO_DECISION = 'NONE';
-export const DECISION_OPTIONS: string[] = [...DECISION_VALUES, NO_DECISION];
+/** Options for both decision groups — released and pending each hold their own state. */
+export const DECISION_OPTIONS: string[] = [...DECIDABLE_VALUES, NO_DECISION];
 
 export type FilterState = Record<string, boolean>;
 
 /** Every option checked — the default, meaning "no filter applied". */
 export function allChecked(options: readonly string[]): FilterState {
 	return Object.fromEntries(options.map((o) => [o, true]));
+}
+
+export function allCleared(options: readonly string[]): FilterState {
+	return Object.fromEntries(options.map((o) => [o, false]));
 }
 
 export type LinkedParams = {
@@ -43,6 +58,8 @@ export type RecipientParams = {
 	statuses?: UserStatus[];
 	decisions?: DecisionStatus[];
 	includeNoDecision?: boolean;
+	pendingDecisions?: DecisionStatus[];
+	includeNoPending?: boolean;
 	emails?: string[];
 } & LinkedParams &
 	AnswerParams;
@@ -171,7 +188,7 @@ export function parseEmailCsv(text: string): { emails: string[]; invalid: string
  * unticked filters nothing, so both omit their keys; sending `[]` would match nobody.
  *
  * Inputs:
- * - roleFilter, statusFilter, decisionFilter: FilterState — option → checked
+ * - roleFilter, statusFilter, decisionFilter, pendingFilter: FilterState — option → checked
  * - search: string — trimmed; blank is omitted
  * - facets: FacetState — see `facetParams`
  *
@@ -182,27 +199,42 @@ export function buildRecipientParams(
 	roleFilter: FilterState,
 	statusFilter: FilterState,
 	decisionFilter: FilterState,
+	pendingFilter: FilterState = allChecked(DECISION_OPTIONS),
 	search = '',
 	facets: FacetState = {}
 ): RecipientParams {
 	const selRoles = ALL_ROLES.filter((r) => roleFilter[r]);
 	const selStatuses = ALL_STATUSES.filter((s) => statusFilter[s]);
-	const selDecisions = DECISION_VALUES.filter((d) => decisionFilter[d]);
-	const noneChecked = decisionFilter[NO_DECISION] ?? true;
-	const allDecisionsDefault = selDecisions.length === DECISION_VALUES.length && noneChecked;
+	const decisions = decisionGroup(decisionFilter);
+	const pending = decisionGroup(pendingFilter);
 
-	// Narrowing means: some options ticked, but not all of them. The `NONE` pseudo-option
-	// counts as a decision selection, so unticking only it still narrows.
+	// Narrowing means: some options ticked, but not all of them.
 	const rolesNarrow = selRoles.length > 0 && selRoles.length < ALL_ROLES.length;
 	const statusesNarrow = selStatuses.length > 0 && selStatuses.length < ALL_STATUSES.length;
-	const decisionsNarrow = (selDecisions.length > 0 || noneChecked) && !allDecisionsDefault;
 
 	return {
 		search: search.trim() || undefined,
 		roles: rolesNarrow ? selRoles : undefined,
 		statuses: statusesNarrow ? selStatuses : undefined,
-		decisions: decisionsNarrow ? selDecisions : undefined,
-		includeNoDecision: decisionsNarrow ? noneChecked : undefined,
+		decisions: decisions.narrow ? decisions.selected : undefined,
+		includeNoDecision: decisions.narrow ? decisions.noneChecked : undefined,
+		pendingDecisions: pending.narrow ? pending.selected : undefined,
+		includeNoPending: pending.narrow ? pending.noneChecked : undefined,
 		...facetParams(facets)
 	};
+}
+
+/**
+ * A decision checkbox group's selection, shared by the released and pending groups.
+ * The `NONE` pseudo-option counts as a selection, so unticking only it still narrows.
+ */
+function decisionGroup(state: FilterState): {
+	selected: DecisionStatus[];
+	noneChecked: boolean;
+	narrow: boolean;
+} {
+	const selected = DECIDABLE_VALUES.filter((d) => state[d]);
+	const noneChecked = state[NO_DECISION] ?? true;
+	const allDefault = selected.length === DECIDABLE_VALUES.length && noneChecked;
+	return { selected, noneChecked, narrow: (selected.length > 0 || noneChecked) && !allDefault };
 }

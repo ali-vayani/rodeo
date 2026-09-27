@@ -13,6 +13,7 @@
 export const LOG_ACTIONS = [
 	// Admissions
 	{ key: 'admissions.score.set', label: 'Application scored', group: 'Admissions' },
+	{ key: 'admissions.rubric.save', label: 'Scoring rubric saved', group: 'Admissions' },
 	{ key: 'admissions.decision.set', label: 'Decision set', group: 'Admissions' },
 	{ key: 'admissions.decision.bulk', label: 'Decisions set in bulk', group: 'Admissions' },
 	{ key: 'admissions.decision.blocked', label: 'Decision blocked by lock', group: 'Admissions' },
@@ -26,6 +27,7 @@ export const LOG_ACTIONS = [
 	{ key: 'user.status.update', label: 'Status changed', group: 'Users' },
 	{ key: 'user.decision.override', label: 'Decision overridden', group: 'Users' },
 	{ key: 'user.foodGroup.update', label: 'Food group changed', group: 'Users' },
+	{ key: 'user.notes.update', label: 'Notes updated', group: 'Users' },
 	{ key: 'user.export', label: 'User list exported', group: 'Users' },
 
 	// Application editor

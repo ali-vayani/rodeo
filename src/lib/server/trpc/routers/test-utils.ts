@@ -40,6 +40,7 @@ export const adminUser: User = {
 	decidedBy: null,
 	decidedAt: null,
 	score: null,
+	scoreDelta: null,
 	notes: null,
 	scoredBy: null,
 	scoredAt: null
@@ -72,6 +73,7 @@ export const organizerUser: User = {
 	decidedBy: null,
 	decidedAt: null,
 	score: null,
+	scoreDelta: null,
 	notes: null,
 	scoredBy: null,
 	scoredAt: null
@@ -96,6 +98,7 @@ export const hackerUser: User = {
 	decidedBy: null,
 	decidedAt: null,
 	score: null,
+	scoreDelta: null,
 	notes: null,
 	scoredBy: null,
 	scoredAt: null
@@ -149,6 +152,14 @@ export const mockSettings = {
 	admissionsSend: null,
 	hackathonStartDate: new Date('2024-04-15'),
 	scanActions: ['Check-In'],
+	hackerApplicationOpen: null,
+	hackerApplicationDeadline: null,
+	mentorApplicationOpen: null,
+	mentorApplicationDeadline: null,
+	judgeApplicationOpen: null,
+	judgeApplicationDeadline: null,
+	volunteerApplicationOpen: null,
+	volunteerApplicationDeadline: null,
 	submitTemplate: 'Hi {{name}}, submitted!',
 	submitSubject: 'Application received',
 	acceptTemplate: 'Hi {{name}}, accepted!',

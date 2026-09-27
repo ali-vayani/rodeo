@@ -49,7 +49,10 @@ export async function buildExport(prisma: PrismaClient): Promise<DatabaseExport>
 		emailLog,
 		group,
 		team,
-		invitation
+		invitation,
+		rubricCriterion,
+		rubricLevel,
+		rubricSelection
 	] = await prisma.$transaction([
 		prisma.user.findMany(),
 		prisma.applicationResponse.findMany(),
@@ -62,7 +65,10 @@ export async function buildExport(prisma: PrismaClient): Promise<DatabaseExport>
 		prisma.emailLog.findMany(),
 		prisma.group.findMany(),
 		prisma.team.findMany(),
-		prisma.invitation.findMany()
+		prisma.invitation.findMany(),
+		prisma.rubricCriterion.findMany(),
+		prisma.rubricLevel.findMany(),
+		prisma.rubricSelection.findMany()
 	]);
 
 	const tables: Record<string, unknown[]> = {
@@ -77,7 +83,10 @@ export async function buildExport(prisma: PrismaClient): Promise<DatabaseExport>
 		emailLog,
 		group,
 		team,
-		invitation
+		invitation,
+		rubricCriterion,
+		rubricLevel,
+		rubricSelection
 	};
 
 	const counts: Record<string, number> = {};
@@ -111,6 +120,10 @@ export async function wipeDatabase(prisma: PrismaClient): Promise<Record<string,
 	const scan = await prisma.scan.deleteMany();
 	const emailLog = await prisma.emailLog.deleteMany();
 	const log = await prisma.log.deleteMany();
+	const rubricSelection = await prisma.rubricSelection.deleteMany();
+	const rubricLevel = await prisma.rubricLevel.deleteMany();
+	// The rubric is event config, like the questions: next year's form gets a new one.
+	const rubricCriterion = await prisma.rubricCriterion.deleteMany();
 	const question = await prisma.question.deleteMany();
 	const schedule = await prisma.schedule.deleteMany();
 	const settings = await prisma.settings.deleteMany();
@@ -137,6 +150,9 @@ export async function wipeDatabase(prisma: PrismaClient): Promise<Record<string,
 		emailLog: emailLog.count,
 		group: group.count,
 		team: team.count,
-		invitation: invitation.count
+		invitation: invitation.count,
+		rubricCriterion: rubricCriterion.count,
+		rubricLevel: rubricLevel.count,
+		rubricSelection: rubricSelection.count
 	};
 }

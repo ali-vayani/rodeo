@@ -14,6 +14,7 @@
 		DECISION_VALUES,
 		DECISION_OPTIONS,
 		allChecked,
+		allCleared,
 		buildRecipientParams
 	} from '$lib/admin/filters';
 	import { linkedFacetKey, type FacetState } from '$lib/facets';
@@ -54,6 +55,7 @@
 	let roleFilter = $state(allChecked(ALL_ROLES));
 	let statusFilter = $state(allChecked(ALL_STATUSES));
 	let decisionFilter = $state(allChecked(DECISION_OPTIONS));
+	let pendingFilter = $state(allChecked(DECISION_OPTIONS));
 	let search = $state('');
 
 	/**
@@ -73,7 +75,14 @@
 		return {
 			page: p,
 			pageSize: PAGE_SIZE,
-			...buildRecipientParams(roleFilter, statusFilter, decisionFilter, search, facetSelection)
+			...buildRecipientParams(
+				roleFilter,
+				statusFilter,
+				decisionFilter,
+				pendingFilter,
+				search,
+				facetSelection
+			)
 		};
 	}
 
@@ -120,20 +129,28 @@
 		decisionFilter = { ...decisionFilter, [d]: !decisionFilter[d] };
 		loadPage(1);
 	}
+	function togglePending(d: string) {
+		pendingFilter = { ...pendingFilter, [d]: !pendingFilter[d] };
+		loadPage(1);
+	}
 
 	// `clear` resets a group to its all-ticked "no filter" default. None ticked also
 	// means "no filter", so clearing to empty would show every row above a panel
 	// claiming nothing is selected.
 	function clearRole() {
-		roleFilter = allChecked(ALL_ROLES);
+		roleFilter = allCleared(ALL_ROLES);
 		loadPage(1);
 	}
 	function clearStatus() {
-		statusFilter = allChecked(ALL_STATUSES);
+		statusFilter = allCleared(ALL_STATUSES);
 		loadPage(1);
 	}
 	function clearDecision() {
-		decisionFilter = allChecked(DECISION_OPTIONS);
+		decisionFilter = allCleared(DECISION_OPTIONS);
+		loadPage(1);
+	}
+	function clearPending() {
+		pendingFilter = allCleared(DECISION_OPTIONS);
 		loadPage(1);
 	}
 
@@ -185,7 +202,9 @@
 	// save. Not restricted to the user's own dietary pool: this is a manual override for
 	// exceptions the automatic split doesn't cover, so any existing group is a valid target.
 	let editFoodGroupId = $state('');
+	let editNotes = $state('');
 	let saving = $state(false);
+	let savingNotes = $state(false);
 
 	const foodGroupOptions = untrack(() =>
 		data.foodGroups.map((g) => ({ value: g.id, label: `${g.name} — ${humanizeEnum(g.pool)}` }))
@@ -215,6 +234,7 @@
 		editStatus = user.status;
 		editPending = user.pendingDecision ?? '';
 		editFoodGroupId = user.foodGroupMember?.foodGroup.id ?? '';
+		editNotes = user.notes ?? '';
 		detailOpen = true;
 		loadProfile(user.uid);
 	}
@@ -249,6 +269,23 @@
 		profileLoading = false;
 		// Invalidate any in-flight fetch so it can't repopulate a closed modal.
 		profileToken++;
+	}
+
+	async function saveNotes() {
+		if (!selectedUser) return;
+		savingNotes = true;
+		try {
+			const updated = await trpc.user.updateNotes.mutate({
+				uid: selectedUser.uid,
+				notes: editNotes
+			});
+			users = users.map((u) => (u.uid === updated.uid ? { ...u, notes: updated.notes } : u));
+			showToast('Notes saved');
+		} catch (e) {
+			showToast(errorMessage(e, 'Failed to save notes'), 'error');
+		} finally {
+			savingNotes = false;
+		}
 	}
 
 	async function saveAll() {
@@ -353,6 +390,9 @@
 		{decisionFilter}
 		onToggleDecision={toggleDecision}
 		onClearDecision={clearDecision}
+		{pendingFilter}
+		onTogglePending={togglePending}
+		onClearPending={clearPending}
 		facets={data.facets}
 		bind:selection={facetSelection}
 		onSelectionChange={() => loadPage(1)}
@@ -715,6 +755,23 @@
 				emptyMessage="No food groups have been generated yet"
 				ariaLabel="Food group"
 			/>
+		</div>
+
+		<!-- Admin notes: freeform per-user annotations visible only to admins. -->
+		<div>
+			<div class="mb-1.5 text-2xs font-bold tracking-eyebrow text-muted-foreground uppercase">
+				Admin Notes
+			</div>
+			<textarea
+				bind:value={editNotes}
+				placeholder="Add notes about this user…"
+				rows={4}
+				maxlength={5000}
+				class="w-full resize-y rounded-md border border-border bg-muted px-3 py-2.5 text-base text-foreground outline-none placeholder:text-foreground-tertiary focus:border-primary focus:bg-white"
+			></textarea>
+			<div class="mt-2">
+				<Button variant="secondary" loading={savingNotes} onclick={saveNotes}>Save Notes</Button>
+			</div>
 		</div>
 
 		<!-- Everything they submitted. Read-only, and below the editing controls so a triage

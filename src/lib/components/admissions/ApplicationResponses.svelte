@@ -28,7 +28,9 @@
 	<div class="text-[13px] text-muted-foreground italic">No application responses.</div>
 {:else}
 	<div class="flex flex-col gap-5">
-		{#each sorted as response (response.question.title)}
+		<!-- Keyed by questionId, not title: titles are editable and can collide, and a
+		     duplicate key crashes the whole detail pane. -->
+		{#each sorted as response (response.questionId)}
 			<div>
 				<div class="mb-1.5 text-xs font-semibold text-[#555]">
 					{response.question.title}

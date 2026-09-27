@@ -113,7 +113,12 @@ deploy-production-job:
   environment:
     name: production
     url: https://rodeo-2-0-iota.vercel.app
-  when: manual
+  # Only exists on mainline pipelines. mainline is a protected branch, and
+  # GitLab lets only users who can merge to a protected branch run its
+  # manual jobs, so this is what gates production to Maintainers.
+  rules:
+    - if: $CI_COMMIT_BRANCH == "mainline"
+      when: manual
   script:
     - npm ci
     - npx vercel@latest pull --yes --environment=production --token=$VERCEL_TOKEN

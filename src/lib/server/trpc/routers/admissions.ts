@@ -11,6 +11,7 @@ import { emailSettings } from '$lib/server/settings';
 import { CLAIM_TTL_MS } from '$lib/admissions/lock';
 import { effectiveDecision } from '$lib/admissions/decision';
 import { MAX_SCORE, MIN_SCORE } from '$lib/admissions/score';
+import { MAX_DELTA, rubricMaxScore } from '$lib/admissions/rubric';
 import { APPLICANT_ROLES, narrowToApplicants } from '$lib/admissions/roles';
 import { prepareBlacklist, matchApplicant } from '$lib/blacklist/match';
 import {
@@ -93,6 +94,9 @@ export const admissionsRouter = router({
 				decision: z.nativeEnum(DecisionStatus).optional(),
 				noDecision: z.boolean().optional(),
 				scored: z.boolean().optional(),
+				pending: z.boolean().optional(),
+				/** Match applicants who are scored OR have a real pending decision (or both). */
+				scoredOrPending: z.boolean().optional(),
 				sort: z.enum(['recent', 'score']).default('recent'),
 				search: z.string().optional(),
 				...linkedFieldFilterSchema.shape,
@@ -100,7 +104,7 @@ export const admissionsRouter = router({
 			})
 		)
 		.query(async ({ ctx, input }) => {
-			const { roles, decision, noDecision, scored, sort, search } = input;
+			const { roles, decision, noDecision, scored, pending, scoredOrPending, sort, search } = input;
 
 			// The "All" tab sends no role filter; staff must still stay out.
 			const applicantRoles = narrowToApplicants(roles);
@@ -111,6 +115,22 @@ export const admissionsRouter = router({
 			const conditions: Prisma.UserWhereInput[] = [{ role: { in: applicantRoles } }, SUBMITTED];
 			if (noDecision) conditions.push(UNDECIDED);
 			if (scored !== undefined) conditions.push({ score: scored ? { not: null } : null });
+			if (pending !== undefined)
+				conditions.push({ pendingDecision: pending ? { not: null } : null });
+			if (scoredOrPending) {
+				// A real pending decision excludes the PENDING enum default, which means "none set".
+				conditions.push({
+					OR: [
+						{ score: { not: null } },
+						{
+							AND: [
+								{ pendingDecision: { not: null } },
+								{ pendingDecision: { not: DecisionStatus.PENDING } }
+							]
+						}
+					]
+				});
+			}
 			if (decision !== undefined) {
 				conditions.push({ OR: [{ pendingDecision: decision }, { activeDecision: decision }] });
 			}
@@ -127,7 +147,9 @@ export const admissionsRouter = router({
 				where: { AND: conditions },
 				include: {
 					application: { include: { question: true } },
-					scorer: { select: { name: true } }
+					scorer: { select: { name: true } },
+					// So reopening the rubric modal shows the cells behind a saved score.
+					rubricSelections: { select: { criterionId: true, levelId: true } }
 				},
 				// Ties break on earliest applied so the ranked list is stable between reloads.
 				orderBy:
@@ -409,6 +431,126 @@ export const admissionsRouter = router({
 		}),
 
 	/**
+	 * Scores an applicant from the rubric: one picked level per criterion plus a manual
+	 * delta. The total is computed here, not trusted from the client, and freezes on
+	 * `score` — a later rubric edit changes nothing already saved. Same claim CAS and
+	 * attribution as `setScore`; the two writes are alternatives, not layers.
+	 *
+	 * Throws:
+	 * - TRPCError BAD_REQUEST — no rubric for the applicant's role, or the selections
+	 *   don't cover that rubric exactly (also catches a rubric edited mid-review)
+	 */
+	setRubricScore: adminProcedure
+		.input(
+			z.object({
+				uid: z.string(),
+				selections: z.array(z.object({ criterionId: z.string(), levelId: z.string() })),
+				delta: z.number().int().min(-MAX_DELTA).max(MAX_DELTA).default(0),
+				notes: z.string().max(5000).optional()
+			})
+		)
+		.mutation(async ({ ctx, input }) => {
+			// The role picks which rubric applies, so it has to be read before validation.
+			const target = await ctx.prisma.user.findUnique({
+				where: { uid: input.uid },
+				select: { role: true }
+			});
+			if (!target) {
+				throw new TRPCError({ code: 'NOT_FOUND', message: 'Applicant not found.' });
+			}
+
+			const criteria = await ctx.prisma.rubricCriterion.findMany({
+				where: { role: target.role },
+				include: { levels: true }
+			});
+			if (criteria.length === 0) {
+				throw new TRPCError({
+					code: 'BAD_REQUEST',
+					message: `No scoring rubric is defined for the ${target.role.toLowerCase()} role.`
+				});
+			}
+
+			const chosen = new Map(input.selections.map((s) => [s.criterionId, s.levelId]));
+			if (chosen.size !== criteria.length || input.selections.length !== chosen.size) {
+				throw new TRPCError({
+					code: 'BAD_REQUEST',
+					message:
+						'Every rubric criterion needs exactly one selection. The rubric may have changed — reopen it and try again.'
+				});
+			}
+
+			let subtotal = 0;
+			for (const criterion of criteria) {
+				const level = criterion.levels.find((l) => l.id === chosen.get(criterion.id));
+				if (!level) {
+					throw new TRPCError({
+						code: 'BAD_REQUEST',
+						message:
+							'A selected rubric cell no longer exists. The rubric may have changed — reopen it and try again.'
+					});
+				}
+				subtotal += level.points;
+			}
+
+			const total = subtotal + input.delta;
+			const notes = input.notes?.trim() || null;
+
+			try {
+				const applicant = await ctx.prisma.$transaction(async (tx) => {
+					const applicant = await tx.user.update({
+						where: claimableBy(input.uid, ctx.user.uid),
+						data: {
+							score: total,
+							scoreDelta: input.delta,
+							notes,
+							scoredBy: ctx.user.uid,
+							scoredAt: new Date(),
+							claimedBy: null,
+							claimedAt: null
+						}
+					});
+					// Replace wholesale: a re-score under an edited rubric must not keep cells
+					// for criteria the reviewer no longer picked.
+					await tx.rubricSelection.deleteMany({ where: { userId: input.uid } });
+					await tx.rubricSelection.createMany({
+						data: input.selections.map((s) => ({ userId: input.uid, ...s }))
+					});
+					return applicant;
+				});
+
+				const max = rubricMaxScore(criteria);
+				await logAction(ctx, {
+					action: 'admissions.score.set',
+					summary: `Scored ${applicant.name} ${total}/${max} with the rubric`,
+					target: { id: applicant.uid, label: applicant.name },
+					metadata: {
+						score: total,
+						rubricScore: subtotal,
+						delta: input.delta,
+						hasNotes: notes !== null
+					}
+				});
+
+				return applicant;
+			} catch (e) {
+				if (!isRecordNotFound(e)) throw e;
+
+				const target = await ctx.prisma.user.findUnique({
+					where: { uid: input.uid },
+					select: { name: true, claimer: { select: { name: true } } }
+				});
+				if (!target) {
+					throw new TRPCError({ code: 'NOT_FOUND', message: 'Applicant not found.' });
+				}
+
+				throw new TRPCError({
+					code: 'CONFLICT',
+					message: `${target.claimer?.name ?? 'Another admin'} is reviewing this applicant. Your score was not saved.`
+				});
+			}
+		}),
+
+	/**
 	 * Sets the same pending decision on many applicants. One statement rather than a
 	 * loop over `setDecision`, so a partial failure can't leave the operator guessing
 	 * which half landed. Rows under another admin's fresh claim, and non-applicants, are
@@ -558,7 +700,9 @@ export const admissionsRouter = router({
 			where: { role: { in: APPLICANT_ROLES }, ...SUBMITTED, activeDecision: { not: null } },
 			include: {
 				application: { include: { question: true } },
-				scorer: { select: { name: true } }
+				scorer: { select: { name: true } },
+				// Same shape as `list`, so a row can be carried into the review pane to rescore.
+				rubricSelections: { select: { criterionId: true, levelId: true } }
 			}
 		});
 
@@ -679,24 +823,36 @@ export const admissionsRouter = router({
 				}
 			}
 
-			// CAS on the value read above: a decision changed since then is dropped from the
-			// batch rather than emailed as a stale, irreversible outcome.
+			// CAS on the value read above: a decision changed since then falls out of its
+			// group's `pendingDecision` filter and is dropped from the batch rather than
+			// emailed as a stale, irreversible outcome. Grouped by decision value — one
+			// statement per value, not per user — because per-user statements expire the
+			// 5s transaction timeout above ~1000 decisions and release nothing (#38).
+			const releaseGroups = new Map<DecisionStatus, string[]>();
+			for (const u of users) {
+				releaseGroups.set(u.pendingDecision!, [
+					...(releaseGroups.get(u.pendingDecision!) ?? []),
+					u.uid
+				]);
+			}
 			const swaps = await ctx.prisma.$transaction(
-				users.map((u) =>
-					ctx.prisma.user.updateMany({
-						where: { uid: u.uid, pendingDecision: u.pendingDecision },
+				[...releaseGroups.entries()].map(([decision, uids]) =>
+					ctx.prisma.user.updateManyAndReturn({
+						where: { uid: { in: uids }, pendingDecision: decision },
 						data: {
-							activeDecision: u.pendingDecision,
+							activeDecision: decision,
 							pendingDecision: null,
 							// `decidedBy`/`decidedAt` untouched: release publishes other admins' work.
 							claimedBy: null,
 							claimedAt: null
-						}
+						},
+						select: { uid: true }
 					})
 				)
 			);
 
-			const releasedUsers = users.filter((_, i) => swaps[i].count === 1);
+			const releasedUids = new Set(swaps.flat().map((r) => r.uid));
+			const releasedUsers = users.filter((u) => releasedUids.has(u.uid));
 
 			const recipients = releasedUsers.filter(
 				(u) => u.pendingDecision && templateMap[u.pendingDecision].body
