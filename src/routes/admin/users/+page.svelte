@@ -295,6 +295,12 @@
 			// The decision call is skipped entirely for a released applicant rather than sent
 			// and allowed to fail. The server rejects it with a CONFLICT, which would sink the
 			// whole Promise.all and lose the valid role and status edits.
+			//
+			// Food group is skipped the same way for a non-hacker: the field is hidden for
+			// them (food groups are hacker-only), but `editFoodGroupId` still holds whatever
+			// it was initialized to. Sending it regardless would resubmit an unchanged value
+			// the server now rejects outright for a non-hacker, turning an unrelated save
+			// (e.g. just a status change) into a failure.
 			const [roleResult, statusResult, decisionResult, foodGroupResult] = await Promise.all([
 				trpc.user.updateRole.mutate({ uid: selectedUser.uid, role: editRole }),
 				trpc.user.updateStatus.mutate({ uid: selectedUser.uid, status: editStatus }),
@@ -304,10 +310,12 @@
 							uid: selectedUser.uid,
 							pendingDecision: editPending || null
 						}),
-				trpc.user.updateFoodGroup.mutate({
-					uid: selectedUser.uid,
-					foodGroupId: editFoodGroupId || null
-				})
+				selectedUser.role !== Role.HACKER
+					? null
+					: trpc.user.updateFoodGroup.mutate({
+							uid: selectedUser.uid,
+							foodGroupId: editFoodGroupId || null
+						})
 			]);
 			const merged = {
 				...roleResult,
@@ -739,23 +747,28 @@
 			</div>
 		</div>
 
-		<!-- Manual override: not restricted to this user's own dietary/no-restriction pool,
-		     and editable even after a group has been released to attendees. This is the
-		     escape hatch for exceptions `foodGroups.generate`'s automatic split doesn't
-		     cover — re-running Generate still wipes it, same as any other group. -->
-		<div>
-			<div class="mb-1.5 text-2xs font-bold tracking-eyebrow text-muted-foreground uppercase">
-				Food Group
+		<!-- Food groups are hacker-only, so this control is irrelevant for any other role —
+		     gated on the user's saved role rather than the live `editRole` radio so it
+		     doesn't flicker in and out as an admin experiments before saving. Manual
+		     override: not restricted to this user's own dietary/no-restriction pool, and
+		     editable even after a group has been released to attendees. This is the escape
+		     hatch for exceptions `foodGroups.generate`'s automatic split doesn't cover —
+		     re-running Generate still wipes it, same as any other group. -->
+		{#if selectedUser.role === Role.HACKER}
+			<div>
+				<div class="mb-1.5 text-2xs font-bold tracking-eyebrow text-muted-foreground uppercase">
+					Food Group
+				</div>
+				<Combobox
+					bind:value={editFoodGroupId}
+					placeholder="None"
+					clearable
+					options={foodGroupOptions}
+					emptyMessage="No food groups have been generated yet"
+					ariaLabel="Food group"
+				/>
 			</div>
-			<Combobox
-				bind:value={editFoodGroupId}
-				placeholder="None"
-				clearable
-				options={foodGroupOptions}
-				emptyMessage="No food groups have been generated yet"
-				ariaLabel="Food group"
-			/>
-		</div>
+		{/if}
 
 		<!-- Admin notes: freeform per-user annotations visible only to admins. -->
 		<div>

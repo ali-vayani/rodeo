@@ -88,7 +88,7 @@
 
 <div class="max-w-[720px] space-y-5">
 	<p class="text-xs text-muted-foreground">
-		Confirmed and checked-in attendees are separated by whether they answered a Dietary restriction
+		Confirmed and checked-in hackers are separated by whether they answered a Dietary restriction
 		linked-field question. Teams stay together whenever possible.
 	</p>
 

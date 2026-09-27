@@ -1,10 +1,18 @@
 import { z } from 'zod';
-import { FoodGroupPool, UserStatus } from '$lib/generated/prisma/client';
+import { FoodGroupPool, Role, UserStatus } from '$lib/generated/prisma/client';
 import { router, adminProcedure } from '../init';
 import { logAction } from '$lib/server/log';
 import { splitFoodPool, foodPoolFor } from '$lib/food/groups';
 
 const eligibleStatuses = [UserStatus.CONFIRMED, UserStatus.CHECKED_IN];
+
+/**
+ * Food groups are a hacker-only concept — judges, mentors, volunteers, and staff aren't
+ * split into lunch groups by this feature, whatever their status. Shared between the
+ * eligible-population query and the pool counts shown before Generate is clicked, so the
+ * displayed numbers always match who Generate will actually place.
+ */
+const eligibleWhere = { status: { in: eligibleStatuses }, role: Role.HACKER };
 
 export const foodGroupsRouter = router({
 	list: adminProcedure.query(async ({ ctx }) => {
@@ -22,11 +30,11 @@ export const foodGroupsRouter = router({
 			}),
 			ctx.prisma.user.count({
 				where: {
-					status: { in: eligibleStatuses },
+					...eligibleWhere,
 					dietaryRestriction: { isEmpty: false }
 				}
 			}),
-			ctx.prisma.user.count({ where: { status: { in: eligibleStatuses } } })
+			ctx.prisma.user.count({ where: eligibleWhere })
 		]);
 
 		return {
@@ -44,7 +52,7 @@ export const foodGroupsRouter = router({
 		)
 		.mutation(async ({ ctx, input }) => {
 			const users = await ctx.prisma.user.findMany({
-				where: { status: { in: eligibleStatuses } },
+				where: eligibleWhere,
 				select: {
 					uid: true,
 					name: true,
@@ -96,7 +104,7 @@ export const foodGroupsRouter = router({
 
 			await logAction(ctx, {
 				action: 'food.groups.generate',
-				summary: `Generated ${created.length} food groups for ${users.length} confirmed attendees`,
+				summary: `Generated ${created.length} food groups for ${users.length} confirmed hackers`,
 				metadata: {
 					dietaryUsers: dietary.length,
 					noRestrictionUsers: noRestriction.length,

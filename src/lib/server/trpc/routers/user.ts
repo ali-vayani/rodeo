@@ -247,25 +247,37 @@ export const userRouter = router({
 	/**
 	 * Manual food-group override from /admin/users — the escape hatch for exceptions
 	 * `foodGroups.generate`'s automatic dietary/no-restriction split doesn't cover (e.g.
-	 * two attendees who need to sit together). Any existing group is a valid target
+	 * two hackers who need to sit together). Any existing group is a valid target
 	 * regardless of its pool: this is deliberately not pool-guarded, since restricting it
 	 * would defeat the point of an override. Allowed even after a group has been
 	 * released — this is the fix-a-mistake path, and a mistake is often noticed only
 	 * after release.
 	 *
+	 * Food groups are hacker-only, though, same as `foodGroups.generate` — this is an
+	 * override of *which* group someone lands in, not of who the feature applies to.
+	 * Removing someone from a group (`foodGroupId: null`) is always allowed regardless of
+	 * role, since that can only ever correct a stale assignment, never create one.
+	 *
 	 * Throws:
 	 * - TRPCError NOT_FOUND — foodGroupId does not name an existing group
+	 * - TRPCError BAD_REQUEST — the target user isn't a hacker
 	 */
 	updateFoodGroup: adminProcedure
 		.input(z.object({ uid: z.string(), foodGroupId: z.string().nullable() }))
 		.mutation(async ({ ctx, input }) => {
 			const before = await ctx.prisma.user.findUniqueOrThrow({
 				where: { uid: input.uid },
-				select: { name: true, ...FOOD_GROUP_MEMBER_INCLUDE }
+				select: { name: true, role: true, ...FOOD_GROUP_MEMBER_INCLUDE }
 			});
 
 			let group: { id: string; name: string; pool: FoodGroupPool } | null = null;
 			if (input.foodGroupId !== null) {
+				if (before.role !== Role.HACKER) {
+					throw new TRPCError({
+						code: 'BAD_REQUEST',
+						message: 'Only hackers can be assigned to a food group.'
+					});
+				}
 				group = await ctx.prisma.foodGroup.findUnique({
 					where: { id: input.foodGroupId },
 					select: { id: true, name: true, pool: true }
