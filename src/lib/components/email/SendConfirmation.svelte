@@ -6,6 +6,8 @@
 <script lang="ts">
 	import EmailPreview, { type PreviewAs } from './EmailPreview.svelte';
 	import { Input } from '$lib/components/ui';
+	import { formatFileSize } from '$lib/format';
+	import type { EmailAttachmentRef } from '$lib/email/attachments';
 
 	let {
 		subject,
@@ -13,6 +15,8 @@
 		count,
 		/** How many of `count` have no portal account. Called out explicitly below. */
 		externalCount = 0,
+		/** Files every recipient will get. Named here so what goes out is confirmed whole. */
+		attachments = [],
 		loading,
 		sending,
 		vars = undefined,
@@ -23,6 +27,7 @@
 		body: string;
 		count: number | null;
 		externalCount?: number;
+		attachments?: EmailAttachmentRef[];
 		loading: boolean;
 		sending: boolean;
 		vars?: Record<string, string>;
@@ -60,6 +65,13 @@
 		<div class="mt-1 text-xs text-foreground-secondary">
 			Subject: <span class="font-mono text-foreground">{subject}</span>
 		</div>
+		{#if attachments.length > 0}
+			<div class="mt-1 text-xs text-foreground-secondary">
+				Attachments: <span class="font-mono text-foreground"
+					>{attachments.map((a) => `${a.filename} (${formatFileSize(a.size)})`).join(', ')}</span
+				>
+			</div>
+		{/if}
 	</div>
 
 	<EmailPreview {subject} {body} {vars} {previewAs} height="lg" />

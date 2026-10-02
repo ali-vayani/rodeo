@@ -317,6 +317,9 @@ model EmailLog {
   failed   String[]
   // Recipient → last delivery error, so a failed blast records why, not just who.
   errors   Json     @default("{}")
+  // Storage refs ({key, filename, contentType, size}[]) for files attached to the
+  // send. On the row, not the request, so a resumed send attaches the same files.
+  attachments Json  @default("[]")
 }
 
 model Group {

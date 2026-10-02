@@ -25,7 +25,12 @@
 	import { PageHeader, Tabs } from '$lib/components/patterns';
 	import type { TabItem } from '$lib/components/ui/types';
 	import { toast } from '$lib/ui/toast.svelte';
-	import { pluralize } from '$lib/format';
+	import { formatFileSize, pluralize } from '$lib/format';
+	import {
+		MAX_EMAIL_ATTACHMENTS,
+		MAX_EMAIL_ATTACHMENT_BYTES,
+		type EmailAttachmentRef
+	} from '$lib/email/attachments';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
@@ -81,6 +86,67 @@
 	let body = $state('');
 	let confirmText = $state('');
 
+	/** Refs the upload endpoint returned; `startSend` receives exactly this list. */
+	let attachments = $state<EmailAttachmentRef[]>([]);
+	let uploading = $state(false);
+	let fileInput = $state<HTMLInputElement | null>(null);
+
+	/**
+	 * Uploads each picked file and keeps the ref. Sequential rather than parallel:
+	 * these proxy through one function each, and a burst of 4 MB bodies buys nothing
+	 * but a harder-to-read failure when one of them is refused.
+	 */
+	async function attachFiles(picked: FileList | null) {
+		const files = Array.from(picked ?? []);
+		if (files.length === 0) return;
+		if (attachments.length + files.length > MAX_EMAIL_ATTACHMENTS) {
+			toast.error(`At most ${MAX_EMAIL_ATTACHMENTS} attachments per email.`);
+			return;
+		}
+
+		uploading = true;
+		try {
+			for (const file of files) {
+				// Checked here as well as server-side, because past the platform's body cap
+				// the refusal is a bare 413 with no message worth showing.
+				if (file.size > MAX_EMAIL_ATTACHMENT_BYTES) {
+					const limit = Math.floor(MAX_EMAIL_ATTACHMENT_BYTES / (1024 * 1024));
+					toast.error(`${file.name} is ${formatFileSize(file.size)}. The limit is ${limit} MB.`);
+					continue;
+				}
+
+				const form = new FormData();
+				form.append('file', file);
+				const res = await fetch('/admin/custom-email/attachments', {
+					method: 'POST',
+					body: form
+				});
+				if (!res.ok) {
+					const reason = await res
+						.json()
+						.then((b) => b?.message)
+						.catch(() => null);
+					toast.error(reason ?? `Upload of ${file.name} failed (${res.status})`);
+					continue;
+				}
+				attachments = [...attachments, await res.json()];
+			}
+		} finally {
+			uploading = false;
+		}
+	}
+
+	function removeAttachment(ref: EmailAttachmentRef) {
+		attachments = attachments.filter((a) => a.key !== ref.key);
+		// Best effort — an orphan in the bucket costs nothing, so a failed delete is not
+		// worth interrupting the draft over.
+		fetch('/admin/custom-email/attachments', {
+			method: 'DELETE',
+			headers: { 'content-type': 'application/json' },
+			body: JSON.stringify({ key: ref.key })
+		}).catch(() => {});
+	}
+
 	/**
 	 * Resend allows 10 requests/second per team and answers a burst past it with a 429.
 	 * The gap between sends targets roughly 8/s to leave headroom; the round trip usually
@@ -118,7 +184,7 @@
 				)
 	);
 	let composeReady = $derived(subject.trim().length > 0 && body.trim().length > 0);
-	let isDirty = $derived(subject.length > 0 || body.length > 0);
+	let isDirty = $derived(subject.length > 0 || body.length > 0 || attachments.length > 0);
 
 	// The toggle only means anything for an explicit address list; in filter mode there
 	// are no unmatched addresses for it to admit. Sent explicitly rather than inferred.
@@ -251,7 +317,8 @@
 				// the set drifted, so a stale filter cannot silently mail everyone. External
 				// recipients are inside that number, not alongside it.
 				expectedCount: count,
-				allowExternal: sendExternal
+				allowExternal: sendExternal,
+				attachments
 			});
 
 			const sendId = started.sendId;
@@ -301,6 +368,9 @@
 			logs = refreshed.logs;
 			subject = '';
 			body = '';
+			// The refs are cleared but the objects stay: EmailLog points at them, and the
+			// history should keep naming what a past send carried.
+			attachments = [];
 			confirmText = '';
 			step = 1;
 		} catch (e: unknown) {
@@ -360,12 +430,61 @@
 					</p>
 				</div>
 				<TemplateEditor label="Custom" bind:subject bind:body {unavailable} />
+
+				<div class="flex flex-col gap-2">
+					<div class="flex items-center justify-between">
+						<span class="text-sm font-medium text-foreground">Attachments</span>
+						<span class="text-xs text-foreground-secondary">
+							Up to {MAX_EMAIL_ATTACHMENTS} files, {Math.floor(
+								MAX_EMAIL_ATTACHMENT_BYTES / (1024 * 1024)
+							)} MB each. Every recipient gets the same files.
+						</span>
+					</div>
+
+					{#each attachments as ref (ref.key)}
+						<div
+							class="flex items-center justify-between gap-2 rounded-md border border-border bg-card px-3 py-2"
+						>
+							<span class="min-w-0 truncate text-base text-foreground">{ref.filename}</span>
+							<span class="shrink-0 text-xs text-foreground-secondary"
+								>{formatFileSize(ref.size)}</span
+							>
+							<Button size="sm" variant="ghost" onclick={() => removeAttachment(ref)}>
+								Remove
+							</Button>
+						</div>
+					{/each}
+
+					<input
+						bind:this={fileInput}
+						type="file"
+						multiple
+						class="hidden"
+						onchange={(e) => {
+							const input = e.target as HTMLInputElement;
+							attachFiles(input.files);
+							// Clear it so re-picking the same file fires `change` again, letting a
+							// failed upload be retried.
+							input.value = '';
+						}}
+					/>
+					<Button
+						class="self-start"
+						onclick={() => fileInput?.click()}
+						loading={uploading}
+						disabled={attachments.length >= MAX_EMAIL_ATTACHMENTS}
+					>
+						Attach files
+					</Button>
+				</div>
+
 				<EmailPreview {subject} {body} vars={previewVars} {previewAs} height="sm" />
 			{:else}
 				<SendConfirmation
 					{subject}
 					{body}
 					{count}
+					{attachments}
 					externalCount={sendExternal ? externalEmails.length : 0}
 					vars={previewVars}
 					{previewAs}

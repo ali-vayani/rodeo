@@ -22,13 +22,22 @@ vi.mock('$lib/server/email', () => ({
 	sendEmail: vi.fn().mockResolvedValue(undefined)
 }));
 
+// The attachment bytes live behind the storage layer; the router only needs the two
+// calls it makes, and mocking here keeps the AWS SDK out of these tests entirely.
+vi.mock('$lib/server/storage', () => ({
+	getObject: vi.fn(),
+	storageFailureReason: (e: unknown) => (e instanceof Error ? e.message : String(e))
+}));
+
 const { prisma } = await import('$lib/server/db');
 const db = prisma as DeepMockProxy<PrismaClient>;
 const { sendEmail } = await import('$lib/server/email');
+const { getObject } = await import('$lib/server/storage');
 
 beforeEach(() => {
 	mockReset(db);
 	vi.mocked(sendEmail).mockClear();
+	vi.mocked(getObject).mockReset().mockResolvedValue(Buffer.from('pdf-bytes'));
 });
 
 const emailInput = {
@@ -364,6 +373,97 @@ describe('email.startSend + sendOne', () => {
 			expect.objectContaining({ where: { AND: [{ uid: 'IMPOSSIBLE_NO_MATCH' }] } })
 		);
 		expect(result).toEqual({ sent: 0, external: 0 });
+	});
+});
+
+describe('email.startSend + sendOne — attachments', () => {
+	const ref = {
+		key: 'email-attachments/123e4567-e89b-42d3-a456-426614174000',
+		filename: 'schedule.pdf',
+		contentType: 'application/pdf',
+		size: 9
+	};
+
+	it('stores the refs on the log and mails the file to every recipient', async () => {
+		const caller = createTestCaller(db, adminUser);
+		mockUsers([hackerUser, appliedHacker] as never);
+		stubSendLog();
+
+		const result = await runSend(caller, { ...emailInput, expectedCount: 2, attachments: [ref] });
+
+		expect(result).toEqual({ sent: 2, external: 0 });
+		// On the row, not the request: `sendOne` reads the refs back from here, so a
+		// resumed send attaches the same files whatever the client later claims.
+		expect(db.emailLog.create).toHaveBeenCalledWith(
+			expect.objectContaining({ data: expect.objectContaining({ attachments: [ref] }) })
+		);
+		for (const call of vi.mocked(sendEmail).mock.calls) {
+			expect(call[0].attachments).toEqual([
+				{
+					filename: ref.filename,
+					content: Buffer.from('pdf-bytes'),
+					contentType: ref.contentType
+				}
+			]);
+		}
+	});
+
+	it('refuses a key outside the attachment prefix', async () => {
+		// The schema is what stops a hand-written call mailing an arbitrary bucket
+		// object — an applicant's resume, say.
+		const caller = createTestCaller(db, adminUser);
+		mockUsers([hackerUser] as never);
+
+		await expect(
+			caller.email.startSend({
+				...emailInput,
+				expectedCount: 1,
+				attachments: [{ ...ref, key: 'applications/user-1/question-1' }]
+			} as never)
+		).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+		expect(db.emailLog.create).not.toHaveBeenCalled();
+	});
+
+	it('fails the whole send before mailing anyone when an attachment cannot be read', async () => {
+		const caller = createTestCaller(db, adminUser);
+		mockUsers([hackerUser] as never);
+		vi.mocked(getObject).mockRejectedValue(new Error('NoSuchKey: gone'));
+		const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+		await expect(
+			caller.email.startSend({ ...emailInput, expectedCount: 1, attachments: [ref] } as never)
+		).rejects.toThrow('could not be read');
+		// Refused before the log row exists: a committed send with a dead ref would fail
+		// all N recipients one at a time instead.
+		expect(db.emailLog.create).not.toHaveBeenCalled();
+		expect(sendEmail).not.toHaveBeenCalled();
+		errorSpy.mockRestore();
+	});
+
+	it('records a per-recipient failure when the object vanishes mid-send', async () => {
+		const caller = createTestCaller(db, adminUser);
+		mockUsers([hackerUser] as never);
+		const getRow = stubSendLog();
+		// Readable at startSend, gone by the time sendOne fetches it.
+		vi.mocked(getObject)
+			.mockResolvedValueOnce(Buffer.from('pdf-bytes'))
+			.mockRejectedValue(new Error('NoSuchKey: gone'));
+		const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+		const started = await caller.email.startSend({
+			...emailInput,
+			expectedCount: 1,
+			attachments: [ref]
+		} as never);
+		const result = await caller.email.sendOne({
+			sendId: started.sendId!,
+			recipient: hackerUser.uid
+		});
+
+		expect(result).toMatchObject({ ok: false, error: 'NoSuchKey: gone' });
+		expect(getRow()).toMatchObject({ failed: [hackerUser.uid] });
+		expect(sendEmail).not.toHaveBeenCalled();
+		errorSpy.mockRestore();
 	});
 });
 
