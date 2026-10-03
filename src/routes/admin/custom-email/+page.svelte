@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { resolve } from '$app/paths';
 	import { untrack } from 'svelte';
 	import { createClient } from '$lib/trpc/client';
 	import {
@@ -27,6 +28,7 @@
 	import { toast } from '$lib/ui/toast.svelte';
 	import { formatFileSize, pluralize } from '$lib/format';
 	import {
+		attachmentPreviewUrl,
 		MAX_EMAIL_ATTACHMENTS,
 		MAX_EMAIL_ATTACHMENT_BYTES,
 		type EmailAttachmentRef
@@ -131,6 +133,8 @@
 				}
 				attachments = [...attachments, await res.json()];
 			}
+		} catch (e: unknown) {
+			toast.fromError(e, 'Attachment upload failed. Try again.');
 		} finally {
 			uploading = false;
 		}
@@ -196,9 +200,16 @@
 	 * external addresses. Externals carry the same fallback name the server will use.
 	 */
 	let previewTargets = $derived([
-		...sample.map((u) => ({ name: u.name, email: u.email, status: u.status, external: false })),
+		...sample.map((u) => ({
+			uid: u.uid,
+			name: u.name,
+			email: u.email,
+			status: u.status,
+			external: false
+		})),
 		...(sendExternal
 			? externalEmails.map((email) => ({
+					uid: undefined,
 					name: NAME_FALLBACK,
 					email,
 					status: null,
@@ -238,6 +249,7 @@
 	);
 
 	let previewAs = $derived<PreviewAs>({
+		uid: previewTarget?.uid,
 		name: previewTarget?.name ?? '',
 		email: previewTarget?.email ?? '',
 		external: previewTarget?.external ?? false,
@@ -350,12 +362,14 @@
 			}
 
 			const result = await trpc.email.finishSend.mutate({ sendId });
-			if (result.failed > 0) {
+			if (result.failed > 0 || result.pending > 0) {
 				// The most common error explains most blasts (quota, bad domain) in one line.
 				const reason = result.failures[0]
 					? ` Most common error: ${result.failures[0].message}`
 					: '';
-				toast.error(`Sent ${result.sent} of ${result.total} — ${result.failed} failed.${reason}`);
+				toast.error(
+					`Sent ${result.sent} of ${result.total}. ${result.failed} failed, ${result.pending} unconfirmed.${reason}`
+				);
 			} else {
 				toast.success(
 					started.external > 0
@@ -368,8 +382,7 @@
 			logs = refreshed.logs;
 			subject = '';
 			body = '';
-			// The refs are cleared but the objects stay: EmailLog points at them, and the
-			// history should keep naming what a past send carried.
+			// Keep the objects for retries until S3 expires them. The log retains filenames.
 			attachments = [];
 			confirmText = '';
 			step = 1;
@@ -445,7 +458,13 @@
 						<div
 							class="flex items-center justify-between gap-2 rounded-md border border-border bg-card px-3 py-2"
 						>
-							<span class="min-w-0 truncate text-base text-foreground">{ref.filename}</span>
+							<a
+								href={resolve(attachmentPreviewUrl(ref))}
+								target="_blank"
+								rel="noopener noreferrer"
+								class="min-w-0 truncate text-base text-foreground underline underline-offset-2"
+								title="Open attachment in a new tab">{ref.filename}</a
+							>
 							<span class="shrink-0 text-xs text-foreground-secondary"
 								>{formatFileSize(ref.size)}</span
 							>

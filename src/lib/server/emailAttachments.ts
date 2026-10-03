@@ -13,13 +13,13 @@
 
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
-import { MAX_EMAIL_ATTACHMENT_BYTES } from '$lib/email/attachments';
+import { EMAIL_ATTACHMENT_KEY_PREFIX, MAX_EMAIL_ATTACHMENT_BYTES } from '$lib/email/attachments';
 import type { UploadRejection } from './applicationFiles';
 
 export { MAX_EMAIL_ATTACHMENTS } from '$lib/email/attachments';
 export type { EmailAttachmentRef } from '$lib/email/attachments';
 
-export const EMAIL_ATTACHMENT_KEY_PREFIX = 'email-attachments/';
+export { EMAIL_ATTACHMENT_KEY_PREFIX } from '$lib/email/attachments';
 
 /** Exactly the keys `emailAttachmentKey` mints: the prefix and a UUID, nothing else. */
 const KEY_PATTERN = new RegExp(
@@ -57,8 +57,8 @@ export function checkAttachmentUpload(file: {
 		return { message: `That file is over the ${limit} MB limit.`, status: 413 };
 	}
 
-	if (file.name.trim() === '') {
-		return { message: 'That file has no name.', status: 400 };
+	if (file.name.trim() === '' || file.name.trim().length > 200) {
+		return { message: 'Use a filename between 1 and 200 characters.', status: 400 };
 	}
 
 	return null;

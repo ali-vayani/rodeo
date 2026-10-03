@@ -4,10 +4,11 @@
 </script>
 
 <script lang="ts">
+	import { resolve } from '$app/paths';
 	import EmailPreview, { type PreviewAs } from './EmailPreview.svelte';
 	import { Input } from '$lib/components/ui';
 	import { formatFileSize } from '$lib/format';
-	import type { EmailAttachmentRef } from '$lib/email/attachments';
+	import { attachmentPreviewUrl, type EmailAttachmentRef } from '$lib/email/attachments';
 
 	let {
 		subject,
@@ -67,9 +68,17 @@
 		</div>
 		{#if attachments.length > 0}
 			<div class="mt-1 text-xs text-foreground-secondary">
-				Attachments: <span class="font-mono text-foreground"
-					>{attachments.map((a) => `${a.filename} (${formatFileSize(a.size)})`).join(', ')}</span
-				>
+				Attachments:
+				{#each attachments as attachment (attachment.key)}
+					<a
+						href={resolve(attachmentPreviewUrl(attachment))}
+						target="_blank"
+						rel="noopener noreferrer"
+						class="mr-2 font-mono text-foreground underline underline-offset-2"
+						title="Open attachment in a new tab"
+						>{attachment.filename} ({formatFileSize(attachment.size)})</a
+					>
+				{/each}
 			</div>
 		{/if}
 	</div>

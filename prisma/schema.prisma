@@ -313,8 +313,8 @@ model EmailLog {
   // Written before the first message goes out, then filled in as the client drives
   // the send. A closed tab leaves a row saying exactly how far it got, and a rerun
   // skips `sent` rather than mailing anyone twice.
-  sent     String[]
-  failed   String[]
+  sent     String[] @default([])
+  failed   String[] @default([])
   // Recipient → last delivery error, so a failed blast records why, not just who.
   errors   Json     @default("{}")
   // Storage refs ({key, filename, contentType, size}[]) for files attached to the

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { createHash } from 'node:crypto';
 import { TRPCError } from '@trpc/server';
 import { router, adminProcedure } from '../init';
 import { sendEmail, type EmailAttachment } from '$lib/server/email';
@@ -18,7 +19,7 @@ import {
 	templateBlockers,
 	SAMPLE_VARS
 } from '$lib/email/variables';
-import { buildEmailPersonalization } from '$lib/server/wallet/email-block';
+import { buildCheckInPassBlock, buildEmailPersonalization } from '$lib/server/wallet/email-block';
 import {
 	attachmentRefSchema,
 	storedAttachmentRefs,
@@ -124,6 +125,26 @@ export const emailRouter = router({
 				// "no exact match — these 3 look close" before anything is sent.
 				search: expansion
 			};
+		}),
+
+	previewCheckIn: adminProcedure
+		.input(z.object({ uid: z.string().optional() }))
+		.query(async ({ ctx, input }) => {
+			const user = input.uid
+				? await ctx.prisma.user.findUnique({ where: { uid: input.uid } })
+				: { uid: 'preview', name: 'Sample attendee', status: UserStatus.CONFIRMED };
+			if (!user) {
+				throw new TRPCError({ code: 'NOT_FOUND', message: 'That recipient no longer exists.' });
+			}
+			const block = await buildCheckInPassBlock(user, await ctx.prisma.settings.findFirst());
+			let html = block.html;
+			for (const attachment of block.attachments) {
+				html = html.replace(
+					`cid:${attachment.contentId}`,
+					`data:${attachment.contentType};base64,${attachment.content.toString('base64')}`
+				);
+			}
+			return { html, filenames: block.attachments.map((attachment) => attachment.filename) };
 		}),
 
 	/**
@@ -258,7 +279,7 @@ export const emailRouter = router({
 			// Attachment refs ride on the row for the same reason — a resumed send must
 			// attach the same files, whatever the client now claims.
 			const emailLog = await ctx.prisma.emailLog.create({
-				data: { subject, body, userIds: recipients, attachments }
+				data: { subject, body, userIds: recipients, attachments, sent: [], failed: [], errors: {} }
 			});
 
 			const reached =
@@ -359,6 +380,8 @@ export const emailRouter = router({
 				const files = await loadAttachments(storedAttachmentRefs(log.attachments));
 				await sendEmail({
 					to,
+					// Reuse the key if delivery succeeded but the progress write or response failed.
+					idempotencyKey: `custom/${log.id}/${createHash('sha256').update(input.recipient).digest('hex')}`,
 					// `dropRawValues` in the subject because it is plain text; `escapeValues` in
 					// the body because it is rendered to HTML. Same split as sendTemplatedEmail.
 					subject: substituteVariables(log.subject, vars, { dropRawValues: true }),
@@ -432,6 +455,7 @@ export const emailRouter = router({
 			const sent = log.sent.length;
 			const failed = log.failed.length;
 			const total = log.userIds.length;
+			const pending = total - new Set([...log.sent, ...log.failed]).size;
 
 			// One line per distinct error, biggest group first, so 475 identical quota
 			// rejections read as one reason rather than 475.
@@ -456,19 +480,21 @@ export const emailRouter = router({
 				summary:
 					`Sent a custom email "${log.subject}" to ${sent} of ${total} ` +
 					`${total === 1 ? 'recipient' : 'recipients'}` +
-					(failed > 0 ? ` — ${failed} failed to send${reasons}` : ''),
+					(failed > 0 ? ` — ${failed} failed to send${reasons}` : '') +
+					(pending > 0 ? `; ${pending} unconfirmed` : ''),
 				target: { id: log.id, label: log.subject },
 				metadata: {
 					recipients: total,
 					sent,
 					failed,
+					pending,
 					// Flattened for LogMetadata; the summary shows the top three, this holds all.
 					failures: failures.map((f) => `${f.count}× ${f.message}`),
 					subject: log.subject
 				}
 			});
 
-			return { sent, failed, total, failures };
+			return { sent, failed, pending, total, failures };
 		}),
 
 	/**

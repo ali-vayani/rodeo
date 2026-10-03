@@ -43,6 +43,7 @@ export interface EmailPayload {
 	/** Markdown. Rendered to HTML before sending. */
 	body: string;
 	attachments?: EmailAttachment[];
+	idempotencyKey?: string;
 }
 
 let resend: Resend | null = null;
@@ -88,26 +89,29 @@ export async function sendEmail(payload: EmailPayload): Promise<void> {
 
 	const attachments = payload.attachments ?? [];
 
-	const { error } = await resendClient().emails.send({
-		to: payload.to,
-		from: emailFrom(),
-		subject: payload.subject,
-		html: await marked.parse(payload.body),
-		// Resend names the header `content_id` and infers inline placement from
-		// the body referencing it, so there is no `inline` flag to pass here.
-		...(attachments.length
-			? {
-					attachments: attachments.map((a) => ({
-						filename: a.filename,
-						content: a.content,
-						contentType: a.contentType,
-						// Only inline images carry one; a cid on a plain attachment would
-						// hide it from clients that treat cid parts as inline-only.
-						...(a.contentId ? { content_id: a.contentId } : {})
-					}))
-				}
-			: {})
-	});
+	const { error } = await resendClient().emails.send(
+		{
+			to: payload.to,
+			from: emailFrom(),
+			subject: payload.subject,
+			html: await marked.parse(payload.body),
+			// The SDK maps contentId to content_id. Send base64 explicitly because a
+			// Buffer becomes a JSON object when the SDK serializes the request.
+			...(attachments.length
+				? {
+						attachments: attachments.map((a) => ({
+							filename: a.filename,
+							content: a.content.toString('base64'),
+							contentType: a.contentType,
+							// Only inline images carry one; a cid on a plain attachment would
+							// hide it from clients that treat cid parts as inline-only.
+							...(a.contentId ? { contentId: a.contentId } : {})
+						}))
+					}
+				: {})
+		},
+		payload.idempotencyKey ? { idempotencyKey: payload.idempotencyKey } : undefined
+	);
 
 	// The SDK reports delivery failures in the response rather than by throwing, so an
 	// unchecked call silently "succeeds" on a rejected send.

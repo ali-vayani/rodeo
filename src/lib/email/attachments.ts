@@ -6,6 +6,8 @@
  */
 
 export const MAX_EMAIL_ATTACHMENTS = 5;
+export const EMAIL_ATTACHMENT_KEY_PREFIX = 'email-attachments/';
+export const EMAIL_ATTACHMENT_RETENTION_DAYS = 30;
 
 /**
  * Per-file ceiling. Vercel caps a function's request body at 4.5 MB and the upload
@@ -26,3 +28,13 @@ export type EmailAttachmentRef = {
 	contentType: string;
 	size: number;
 };
+
+export function attachmentPreviewUrl(
+	ref: EmailAttachmentRef
+): `/admin/custom-email/attachments?${string}` {
+	return `/admin/custom-email/attachments?${new URLSearchParams({
+		key: ref.key,
+		filename: ref.filename,
+		contentType: ref.contentType
+	})}`;
+}

@@ -22,6 +22,7 @@ import {
 } from '$lib/server/emailAttachments';
 import {
 	deleteObject,
+	downloadResponse,
 	putObject,
 	storageFailureReason,
 	storageUnavailableReason,
@@ -66,6 +67,21 @@ export const POST: RequestHandler = async ({ locals, request }) => {
 	}
 
 	return json({ key, filename: file.name, contentType, size: file.size });
+};
+
+export const GET: RequestHandler = async ({ locals, url }) => {
+	requireAdmin(locals);
+	const parsed = attachmentRefSchema
+		.pick({ key: true, filename: true, contentType: true })
+		.safeParse(Object.fromEntries(url.searchParams));
+	if (!parsed.success) error(400, 'Not a valid attachment.');
+	const { key, filename, contentType } = parsed.data;
+	try {
+		return await downloadResponse(key, filename, { inline: contentType === 'application/pdf' });
+	} catch (e) {
+		console.error(`[storage] Email attachment preview failed: ${storageFailureReason(e)}`);
+		error(404, 'This attachment is unavailable. Remove and re-attach it.');
+	}
 };
 
 /** Removes an attachment the admin discarded before sending. Best effort — an orphan

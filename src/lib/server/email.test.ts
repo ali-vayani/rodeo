@@ -138,7 +138,7 @@ describe('production', () => {
 		await expect(sendEmail(message)).rejects.toThrow('No email transport configured');
 	});
 
-	it('carries a content_id only for inline attachments', async () => {
+	it('encodes file bytes and supplies the SDK contentId only for inline attachments', async () => {
 		configureResend();
 
 		await sendEmail({
@@ -158,9 +158,11 @@ describe('production', () => {
 		});
 
 		const [inline, plain] = resendSend.mock.calls[0][0].attachments;
-		expect(inline.content_id).toBe('qr');
+		expect(inline.contentId).toBe('qr');
+		expect(inline.content).toBe(Buffer.from('png').toString('base64'));
+		expect(plain.content).toBe(Buffer.from('pdf').toString('base64'));
 		expect(plain.filename).toBe('schedule.pdf');
-		expect('content_id' in plain).toBe(false);
+		expect('contentId' in plain).toBe(false);
 	});
 });
 
