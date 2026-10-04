@@ -45,7 +45,6 @@
 			if (request !== listRequest) return;
 			users = result.users;
 			total = result.total;
-			expansion = result.search;
 			page = p;
 		} catch (e) {
 			if (request === listRequest) showToast(errorMessage(e, 'Failed to load page'), 'error');
@@ -82,20 +81,6 @@
 				facetSelection
 			)
 		};
-	}
-
-	// What the server fell back to when the typed term matched almost nothing. The rows
-	// themselves are `createdAt desc` under pagination and are NOT ranked; these names are.
-	let expansion = $state(untrack(() => data.search));
-
-	let suggestionsLabel = $derived(
-		expansion.exact > 0 ? 'Similar names' : 'No exact match. Try a suggested name'
-	);
-
-	function pickSuggestion(name: string) {
-		search = name;
-		expansion = { names: [], fuzzy: false, capped: false, exact: 0 };
-		loadPage(1);
 	}
 
 	function toggleRole(r: string) {
@@ -140,7 +125,6 @@
 		// Invalidate pending results as soon as typing resumes, before the debounce ends.
 		listRequest++;
 		loadingPage = true;
-		expansion = { names: [], fuzzy: false, capped: false, exact: 0 };
 		clearTimeout(searchTimer);
 		searchTimer = setTimeout(() => loadPage(1), 400);
 	}
@@ -383,22 +367,6 @@
 				{total} total
 			</span>
 		</div>
-
-		{#if expansion.fuzzy && expansion.names.length > 0}
-			<div class="border-b border-border bg-muted px-4 py-2.5">
-				<Combobox
-					options={expansion.names.map((name) => ({ value: name, label: name }))}
-					label={suggestionsLabel}
-					placeholder="Choose a suggested user"
-					onChange={pickSuggestion}
-					disabled={loadingPage}
-					fieldClass="max-w-sm"
-					hint={expansion.capped
-						? `Showing the ${expansion.names.length} closest names`
-						: undefined}
-				/>
-			</div>
-		{/if}
 
 		{#if users.length === 0}
 			<div class="py-12 text-center text-base text-muted-foreground">No results</div>

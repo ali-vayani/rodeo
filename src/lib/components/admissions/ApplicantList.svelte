@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { Combobox } from '$lib/components/ui';
 	import { MediaQuery } from 'svelte/reactivity';
 	import BlacklistBadge from './BlacklistBadge.svelte';
 	import FacetFilters from '$lib/components/admin/FacetFilters.svelte';
@@ -21,8 +20,6 @@
 		facets,
 		facetSelection,
 		onFacetsChange,
-		searchInfo,
-		onSuggestionSelect,
 		loading,
 		collapsed,
 		onToggleCollapse,
@@ -52,9 +49,6 @@
 		facets: Facet[];
 		facetSelection: FacetState;
 		onFacetsChange: (selected: FacetState) => void;
-		/** `names` is ranked by relevance; the list below is `createdAt desc`, hence a separate strip. */
-		searchInfo: { names: string[]; fuzzy: boolean; capped: boolean; exact: number };
-		onSuggestionSelect: (name: string) => void;
 		loading: boolean;
 		collapsed: boolean;
 		onToggleCollapse: () => void;
@@ -75,13 +69,6 @@
 	// Facets, not values: a substring box or a range is one filter however it is filled.
 	let activeFilterCount = $derived(
 		Object.values(facetSelection).filter((selection) => isEngaged(selection)).length
-	);
-
-	// `fuzzy` means the fold ran, not that it found anything.
-	let showSuggestions = $derived(searchInfo.fuzzy && searchInfo.names.length > 0);
-
-	let suggestionsLabel = $derived(
-		searchInfo.exact > 0 ? 'Similar names' : 'No exact match. Try a suggested name'
 	);
 
 	function clearFacetFilters() {
@@ -192,21 +179,6 @@
 				class="w-full rounded border border-border bg-[#f9f9f9] px-[10px] py-1.5 text-touch text-primary outline-none sm:text-xs"
 			/>
 		</div>
-
-		{#if showSuggestions}
-			<div class="shrink-0 border-b border-border bg-muted px-3 py-2">
-				<Combobox
-					options={searchInfo.names.map((name) => ({ value: name, label: name }))}
-					label={suggestionsLabel}
-					placeholder="Choose a suggested user"
-					onChange={onSuggestionSelect}
-					disabled={loading}
-					hint={searchInfo.capped
-						? `Showing the ${searchInfo.names.length} closest names`
-						: undefined}
-				/>
-			</div>
-		{/if}
 
 		{#if facets.length > 0}
 			<div class="shrink-0 border-b border-border">

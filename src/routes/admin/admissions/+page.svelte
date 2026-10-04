@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { onMount, onDestroy } from 'svelte';
 	import type { Role, DecisionStatus } from '$lib/generated/prisma/enums';
 	import { errorMessage, isTRPCErrorCode } from '$lib/ui/errors';
 	import { fly } from 'svelte/transition';
@@ -111,14 +112,6 @@
 		Object.values(decideFacetSelection).filter((s) => isEngaged(s)).length
 	);
 
-	/** What the last list query did with the search term — drives the "did you mean" strip. */
-	let searchInfo = $state<ListResult['search']>({
-		names: [],
-		fuzzy: false,
-		capped: false,
-		exact: 0
-	});
-
 	let loading = $state(false);
 	let scoreLoading = $state(false);
 	let sidebarCollapsed = $state(false);
@@ -209,17 +202,15 @@
 		selectedUid = uid;
 	}
 
-	$effect(() => {
+	onMount(() => {
 		async function initialLoad() {
 			try {
-				const [listResult, fetchedFacets, fetchedStats, fetchedRubric] = await Promise.all([
-					trpc.admissions.list.query({ noDecision: true, scored: false }),
+				const [, fetchedFacets, fetchedStats, fetchedRubric] = await Promise.all([
+					loadApplicants(),
 					trpc.filters.facets.query(),
 					trpc.admissions.stats.query(),
 					trpc.rubric.get.query()
 				]);
-				applicants = listResult.applicants;
-				searchInfo = listResult.search;
 				reviewFacets = fetchedFacets;
 				decideFacets = fetchedFacets;
 				stats = fetchedStats;
@@ -264,7 +255,11 @@
 		};
 	});
 
+	let applicantsRequest = 0;
+
 	async function loadApplicants() {
+		clearTimeout(searchTimer);
+		const request = ++applicantsRequest;
 		loading = true;
 		try {
 			const result = await trpc.admissions.list.query({
@@ -280,12 +275,13 @@
 				// someone ticked a box and unticked it again.
 				...facetParams(facetSelection)
 			});
+			if (request !== applicantsRequest) return;
 			applicants = result.applicants;
-			searchInfo = result.search;
 		} catch (e) {
-			showToast(errorMessage(e, 'Failed to load applicants'), 'error');
+			if (request === applicantsRequest)
+				showToast(errorMessage(e, 'Failed to load applicants'), 'error');
 		} finally {
-			loading = false;
+			if (request === applicantsRequest) loading = false;
 		}
 	}
 
@@ -382,6 +378,9 @@
 	let searchTimer: ReturnType<typeof setTimeout>;
 	function onSearchInput(value: string) {
 		search = value;
+		applicantsRequest++;
+		loading = true;
+
 		clearTimeout(searchTimer);
 		searchTimer = setTimeout(loadApplicants, 400);
 	}
@@ -401,12 +400,10 @@
 		loadApplicants();
 	}
 
-	function onSuggestionSelect(name: string) {
-		search = name;
-		searchInfo = { names: [], fuzzy: false, capped: false, exact: 0 };
+	onDestroy(() => {
 		clearTimeout(searchTimer);
-		loadApplicants();
-	}
+		applicantsRequest++;
+	});
 
 	async function handleSaveScore(score: number, notes: string) {
 		if (!selectedUid || !session.canDecide) return;
@@ -852,8 +849,6 @@
 					facets={reviewFacets}
 					{facetSelection}
 					{onFacetsChange}
-					{searchInfo}
-					{onSuggestionSelect}
 					{loading}
 					collapsed={sidebarCollapsed}
 					onToggleCollapse={() => (sidebarCollapsed = !sidebarCollapsed)}

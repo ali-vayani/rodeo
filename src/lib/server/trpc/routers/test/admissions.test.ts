@@ -798,6 +798,22 @@ describe('admissions.list — typo-tolerant search', () => {
 		db.user.findMany.mockResolvedValue([hackerUser] as never);
 	});
 
+	it.each(['Hackr', 'Hacker', 'hacker@example.com'])(
+		'uses the same search predicate as Users for %s',
+		async (search) => {
+			db.user.count.mockResolvedValue(0);
+			const caller = createTestCaller(db, adminUser);
+			const users = await caller.user.list({ search });
+			const usersWhere = db.user.findMany.mock.calls.at(-1)?.[0]?.where as { AND: unknown[] };
+
+			const admissions = await caller.admissions.list({ search });
+			const admissionsWhere = db.user.findMany.mock.calls.at(-1)?.[0]?.where as { AND: unknown[] };
+
+			expect(admissions.search).toEqual(users.search);
+			expect(admissionsWhere.AND.at(-1)).toEqual(usersWhere.AND.at(-1));
+		}
+	);
+
 	it('leaves a productive search alone, without scanning names', async () => {
 		db.user.count.mockResolvedValue(EXACT_MATCH_FLOOR as never);
 		await createTestCaller(db, adminUser).admissions.list({ search: 'Hacker' });
