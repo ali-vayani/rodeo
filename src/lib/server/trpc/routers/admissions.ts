@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { TRPCError } from '@trpc/server';
 import type { Prisma } from '$lib/generated/prisma/client';
 import { Role, DecisionStatus, UserStatus } from '$lib/generated/prisma/client';
-import { router, adminProcedure } from '../init';
+import { router, adminProcedure, portalProcedure } from '../init';
 import { logAction } from '$lib/server/log';
 import { sendTemplatedEmail } from '$lib/server/email';
 import { buildEmailPersonalization } from '$lib/server/wallet/email-block';
@@ -90,7 +90,7 @@ export const admissionsRouter = router({
 	 *   misspelling doesn't look like an empty queue; `total` reflects every matching row,
 	 *   not just the ones on this page
 	 */
-	list: adminProcedure
+	list: portalProcedure
 		.input(
 			z.object({
 				roles: z.array(z.nativeEnum(Role)).optional(),
@@ -195,7 +195,7 @@ export const admissionsRouter = router({
 		}),
 
 	/** All fresh (non-stale) claims — clients poll this to see who is reviewing what. */
-	presence: adminProcedure.query(async ({ ctx }) => {
+	presence: portalProcedure.query(async ({ ctx }) => {
 		const now = Date.now();
 		const staleThreshold = new Date(now - CLAIM_TTL_MS);
 		const rows = await ctx.prisma.user.findMany({
@@ -226,7 +226,7 @@ export const admissionsRouter = router({
 	 * Unaudited, as are `releaseClaim` and `heartbeat`: a reviewer generates these every
 	 * few seconds and the volume would bury real decisions.
 	 */
-	claim: adminProcedure.input(z.object({ uid: z.string() })).mutation(async ({ ctx, input }) => {
+	claim: portalProcedure.input(z.object({ uid: z.string() })).mutation(async ({ ctx, input }) => {
 		const now = new Date();
 
 		// One claim per admin: release any other applicant they have open.
@@ -256,7 +256,7 @@ export const admissionsRouter = router({
 	}),
 
 	/** No-op if the claim is held by someone else. */
-	releaseClaim: adminProcedure
+	releaseClaim: portalProcedure
 		.input(z.object({ uid: z.string() }))
 		.mutation(async ({ ctx, input }) => {
 			await ctx.prisma.user.updateMany({
@@ -267,7 +267,7 @@ export const admissionsRouter = router({
 		}),
 
 	/** Extends the lock. `refreshed: false` means another admin has taken the claim. */
-	heartbeat: adminProcedure
+	heartbeat: portalProcedure
 		.input(z.object({ uid: z.string() }))
 		.mutation(async ({ ctx, input }) => {
 			const result = await ctx.prisma.user.updateMany({
@@ -287,7 +287,7 @@ export const admissionsRouter = router({
 	 * - TRPCError CONFLICT — another admin holds a fresh claim
 	 * - TRPCError NOT_FOUND — no such applicant
 	 */
-	setDecision: adminProcedure
+	setDecision: portalProcedure
 		.input(
 			z.object({
 				uid: z.string(),
@@ -353,7 +353,7 @@ export const admissionsRouter = router({
 	 * Clears a pending decision and its attribution. A released `activeDecision` is
 	 * permanent. Same claim CAS as `setDecision`.
 	 */
-	clearDecision: adminProcedure
+	clearDecision: portalProcedure
 		.input(z.object({ uid: z.string() }))
 		.mutation(async ({ ctx, input }) => {
 			try {
@@ -400,7 +400,7 @@ export const admissionsRouter = router({
 	 * Inputs:
 	 * - notes: string — shown to every admin during the decision pass; blank clears
 	 */
-	setScore: adminProcedure
+	setScore: portalProcedure
 		.input(
 			z.object({
 				uid: z.string(),
@@ -460,7 +460,7 @@ export const admissionsRouter = router({
 	 * - TRPCError BAD_REQUEST — no rubric for the applicant's role, or the selections
 	 *   don't cover that rubric exactly (also catches a rubric edited mid-review)
 	 */
-	setRubricScore: adminProcedure
+	setRubricScore: portalProcedure
 		.input(
 			z.object({
 				uid: z.string(),
@@ -625,7 +625,7 @@ export const admissionsRouter = router({
 	 * Headline counts for the admissions page. Decisions are counted at their effective
 	 * value (pending if set, else released), matching what the page's list shows.
 	 */
-	stats: adminProcedure.query(async ({ ctx }) => {
+	stats: portalProcedure.query(async ({ ctx }) => {
 		const applicants = { role: { in: APPLICANT_ROLES }, ...SUBMITTED };
 
 		const [rows, scored, unscored] = await Promise.all([

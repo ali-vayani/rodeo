@@ -6,6 +6,7 @@
  */
 
 import { Role, UserStatus } from '$lib/generated/prisma/client';
+import { isStaff } from '$lib/auth/permissions';
 import { UPLOAD_EXTENSIONS, hasAllowedExtension } from '$lib/application/files';
 import { MAX_UPLOAD_BYTES } from './s3';
 
@@ -84,13 +85,13 @@ export function uploadRefusal(
 }
 
 /**
- * Whether a viewer may download an applicant's file: the applicant themselves, or an
- * ADMIN. ORGANIZER is excluded deliberately — `permissions.ts` keeps them out of
- * /admin/users and /admin/admissions, so this would be a side door into that data.
+ * Whether a viewer may download an applicant's file: the applicant themselves, or
+ * staff. ORGANIZER is included because they review applications in /admin/admissions,
+ * and a file answer is part of the application.
  */
 export function canDownloadApplicationFile(
 	viewer: { uid: string; role: Role },
 	ownerId: string
 ): boolean {
-	return viewer.uid === ownerId || viewer.role === Role.ADMIN;
+	return viewer.uid === ownerId || isStaff(viewer.role);
 }

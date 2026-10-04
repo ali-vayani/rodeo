@@ -98,10 +98,10 @@ describe('canAccess', () => {
 
 	it('keeps every section holding user data away from organizers', () => {
 		// Spelled out rather than derived, so widening ORGANIZER_SECTIONS by accident
-		// fails here instead of silently passing the loop above.
+		// fails here instead of silently passing the loop above. Admissions is the
+		// deliberate exception: organizers review applications.
 		for (const section of [
 			'users',
-			'admissions',
 			'email',
 			'blacklist',
 			'settings',

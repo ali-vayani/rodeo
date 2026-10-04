@@ -21,12 +21,17 @@
 	import { rubricForRole, rubricMaxScore, type CriterionDraft } from '$lib/admissions/rubric';
 	import { APPLICANT_ROLES } from '$lib/admissions/roles';
 	import { facetParams } from '$lib/admin/filters';
+	import { isAdmin } from '$lib/auth/permissions';
 	import { isEngaged, type FacetState } from '$lib/facets';
 	import FacetFilters from '$lib/components/admin/FacetFilters.svelte';
 
 	let { data }: { data: PageData } = $props();
 
 	const trpc = createClient();
+
+	// Organizers get the Review tab only: deciding in bulk, releasing decisions and
+	// editing rubrics are admin acts, and the server rejects them regardless.
+	const fullAccess = $derived(isAdmin(data.role));
 
 	type ListResult = Awaited<ReturnType<typeof trpc.admissions.list.query>>;
 	type Applicant = ListResult['applicants'][number];
@@ -837,9 +842,11 @@
 				{stats.waitlisted} waitlisted | {pendingCount} pending release
 			</span>
 		</div>
-		<Button size="sm" onclick={() => (showRubricEditor = true)}>
-			{rubric.length > 0 ? 'Edit rubrics' : 'Set up rubrics'}
-		</Button>
+		{#if fullAccess}
+			<Button size="sm" onclick={() => (showRubricEditor = true)}>
+				{rubric.length > 0 ? 'Edit rubrics' : 'Set up rubrics'}
+			</Button>
+		{/if}
 	</div>
 
 	<!--
@@ -854,13 +861,17 @@
 		<Tabs
 			tabs={[
 				{ value: 'review', label: 'Review', badge: stats.unscored },
-				{
-					value: 'decide',
-					label: 'Pending Decisions',
-					badge: rankedUnfilteredTotal ?? stats.scored + stats.pending
-				},
-				{ value: 'reconsider', label: 'Reconsider' },
-				{ value: 'stats', label: 'Stats' }
+				...(fullAccess
+					? [
+							{
+								value: 'decide',
+								label: 'Pending Decisions',
+								badge: rankedUnfilteredTotal ?? stats.scored + stats.pending
+							},
+							{ value: 'reconsider', label: 'Reconsider' },
+							{ value: 'stats', label: 'Stats' }
+						]
+					: [])
 			]}
 			active={tab}
 			onChange={onTabChange}
