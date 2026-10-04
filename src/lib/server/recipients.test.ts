@@ -341,7 +341,12 @@ describe('buildRecipientWhere — combined filters', () => {
 
 /** A prisma stand-in for `expandSearch`: a fixed roster, counted and scanned. */
 function fakePrisma(names: string[], exactMatches: number) {
-	const calls = { count: 0, findMany: 0, probeWhere: undefined as unknown };
+	const calls = {
+		count: 0,
+		findMany: 0,
+		probeWhere: undefined as unknown,
+		candidateWhere: undefined as unknown
+	};
 	const prisma = {
 		user: {
 			count: async (args: { where?: unknown }) => {
@@ -349,8 +354,9 @@ function fakePrisma(names: string[], exactMatches: number) {
 				calls.probeWhere = args?.where;
 				return exactMatches;
 			},
-			findMany: async () => {
+			findMany: async (args: { where?: unknown }) => {
 				calls.findMany++;
+				calls.candidateWhere = args.where;
 				return names.map((name) => ({ name }));
 			},
 			// Only the state facet groups users, and none of these cases engage it.
@@ -839,6 +845,15 @@ describe('expandSearch — the probe is scoped to the caller’s own filters', (
 				}
 			]
 		});
+	});
+
+	it('restricts candidate names before ranking and applying the suggestion cap', async () => {
+		const { prisma, calls } = fakePrisma(roster, 0);
+		const scope = [{ role: { in: [Role.HACKER] } }, { activeDecision: null }];
+
+		await expandSearch(prisma, 'adm', scope);
+
+		expect(calls.candidateWhere).toEqual({ AND: scope });
 	});
 
 	it('folds when the term only clears the floor outside the caller’s scope', async () => {

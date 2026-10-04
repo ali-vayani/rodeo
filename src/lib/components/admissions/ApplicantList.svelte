@@ -1,11 +1,12 @@
 <script lang="ts">
+	import { Combobox } from '$lib/components/ui';
 	import { MediaQuery } from 'svelte/reactivity';
 	import BlacklistBadge from './BlacklistBadge.svelte';
 	import FacetFilters from '$lib/components/admin/FacetFilters.svelte';
 	import type { ScoreFilter } from '$lib/admissions/score';
 	import type { BlacklistMatch } from '$lib/blacklist/match';
 	import type { Role } from '$lib/generated/prisma/enums';
-	import { isEngaged, linkedFacetKey, type Facet, type FacetState } from '$lib/facets';
+	import { isEngaged, type Facet, type FacetState } from '$lib/facets';
 
 	let {
 		applicants,
@@ -79,18 +80,8 @@
 	// `fuzzy` means the fold ran, not that it found anything.
 	let showSuggestions = $derived(searchInfo.fuzzy && searchInfo.names.length > 0);
 
-	// Keyed off `exact`, not `fuzzy`: the fold runs below a floor of five, so keying off
-	// it put "No exact match" above three people named Vayani.
-	let suggestionsPrefix = $derived(
-		searchInfo.exact > 0 ? 'Similar names:' : 'No exact match — did you mean:'
-	);
-
-	// Built here, not in markup: Svelte trims whitespace at an `{#if}` boundary, which
-	// glued the cap onto the colon.
 	let suggestionsLabel = $derived(
-		searchInfo.capped
-			? `${suggestionsPrefix} (showing the ${searchInfo.names.length} closest)`
-			: suggestionsPrefix
+		searchInfo.exact > 0 ? 'Similar names' : 'No exact match. Try a suggested name'
 	);
 
 	function clearFacetFilters() {
@@ -204,25 +195,16 @@
 
 		{#if showSuggestions}
 			<div class="shrink-0 border-b border-border bg-muted px-3 py-2">
-				<div class="text-2xs text-foreground-secondary">{suggestionsLabel}</div>
-				<!-- Scrolled: at the cap this is 25 names, which would leave two applicants visible. -->
-				<div class="mt-1.5 flex max-h-40 flex-wrap gap-1 overflow-y-auto">
-					{#each searchInfo.names as name (name)}
-						{@const active =
-							facetSelection[linkedFacetKey('NAME')]?.values?.includes(name) ?? false}
-						<button
-							type="button"
-							aria-pressed={active}
-							onclick={() => onSuggestionSelect(name)}
-							class="max-w-full cursor-pointer truncate rounded-sm border px-1.5 py-0.5 text-xs
-							       transition-colors duration-150 focus-visible:shadow-ring {active
-								? 'border-primary bg-primary text-primary-foreground'
-								: 'border-border bg-card text-foreground hover:bg-surface-hover'}"
-						>
-							{name}
-						</button>
-					{/each}
-				</div>
+				<Combobox
+					options={searchInfo.names.map((name) => ({ value: name, label: name }))}
+					label={suggestionsLabel}
+					placeholder="Choose a suggested user"
+					onChange={onSuggestionSelect}
+					disabled={loading}
+					hint={searchInfo.capped
+						? `Showing the ${searchInfo.names.length} closest names`
+						: undefined}
+				/>
 			</div>
 		{/if}
 

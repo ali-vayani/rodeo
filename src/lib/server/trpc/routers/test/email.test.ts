@@ -1109,13 +1109,15 @@ describe('previewRecipients and sendCustom agree on the recipient set', () => {
 		return [
 			...db.user.count.mock.calls.map((c) => c[0]?.where),
 			...db.user.findMany.mock.calls.map((c) => c[0]?.where)
-		].filter((w) => {
-			if (w === undefined) return false;
-			const key = JSON.stringify(w);
-			if (seen.has(key)) return false;
-			seen.add(key);
-			return true;
-		});
+		]
+			.filter((w) => {
+				if (w === undefined) return false;
+				const key = JSON.stringify(w);
+				if (seen.has(key)) return false;
+				seen.add(key);
+				return true;
+			})
+			.sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b)));
 	}
 
 	function stubRoster() {
@@ -1171,7 +1173,10 @@ describe('previewRecipients and sendCustom agree on the recipient set', () => {
 
 		expect(preview.search).toMatchObject({ fuzzy: true, capped: false });
 		expect(preview.search.names).toContain('Sarah Chen');
-		const where = selectionWheres().at(-1) as { AND: unknown[] };
+		const where = db.user.findMany.mock.calls.findLast((call) => !call[0]?.distinct)?.[0]
+			?.where as {
+			AND: unknown[];
+		};
 		expect(where.AND).toContainEqual({
 			OR: [
 				{ name: { contains: 'Sarh Chn', mode: 'insensitive' } },
