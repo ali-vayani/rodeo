@@ -98,12 +98,19 @@
 	async function sendTest() {
 		sendingTest = true;
 		try {
-			const { to } = await trpc.email.sendTest.mutate({
+			const { to, qrAttached } = await trpc.email.sendTest.mutate({
 				template: active,
 				subject: drafts[active].subject,
 				body: drafts[active].body
 			});
-			showToast(`Test email sent to ${to}`);
+			if (drafts[active].body.includes('{{hacker_qr_code}}') && !qrAttached) {
+				showToast(
+					`Test sent to ${to}, but without the QR code — set the event dates in Settings first`,
+					'error'
+				);
+			} else {
+				showToast(`Test email sent to ${to}`);
+			}
 		} catch (e: unknown) {
 			showToast(e instanceof Error ? e.message : 'Failed to send test email', 'error');
 		} finally {

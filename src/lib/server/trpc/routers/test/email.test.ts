@@ -29,10 +29,18 @@ vi.mock('$lib/server/storage', () => ({
 	storageFailureReason: (e: unknown) => (e instanceof Error ? e.message : String(e))
 }));
 
+// The real implementation behind a spy, so one test can make the QR encoder fail while
+// every other test keeps the genuine block (sendTest asserts on the real attachment).
+vi.mock('$lib/server/wallet/email-block', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('$lib/server/wallet/email-block')>();
+	return { ...actual, buildEmailPersonalization: vi.fn(actual.buildEmailPersonalization) };
+});
+
 const { prisma } = await import('$lib/server/db');
 const db = prisma as DeepMockProxy<PrismaClient>;
 const { sendEmail } = await import('$lib/server/email');
 const { getObject } = await import('$lib/server/storage');
+const { buildEmailPersonalization } = await import('$lib/server/wallet/email-block');
 
 beforeEach(() => {
 	mockReset(db);
@@ -179,6 +187,51 @@ describe('email.startSend + sendOne', () => {
 		await caller.email.sendOne({ sendId: started.sendId!, recipient: hackerUser.uid });
 
 		expect(getRow()).toMatchObject({ sent: [hackerUser.uid], failed: [], errors: {} });
+		errorSpy.mockRestore();
+	});
+
+	it('reports whether each recipient got the check-in QR block', async () => {
+		const caller = createTestCaller(db, adminUser);
+		const confirmed = { ...hackerUser, status: UserStatus.CONFIRMED };
+		mockUsers([confirmed, appliedHacker] as never);
+		stubSendLog();
+
+		const started = await caller.email.startSend({ ...emailInput, expectedCount: 2 } as never);
+		const withQr = await caller.email.sendOne({
+			sendId: started.sendId!,
+			recipient: confirmed.uid
+		});
+		const withoutQr = await caller.email.sendOne({
+			sendId: started.sendId!,
+			recipient: appliedHacker.uid
+		});
+
+		expect(withQr.qrAttached).toBe(true);
+		expect(withoutQr.qrAttached).toBe(false);
+	});
+
+	it('records a QR build failure on the row instead of throwing', async () => {
+		// The page retries thrown calls as network noise; a broken QR must instead land
+		// in the log's failure column, where finishSend and the history report it.
+		const caller = createTestCaller(db, adminUser);
+		const confirmed = { ...hackerUser, status: UserStatus.CONFIRMED };
+		mockUsers([confirmed] as never);
+		const getRow = stubSendLog();
+		vi.mocked(buildEmailPersonalization).mockRejectedValueOnce(new Error('QR encode failed'));
+		const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+		const started = await caller.email.startSend({ ...emailInput, expectedCount: 1 } as never);
+		const result = await caller.email.sendOne({
+			sendId: started.sendId!,
+			recipient: confirmed.uid
+		});
+
+		expect(result).toMatchObject({ ok: false, error: 'QR encode failed', retryable: false });
+		expect(getRow()).toMatchObject({
+			failed: [confirmed.uid],
+			errors: { [confirmed.uid]: 'QR encode failed' }
+		});
+		expect(sendEmail).not.toHaveBeenCalled();
 		errorSpy.mockRestore();
 	});
 
@@ -997,6 +1050,17 @@ describe('email.sendTest', () => {
 				body: `Hi ${adminUser.name}, we start ${SAMPLE_VARS.hackathon_start}.`
 			})
 		);
+	});
+
+	it('reports whether the QR block went with the test', async () => {
+		const caller = createTestCaller(db, adminUser);
+		db.settings.findFirst.mockResolvedValue(mockSettings);
+		expect((await caller.email.sendTest(testInput)).qrAttached).toBe(true);
+
+		// No Settings row means no personalization and no QR; the page tells the admin
+		// instead of mailing a QR-less proof with no explanation.
+		db.settings.findFirst.mockResolvedValue(null);
+		expect((await caller.email.sendTest(testInput)).qrAttached).toBe(false);
 	});
 
 	it('does not write an EmailLog row', async () => {

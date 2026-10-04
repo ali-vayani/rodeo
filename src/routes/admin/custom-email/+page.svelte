@@ -342,13 +342,18 @@
 			const queue = started.recipients.map((recipient) => ({ recipient, attempt: 1 }));
 			progress = { done: 0, total: queue.length };
 
+			// Recipients the QR block was silently left out for — not confirmed attendees.
+			// Only meaningful when the draft asked for one.
+			const usesQr = body.includes('{{hacker_qr_code}}');
+			let qrSkipped = 0;
+
 			while (queue.length > 0) {
 				const job = queue.shift()!;
 				// A dropped connection is indistinguishable from a paced-out send from here, and
 				// both are worth another go, so a thrown request joins the retryable failures.
 				const result = await trpc.email.sendOne
 					.mutate({ sendId, recipient: job.recipient })
-					.catch(() => ({ ok: false, retryable: true }));
+					.catch(() => ({ ok: false, skipped: false, retryable: true, qrAttached: null }));
 
 				if (!result.ok && result.retryable && job.attempt < MAX_ATTEMPTS) {
 					// To the back, so one struggling recipient does not hold up the rest.
@@ -357,6 +362,9 @@
 					continue;
 				}
 
+				if (usesQr && result.ok && !result.skipped && result.qrAttached === false) {
+					qrSkipped += 1;
+				}
 				progress.done += 1;
 				if (queue.length > 0) await sleep(SEND_INTERVAL_MS);
 			}
@@ -375,6 +383,15 @@
 					started.external > 0
 						? `Sent to ${pluralize(result.sent, 'recipient')}, ${started.external} external`
 						: `Sent to ${pluralize(result.sent, 'user')}`
+				);
+			}
+
+			// Its own toast rather than a clause in the tally: the blast "succeeded", but an
+			// admin who asked for QR codes needs to hear that some inboxes got none.
+			if (qrSkipped > 0) {
+				toast.error(
+					`The QR code was left out for ${pluralize(qrSkipped, 'recipient')} — ` +
+						'only confirmed attendees get one.'
 				);
 			}
 

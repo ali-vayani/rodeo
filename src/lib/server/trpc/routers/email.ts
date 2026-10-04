@@ -347,36 +347,45 @@ export const emailRouter = router({
 			// Idempotent by recipient, so a resumed or retried loop cannot put a second copy
 			// in an inbox that already has one.
 			if (log.sent.includes(input.recipient)) {
-				return { ok: true, skipped: true, error: null, retryable: false };
+				return { ok: true, skipped: true, error: null, retryable: false, qrAttached: null };
 			}
 
 			const settings = await ctx.prisma.settings.findFirst();
 
-			let to: string;
-			let vars: Record<string, string>;
-			let attachments: EmailAttachment[] = [];
-
-			if (input.recipient.startsWith(EXTERNAL_RECIPIENT_PREFIX)) {
-				to = input.recipient.slice(EXTERNAL_RECIPIENT_PREFIX.length);
-				vars = buildExternalTemplateVars(emailSettings(settings));
-			} else {
-				const user = await ctx.prisma.user.findUnique({ where: { uid: input.recipient } });
-				if (!user) {
-					throw new TRPCError({
-						code: 'NOT_FOUND',
-						message: 'That recipient no longer has an account.'
-					});
-				}
-				to = user.email;
-				// Raw row, not `emailSettings(...)`: the check-in block embeds this hacker's own
-				// QR as an inline attachment and its wallet gate must fail closed on an
-				// unconfigured install. See buildEmailPersonalization.
-				({ vars, attachments } = await buildEmailPersonalization(user, settings));
+			const external = input.recipient.startsWith(EXTERNAL_RECIPIENT_PREFIX);
+			const user = external
+				? null
+				: await ctx.prisma.user.findUnique({ where: { uid: input.recipient } });
+			if (!external && !user) {
+				throw new TRPCError({
+					code: 'NOT_FOUND',
+					message: 'That recipient no longer has an account.'
+				});
 			}
+			const to = external ? input.recipient.slice(EXTERNAL_RECIPIENT_PREFIX.length) : user!.email;
+
+			// Whether this message carried the check-in block. Null when the recipient could
+			// never have one (external address); the page tallies `false` into the "QR left
+			// out" notice after the blast.
+			let qrAttached: boolean | null = external ? null : false;
 
 			try {
-				// Inside the try: a vanished object fails this recipient the same way a
-				// rejected send does — recorded against the row, and the loop carries on.
+				let vars: Record<string, string>;
+				let attachments: EmailAttachment[] = [];
+				if (user) {
+					// Built inside the try: a QR that fails to encode must land on the row like a
+					// rejected send, not escape as a thrown error the page retries blindly.
+					// Raw row, not `emailSettings(...)`: the check-in block embeds this hacker's own
+					// QR as an inline attachment and its wallet gate must fail closed on an
+					// unconfigured install. See buildEmailPersonalization.
+					({ vars, attachments } = await buildEmailPersonalization(user, settings));
+					qrAttached = attachments.length > 0;
+				} else {
+					vars = buildExternalTemplateVars(emailSettings(settings));
+				}
+
+				// A vanished object fails this recipient the same way a rejected send does —
+				// recorded against the row, and the loop carries on.
 				const files = await loadAttachments(storedAttachmentRefs(log.attachments));
 				await sendEmail({
 					to,
@@ -408,7 +417,8 @@ export const emailRouter = router({
 					error: message,
 					// Resend names its rate-limit rejection `rate_limit_exceeded`, which
 					// `sendEmail` carries through into the message.
-					retryable: /rate_limit|rate limit|429/i.test(message)
+					retryable: /rate_limit|rate limit|429/i.test(message),
+					qrAttached: null
 				};
 			}
 
@@ -431,7 +441,7 @@ export const emailRouter = router({
 				}
 			});
 
-			return { ok: true, skipped: false, error: null, retryable: false };
+			return { ok: true, skipped: false, error: null, retryable: false, qrAttached };
 		}),
 
 	/**
@@ -553,7 +563,9 @@ export const emailRouter = router({
 				metadata: { template: input.template, to }
 			});
 
-			return { to };
+			// False only when no Settings row exists yet; the page says so when the draft
+			// uses `{{hacker_qr_code}}`, instead of mailing a QR-less test with no explanation.
+			return { to, qrAttached: attachments.length > 0 };
 		}),
 
 	getLogs: adminProcedure
