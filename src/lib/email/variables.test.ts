@@ -184,7 +184,9 @@ describe('buildEventVars / buildExternalTemplateVars', () => {
 		// per-recipient, so neither belongs in the event half.
 		const vars = buildEventVars(settings);
 		expect(Object.keys(vars).sort()).toEqual(
-			[...VARIABLE_KEYS].filter((k) => k !== 'name' && k !== 'role' && k !== 'hacker_qr_code').sort()
+			[...VARIABLE_KEYS]
+				.filter((k) => k !== 'name' && k !== 'role' && k !== 'hacker_qr_code')
+				.sort()
 		);
 	});
 
