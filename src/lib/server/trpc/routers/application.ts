@@ -12,7 +12,7 @@ import { isAnswered } from '$lib/questions/isAnswered';
 import { sendTemplatedEmail } from '$lib/server/email';
 import { buildEmailPersonalization } from '$lib/server/wallet/email-block';
 import { templateBlockers } from '$lib/email/variables';
-import { emailSettings } from '$lib/server/settings';
+import { emailSettings, emailTemplate } from '$lib/server/settings';
 import { formatDateLong } from '$lib/format';
 
 /**
@@ -442,22 +442,14 @@ export const applicationRouter = router({
 		// A template an admin has deliberately blanked still opts out.
 		const mail = emailSettings(settings);
 		if (
-			sendableTemplate(
-				'RSVP confirmation',
-				{ subject: mail.confirmSubject, body: mail.confirmTemplate },
-				settings,
-				user.email
-			)
+			sendableTemplate('RSVP confirmation', emailTemplate(mail, 'confirm'), settings, user.email)
 		) {
 			// The RSVP confirmation is where a hacker wants their pass, so this send carries the
 			// check-in block. Personalization takes the raw row so the wallet gate fails closed.
 			const { vars, attachments } = await buildEmailPersonalization(updated, settings);
-			await sendTemplatedEmail(
-				user.email,
-				{ subject: mail.confirmSubject, body: mail.confirmTemplate },
-				vars,
-				attachments
-			).catch(reportSendFailure('RSVP confirmation', user.email));
+			await sendTemplatedEmail(user.email, emailTemplate(mail, 'confirm'), vars, attachments).catch(
+				reportSendFailure('RSVP confirmation', user.email)
+			);
 		}
 
 		return updated;
@@ -500,17 +492,10 @@ export const applicationRouter = router({
 
 		const settings = await ctx.prisma.settings.findFirst();
 		const mail = emailSettings(settings);
-		if (
-			sendableTemplate(
-				'RSVP decline',
-				{ subject: mail.declineSubject, body: mail.declineTemplate },
-				settings,
-				user.email
-			)
-		) {
+		if (sendableTemplate('RSVP decline', emailTemplate(mail, 'decline'), settings, user.email)) {
 			await sendTemplatedEmail(
 				user.email,
-				{ subject: mail.declineSubject, body: mail.declineTemplate },
+				emailTemplate(mail, 'decline'),
 				// Vars only: a declined account has no check-in block, so there is no
 				// attachment to carry.
 				(await buildEmailPersonalization(user, settings)).vars
@@ -613,7 +598,7 @@ export const applicationRouter = router({
 			if (
 				sendableTemplate(
 					'application submitted',
-					{ subject: mail.submitSubject, body: mail.submitTemplate },
+					emailTemplate(mail, 'submit'),
 					settings,
 					user.email
 				)
@@ -621,7 +606,7 @@ export const applicationRouter = router({
 				const { vars, attachments } = await buildEmailPersonalization(updatedUser, settings);
 				await sendTemplatedEmail(
 					user.email,
-					{ subject: mail.submitSubject, body: mail.submitTemplate },
+					emailTemplate(mail, 'submit'),
 					vars,
 					attachments
 				).catch(reportSendFailure('application submitted', user.email));

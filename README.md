@@ -149,6 +149,13 @@ S3 storage and saves their references in `EmailLog`. Each recipient gets the fil
 as Resend attachments. PDFs open from the filename links in the composer and confirmation
 step; other files download. The browser must stay open while a bulk send runs.
 
+The email template editor supports the same attachments, saved separately for each
+template. Save Changes stores files under `email-template-attachments/`, outside the
+30-day draft expiration policy. Send Test includes the current draft's files, even
+before saving. Application, decision, and RSVP emails include the saved files alongside
+any recipient QR image. Revert restores the saved file list. Removing a file deletes
+it only after saving, and only when no other template still references it.
+
 Apply database migrations before deploying these changes. Configure S3 using the four
 variables in `.env.example`, and configure `RESEND_API_KEY` and a verified `EMAIL_FROM`
 for production. Development and preview never deliver email.

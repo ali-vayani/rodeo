@@ -20,6 +20,8 @@ import { marked } from 'marked';
 import { env } from '$env/dynamic/private';
 import { substituteVariables } from '$lib/email/variables';
 import { deployEnv, emailFrom, resendConfigured, NO_EMAIL_MESSAGE } from './env';
+import { loadEmailAttachments } from './emailAttachments';
+import type { EmailAttachmentRef } from '$lib/email/attachments';
 
 /**
  * A file carried inside the message. Two kinds share the shape: inline images — the
@@ -121,7 +123,7 @@ export async function sendEmail(payload: EmailPayload): Promise<void> {
 /** Substitutes `vars` into both halves of a stored template and sends it. */
 export async function sendTemplatedEmail(
 	to: string,
-	template: { subject: string; body: string },
+	template: { subject: string; body: string; attachmentRefs?: EmailAttachmentRef[] },
 	vars: Record<string, string>,
 	attachments: EmailAttachment[] = []
 ): Promise<void> {
@@ -132,6 +134,6 @@ export async function sendTemplatedEmail(
 		subject: substituteVariables(template.subject, vars, { dropRawValues: true }),
 		// Body becomes HTML via `marked` — escape user-controlled variable values.
 		body: substituteVariables(template.body, vars, { escapeValues: true }),
-		attachments
+		attachments: [...attachments, ...(await loadEmailAttachments(template.attachmentRefs ?? []))]
 	});
 }

@@ -10,6 +10,9 @@
  * enforced". The dates here are `new Date()` at import, so substituting them would lock
  * every applicant out. Email copy has a safe default; a deadline does not.
  */
+import type { TemplateKey } from '$lib/email/templates';
+import { storedAttachmentRefs } from './emailAttachments';
+
 export const DEFAULT_SETTINGS = {
 	applicationOpen: new Date(),
 	applicationDeadline: new Date(),
@@ -25,6 +28,12 @@ export const DEFAULT_SETTINGS = {
 	judgeApplicationDeadline: null as Date | null,
 	volunteerApplicationOpen: null as Date | null,
 	volunteerApplicationDeadline: null as Date | null,
+	submitAttachments: [],
+	acceptAttachments: [],
+	rejectAttachments: [],
+	waitlistAttachments: [],
+	confirmAttachments: [],
+	declineAttachments: [],
 	submitTemplate: 'Hi {{name}}, your application has been submitted!',
 	submitSubject: 'We received your application',
 	acceptTemplate: 'Hi {{name}}, you have been accepted!',
@@ -47,4 +56,17 @@ export const DEFAULT_SETTINGS = {
  */
 export function emailSettings<T>(row: T | null): T | typeof DEFAULT_SETTINGS {
 	return row ?? DEFAULT_SETTINGS;
+}
+
+export function emailTemplate(
+	settings: Record<`${TemplateKey}Subject` | `${TemplateKey}Template`, string> &
+		Partial<Record<`${TemplateKey}Attachments`, unknown>>,
+	key: TemplateKey
+) {
+	const attachmentRefs = storedAttachmentRefs(settings[`${key}Attachments`]);
+	return {
+		subject: settings[`${key}Subject`],
+		body: settings[`${key}Template`],
+		...(attachmentRefs.length ? { attachmentRefs } : {})
+	};
 }

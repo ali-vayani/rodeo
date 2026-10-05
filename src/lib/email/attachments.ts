@@ -7,6 +7,7 @@
 
 export const MAX_EMAIL_ATTACHMENTS = 5;
 export const EMAIL_ATTACHMENT_KEY_PREFIX = 'email-attachments/';
+export const TEMPLATE_ATTACHMENT_KEY_PREFIX = 'email-template-attachments/';
 export const EMAIL_ATTACHMENT_RETENTION_DAYS = 30;
 
 /**

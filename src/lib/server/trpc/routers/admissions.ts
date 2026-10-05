@@ -4,10 +4,11 @@ import type { Prisma } from '$lib/generated/prisma/client';
 import { Role, DecisionStatus, UserStatus } from '$lib/generated/prisma/client';
 import { router, adminProcedure, portalProcedure } from '../init';
 import { logAction } from '$lib/server/log';
-import { sendTemplatedEmail } from '$lib/server/email';
+import { sendTemplatedEmail, type EmailAttachment } from '$lib/server/email';
+import { loadEmailAttachments } from '$lib/server/emailAttachments';
 import { buildEmailPersonalization } from '$lib/server/wallet/email-block';
 import { templateBlockers } from '$lib/email/variables';
-import { emailSettings } from '$lib/server/settings';
+import { emailSettings, emailTemplate } from '$lib/server/settings';
 import { CLAIM_TTL_MS } from '$lib/admissions/lock';
 import { effectiveDecision } from '$lib/admissions/decision';
 import { MAX_SCORE, MIN_SCORE } from '$lib/admissions/score';
@@ -810,19 +811,10 @@ export const admissionsRouter = router({
 
 			// Defaults on an unconfigured install, so a release never decides fates silently.
 			const mail = emailSettings(settings);
-			const templateMap: Record<string, { subject: string; body: string }> = {
-				[DecisionStatus.ACCEPTED]: {
-					subject: mail.acceptSubject,
-					body: mail.acceptTemplate
-				},
-				[DecisionStatus.REJECTED]: {
-					subject: mail.rejectSubject,
-					body: mail.rejectTemplate
-				},
-				[DecisionStatus.WAITLISTED]: {
-					subject: mail.waitlistSubject,
-					body: mail.waitlistTemplate
-				},
+			const templateMap: Record<string, ReturnType<typeof emailTemplate>> = {
+				[DecisionStatus.ACCEPTED]: emailTemplate(mail, 'accept'),
+				[DecisionStatus.REJECTED]: emailTemplate(mail, 'reject'),
+				[DecisionStatus.WAITLISTED]: emailTemplate(mail, 'waitlist'),
 				[DecisionStatus.PENDING]: { subject: '', body: '' }
 			};
 
@@ -830,6 +822,7 @@ export const admissionsRouter = router({
 			// that cannot be rendered has to stop the batch while stopping it is still free —
 			// skipping the send afterwards would leave accepted applicants decided and
 			// unmailed, which is the one outcome worse than not releasing.
+			const templateFiles = new Map<string, EmailAttachment[]>();
 			for (const decision of new Set(users.map((u) => u.pendingDecision))) {
 				if (!decision) continue;
 				const template = templateMap[decision];
@@ -839,6 +832,15 @@ export const admissionsRouter = router({
 					throw new TRPCError({
 						code: 'BAD_REQUEST',
 						message: `The ${decision.toLowerCase()} email cannot be sent. ${blocked.message}`
+					});
+				}
+				try {
+					templateFiles.set(decision, await loadEmailAttachments(template.attachmentRefs ?? []));
+				} catch (cause) {
+					throw new TRPCError({
+						code: 'BAD_REQUEST',
+						message: `An attachment for the ${decision.toLowerCase()} template could not be read. Re-attach it before releasing decisions.`,
+						cause
 					});
 				}
 			}
@@ -884,7 +886,13 @@ export const admissionsRouter = router({
 					// Raw row, not `mail`: the wallet gate must fail closed on an unconfigured
 					// install. See buildEmailPersonalization.
 					const { vars, attachments } = await buildEmailPersonalization(u, settings);
-					return sendTemplatedEmail(u.email, templateMap[u.pendingDecision!], vars, attachments);
+					const template = templateMap[u.pendingDecision!];
+					return sendTemplatedEmail(
+						u.email,
+						{ subject: template.subject, body: template.body },
+						vars,
+						[...attachments, ...(templateFiles.get(u.pendingDecision!) ?? [])]
+					);
 				})
 			);
 			const emailsFailed = results.filter((r) => r.status === 'rejected').length;

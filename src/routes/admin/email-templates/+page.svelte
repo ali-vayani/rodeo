@@ -5,6 +5,8 @@
 	import { EMAIL_TEMPLATES, type TemplateKey } from '$lib/email/templates';
 	import { unavailableVariables } from '$lib/email/variables';
 	import { pluralize } from '$lib/format';
+	import AttachmentPicker from '$lib/components/email/AttachmentPicker.svelte';
+	import type { EmailAttachmentRef } from '$lib/email/attachments';
 	import TemplateEditor from '$lib/components/email/TemplateEditor.svelte';
 	import EmailPreview from '$lib/components/email/EmailPreview.svelte';
 	import Toast from '$lib/components/legacy/Toast.svelte';
@@ -16,15 +18,19 @@
 
 	const trpc = createClient();
 
-	type Draft = { subject: string; body: string };
+	type Draft = { subject: string; body: string; attachments: EmailAttachmentRef[] };
 
-	/** Pull the 12 template columns into `{ [key]: { subject, body } }`. */
+	/** Build one draft per template from its saved columns. */
 	function extract(settings: PageData['settings']): Record<TemplateKey, Draft> {
 		const row = settings as unknown as Record<string, string>;
 		return Object.fromEntries(
 			EMAIL_TEMPLATES.map((t) => [
 				t.key,
-				{ subject: row[`${t.key}Subject`] ?? '', body: row[`${t.key}Template`] ?? '' }
+				{
+					subject: row[`${t.key}Subject`] ?? '',
+					body: row[`${t.key}Template`] ?? '',
+					attachments: (settings[`${t.key}Attachments`] ?? []) as EmailAttachmentRef[]
+				}
 			])
 		) as Record<TemplateKey, Draft>;
 	}
@@ -41,6 +47,7 @@
 	let active = $state<TemplateKey>('submit');
 	let saving = $state(false);
 	let sendingTest = $state(false);
+	let uploading = $state(false);
 	/** Send Test always goes to the admin's own inbox; see email.sendTest. */
 	const adminEmail = untrack(() => data.adminEmail);
 	let lastSavedAt = $state<Date | null>(null);
@@ -49,7 +56,10 @@
 
 	let dirtyKeys = $derived(
 		EMAIL_TEMPLATES.map((t) => t.key).filter(
-			(k) => drafts[k].subject !== saved[k].subject || drafts[k].body !== saved[k].body
+			(k) =>
+				drafts[k].subject !== saved[k].subject ||
+				drafts[k].body !== saved[k].body ||
+				JSON.stringify(drafts[k].attachments) !== JSON.stringify(saved[k].attachments)
 		)
 	);
 	let isDirty = $derived(dirtyKeys.length > 0);
@@ -58,12 +68,12 @@
 		lastSavedAt?.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) ?? ''
 	);
 
-	const guard = createUnsavedGuard(() => isDirty);
+	const guard = createUnsavedGuard(() => isDirty || uploading);
 
 	/** `save` reports failure by leaving the drafts dirty, so that is the signal to stay. */
 	async function saveAndLeave() {
 		await save();
-		if (isDirty) guard.dismiss();
+		if (isDirty || uploading) guard.dismiss();
 		else guard.proceed();
 	}
 
@@ -78,14 +88,15 @@
 	}
 
 	async function save() {
-		if (!isDirty) return;
+		if (!isDirty || saving || uploading) return;
 		saving = true;
 		try {
-			const templates = Object.fromEntries(
-				dirtyKeys.map((k) => [k, { subject: drafts[k].subject, body: drafts[k].body }])
-			);
-			await trpc.settings.updateTemplates.mutate({ templates });
-			saved = structuredClone($state.snapshot(drafts));
+			const templates = Object.fromEntries(dirtyKeys.map((k) => [k, $state.snapshot(drafts[k])]));
+			const updated = await trpc.settings.updateTemplates.mutate({ templates });
+			saved = extract(updated);
+			for (const key of Object.keys(templates) as TemplateKey[]) {
+				drafts[key].attachments = saved[key].attachments;
+			}
 			lastSavedAt = new Date();
 			showToast('Templates saved');
 		} catch (e: unknown) {
@@ -101,7 +112,8 @@
 			const { to, qrAttached } = await trpc.email.sendTest.mutate({
 				template: active,
 				subject: drafts[active].subject,
-				body: drafts[active].body
+				body: drafts[active].body,
+				attachments: drafts[active].attachments
 			});
 			if (drafts[active].body.includes('{{hacker_qr_code}}') && !qrAttached) {
 				showToast(
@@ -131,7 +143,7 @@
 		</span>
 		<button
 			onclick={save}
-			disabled={saving || !isDirty}
+			disabled={saving || uploading || sendingTest || !isDirty}
 			class="cursor-pointer rounded-md border-none bg-primary px-[18px] py-[9px] text-[13px] font-semibold text-white disabled:opacity-50"
 		>
 			{saving ? 'Saving…' : 'Save Changes'}
@@ -155,6 +167,7 @@
 		{#each EMAIL_TEMPLATES as t (t.key)}
 			<button
 				onclick={() => (active = t.key)}
+				disabled={uploading || saving || sendingTest}
 				class="flex shrink-0 cursor-pointer items-center justify-between gap-2 border-border px-4 py-[11px] text-left text-[13px] whitespace-nowrap transition-colors md:shrink md:border-b md:whitespace-normal {active ===
 				t.key
 					? 'bg-white font-semibold text-primary'
@@ -168,7 +181,7 @@
 		{/each}
 	</div>
 
-	<div class="flex min-w-0 flex-1 flex-col gap-4 p-4 md:p-8">
+	<div class="flex min-w-0 flex-1 flex-col gap-4 overflow-y-auto p-4 md:p-8">
 		<div>
 			<h2 class="text-[15px] font-semibold text-primary">{activeMeta.label}</h2>
 			<p class="mt-0.5 text-xs text-muted-foreground">{activeMeta.description}</p>
@@ -180,6 +193,17 @@
 			bind:body={drafts[active].body}
 			{unavailable}
 		/>
+
+		<AttachmentPicker
+			bind:attachments={drafts[active].attachments}
+			bind:uploading
+			disabled={saving || sendingTest}
+			onError={(message) => showToast(message, 'error')}
+		/>
+		<p class="text-xs text-muted-foreground">
+			Saved files are included in every email sent with this template. Removal takes effect when you
+			save.
+		</p>
 
 		<!-- Remount on switch so the preview shows the new template immediately
 		     instead of waiting out the debounce on the old one. -->
@@ -198,14 +222,18 @@
 			</span>
 			<button
 				onclick={sendTest}
-				disabled={sendingTest || !drafts[active].subject || !drafts[active].body}
+				disabled={sendingTest ||
+					saving ||
+					uploading ||
+					!drafts[active].subject ||
+					!drafts[active].body}
 				class="shrink-0 cursor-pointer rounded-md border border-border bg-white px-[14px] py-[9px] text-[13px] font-medium whitespace-nowrap text-primary disabled:opacity-50"
 			>
 				{sendingTest ? 'Sending…' : 'Send Test'}
 			</button>
 			<button
 				onclick={revertActive}
-				disabled={!dirtyKeys.includes(active)}
+				disabled={saving || uploading || sendingTest || !dirtyKeys.includes(active)}
 				class="shrink-0 cursor-pointer rounded-md border border-border bg-white px-[14px] py-[9px] text-[13px] font-medium whitespace-nowrap text-primary disabled:opacity-50"
 			>
 				Revert

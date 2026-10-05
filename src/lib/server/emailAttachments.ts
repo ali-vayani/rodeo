@@ -1,29 +1,29 @@
 /**
- * The rules behind custom-email attachments, kept out of the route handler and the
- * router — same split as `applicationFiles`, and for the same reason: handlers here
- * are untested, this module is covered.
- *
- * An attachment lives in the storage bucket under its own prefix, uploaded once at
- * compose time and read back per recipient at send time. The limits and the ref shape
- * are in `$lib/email/attachments`, shared with the compose page; this module holds
- * what only the server may decide — the keys it mints, and what it accepts back.
- * Everything that accepts a ref checks its key against `KEY_PATTERN`, so a request
- * cannot point a send at an arbitrary bucket object — an applicant's resume, say.
+ * Upload validation and storage for custom-email and lifecycle-template attachments.
+ * Draft uploads expire under the bucket policy. Saving a template copies its files
+ * to a separate prefix so future lifecycle emails can still read them.
  */
 
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
-import { EMAIL_ATTACHMENT_KEY_PREFIX, MAX_EMAIL_ATTACHMENT_BYTES } from '$lib/email/attachments';
+import {
+	EMAIL_ATTACHMENT_KEY_PREFIX,
+	TEMPLATE_ATTACHMENT_KEY_PREFIX,
+	MAX_EMAIL_ATTACHMENT_BYTES,
+	type EmailAttachmentRef
+} from '$lib/email/attachments';
 import type { UploadRejection } from './applicationFiles';
+import type { EmailAttachment } from './email';
+import { getObject, putObject, deleteObject } from './storage';
 
 export { MAX_EMAIL_ATTACHMENTS } from '$lib/email/attachments';
 export type { EmailAttachmentRef } from '$lib/email/attachments';
 
 export { EMAIL_ATTACHMENT_KEY_PREFIX } from '$lib/email/attachments';
 
-/** Exactly the keys `emailAttachmentKey` mints: the prefix and a UUID, nothing else. */
+/** Only upload and saved-template prefixes may be attached or previewed. */
 const KEY_PATTERN = new RegExp(
-	`^${EMAIL_ATTACHMENT_KEY_PREFIX}[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`
+	`^(?:${EMAIL_ATTACHMENT_KEY_PREFIX}|${TEMPLATE_ATTACHMENT_KEY_PREFIX})[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`
 );
 
 /** A fresh storage key for one uploaded attachment. */
@@ -72,4 +72,44 @@ export function checkAttachmentUpload(file: {
 export function storedAttachmentRefs(value: unknown) {
 	const parsed = z.array(attachmentRefSchema).safeParse(value);
 	return parsed.success ? parsed.data : [];
+}
+
+export async function loadEmailAttachments(refs: EmailAttachmentRef[]): Promise<EmailAttachment[]> {
+	return Promise.all(
+		refs.map(async (ref) => ({
+			filename: ref.filename,
+			content: await getObject(ref.key),
+			contentType: ref.contentType
+		}))
+	);
+}
+
+/** Saved templates must outlive the lifecycle policy for draft uploads. */
+export async function persistTemplateAttachments(refs: EmailAttachmentRef[], created: string[]) {
+	const saved: EmailAttachmentRef[] = [];
+	for (const ref of refs) {
+		const bytes = await getObject(ref.key);
+		if (bytes.length !== ref.size) throw new Error(`The file size changed for ${ref.filename}.`);
+		if (ref.key.startsWith(TEMPLATE_ATTACHMENT_KEY_PREFIX)) {
+			saved.push(ref);
+			continue;
+		}
+		const key = `${TEMPLATE_ATTACHMENT_KEY_PREFIX}${randomUUID()}`;
+		created.push(key);
+		await putObject(key, bytes, ref.contentType);
+		saved.push({ ...ref, key });
+	}
+	return saved;
+}
+
+export async function removeEmailAttachments(keys: string[]) {
+	await Promise.all(
+		keys.map(async (key) => {
+			try {
+				await deleteObject(key);
+			} catch (error) {
+				console.error(`[email] Could not remove attachment ${key}:`, error);
+			}
+		})
+	);
 }

@@ -15,6 +15,7 @@
 import { error, json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { isAdmin } from '$lib/auth/permissions';
+import { EMAIL_ATTACHMENT_KEY_PREFIX } from '$lib/email/attachments';
 import {
 	attachmentRefSchema,
 	checkAttachmentUpload,
@@ -91,6 +92,9 @@ export const DELETE: RequestHandler = async ({ locals, request }) => {
 
 	const parsed = attachmentRefSchema.shape.key.safeParse((await request.json())?.key);
 	if (!parsed.success) error(400, 'Not an attachment key.');
+	if (!parsed.data.startsWith(EMAIL_ATTACHMENT_KEY_PREFIX)) {
+		error(400, 'Remove saved attachments in the template editor and save your changes.');
+	}
 
 	try {
 		await deleteObject(parsed.data);

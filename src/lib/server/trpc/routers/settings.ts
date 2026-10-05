@@ -1,10 +1,19 @@
 import { z } from 'zod';
+import { TRPCError } from '@trpc/server';
+import type { EmailAttachmentRef } from '$lib/email/attachments';
 import { router, authedProcedure, adminProcedure } from '../init';
 import { TEMPLATE_KEYS, type TemplateKey } from '$lib/email/templates';
 import { isAdmin } from '$lib/auth/permissions';
 import { DEFAULT_SETTINGS } from '$lib/server/settings';
 import { US_STATES } from '$lib/data/states';
 import { logAction, listOrNone } from '$lib/server/log';
+import {
+	attachmentRefSchema,
+	MAX_EMAIL_ATTACHMENTS,
+	persistTemplateAttachments,
+	removeEmailAttachments,
+	storedAttachmentRefs
+} from '$lib/server/emailAttachments';
 
 // Same bounds as `updateTemplates`; `update` is the other write path to these columns
 // and `admissions.release` mails whatever is stored.
@@ -109,7 +118,8 @@ const settingsInput = z
 // resolve the same values the editor sees.
 export { DEFAULT_SETTINGS };
 
-type TemplateColumns = Record<`${TemplateKey}Template` | `${TemplateKey}Subject`, string>;
+type TemplateColumns = Record<`${TemplateKey}Template` | `${TemplateKey}Subject`, string> &
+	Record<`${TemplateKey}Attachments`, EmailAttachmentRef[]>;
 
 /**
  * Template and subject columns blanked for non-admin `settings.get` callers, who need
@@ -120,7 +130,8 @@ type TemplateColumns = Record<`${TemplateKey}Template` | `${TemplateKey}Subject`
 const REDACTED_TEMPLATES = Object.fromEntries(
 	TEMPLATE_KEYS.flatMap((key) => [
 		[`${key}Template`, ''],
-		[`${key}Subject`, '']
+		[`${key}Subject`, ''],
+		[`${key}Attachments`, []]
 	])
 ) as TemplateColumns;
 
@@ -187,23 +198,61 @@ export const settingsRouter = router({
 					z.enum(TEMPLATE_KEYS),
 					z.object({
 						subject: z.string().min(1).max(200),
-						body: z.string().max(20000)
+						body: z.string().max(20000),
+						attachments: z.array(attachmentRefSchema).max(MAX_EMAIL_ATTACHMENTS).optional()
 					})
 				)
 			})
 		)
 		.mutation(async ({ ctx, input }) => {
-			const data: Record<string, string> = {};
-			for (const [key, value] of Object.entries(input.templates)) {
-				data[`${key}Subject`] = value.subject;
-				data[`${key}Template`] = value.body;
-			}
-
 			const existing = await ctx.prisma.settings.findFirst();
-			const settings = existing
-				? await ctx.prisma.settings.update({ where: { id: existing.id }, data })
-				: // Fresh install: seed.ts creates no Settings row, so materialise one.
-					await ctx.prisma.settings.create({ data: { ...DEFAULT_SETTINGS, ...data } });
+			const data: Partial<TemplateColumns> = {};
+			const created: string[] = [];
+			let settings;
+			try {
+				for (const key of TEMPLATE_KEYS) {
+					const value = input.templates[key];
+					if (!value) continue;
+					data[`${key}Subject`] = value.subject;
+					data[`${key}Template`] = value.body;
+					if (value.attachments !== undefined) {
+						try {
+							data[`${key}Attachments`] = await persistTemplateAttachments(
+								value.attachments,
+								created
+							);
+						} catch (cause) {
+							throw new TRPCError({
+								code: 'BAD_REQUEST',
+								message:
+									'An attachment could not be saved. Remove and re-attach it, then try again.',
+								cause
+							});
+						}
+					}
+				}
+				settings = existing
+					? await ctx.prisma.settings.update({ where: { id: existing.id }, data })
+					: await ctx.prisma.settings.create({
+							data: { ...DEFAULT_SETTINGS, ...data }
+						});
+			} catch (error) {
+				await removeEmailAttachments(created);
+				throw error;
+			}
+			if (existing) {
+				const retained = new Set(
+					TEMPLATE_KEYS.flatMap((key) =>
+						storedAttachmentRefs(settings[`${key}Attachments`]).map((ref) => ref.key)
+					)
+				);
+				const removed = TEMPLATE_KEYS.flatMap((key) =>
+					storedAttachmentRefs(existing[`${key}Attachments`])
+				)
+					.filter((ref) => !retained.has(ref.key))
+					.map((ref) => ref.key);
+				await removeEmailAttachments([...new Set(removed)]);
+			}
 
 			const edited = Object.keys(input.templates);
 			await logAction(ctx, {

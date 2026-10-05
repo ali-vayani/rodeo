@@ -7,6 +7,11 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest
 import type { EmailAttachmentRef } from '$lib/email/attachments';
 import { attachmentPreviewUrl } from '$lib/email/attachments';
 import { emailRouter } from './trpc/routers/email';
+import { settingsRouter } from './trpc/routers/settings';
+import { applicationRouter } from './trpc/routers/application';
+import { admissionsRouter } from './trpc/routers/admissions';
+import { TEMPLATE_KEYS } from '$lib/email/templates';
+import { storedAttachmentRefs } from './emailAttachments';
 import { POST, GET, DELETE } from '../../routes/admin/custom-email/attachments/+server';
 import * as local from './storage-local';
 
@@ -237,5 +242,147 @@ describe.skipIf(!databaseUrl)('email pipeline with PostgreSQL and file storage',
 				)
 			)
 		).rejects.toMatchObject({ status: 400 });
+	});
+
+	it('includes unsaved template attachments in the admin test email', async () => {
+		const ref = await upload();
+		stubDelivery();
+		await caller.sendTest({
+			template: 'accept',
+			subject: 'Draft test',
+			body: 'Draft body',
+			attachments: [ref]
+		});
+		const body = JSON.parse(fetchMock.mock.calls[0][1]!.body as string);
+		expect(body.to).toBe(admin.email);
+		expect(body.attachments).toContainEqual({
+			filename: ref.filename,
+			content_type: 'application/pdf',
+			content: pdf.toString('base64')
+		});
+	});
+
+	it.each(TEMPLATE_KEYS)(
+		'saves and sends %s attachments through its lifecycle action',
+		async (key) => {
+			const ref = await upload();
+			const settingsCaller = settingsRouter.createCaller({ prisma, user: admin });
+			const saved = await settingsCaller.updateTemplates({
+				templates: {
+					[key]: { subject: `${key} template`, body: 'See attached schedule.', attachments: [ref] }
+				}
+			});
+			const [file] = storedAttachmentRefs(saved[`${key}Attachments`]);
+			uploaded.push(file.key);
+			expect(file.key).toMatch(/^email-template-attachments\//);
+			expect((await settingsCaller.get())[`${key}Attachments`]).toEqual([file]);
+			await local.deleteObject(ref.key);
+			expect(await local.getObject(file.key)).toEqual(pdf);
+			const dates = {
+				applicationOpen: new Date(Date.now() - 86_400_000),
+				applicationDeadline: new Date(Date.now() + 86_400_000),
+				RSVPDeadline: null
+			};
+			await prisma.settings.update({ where: { id: saved.id }, data: dates });
+			const decision =
+				key === 'accept'
+					? 'ACCEPTED'
+					: key === 'reject'
+						? 'REJECTED'
+						: key === 'waitlist'
+							? 'WAITLISTED'
+							: null;
+			const user = await prisma.user.create({
+				data: {
+					name: `${key} attendee`,
+					email: `${key}@example.test`,
+					role: 'HACKER',
+					status: key === 'submit' ? 'CREATED' : 'APPLIED',
+					pendingDecision: decision,
+					activeDecision: key === 'confirm' || key === 'decline' ? 'ACCEPTED' : null
+				}
+			});
+			stubDelivery();
+			const application = applicationRouter.createCaller({ prisma, user });
+			if (key === 'submit') await application.submit();
+			else if (key === 'confirm') await application.rsvp();
+			else if (key === 'decline') await application.rsvpDecline();
+			else
+				await admissionsRouter.createCaller({ prisma, user: admin }).release({ uids: [user.uid] });
+			expect(fetchMock).toHaveBeenCalledTimes(1);
+			const body = JSON.parse(fetchMock.mock.calls[0][1]!.body as string);
+			expect(body.subject).toBe(`${key} template`);
+			expect(body.attachments).toContainEqual({
+				filename: ref.filename,
+				content_type: 'application/pdf',
+				content: pdf.toString('base64')
+			});
+			await expect(
+				DELETE(
+					event(
+						new Request('http://localhost/admin/custom-email/attachments', {
+							method: 'DELETE',
+							body: JSON.stringify({ key: file.key })
+						})
+					)
+				)
+			).rejects.toMatchObject({ status: 400 });
+			const view = await GET(event(new Request(`http://localhost${attachmentPreviewUrl(file)}`)));
+			expect(view.status).toBe(200);
+			const redacted = await settingsRouter.createCaller({ prisma, user }).get();
+			expect(redacted[`${key}Attachments`]).toEqual([]);
+			await settingsCaller.updateTemplates({
+				templates: {
+					[key]: { subject: `${key} template`, body: 'No attachment.', attachments: [] }
+				}
+			});
+			expect(await local.exists(file.key)).toBe(false);
+		}
+	);
+
+	it('retains a file until it has been removed from every template that uses it', async () => {
+		const settingsCaller = settingsRouter.createCaller({ prisma, user: admin });
+		const draft = { subject: 'Shared file', body: 'Schedule' };
+		const saved = await settingsCaller.updateTemplates({
+			templates: { accept: { ...draft, attachments: [await upload()] } }
+		});
+		const refs = storedAttachmentRefs(saved.acceptAttachments);
+		uploaded.push(refs[0].key);
+		await settingsCaller.updateTemplates({
+			templates: { confirm: { ...draft, attachments: refs } }
+		});
+		await settingsCaller.updateTemplates({ templates: { accept: { ...draft, attachments: [] } } });
+		expect(await local.exists(refs[0].key)).toBe(true);
+		await settingsCaller.updateTemplates({ templates: { confirm: { ...draft, attachments: [] } } });
+		expect(await local.exists(refs[0].key)).toBe(false);
+	});
+
+	it('refuses decision release when a saved template attachment is missing', async () => {
+		const saved = await settingsRouter.createCaller({ prisma, user: admin }).updateTemplates({
+			templates: {
+				accept: { subject: 'Acceptance', body: 'See schedule.', attachments: [await upload()] }
+			}
+		});
+		const [ref] = storedAttachmentRefs(saved.acceptAttachments);
+		uploaded.push(ref.key);
+		await local.deleteObject(ref.key);
+		const user = await prisma.user.create({
+			data: {
+				name: 'Pending attendee',
+				email: 'missing-file@example.test',
+				role: 'HACKER',
+				status: 'APPLIED',
+				pendingDecision: 'ACCEPTED'
+			}
+		});
+		stubDelivery();
+		await expect(
+			admissionsRouter.createCaller({ prisma, user: admin }).release({ uids: [user.uid] })
+		).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+		expect(await prisma.user.findUnique({ where: { uid: user.uid } })).toMatchObject({
+			pendingDecision: 'ACCEPTED',
+			activeDecision: null
+		});
+		expect(fetchMock).not.toHaveBeenCalled();
 	});
 });

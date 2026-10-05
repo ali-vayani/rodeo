@@ -24,26 +24,11 @@ import {
 	attachmentRefSchema,
 	storedAttachmentRefs,
 	MAX_EMAIL_ATTACHMENTS,
-	type EmailAttachmentRef
+	loadEmailAttachments
 } from '$lib/server/emailAttachments';
-import { getObject, storageFailureReason } from '$lib/server/storage';
+import { storageFailureReason } from '$lib/server/storage';
 import { UserStatus } from '$lib/generated/prisma/enums';
 import { logAction } from '$lib/server/log';
-
-/**
- * Storage refs resolved to sendable attachments. Bytes are read fresh each call:
- * `sendOne` runs once per recipient in its own invocation, so there is nowhere for a
- * blast-wide copy to live.
- */
-async function loadAttachments(refs: EmailAttachmentRef[]): Promise<EmailAttachment[]> {
-	return Promise.all(
-		refs.map(async (ref) => ({
-			filename: ref.filename,
-			content: await getObject(ref.key),
-			contentType: ref.contentType
-		}))
-	);
-}
 
 /**
  * Whether addresses with no account are recipients or mistakes.
@@ -256,7 +241,7 @@ export const emailRouter = router({
 			// vanished — a deleted draft, a cleaned bucket — would otherwise fail all N
 			// recipients one at a time, after the send was committed to the log.
 			try {
-				await loadAttachments(attachments);
+				await loadEmailAttachments(attachments);
 			} catch (e) {
 				const reason = storageFailureReason(e);
 				console.error(`[email] Attachment check failed before send: ${reason}`);
@@ -386,7 +371,7 @@ export const emailRouter = router({
 
 				// A vanished object fails this recipient the same way a rejected send does —
 				// recorded against the row, and the loop carries on.
-				const files = await loadAttachments(storedAttachmentRefs(log.attachments));
+				const files = await loadEmailAttachments(storedAttachmentRefs(log.attachments));
 				await sendEmail({
 					to,
 					// Reuse the key if delivery succeeded but the progress write or response failed.
@@ -518,6 +503,7 @@ export const emailRouter = router({
 		.input(
 			z.object({
 				template: z.enum(TEMPLATE_KEYS),
+				attachments: z.array(attachmentRefSchema).max(MAX_EMAIL_ATTACHMENTS).default([]),
 				subject: z.string().min(1).max(200),
 				body: z.string().min(1).max(20000)
 			})
@@ -554,7 +540,7 @@ export const emailRouter = router({
 				to,
 				subject: substituteVariables(input.subject, vars, { dropRawValues: true }),
 				body: substituteVariables(input.body, vars, { escapeValues: true }),
-				attachments
+				attachments: [...attachments, ...(await loadEmailAttachments(input.attachments))]
 			});
 
 			await logAction(ctx, {

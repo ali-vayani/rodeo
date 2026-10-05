@@ -162,6 +162,13 @@ model Settings {
   volunteerApplicationOpen   DateTime?
   volunteerApplicationDeadline DateTime?
 
+  submitAttachments Json @default("[]")
+  acceptAttachments Json @default("[]")
+  rejectAttachments Json @default("[]")
+  waitlistAttachments Json @default("[]")
+  confirmAttachments Json @default("[]")
+  declineAttachments Json @default("[]")
+
   submitTemplate      String
   submitSubject       String   @default("We received your application")
   acceptTemplate      String
