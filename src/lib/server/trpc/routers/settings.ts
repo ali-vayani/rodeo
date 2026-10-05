@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { TRPCError } from '@trpc/server';
+import { Role } from '$lib/generated/prisma/client';
 import type { EmailAttachmentRef } from '$lib/email/attachments';
 import { router, authedProcedure, adminProcedure } from '../init';
 import { TEMPLATE_KEYS, type TemplateKey } from '$lib/email/templates';
@@ -263,5 +264,97 @@ export const settingsRouter = router({
 			});
 
 			return settings;
+		}),
+
+	/** Returns all template overrides. Used by the admin template editor. */
+	getTemplateOverrides: adminProcedure.query(async ({ ctx }) => {
+		return ctx.prisma.templateOverride.findMany();
+	}),
+
+	/**
+	 * Creates or updates a role-specific template override.
+	 * Presence of an override means it is enabled; to disable, call deleteTemplateOverride.
+	 */
+	upsertTemplateOverride: adminProcedure
+		.input(
+			z.object({
+				templateKey: z.enum(TEMPLATE_KEYS),
+				role: z.nativeEnum(Role),
+				subject: z.string().min(1).max(200),
+				body: z.string().max(20000),
+				attachments: z.array(attachmentRefSchema).max(MAX_EMAIL_ATTACHMENTS).optional()
+			})
+		)
+		.mutation(async ({ ctx, input }) => {
+			const { templateKey, role, subject, body } = input;
+			const created: string[] = [];
+
+			let attachments: EmailAttachmentRef[];
+			try {
+				attachments = await persistTemplateAttachments(input.attachments ?? [], created);
+			} catch (cause) {
+				throw new TRPCError({
+					code: 'BAD_REQUEST',
+					message: 'An attachment could not be saved. Remove and re-attach it, then try again.',
+					cause
+				});
+			}
+
+			let override;
+			try {
+				override = await ctx.prisma.templateOverride.upsert({
+					where: { templateKey_role: { templateKey, role } },
+					create: { templateKey, role, subject, body, attachments },
+					update: { subject, body, attachments }
+				});
+			} catch (error) {
+				await removeEmailAttachments(created);
+				throw error;
+			}
+
+			// Clean up attachments from the previous version of this override that are no
+			// longer referenced.
+			const retained = new Set(storedAttachmentRefs(override.attachments).map((r) => r.key));
+			const staleKeys = created.filter((k) => !retained.has(k));
+			await removeEmailAttachments(staleKeys);
+
+			await logAction(ctx, {
+				action: 'settings.templateOverride.upsert',
+				summary: `Upserted the ${templateKey} template override for ${role}`,
+				metadata: { templateKey, role }
+			});
+
+			return override;
+		}),
+
+	/** Removes a role-specific override, reverting that role to the default template. */
+	deleteTemplateOverride: adminProcedure
+		.input(
+			z.object({
+				templateKey: z.enum(TEMPLATE_KEYS),
+				role: z.nativeEnum(Role)
+			})
+		)
+		.mutation(async ({ ctx, input }) => {
+			const { templateKey, role } = input;
+
+			const existing = await ctx.prisma.templateOverride.findUnique({
+				where: { templateKey_role: { templateKey, role } }
+			});
+
+			if (!existing) return;
+
+			await ctx.prisma.templateOverride.delete({
+				where: { templateKey_role: { templateKey, role } }
+			});
+
+			const keysToRemove = storedAttachmentRefs(existing.attachments).map((r) => r.key);
+			await removeEmailAttachments(keysToRemove);
+
+			await logAction(ctx, {
+				action: 'settings.templateOverride.delete',
+				summary: `Deleted the ${templateKey} template override for ${role}`,
+				metadata: { templateKey, role }
+			});
 		})
 });

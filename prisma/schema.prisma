@@ -188,6 +188,20 @@ model Settings {
   homeState           String?
 }
 
+/// A role-specific override for a lifecycle email template.
+/// Presence means the override is enabled; absence means fall back to the default.
+model TemplateOverride {
+  id          String @id @default(cuid())
+  /// One of: submit | accept | reject | waitlist | confirm | decline
+  templateKey String
+  role        Role
+  subject     String
+  body        String
+  attachments Json   @default("[]")
+
+  @@unique([templateKey, role])
+}
+
 /// A scoring-rubric row: one criterion with its levels as cells. Rows are criteria,
 /// columns are levels; criteria may have different numbers of levels. Each applicant
 /// role has its own rubric — a criterion belongs to exactly one.

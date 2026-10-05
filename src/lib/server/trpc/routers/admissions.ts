@@ -9,7 +9,7 @@ import { loadEmailAttachments } from '$lib/server/emailAttachments';
 import { buildEmailPersonalization } from '$lib/server/wallet/email-block';
 import { templateBlockers } from '$lib/email/variables';
 import { emailSettings } from '$lib/server/settings';
-import { emailTemplate } from '$lib/server/emailTemplates';
+import { resolveTemplate } from '$lib/server/emailTemplates';
 import { CLAIM_TTL_MS } from '$lib/admissions/lock';
 import { effectiveDecision } from '$lib/admissions/decision';
 import { MAX_SCORE, MIN_SCORE } from '$lib/admissions/score';
@@ -812,22 +812,36 @@ export const admissionsRouter = router({
 
 			// Defaults on an unconfigured install, so a release never decides fates silently.
 			const mail = emailSettings(settings);
-			const templateMap: Record<string, ReturnType<typeof emailTemplate>> = {
-				[DecisionStatus.ACCEPTED]: emailTemplate(mail, 'accept'),
-				[DecisionStatus.REJECTED]: emailTemplate(mail, 'reject'),
-				[DecisionStatus.WAITLISTED]: emailTemplate(mail, 'waitlist'),
-				[DecisionStatus.PENDING]: { subject: '', body: '' }
-			};
 
-			// Before the transaction, deliberately. Releasing is irreversible, so a template
-			// that cannot be rendered has to stop the batch while stopping it is still free —
-			// skipping the send afterwards would leave accepted applicants decided and
-			// unmailed, which is the one outcome worse than not releasing.
+			// Load overrides for all three decision templates up front.
+			const decisionKeys = ['accept', 'reject', 'waitlist'] as const;
+			const allOverrides = await ctx.prisma.templateOverride.findMany({
+				where: { templateKey: { in: [...decisionKeys] } }
+			});
+
+			// Composite cache key: `${decision}:${role}` for overrides, `${decision}:default`
+			// for the default template. Built before the transaction so attachment or blocker
+			// errors abort while the release is still reversible.
 			const templateFiles = new Map<string, EmailAttachment[]>();
-			for (const decision of new Set(users.map((u) => u.pendingDecision))) {
-				if (!decision) continue;
-				const template = templateMap[decision];
-				if (!template?.body) continue;
+
+			// Collect the unique (decision, role) pairs we'll actually need.
+			const decisionKeyMap: Record<string, 'accept' | 'reject' | 'waitlist'> = {
+				[DecisionStatus.ACCEPTED]: 'accept',
+				[DecisionStatus.REJECTED]: 'reject',
+				[DecisionStatus.WAITLISTED]: 'waitlist'
+			};
+			const needed = new Set(
+				users
+					.filter((u) => u.pendingDecision && u.pendingDecision !== DecisionStatus.PENDING)
+					.map((u) => `${u.pendingDecision}:${u.role}`)
+			);
+
+			for (const combo of needed) {
+				const [decision, role] = combo.split(':') as [DecisionStatus, Role];
+				const key = decisionKeyMap[decision];
+				if (!key) continue;
+				const template = resolveTemplate(mail, allOverrides, key, role as Role);
+				if (!template.body) continue;
 				const blocked = templateBlockers([template.subject, template.body], mail);
 				if (blocked) {
 					throw new TRPCError({
@@ -836,7 +850,7 @@ export const admissionsRouter = router({
 					});
 				}
 				try {
-					templateFiles.set(decision, await loadEmailAttachments(template.attachmentRefs ?? []));
+					templateFiles.set(combo, await loadEmailAttachments(template.attachmentRefs ?? []));
 				} catch (cause) {
 					throw new TRPCError({
 						code: 'BAD_REQUEST',
@@ -877,9 +891,12 @@ export const admissionsRouter = router({
 			const releasedUids = new Set(swaps.flat().map((r) => r.uid));
 			const releasedUsers = users.filter((u) => releasedUids.has(u.uid));
 
-			const recipients = releasedUsers.filter(
-				(u) => u.pendingDecision && templateMap[u.pendingDecision].body
-			);
+			const recipients = releasedUsers.filter((u) => {
+				if (!u.pendingDecision) return false;
+				const key = decisionKeyMap[u.pendingDecision];
+				if (!key) return false;
+				return resolveTemplate(mail, allOverrides, key, u.role).body;
+			});
 			const emailsAttempted = recipients.length;
 
 			const results = await Promise.allSettled(
@@ -887,12 +904,13 @@ export const admissionsRouter = router({
 					// Raw row, not `mail`: the wallet gate must fail closed on an unconfigured
 					// install. See buildEmailPersonalization.
 					const { vars, attachments } = await buildEmailPersonalization(u, settings);
-					const template = templateMap[u.pendingDecision!];
+					const key = decisionKeyMap[u.pendingDecision!]!;
+					const template = resolveTemplate(mail, allOverrides, key, u.role);
 					return sendTemplatedEmail(
 						u.email,
 						{ subject: template.subject, body: template.body },
 						vars,
-						[...attachments, ...(templateFiles.get(u.pendingDecision!) ?? [])]
+						[...attachments, ...(templateFiles.get(`${u.pendingDecision}:${u.role}`) ?? [])]
 					);
 				})
 			);

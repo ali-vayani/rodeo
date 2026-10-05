@@ -40,6 +40,7 @@ beforeEach(() => {
 	// `list` folds the blacklist to flag applicants; default to empty so tests that are
 	// about filtering don't each have to say they aren't about the blacklist.
 	db.blacklist.findMany.mockResolvedValue([] as never);
+	db.templateOverride.findMany.mockResolvedValue([] as never);
 });
 
 afterEach(() => {
