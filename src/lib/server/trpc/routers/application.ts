@@ -12,7 +12,8 @@ import { isAnswered } from '$lib/questions/isAnswered';
 import { sendTemplatedEmail } from '$lib/server/email';
 import { buildEmailPersonalization } from '$lib/server/wallet/email-block';
 import { templateBlockers } from '$lib/email/variables';
-import { emailSettings, emailTemplate } from '$lib/server/settings';
+import { emailSettings } from '$lib/server/settings';
+import { emailTemplate } from '$lib/server/emailTemplates';
 import { formatDateLong } from '$lib/format';
 
 /**
