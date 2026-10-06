@@ -31,30 +31,33 @@ describe('user.me', () => {
 });
 
 describe('user.updateName', () => {
-	it('updates only the caller and keeps the linked application answer in sync', async () => {
-		const caller = createTestCaller(db, hackerUser);
-		db.question.findMany.mockResolvedValue([{ id: 'name-question' }] as never);
-		db.user.update.mockResolvedValue({ name: 'New Name' } as never);
-		db.applicationResponse.updateMany.mockResolvedValue({ count: 1 });
-		db.$transaction.mockResolvedValue([{ name: 'New Name' }, { count: 1 }] as never);
+	it.each(Object.values(Role))(
+		'allows %s to update only their own name and linked answer',
+		async (role) => {
+			const caller = createTestCaller(db, { ...hackerUser, role });
+			db.question.findMany.mockResolvedValue([{ id: 'name-question' }] as never);
+			db.user.update.mockResolvedValue({ name: 'New Name' } as never);
+			db.applicationResponse.updateMany.mockResolvedValue({ count: 1 });
+			db.$transaction.mockResolvedValue([{ name: 'New Name' }, { count: 1 }] as never);
 
-		const result = await caller.user.updateName({ name: '  New Name  ' });
+			const result = await caller.user.updateName({ name: '  New Name  ' });
 
-		expect(result).toEqual({ name: 'New Name' });
-		expect(db.question.findMany).toHaveBeenCalledWith({
-			where: { linkedField: LinkedField.NAME },
-			select: { id: true }
-		});
-		expect(db.user.update).toHaveBeenCalledWith({
-			where: { uid: hackerUser.uid },
-			data: { name: 'New Name' },
-			select: { name: true }
-		});
-		expect(db.applicationResponse.updateMany).toHaveBeenCalledWith({
-			where: { userId: hackerUser.uid, questionId: { in: ['name-question'] } },
-			data: { value: 'New Name' }
-		});
-	});
+			expect(result).toEqual({ name: 'New Name' });
+			expect(db.question.findMany).toHaveBeenCalledWith({
+				where: { linkedField: LinkedField.NAME },
+				select: { id: true }
+			});
+			expect(db.user.update).toHaveBeenCalledWith({
+				where: { uid: hackerUser.uid },
+				data: { name: 'New Name' },
+				select: { name: true }
+			});
+			expect(db.applicationResponse.updateMany).toHaveBeenCalledWith({
+				where: { userId: hackerUser.uid, questionId: { in: ['name-question'] } },
+				data: { value: 'New Name' }
+			});
+		}
+	);
 
 	it('rejects empty and overlong names', async () => {
 		const caller = createTestCaller(db, hackerUser);

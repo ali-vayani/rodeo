@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { untrack } from 'svelte';
+	import NameEditor from '$lib/components/account/NameEditor.svelte';
 	import { Badge } from '$lib/components/ui';
 	import { formatDate, humanizeEnum, initials } from '$lib/format';
 
@@ -8,13 +10,9 @@
 		/** null only if the session vanished between the hook and the load. */
 		me: { name: string; email: string; role: string; createdAt: Date | string } | null;
 	} = $props();
+	let name = $state(untrack(() => me?.name ?? ''));
 </script>
 
-<!--
-	Read-only by design. Name and email come from the Google identity that signed
-	in, and role is granted from /admin/users by someone else — an editable field
-	here would either be a lie or a privilege-escalation form.
--->
 <div class="max-w-[560px]">
 	{#if !me}
 		<p class="m-0 text-[13px] text-muted-foreground italic">Not signed in.</p>
@@ -24,11 +22,10 @@
 				class="flex size-12 shrink-0 items-center justify-center rounded-full bg-muted font-mono text-md font-medium text-foreground-secondary"
 				aria-hidden="true"
 			>
-				{initials(me.name)}
+				{initials(name)}
 			</div>
-			<div class="min-w-0">
-				<div class="truncate text-[15px] font-semibold text-primary">{me.name}</div>
-				<div class="truncate text-[13px] text-muted-foreground">{me.email}</div>
+			<div class="min-w-0 flex-1">
+				<NameEditor bind:name email={me.email} nameClass="text-md font-semibold text-primary" />
 			</div>
 		</div>
 
