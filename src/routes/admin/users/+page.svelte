@@ -568,14 +568,6 @@
 					{formatDate(selectedUser.createdAt)}
 				</div>
 			</div>
-			<div>
-				<div class="mb-1 text-2xs font-bold tracking-eyebrow text-muted-foreground uppercase">
-					UID
-				</div>
-				<div class="font-mono text-xs break-all text-muted-foreground">
-					{selectedUser.uid}
-				</div>
-			</div>
 		</div>
 
 		<!-- Role. Radios, not checkboxes: roles are mutually exclusive, so picking a second
