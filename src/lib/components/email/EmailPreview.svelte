@@ -6,6 +6,7 @@
 	 * has no concrete recipient, so it keeps the placeholder samples.
 	 */
 	export type PreviewAs = {
+		uid?: string;
 		name: string;
 		email: string;
 		/** No User row: `{{name}}` is the nameless-recipient fallback, not their name. */
@@ -20,6 +21,7 @@
 
 <script lang="ts">
 	import { untrack } from 'svelte';
+	import { createClient } from '$lib/trpc/client';
 	import { tokenizeTemplate, SAMPLE_VARS, type TemplateSegment } from '$lib/email/variables';
 
 	let {
@@ -62,6 +64,38 @@
 	let subjectSegments = $derived(tokenizeTemplate(debouncedSubject, vars));
 	let bodySegments = $derived(tokenizeTemplate(debouncedBody, vars));
 
+	let checkIn = $state<{ html: string; filenames: string[] } | null>(null);
+	let checkInError = $state('');
+	let hasCheckIn = $derived(
+		bodySegments.some(
+			(segment) =>
+				segment.type === 'known' && segment.key === 'hacker_qr_code' && segment.value !== ''
+		)
+	);
+
+	$effect(() => {
+		const uid = previewAs?.uid;
+		const needed = hasCheckIn;
+		let cancelled = false;
+		checkIn = null;
+		checkInError = '';
+		if (needed) {
+			createClient()
+				.email.previewCheckIn.query({ uid })
+				.then(
+					(result) => {
+						if (!cancelled) checkIn = result;
+					},
+					() => {
+						if (!cancelled) checkInError = 'Could not load the QR attachment preview.';
+					}
+				);
+		}
+		return () => {
+			cancelled = true;
+		};
+	});
+
 	let unknownKeys = $derived([
 		...new Set(
 			[...subjectSegments, ...bodySegments]
@@ -82,8 +116,22 @@
 	leave an empty highlight pill the real email doesn't have.
 -->
 {#snippet part(
-	seg: TemplateSegment
-)}{#if seg.type === 'text'}{seg.value}{:else if seg.value === ''}{:else}<span
+	seg: TemplateSegment,
+	includeAttachments = false
+)}{#if seg.type === 'text'}{seg.value}{:else if seg.value === ''}{:else if seg.type === 'known' && seg.key === 'hacker_qr_code'}{#if includeAttachments}{#if checkInError}<span
+					class="text-sm text-warning-700">{checkInError}</span
+				>{:else if checkIn && !checkIn.html}<span class="text-xs text-foreground-secondary"
+					>This recipient receives no QR attachment.</span
+				>{:else if checkIn}<iframe
+					title="Check-in QR attachment preview"
+					srcdoc={checkIn.html}
+					sandbox=""
+					class="h-96 w-full border-0 bg-white"
+				></iframe><span class="text-xs text-foreground-secondary"
+					>Inline attachment: {checkIn.filenames.join(', ')}{#if !previewAs?.uid}. Sample only; each
+						attendee receives their own QR code.{/if}</span
+				>{:else}<span class="text-sm text-foreground-secondary">Loading QR attachment...</span
+				>{/if}{/if}{:else}<span
 			class="rounded-md px-1 py-0.5 text-sm {seg.type === 'known'
 				? 'bg-info-50 text-info-700'
 				: 'bg-warning-50 text-warning-700'}">{seg.value}</span
@@ -159,7 +207,7 @@
 			{#if debouncedBody === ''}
 				<span class="text-foreground-secondary italic">Nothing to preview yet.</span>
 			{:else}<!--
-				-->{#each bodySegments as seg, i (i)}{@render part(seg)}{/each}{/if}
+				-->{#each bodySegments as seg, i (i)}{@render part(seg, true)}{/each}{/if}
 		</div>
 	</div>
 </div>

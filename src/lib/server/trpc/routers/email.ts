@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { createHash } from 'node:crypto';
 import { TRPCError } from '@trpc/server';
 import { router, adminProcedure } from '../init';
 import { sendEmail, type EmailAttachment } from '$lib/server/email';
@@ -18,7 +19,14 @@ import {
 	templateBlockers,
 	SAMPLE_VARS
 } from '$lib/email/variables';
-import { buildEmailPersonalization } from '$lib/server/wallet/email-block';
+import { buildCheckInPassBlock, buildEmailPersonalization } from '$lib/server/wallet/email-block';
+import {
+	attachmentRefSchema,
+	storedAttachmentRefs,
+	MAX_EMAIL_ATTACHMENTS,
+	loadEmailAttachments
+} from '$lib/server/emailAttachments';
+import { storageFailureReason } from '$lib/server/storage';
 import { UserStatus } from '$lib/generated/prisma/enums';
 import { logAction } from '$lib/server/log';
 
@@ -104,6 +112,26 @@ export const emailRouter = router({
 			};
 		}),
 
+	previewCheckIn: adminProcedure
+		.input(z.object({ uid: z.string().optional() }))
+		.query(async ({ ctx, input }) => {
+			const user = input.uid
+				? await ctx.prisma.user.findUnique({ where: { uid: input.uid } })
+				: { uid: 'preview', name: 'Sample attendee', status: UserStatus.CONFIRMED };
+			if (!user) {
+				throw new TRPCError({ code: 'NOT_FOUND', message: 'That recipient no longer exists.' });
+			}
+			const block = await buildCheckInPassBlock(user, await ctx.prisma.settings.findFirst());
+			let html = block.html;
+			for (const attachment of block.attachments) {
+				html = html.replace(
+					`cid:${attachment.contentId}`,
+					`data:${attachment.contentType};base64,${attachment.content.toString('base64')}`
+				);
+			}
+			return { html, filenames: block.attachments.map((attachment) => attachment.filename) };
+		}),
+
 	/**
 	 * The recipient-independent variables, already rendered to the exact strings a send
 	 * will substitute.
@@ -149,11 +177,14 @@ export const emailRouter = router({
 				// `filters: {}` matches everyone, so a client bug or a replay that lost the filters
 				// would otherwise blast the whole database.
 				expectedCount: z.number().int().min(0),
-				allowExternal: allowExternalSchema
+				allowExternal: allowExternalSchema,
+				// Refs from the compose-step upload endpoint. The schema only passes keys that
+				// endpoint mints, so a send cannot attach an arbitrary bucket object.
+				attachments: z.array(attachmentRefSchema).max(MAX_EMAIL_ATTACHMENTS).default([])
 			})
 		)
 		.mutation(async ({ ctx, input }) => {
-			const { subject, body, filters, expectedCount, allowExternal } = input;
+			const { subject, body, filters, expectedCount, allowExternal, attachments } = input;
 
 			// Before any query, and whatever the toggle says. The page strips malformed entries,
 			// so reaching this means a caller bypassed it — refuse rather than mail the rest.
@@ -206,6 +237,20 @@ export const emailRouter = router({
 				return { sendId: null, recipients: [], users: 0, external: 0 };
 			}
 
+			// Read every attachment once before anyone is mailed. A ref whose object has
+			// vanished — a deleted draft, a cleaned bucket — would otherwise fail all N
+			// recipients one at a time, after the send was committed to the log.
+			try {
+				await loadEmailAttachments(attachments);
+			} catch (e) {
+				const reason = storageFailureReason(e);
+				console.error(`[email] Attachment check failed before send: ${reason}`);
+				throw new TRPCError({
+					code: 'BAD_REQUEST',
+					message: 'An attachment could not be read. Remove and re-attach it, then try again.'
+				});
+			}
+
 			// One identifier per recipient, in the spelling EmailLog already stores: a uid for
 			// an account holder, a prefixed address for everyone else. `sendOne` refuses
 			// anything absent from this list, which is what stops it being an open relay.
@@ -216,8 +261,10 @@ export const emailRouter = router({
 
 			// Stores the raw template, not a rendered copy: one row covers N recipients, and
 			// `sendOne` reads the body back from here so it cannot be rewritten mid-send.
+			// Attachment refs ride on the row for the same reason — a resumed send must
+			// attach the same files, whatever the client now claims.
 			const emailLog = await ctx.prisma.emailLog.create({
-				data: { subject, body, userIds: recipients }
+				data: { subject, body, userIds: recipients, attachments, sent: [], failed: [], errors: {} }
 			});
 
 			const reached =
@@ -238,7 +285,8 @@ export const emailRouter = router({
 					users: users.length,
 					external: external.length,
 					externalAllowed: allowExternal,
-					subject
+					subject,
+					...(attachments.length ? { attachments: attachments.map((a) => a.filename) } : {})
 				}
 			});
 
@@ -284,41 +332,55 @@ export const emailRouter = router({
 			// Idempotent by recipient, so a resumed or retried loop cannot put a second copy
 			// in an inbox that already has one.
 			if (log.sent.includes(input.recipient)) {
-				return { ok: true, skipped: true, error: null, retryable: false };
+				return { ok: true, skipped: true, error: null, retryable: false, qrAttached: null };
 			}
 
 			const settings = await ctx.prisma.settings.findFirst();
 
-			let to: string;
-			let vars: Record<string, string>;
-			let attachments: EmailAttachment[] = [];
-
-			if (input.recipient.startsWith(EXTERNAL_RECIPIENT_PREFIX)) {
-				to = input.recipient.slice(EXTERNAL_RECIPIENT_PREFIX.length);
-				vars = buildExternalTemplateVars(emailSettings(settings));
-			} else {
-				const user = await ctx.prisma.user.findUnique({ where: { uid: input.recipient } });
-				if (!user) {
-					throw new TRPCError({
-						code: 'NOT_FOUND',
-						message: 'That recipient no longer has an account.'
-					});
-				}
-				to = user.email;
-				// Raw row, not `emailSettings(...)`: the check-in block embeds this hacker's own
-				// QR as an inline attachment and its wallet gate must fail closed on an
-				// unconfigured install. See buildEmailPersonalization.
-				({ vars, attachments } = await buildEmailPersonalization(user, settings));
+			const external = input.recipient.startsWith(EXTERNAL_RECIPIENT_PREFIX);
+			const user = external
+				? null
+				: await ctx.prisma.user.findUnique({ where: { uid: input.recipient } });
+			if (!external && !user) {
+				throw new TRPCError({
+					code: 'NOT_FOUND',
+					message: 'That recipient no longer has an account.'
+				});
 			}
+			const to = external ? input.recipient.slice(EXTERNAL_RECIPIENT_PREFIX.length) : user!.email;
+
+			// Whether this message carried the check-in block. Null when the recipient could
+			// never have one (external address); the page tallies `false` into the "QR left
+			// out" notice after the blast.
+			let qrAttached: boolean | null = external ? null : false;
 
 			try {
+				let vars: Record<string, string>;
+				let attachments: EmailAttachment[] = [];
+				if (user) {
+					// Built inside the try: a QR that fails to encode must land on the row like a
+					// rejected send, not escape as a thrown error the page retries blindly.
+					// Raw row, not `emailSettings(...)`: the check-in block embeds this hacker's own
+					// QR as an inline attachment and its wallet gate must fail closed on an
+					// unconfigured install. See buildEmailPersonalization.
+					({ vars, attachments } = await buildEmailPersonalization(user, settings));
+					qrAttached = attachments.length > 0;
+				} else {
+					vars = buildExternalTemplateVars(emailSettings(settings));
+				}
+
+				// A vanished object fails this recipient the same way a rejected send does —
+				// recorded against the row, and the loop carries on.
+				const files = await loadEmailAttachments(storedAttachmentRefs(log.attachments));
 				await sendEmail({
 					to,
+					// Reuse the key if delivery succeeded but the progress write or response failed.
+					idempotencyKey: `custom/${log.id}/${createHash('sha256').update(input.recipient).digest('hex')}`,
 					// `dropRawValues` in the subject because it is plain text; `escapeValues` in
 					// the body because it is rendered to HTML. Same split as sendTemplatedEmail.
 					subject: substituteVariables(log.subject, vars, { dropRawValues: true }),
 					body: substituteVariables(log.body, vars, { escapeValues: true }),
-					attachments
+					attachments: [...attachments, ...files]
 				});
 			} catch (error) {
 				const message = error instanceof Error ? error.message : String(error);
@@ -340,7 +402,8 @@ export const emailRouter = router({
 					error: message,
 					// Resend names its rate-limit rejection `rate_limit_exceeded`, which
 					// `sendEmail` carries through into the message.
-					retryable: /rate_limit|rate limit|429/i.test(message)
+					retryable: /rate_limit|rate limit|429/i.test(message),
+					qrAttached: null
 				};
 			}
 
@@ -363,7 +426,7 @@ export const emailRouter = router({
 				}
 			});
 
-			return { ok: true, skipped: false, error: null, retryable: false };
+			return { ok: true, skipped: false, error: null, retryable: false, qrAttached };
 		}),
 
 	/**
@@ -387,6 +450,7 @@ export const emailRouter = router({
 			const sent = log.sent.length;
 			const failed = log.failed.length;
 			const total = log.userIds.length;
+			const pending = total - new Set([...log.sent, ...log.failed]).size;
 
 			// One line per distinct error, biggest group first, so 475 identical quota
 			// rejections read as one reason rather than 475.
@@ -411,19 +475,21 @@ export const emailRouter = router({
 				summary:
 					`Sent a custom email "${log.subject}" to ${sent} of ${total} ` +
 					`${total === 1 ? 'recipient' : 'recipients'}` +
-					(failed > 0 ? ` — ${failed} failed to send${reasons}` : ''),
+					(failed > 0 ? ` — ${failed} failed to send${reasons}` : '') +
+					(pending > 0 ? `; ${pending} unconfirmed` : ''),
 				target: { id: log.id, label: log.subject },
 				metadata: {
 					recipients: total,
 					sent,
 					failed,
+					pending,
 					// Flattened for LogMetadata; the summary shows the top three, this holds all.
 					failures: failures.map((f) => `${f.count}× ${f.message}`),
 					subject: log.subject
 				}
 			});
 
-			return { sent, failed, total, failures };
+			return { sent, failed, pending, total, failures };
 		}),
 
 	/**
@@ -437,6 +503,7 @@ export const emailRouter = router({
 		.input(
 			z.object({
 				template: z.enum(TEMPLATE_KEYS),
+				attachments: z.array(attachmentRefSchema).max(MAX_EMAIL_ATTACHMENTS).default([]),
 				subject: z.string().min(1).max(200),
 				body: z.string().min(1).max(20000)
 			})
@@ -473,7 +540,7 @@ export const emailRouter = router({
 				to,
 				subject: substituteVariables(input.subject, vars, { dropRawValues: true }),
 				body: substituteVariables(input.body, vars, { escapeValues: true }),
-				attachments
+				attachments: [...attachments, ...(await loadEmailAttachments(input.attachments))]
 			});
 
 			await logAction(ctx, {
@@ -482,7 +549,9 @@ export const emailRouter = router({
 				metadata: { template: input.template, to }
 			});
 
-			return { to };
+			// False only when no Settings row exists yet; the page says so when the draft
+			// uses `{{hacker_qr_code}}`, instead of mailing a QR-less test with no explanation.
+			return { to, qrAttached: attachments.length > 0 };
 		}),
 
 	getLogs: adminProcedure

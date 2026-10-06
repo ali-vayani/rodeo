@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { onMount, onDestroy } from 'svelte';
 	import type { Role, DecisionStatus } from '$lib/generated/prisma/enums';
 	import { errorMessage, isTRPCErrorCode } from '$lib/ui/errors';
 	import { fly } from 'svelte/transition';
@@ -20,12 +21,17 @@
 	import { rubricForRole, rubricMaxScore, type CriterionDraft } from '$lib/admissions/rubric';
 	import { APPLICANT_ROLES } from '$lib/admissions/roles';
 	import { facetParams } from '$lib/admin/filters';
-	import { isEngaged, linkedFacetKey, type FacetState } from '$lib/facets';
+	import { isAdmin } from '$lib/auth/permissions';
+	import { isEngaged, type FacetState } from '$lib/facets';
 	import FacetFilters from '$lib/components/admin/FacetFilters.svelte';
 
 	let { data }: { data: PageData } = $props();
 
 	const trpc = createClient();
+
+	// Organizers get the Review tab only: deciding in bulk, releasing decisions and
+	// editing rubrics are admin acts, and the server rejects them regardless.
+	const fullAccess = $derived(isAdmin(data.role));
 
 	type ListResult = Awaited<ReturnType<typeof trpc.admissions.list.query>>;
 	type Applicant = ListResult['applicants'][number];
@@ -56,6 +62,14 @@
 	let search = $state('');
 	let scoreFilter = $state<ScoreFilter>('unscored');
 	let stats = $state<StatsResult>(DEFAULT_STATS);
+
+	/** Review queue pagination — this is the list that can run into the thousands. */
+	const APPLICANTS_PAGE_SIZE = 100;
+	let applicantsPage = $state(1);
+	let applicantsTotal = $state(0);
+	let applicantsTotalPages = $derived(
+		Math.max(1, Math.ceil(applicantsTotal / APPLICANTS_PAGE_SIZE))
+	);
 
 	let rubric = $state<Awaited<ReturnType<typeof trpc.rubric.get.query>>>([]);
 	let showRubricEditor = $state(false);
@@ -111,27 +125,6 @@
 		Object.values(decideFacetSelection).filter((s) => isEngaged(s)).length
 	);
 
-	/** The Name facet, which the did-you-mean chips drive directly. See `onSuggestionSelect`. */
-	const NAME_FACET = linkedFacetKey('NAME');
-
-	/** What the last list query did with the search term — drives the "did you mean" strip. */
-	let searchInfo = $state<ListResult['search']>({
-		names: [],
-		fuzzy: false,
-		capped: false,
-		exact: 0
-	});
-
-	/**
-	 * Whether the current `name` selection came from a suggestion chip rather than the
-	 * filter panel.
-	 *
-	 * A chip sets a filter the organizer cannot see without opening the panel, so typing a
-	 * fresh search term while one is active would silently intersect the two and return
-	 * nothing. Panel selections are visible and are left alone.
-	 */
-	let nameFromSuggestion = $state(false);
-
 	let loading = $state(false);
 	let scoreLoading = $state(false);
 	let sidebarCollapsed = $state(false);
@@ -182,7 +175,7 @@
 			const takenName = applicants.find((a) => a.uid === uid)?.name ?? 'That applicant';
 			// Optimistically mark it held so the next pick can't land on it again.
 			presenceMap = { ...presenceMap, [uid]: takenBy ?? 'Another admin' };
-			rollToNextUnlocked(
+			void rollToNextUnlocked(
 				applicants.findIndex((a) => a.uid === uid),
 				uid,
 				takenName,
@@ -195,13 +188,23 @@
 	// scrolling inside the detail pane's own scroll container counts.
 	$effect(() => (paneEl ? session.observePane(paneEl) : undefined));
 
-	function rollToNextUnlocked(
+	async function rollToNextUnlocked(
 		fromIndex: number,
 		excludeUid: string | null,
 		takenName?: string,
 		takenBy?: string | null
 	) {
-		const uid = pickNextUnlocked(applicants, presenceMap, fromIndex, excludeUid);
+		let uid = pickNextUnlocked(applicants, presenceMap, fromIndex, excludeUid);
+
+		// `applicants` is only the current page, not the whole queue — exhausting it
+		// locally (everyone decided, or everyone left is locked) doesn't mean the queue
+		// is actually empty. Refetch before reporting "done" so a fuller page 2 doesn't
+		// get reported as "no more applicants".
+		if (!uid) {
+			await loadApplicants();
+			uid = pickNextUnlocked(applicants, presenceMap, 0, excludeUid);
+		}
+
 		if (!uid) {
 			selectedUid = null;
 			showToast(
@@ -222,17 +225,15 @@
 		selectedUid = uid;
 	}
 
-	$effect(() => {
+	onMount(() => {
 		async function initialLoad() {
 			try {
-				const [listResult, fetchedFacets, fetchedStats, fetchedRubric] = await Promise.all([
-					trpc.admissions.list.query({ noDecision: true, scored: false }),
+				const [, fetchedFacets, fetchedStats, fetchedRubric] = await Promise.all([
+					loadApplicants(),
 					trpc.filters.facets.query(),
 					trpc.admissions.stats.query(),
 					trpc.rubric.get.query()
 				]);
-				applicants = listResult.applicants;
-				searchInfo = listResult.search;
 				reviewFacets = fetchedFacets;
 				decideFacets = fetchedFacets;
 				stats = fetchedStats;
@@ -277,7 +278,11 @@
 		};
 	});
 
+	let applicantsRequest = 0;
+
 	async function loadApplicants() {
+		clearTimeout(searchTimer);
+		const request = ++applicantsRequest;
 		loading = true;
 		try {
 			const result = await trpc.admissions.list.query({
@@ -287,19 +292,36 @@
 				scored: scoreFilter === 'all' ? undefined : scoreFilter === 'scored',
 				roles: roleTab !== 'ALL' ? [roleTab] : undefined,
 				search: search.trim() || undefined,
+				page: applicantsPage,
+				pageSize: APPLICANTS_PAGE_SIZE,
 				// `facetParams` omits an untouched or cleared facet's key rather than sending `[]`.
 				// The predicate reads an omitted key as "no filter" and an empty array as "match
 				// nobody", so forwarding `{ values: [] }` verbatim would empty the queue the moment
 				// someone ticked a box and unticked it again.
 				...facetParams(facetSelection)
 			});
+			if (request !== applicantsRequest) return;
 			applicants = result.applicants;
-			searchInfo = result.search;
+			applicantsTotal = result.total;
 		} catch (e) {
-			showToast(errorMessage(e, 'Failed to load applicants'), 'error');
+			if (request === applicantsRequest)
+				showToast(errorMessage(e, 'Failed to load applicants'), 'error');
 		} finally {
-			loading = false;
+			if (request === applicantsRequest) loading = false;
 		}
+	}
+
+	/** Any filter/search/role change invalidates the current page — it may not exist in the new result set. */
+	function loadApplicantsFromStart() {
+		applicantsPage = 1;
+		loadApplicants();
+	}
+
+	function goToApplicantsPage(next: number) {
+		if (next < 1 || next > applicantsTotalPages || next === applicantsPage) return;
+		applicantsPage = next;
+		selectedUid = null;
+		loadApplicants();
 	}
 
 	async function loadDecideFacets() {
@@ -389,16 +411,16 @@
 
 	function onRoleTabChange(tab: Role | 'ALL') {
 		roleTab = tab;
-		loadApplicants();
+		loadApplicantsFromStart();
 	}
 
 	let searchTimer: ReturnType<typeof setTimeout>;
 	function onSearchInput(value: string) {
 		search = value;
-		if (nameFromSuggestion) {
-			nameFromSuggestion = false;
-			facetSelection = { ...facetSelection, [NAME_FACET]: { values: [] } };
-		}
+		applicantsPage = 1;
+		applicantsRequest++;
+		loading = true;
+
 		clearTimeout(searchTimer);
 		searchTimer = setTimeout(loadApplicants, 400);
 	}
@@ -407,8 +429,7 @@
 	// immediately — the 400ms debounce exists for keystrokes, which these are not.
 	function onFacetsChange(next: FacetState) {
 		facetSelection = next;
-		nameFromSuggestion = false;
-		loadApplicants();
+		loadApplicantsFromStart();
 	}
 
 	function onScoreFilterChange(next: ScoreFilter) {
@@ -416,21 +437,13 @@
 		// The selected applicant is very likely about to leave the list, and leaving the
 		// detail pane on them would strand their claim until it went stale.
 		selectedUid = null;
-		loadApplicants();
+		loadApplicantsFromStart();
 	}
 
-	/**
-	 * Narrow to one suggested name, or click the active chip to back out of it.
-	 *
-	 * Sets the `names` filter rather than rewriting the search box. The typed term is what
-	 * produced the suggestions, so replacing it would delete the strip that offered them.
-	 */
-	function onSuggestionSelect(name: string) {
-		const next = facetSelection[NAME_FACET]?.values?.includes(name) ? [] : [name];
-		facetSelection = { ...facetSelection, [NAME_FACET]: { values: next } };
-		nameFromSuggestion = next.length > 0;
-		loadApplicants();
-	}
+	onDestroy(() => {
+		clearTimeout(searchTimer);
+		applicantsRequest++;
+	});
 
 	async function handleSaveScore(score: number, notes: string) {
 		if (!selectedUid || !session.canDecide) return;
@@ -594,7 +607,7 @@
 			if (selectedUid !== uid) return;
 
 			applicants = applicants.filter((a) => a.uid !== uid);
-			rollToNextUnlocked(idx, uid);
+			await rollToNextUnlocked(idx, uid);
 			showToast(`Set to ${decision.toLowerCase()}`);
 			void refreshStats();
 		} catch (e) {
@@ -618,6 +631,7 @@
 		if (!applicant) return;
 		tab = 'review';
 		scoreFilter = 'scored';
+		applicantsPage = 1;
 		// Shown immediately; the refetch below replaces the list around it.
 		applicants = [applicant];
 		selectedUid = uid;
@@ -828,9 +842,11 @@
 				{stats.waitlisted} waitlisted | {pendingCount} pending release
 			</span>
 		</div>
-		<Button size="sm" onclick={() => (showRubricEditor = true)}>
-			{rubric.length > 0 ? 'Edit rubrics' : 'Set up rubrics'}
-		</Button>
+		{#if fullAccess}
+			<Button size="sm" onclick={() => (showRubricEditor = true)}>
+				{rubric.length > 0 ? 'Edit rubrics' : 'Set up rubrics'}
+			</Button>
+		{/if}
 	</div>
 
 	<!--
@@ -845,13 +861,17 @@
 		<Tabs
 			tabs={[
 				{ value: 'review', label: 'Review', badge: stats.unscored },
-				{
-					value: 'decide',
-					label: 'Pending Decisions',
-					badge: rankedUnfilteredTotal ?? stats.scored + stats.pending
-				},
-				{ value: 'reconsider', label: 'Reconsider' },
-				{ value: 'stats', label: 'Stats' }
+				...(fullAccess
+					? [
+							{
+								value: 'decide',
+								label: 'Pending Decisions',
+								badge: rankedUnfilteredTotal ?? stats.scored + stats.pending
+							},
+							{ value: 'reconsider', label: 'Reconsider' },
+							{ value: 'stats', label: 'Stats' }
+						]
+					: [])
 			]}
 			active={tab}
 			onChange={onTabChange}
@@ -876,8 +896,6 @@
 					facets={reviewFacets}
 					{facetSelection}
 					{onFacetsChange}
-					{searchInfo}
-					{onSuggestionSelect}
 					{loading}
 					collapsed={sidebarCollapsed}
 					onToggleCollapse={() => (sidebarCollapsed = !sidebarCollapsed)}
@@ -885,6 +903,10 @@
 					selfClaimUid={session.phase === 'owned' || session.phase === 'warning'
 						? selectedUid
 						: null}
+					page={applicantsPage}
+					totalPages={applicantsTotalPages}
+					total={applicantsTotal}
+					onPageChange={goToApplicantsPage}
 				/>
 
 				<!-- Right detail pane. Below md it replaces the list when an applicant is selected,

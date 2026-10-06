@@ -54,8 +54,10 @@ export const adminProcedure = t.procedure.use(({ ctx, next }) => {
 });
 
 /**
- * ADMIN or ORGANIZER. Only for endpoints that expose no per-person data: scanning, the
- * schedule, and the dashboard's anonymous aggregates. See $lib/auth/permissions.
+ * ADMIN or ORGANIZER. For endpoints organizers need to run the event: scanning, the
+ * schedule, the dashboard's anonymous aggregates, and the admissions review flow.
+ * Irreversible or event-wide admissions acts (release, bulk decisions, rubric edits)
+ * stay on `adminProcedure`. See $lib/auth/permissions.
  */
 export const portalProcedure = t.procedure.use(({ ctx, next }) => {
 	if (!ctx.user) throw new TRPCError({ code: 'UNAUTHORIZED' });

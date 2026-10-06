@@ -2,12 +2,14 @@ import { z } from 'zod';
 import { TRPCError } from '@trpc/server';
 import type { Prisma } from '$lib/generated/prisma/client';
 import { Role, DecisionStatus, UserStatus } from '$lib/generated/prisma/client';
-import { router, adminProcedure } from '../init';
+import { router, adminProcedure, portalProcedure } from '../init';
 import { logAction } from '$lib/server/log';
-import { sendTemplatedEmail } from '$lib/server/email';
+import { sendTemplatedEmail, type EmailAttachment } from '$lib/server/email';
+import { loadEmailAttachments } from '$lib/server/emailAttachments';
 import { buildEmailPersonalization } from '$lib/server/wallet/email-block';
 import { templateBlockers } from '$lib/email/variables';
 import { emailSettings } from '$lib/server/settings';
+import { resolveTemplate } from '$lib/server/emailTemplates';
 import { CLAIM_TTL_MS } from '$lib/admissions/lock';
 import { effectiveDecision } from '$lib/admissions/decision';
 import { MAX_SCORE, MIN_SCORE } from '$lib/admissions/score';
@@ -82,12 +84,15 @@ export const admissionsRouter = router({
 	 * - sort: 'recent' | 'score' — `score` ranks highest-first for the decision pass
 	 * - search: string — name or email, with a typo-tolerant fallback
 	 * - names/universities/years, answers/states — see $lib/server/recipients; `[]` matches nobody
+	 * - page/pageSize — omitted entirely, this returns every match (the ranked decision
+	 *   pass needs the whole queue for bulk release); given, it paginates and adds `total`
 	 *
 	 * Outputs:
-	 * - { applicants, search } — `search` reports the fallback so a misspelling doesn't
-	 *   look like an empty queue
+	 * - { applicants, search, total, page, pageSize } — `search` reports the fallback so a
+	 *   misspelling doesn't look like an empty queue; `total` reflects every matching row,
+	 *   not just the ones on this page
 	 */
-	list: adminProcedure
+	list: portalProcedure
 		.input(
 			z.object({
 				roles: z.array(z.nativeEnum(Role)).optional(),
@@ -99,16 +104,24 @@ export const admissionsRouter = router({
 				scoredOrPending: z.boolean().optional(),
 				sort: z.enum(['recent', 'score']).default('recent'),
 				search: z.string().optional(),
+				page: z.number().int().min(1).optional(),
+				pageSize: z.number().int().min(1).max(500).optional(),
 				...linkedFieldFilterSchema.shape,
 				...answerFilterSchema.shape
 			})
 		)
 		.query(async ({ ctx, input }) => {
 			const { roles, decision, noDecision, scored, pending, scoredOrPending, sort, search } = input;
+			const pageSize = input.pageSize;
+			const page = input.page ?? 1;
+			// Paginating is opt-in: a caller that never sends `pageSize` gets the full match
+			// set back, exactly like before this was added.
+			const paginate = pageSize !== undefined;
 
 			// The "All" tab sends no role filter; staff must still stay out.
 			const applicantRoles = narrowToApplicants(roles);
-			if (applicantRoles.length === 0) return { applicants: [], search: NO_EXPANSION };
+			if (applicantRoles.length === 0)
+				return { applicants: [], search: NO_EXPANSION, total: 0, page, pageSize: pageSize ?? 0 };
 
 			// Stacked under AND: the decision and search filters each contribute an `OR`, and
 			// spreading both into one object literal silently drops the first.
@@ -143,39 +156,48 @@ export const admissionsRouter = router({
 			const searchClause = searchCondition(search, expansion);
 			if (searchClause) conditions.push(searchClause);
 
-			const users = await ctx.prisma.user.findMany({
-				where: { AND: conditions },
-				include: {
-					application: { include: { question: true } },
-					scorer: { select: { name: true } },
-					// So reopening the rubric modal shows the cells behind a saved score.
-					rubricSelections: { select: { criterionId: true, levelId: true } }
-				},
-				// Ties break on earliest applied so the ranked list is stable between reloads.
-				orderBy:
-					sort === 'score'
-						? [{ score: { sort: 'desc', nulls: 'last' } }, { createdAt: 'asc' }]
-						: { createdAt: 'desc' }
-			});
+			const where: Prisma.UserWhereInput = { AND: conditions };
 
-			// Fuzzy name matching can't be a WHERE clause; the table is a few hundred rows.
-			const blacklist = prepareBlacklist(
-				await ctx.prisma.blacklist.findMany({
+			const [users, total, blacklist] = await Promise.all([
+				ctx.prisma.user.findMany({
+					where,
+					include: {
+						application: { include: { question: true } },
+						scorer: { select: { name: true } },
+						// So reopening the rubric modal shows the cells behind a saved score.
+						rubricSelections: { select: { criterionId: true, levelId: true } }
+					},
+					// Ties break on earliest applied so the ranked list is stable between reloads.
+					orderBy:
+						sort === 'score'
+							? [{ score: { sort: 'desc', nulls: 'last' } }, { createdAt: 'asc' }]
+							: { createdAt: 'desc' },
+					...(paginate ? { skip: (page - 1) * pageSize, take: pageSize } : {})
+				}),
+				// Only the page changed, not the match count, so this is skipped when the
+				// caller isn't paginating and already has every row in `users`.
+				paginate ? ctx.prisma.user.count({ where }) : null,
+				// Fuzzy name matching can't be a WHERE clause; the table is a few hundred rows.
+				ctx.prisma.blacklist.findMany({
 					select: { firstName: true, lastName: true, email: true }
 				})
-			);
+			]);
+			const preparedBlacklist = prepareBlacklist(blacklist);
 
 			return {
 				applicants: users.map((user) => ({
 					...user,
-					blacklistMatch: matchApplicant(user, blacklist)
+					blacklistMatch: matchApplicant(user, preparedBlacklist)
 				})),
-				search: expansion
+				search: expansion,
+				total: total ?? users.length,
+				page,
+				pageSize: pageSize ?? users.length
 			};
 		}),
 
 	/** All fresh (non-stale) claims — clients poll this to see who is reviewing what. */
-	presence: adminProcedure.query(async ({ ctx }) => {
+	presence: portalProcedure.query(async ({ ctx }) => {
 		const now = Date.now();
 		const staleThreshold = new Date(now - CLAIM_TTL_MS);
 		const rows = await ctx.prisma.user.findMany({
@@ -206,7 +228,7 @@ export const admissionsRouter = router({
 	 * Unaudited, as are `releaseClaim` and `heartbeat`: a reviewer generates these every
 	 * few seconds and the volume would bury real decisions.
 	 */
-	claim: adminProcedure.input(z.object({ uid: z.string() })).mutation(async ({ ctx, input }) => {
+	claim: portalProcedure.input(z.object({ uid: z.string() })).mutation(async ({ ctx, input }) => {
 		const now = new Date();
 
 		// One claim per admin: release any other applicant they have open.
@@ -236,7 +258,7 @@ export const admissionsRouter = router({
 	}),
 
 	/** No-op if the claim is held by someone else. */
-	releaseClaim: adminProcedure
+	releaseClaim: portalProcedure
 		.input(z.object({ uid: z.string() }))
 		.mutation(async ({ ctx, input }) => {
 			await ctx.prisma.user.updateMany({
@@ -247,7 +269,7 @@ export const admissionsRouter = router({
 		}),
 
 	/** Extends the lock. `refreshed: false` means another admin has taken the claim. */
-	heartbeat: adminProcedure
+	heartbeat: portalProcedure
 		.input(z.object({ uid: z.string() }))
 		.mutation(async ({ ctx, input }) => {
 			const result = await ctx.prisma.user.updateMany({
@@ -267,7 +289,7 @@ export const admissionsRouter = router({
 	 * - TRPCError CONFLICT — another admin holds a fresh claim
 	 * - TRPCError NOT_FOUND — no such applicant
 	 */
-	setDecision: adminProcedure
+	setDecision: portalProcedure
 		.input(
 			z.object({
 				uid: z.string(),
@@ -333,7 +355,7 @@ export const admissionsRouter = router({
 	 * Clears a pending decision and its attribution. A released `activeDecision` is
 	 * permanent. Same claim CAS as `setDecision`.
 	 */
-	clearDecision: adminProcedure
+	clearDecision: portalProcedure
 		.input(z.object({ uid: z.string() }))
 		.mutation(async ({ ctx, input }) => {
 			try {
@@ -380,7 +402,7 @@ export const admissionsRouter = router({
 	 * Inputs:
 	 * - notes: string — shown to every admin during the decision pass; blank clears
 	 */
-	setScore: adminProcedure
+	setScore: portalProcedure
 		.input(
 			z.object({
 				uid: z.string(),
@@ -440,7 +462,7 @@ export const admissionsRouter = router({
 	 * - TRPCError BAD_REQUEST — no rubric for the applicant's role, or the selections
 	 *   don't cover that rubric exactly (also catches a rubric edited mid-review)
 	 */
-	setRubricScore: adminProcedure
+	setRubricScore: portalProcedure
 		.input(
 			z.object({
 				uid: z.string(),
@@ -605,7 +627,7 @@ export const admissionsRouter = router({
 	 * Headline counts for the admissions page. Decisions are counted at their effective
 	 * value (pending if set, else released), matching what the page's list shows.
 	 */
-	stats: adminProcedure.query(async ({ ctx }) => {
+	stats: portalProcedure.query(async ({ ctx }) => {
 		const applicants = { role: { in: APPLICANT_ROLES }, ...SUBMITTED };
 
 		const [rows, scored, unscored] = await Promise.all([
@@ -790,30 +812,36 @@ export const admissionsRouter = router({
 
 			// Defaults on an unconfigured install, so a release never decides fates silently.
 			const mail = emailSettings(settings);
-			const templateMap: Record<string, { subject: string; body: string }> = {
-				[DecisionStatus.ACCEPTED]: {
-					subject: mail.acceptSubject,
-					body: mail.acceptTemplate
-				},
-				[DecisionStatus.REJECTED]: {
-					subject: mail.rejectSubject,
-					body: mail.rejectTemplate
-				},
-				[DecisionStatus.WAITLISTED]: {
-					subject: mail.waitlistSubject,
-					body: mail.waitlistTemplate
-				},
-				[DecisionStatus.PENDING]: { subject: '', body: '' }
-			};
 
-			// Before the transaction, deliberately. Releasing is irreversible, so a template
-			// that cannot be rendered has to stop the batch while stopping it is still free —
-			// skipping the send afterwards would leave accepted applicants decided and
-			// unmailed, which is the one outcome worse than not releasing.
-			for (const decision of new Set(users.map((u) => u.pendingDecision))) {
-				if (!decision) continue;
-				const template = templateMap[decision];
-				if (!template?.body) continue;
+			// Load overrides for all three decision templates up front.
+			const decisionKeys = ['accept', 'reject', 'waitlist'] as const;
+			const allOverrides = await ctx.prisma.templateOverride.findMany({
+				where: { templateKey: { in: [...decisionKeys] } }
+			});
+
+			// Composite cache key: `${decision}:${role}` for overrides, `${decision}:default`
+			// for the default template. Built before the transaction so attachment or blocker
+			// errors abort while the release is still reversible.
+			const templateFiles = new Map<string, EmailAttachment[]>();
+
+			// Collect the unique (decision, role) pairs we'll actually need.
+			const decisionKeyMap: Record<string, 'accept' | 'reject' | 'waitlist'> = {
+				[DecisionStatus.ACCEPTED]: 'accept',
+				[DecisionStatus.REJECTED]: 'reject',
+				[DecisionStatus.WAITLISTED]: 'waitlist'
+			};
+			const needed = new Set(
+				users
+					.filter((u) => u.pendingDecision && u.pendingDecision !== DecisionStatus.PENDING)
+					.map((u) => `${u.pendingDecision}:${u.role}`)
+			);
+
+			for (const combo of needed) {
+				const [decision, role] = combo.split(':') as [DecisionStatus, Role];
+				const key = decisionKeyMap[decision];
+				if (!key) continue;
+				const template = resolveTemplate(mail, allOverrides, key, role as Role);
+				if (!template.body) continue;
 				const blocked = templateBlockers([template.subject, template.body], mail);
 				if (blocked) {
 					throw new TRPCError({
@@ -821,30 +849,54 @@ export const admissionsRouter = router({
 						message: `The ${decision.toLowerCase()} email cannot be sent. ${blocked.message}`
 					});
 				}
+				try {
+					templateFiles.set(combo, await loadEmailAttachments(template.attachmentRefs ?? []));
+				} catch (cause) {
+					throw new TRPCError({
+						code: 'BAD_REQUEST',
+						message: `An attachment for the ${decision.toLowerCase()} template could not be read. Re-attach it before releasing decisions.`,
+						cause
+					});
+				}
 			}
 
-			// CAS on the value read above: a decision changed since then is dropped from the
-			// batch rather than emailed as a stale, irreversible outcome.
+			// CAS on the value read above: a decision changed since then falls out of its
+			// group's `pendingDecision` filter and is dropped from the batch rather than
+			// emailed as a stale, irreversible outcome. Grouped by decision value — one
+			// statement per value, not per user — because per-user statements expire the
+			// 5s transaction timeout above ~1000 decisions and release nothing (#38).
+			const releaseGroups = new Map<DecisionStatus, string[]>();
+			for (const u of users) {
+				releaseGroups.set(u.pendingDecision!, [
+					...(releaseGroups.get(u.pendingDecision!) ?? []),
+					u.uid
+				]);
+			}
 			const swaps = await ctx.prisma.$transaction(
-				users.map((u) =>
-					ctx.prisma.user.updateMany({
-						where: { uid: u.uid, pendingDecision: u.pendingDecision },
+				[...releaseGroups.entries()].map(([decision, uids]) =>
+					ctx.prisma.user.updateManyAndReturn({
+						where: { uid: { in: uids }, pendingDecision: decision },
 						data: {
-							activeDecision: u.pendingDecision,
+							activeDecision: decision,
 							pendingDecision: null,
 							// `decidedBy`/`decidedAt` untouched: release publishes other admins' work.
 							claimedBy: null,
 							claimedAt: null
-						}
+						},
+						select: { uid: true }
 					})
 				)
 			);
 
-			const releasedUsers = users.filter((_, i) => swaps[i].count === 1);
+			const releasedUids = new Set(swaps.flat().map((r) => r.uid));
+			const releasedUsers = users.filter((u) => releasedUids.has(u.uid));
 
-			const recipients = releasedUsers.filter(
-				(u) => u.pendingDecision && templateMap[u.pendingDecision].body
-			);
+			const recipients = releasedUsers.filter((u) => {
+				if (!u.pendingDecision) return false;
+				const key = decisionKeyMap[u.pendingDecision];
+				if (!key) return false;
+				return resolveTemplate(mail, allOverrides, key, u.role).body;
+			});
 			const emailsAttempted = recipients.length;
 
 			const results = await Promise.allSettled(
@@ -852,7 +904,14 @@ export const admissionsRouter = router({
 					// Raw row, not `mail`: the wallet gate must fail closed on an unconfigured
 					// install. See buildEmailPersonalization.
 					const { vars, attachments } = await buildEmailPersonalization(u, settings);
-					return sendTemplatedEmail(u.email, templateMap[u.pendingDecision!], vars, attachments);
+					const key = decisionKeyMap[u.pendingDecision!]!;
+					const template = resolveTemplate(mail, allOverrides, key, u.role);
+					return sendTemplatedEmail(
+						u.email,
+						{ subject: template.subject, body: template.body },
+						vars,
+						[...attachments, ...(templateFiles.get(`${u.pendingDecision}:${u.role}`) ?? [])]
+					);
 				})
 			);
 			const emailsFailed = results.filter((r) => r.status === 'rejected').length;
