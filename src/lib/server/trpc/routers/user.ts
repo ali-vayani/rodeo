@@ -5,12 +5,16 @@ import {
 	UserStatus,
 	DecisionStatus,
 	InvitationStatus,
-	LinkedField
+	LinkedField,
+	QuestionType
 } from '$lib/generated/prisma/client';
 import { router, authedProcedure, adminProcedure } from '../init';
 import { resolveRecipientWhere, recipientFilterSchema } from '$lib/server/recipients';
 import { logAction, valueOrNone } from '$lib/server/log';
 import { TEAM_MEMBER_SELECT, SELF_USER_SELECT } from '$lib/server/trpc/selects';
+import { decodeMultiSelect } from '$lib/questions/multiSelect';
+import { USER_EXPORT_COLUMNS, type UserExportColumn } from '$lib/admin/exportColumns';
+import type { User } from '$lib/generated/prisma/client';
 
 /**
  * One CSV cell, always quoted, with formula injection neutralised. Excel and Sheets
@@ -23,6 +27,53 @@ function csvCell(value: string | null | undefined): string {
 	const neutralized = /^[=+\-@\t\r]/.test(raw) ? `'${raw}` : raw;
 	return `"${neutralized.replace(/"/g, '""')}"`;
 }
+
+/**
+ * An answer as it should read in a spreadsheet cell. A MULTI_SELECT answer stores JSON
+ * internally (see `$lib/questions/multiSelect`), which is not what an admin should see
+ * in an export — comma-joined here to match how `ApplicationResponses.svelte` already
+ * displays a multi-select answer to a reviewer.
+ */
+function formatAnswer(value: string, type: QuestionType): string {
+	return type === QuestionType.MULTI_SELECT ? decodeMultiSelect(value).join(', ') : value;
+}
+
+/** One base `User` column's value, in export order. */
+function baseColumnValue(column: UserExportColumn, u: User): string {
+	switch (column) {
+		case 'uid':
+			return u.uid;
+		case 'name':
+			return u.name;
+		case 'email':
+			return u.email;
+		case 'role':
+			return u.role;
+		case 'status':
+			return u.status;
+		case 'pendingDecision':
+			return u.pendingDecision ?? '';
+		case 'activeDecision':
+			return u.activeDecision ?? '';
+		case 'teamId':
+			return u.teamId ?? '';
+		case 'createdAt':
+			return u.createdAt.toISOString();
+	}
+}
+
+/**
+ * `filters`, `columns` and `questionIds` follow the same convention `recipientFilterSchema`
+ * already uses elsewhere: omitted means "everything", `[]` means "none of this kind" —
+ * never "everything" by accident.
+ */
+const exportCsvInput = z
+	.object({
+		filters: recipientFilterSchema.optional(),
+		columns: z.array(z.enum(USER_EXPORT_COLUMNS)).optional(),
+		questionIds: z.array(z.string()).optional()
+	})
+	.optional();
 
 export const userRouter = router({
 	me: authedProcedure.query(async ({ ctx }) => {
@@ -280,34 +331,67 @@ export const userRouter = router({
 			return user;
 		}),
 
-	exportCsv: adminProcedure.query(async ({ ctx }) => {
-		const users = await ctx.prisma.user.findMany({
-			orderBy: { createdAt: 'desc' }
-		});
+	/**
+	 * `input` omitted exports every user, every base column and every question — the
+	 * unfiltered, everything export. Supplied:
+	 * - `filters` is the same recipient filter `user.list` and `email.sendCustom` already
+	 *   share, so "export selected criteria" exports exactly the rows the admin has
+	 *   filtered the Users page down to.
+	 * - `columns` and `questionIds` let the admin drop columns they don't want in the file
+	 *   rather than deleting them from a full export afterwards.
+	 */
+	exportCsv: adminProcedure.input(exportCsvInput).query(async ({ ctx, input }) => {
+		const { where } = await resolveRecipientWhere(ctx.prisma, input?.filters ?? {});
 
-		// A query, but logged: it hands an admin every applicant's name and email in a file.
+		const [users, allQuestions] = await Promise.all([
+			ctx.prisma.user.findMany({
+				where,
+				orderBy: { createdAt: 'desc' },
+				include: { application: true }
+			}),
+			ctx.prisma.question.findMany({ orderBy: { order: 'asc' } })
+		]);
+
+		// Filtered against the canonical lists, not used as-is, so a column lands in its
+		// usual place and a stale/unknown id is silently dropped rather than crashing.
+		const columns =
+			input?.columns !== undefined
+				? USER_EXPORT_COLUMNS.filter((c) => input.columns!.includes(c))
+				: USER_EXPORT_COLUMNS;
+		const questions =
+			input?.questionIds !== undefined
+				? allQuestions.filter((q) => input.questionIds!.includes(q.id))
+				: allQuestions;
+
+		// A query, but logged: it hands an admin every applicant's name, email and
+		// application answers in a file.
 		await logAction(ctx, {
 			action: 'user.export',
-			summary: `Exported the user list (${users.length} users)`,
-			metadata: { count: users.length }
+			summary: input?.filters
+				? `Exported a filtered user list (${users.length} users)`
+				: `Exported the user list (${users.length} users)`,
+			metadata: {
+				count: users.length,
+				filtered: input?.filters !== undefined,
+				columns: columns.length,
+				questions: questions.length
+			}
 		});
 
-		const header = 'uid,name,email,role,status,pendingDecision,activeDecision,teamId,createdAt';
-		const rows = users.map((u) =>
-			[
-				u.uid,
-				u.name,
-				u.email,
-				u.role,
-				u.status,
-				u.pendingDecision ?? '',
-				u.activeDecision ?? '',
-				u.teamId ?? '',
-				u.createdAt.toISOString()
+		const header = [...columns, ...questions.map((q) => q.title)].map(csvCell).join(',');
+
+		const rows = users.map((u) => {
+			const answers = new Map((u.application ?? []).map((a) => [a.questionId, a.value]));
+			return [
+				...columns.map((c) => baseColumnValue(c, u)),
+				...questions.map((q) => {
+					const value = answers.get(q.id);
+					return value === undefined ? '' : formatAnswer(value, q.type);
+				})
 			]
 				.map(csvCell)
-				.join(',')
-		);
+				.join(',');
+		});
 
 		return [header, ...rows].join('\n');
 	})

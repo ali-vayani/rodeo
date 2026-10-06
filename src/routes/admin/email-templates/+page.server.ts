@@ -7,7 +7,10 @@ const createCaller = createCallerFactory(appRouter);
 
 export const load: PageServerLoad = async (event) => {
 	const caller = createCaller(createContext(event));
-	const settings = await caller.settings.get();
+	const [settings, overrides] = await Promise.all([
+		caller.settings.get(),
+		caller.settings.getTemplateOverrides()
+	]);
 	// Prefills the Send Test recipient. hooks.server.ts guards /admin/*, so a user is present.
-	return { settings, adminEmail: event.locals.user?.email ?? '' };
+	return { settings, overrides, adminEmail: event.locals.user?.email ?? '' };
 };

@@ -33,7 +33,7 @@ const MILESTONES: { key: MilestoneKey; label: string; detail: string }[] = [
 	},
 	{
 		key: 'close',
-		label: 'Applications close',
+		label: 'Hacker Applications close',
 		detail: 'Applications are no longer accepted after this deadline.'
 	},
 	{

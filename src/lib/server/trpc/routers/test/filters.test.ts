@@ -511,12 +511,9 @@ describe('filters.facets — the state facet', () => {
 });
 
 describe('filters.facets — permissions', () => {
-	it('is refused to an organizer, like every other per-person surface', async () => {
-		// Aggregate counts of a named applicant pool are still applicant data, and at a count
-		// of one, literally so. None of the pages that use this are in ORGANIZER_SECTIONS.
-		await expect(createTestCaller(db, organizerUser).filters.facets()).rejects.toMatchObject({
-			code: 'FORBIDDEN'
-		});
+	it('is allowed to an organizer, who filters the admissions review queue with it', async () => {
+		db.question.findMany.mockResolvedValue([]);
+		await expect(createTestCaller(db, organizerUser).filters.facets()).resolves.toBeDefined();
 	});
 
 	it('is refused to a hacker', async () => {
