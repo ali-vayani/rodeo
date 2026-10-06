@@ -15,7 +15,7 @@ import { error, json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { QuestionType } from '$lib/generated/prisma/client';
 import { prisma } from '$lib/server/db';
-import { applicationWindowState } from '$lib/application/window';
+import { roleApplicationWindowState } from '$lib/application/window';
 import { applicationFileKey, checkUpload, uploadRefusal } from '$lib/server/applicationFiles';
 import {
 	putObject,
@@ -45,7 +45,18 @@ export const POST: RequestHandler = async ({ params, locals, request }) => {
 			select: { id: true, type: true, targetRole: true }
 		}),
 		prisma.settings.findFirst({
-			select: { applicationOpen: true, applicationDeadline: true }
+			select: {
+				applicationOpen: true,
+				applicationDeadline: true,
+				hackerApplicationOpen: true,
+				hackerApplicationDeadline: true,
+				mentorApplicationOpen: true,
+				mentorApplicationDeadline: true,
+				judgeApplicationOpen: true,
+				judgeApplicationDeadline: true,
+				volunteerApplicationOpen: true,
+				volunteerApplicationDeadline: true
+			}
 		})
 	]);
 
@@ -53,7 +64,7 @@ export const POST: RequestHandler = async ({ params, locals, request }) => {
 	if (question.type !== QuestionType.FILE) error(400, 'That question does not take a file.');
 
 	// The same function the form renders from, so the two cannot drift.
-	const windowState = applicationWindowState(settings);
+	const windowState = roleApplicationWindowState(settings, user.role);
 	if (windowState !== 'open') {
 		// Logged rather than merely refused: the form disables itself in this window, so a
 		// request that arrives anyway means a stale tab or a client-side gate that failed.

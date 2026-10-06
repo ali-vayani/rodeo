@@ -16,6 +16,8 @@
 		"format": "prettier --write .",
 		"test:unit": "vitest",
 		"test": "npm run test:unit -- --run",
+		"email:retention": "tsx scripts/configure-email-attachment-retention.ts",
+		"test:email-pipeline": "vitest run src/lib/server/emailPipeline.integration.test.ts",
 		"db:generate": "prisma generate",
 		"db:migrate": "prisma migrate dev",
 		"db:push": "prisma db push && prisma generate",

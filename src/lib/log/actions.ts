@@ -43,6 +43,12 @@ export const LOG_ACTIONS = [
 	// Settings
 	{ key: 'settings.update', label: 'Settings updated', group: 'Settings' },
 	{ key: 'settings.templates.update', label: 'Email templates updated', group: 'Settings' },
+	{ key: 'settings.templateOverride.upsert', label: 'Template override saved', group: 'Settings' },
+	{
+		key: 'settings.templateOverride.delete',
+		label: 'Template override removed',
+		group: 'Settings'
+	},
 
 	// Schedule
 	{ key: 'schedule.create', label: 'Event added', group: 'Schedule' },
