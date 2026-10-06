@@ -932,6 +932,8 @@
 					facets={reviewFacets}
 					{facetSelection}
 					{onFacetsChange}
+					{searchInfo}
+					{onSuggestionSelect}
 					{loading}
 					collapsed={sidebarCollapsed}
 					onToggleCollapse={() => (sidebarCollapsed = !sidebarCollapsed)}

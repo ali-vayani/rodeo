@@ -119,6 +119,7 @@
 	}
 
 	let roleFilter = $state<string | null>(null);
+	let decisionFilter = $state<'all' | 'undecided' | 'ACCEPTED' | 'WAITLISTED' | 'REJECTED'>('all');
 
 	// Fixed to APPLICANT_ROLES so tabs don't disappear when server-side filters narrow the results.
 	const availableRoles = APPLICANT_ROLES;
@@ -129,6 +130,12 @@
 	let rows = $derived(
 		applicants
 			.filter((a) => !roleFilter || a.role === roleFilter)
+			.filter((a) => {
+				if (decisionFilter === 'all') return true;
+				if (decisionFilter === 'undecided')
+					return a.pendingDecision === null || a.pendingDecision === 'PENDING';
+				return a.pendingDecision === decisionFilter;
+			})
 			.map((applicant, i) => ({ ...applicant, rank: i + 1 }))
 	);
 	type Row = (typeof rows)[number];
@@ -237,6 +244,21 @@
 					       {roleFilter === role ? 'bg-primary text-white' : 'text-foreground-secondary hover:bg-muted'}"
 			>
 				{humanizeEnum(role)}
+			</button>
+		{/each}
+	</div>
+
+	<div class="flex w-full items-center gap-1">
+		{#each [{ value: 'all', label: 'All' }, { value: 'undecided', label: 'Undecided' }, { value: 'ACCEPTED', label: 'Accepted' }, { value: 'WAITLISTED', label: 'Waitlisted' }, { value: 'REJECTED', label: 'Rejected' }] as opt (opt.value)}
+			<button
+				type="button"
+				onclick={() => (decisionFilter = opt.value as typeof decisionFilter)}
+				class="rounded px-2 py-0.5 text-xs font-medium transition-colors
+				       {decisionFilter === opt.value
+					? 'bg-primary text-white'
+					: 'text-foreground-secondary hover:bg-muted'}"
+			>
+				{opt.label}
 			</button>
 		{/each}
 	</div>
