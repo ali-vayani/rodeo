@@ -69,6 +69,8 @@ export const recipientFilterSchema = z.object({
 	statuses: z.array(z.nativeEnum(UserStatus)).optional(),
 	decisions: z.array(z.nativeEnum(DecisionStatus)).optional(),
 	includeNoDecision: z.boolean().optional(),
+	pendingDecisions: z.array(z.nativeEnum(DecisionStatus)).optional(),
+	includeNoPending: z.boolean().optional(),
 	/** Explicit recipient list, intersected with any other filters. `[]` means nobody. */
 	emails: z.array(z.string()).optional(),
 	...linkedFieldFilterSchema.shape,
@@ -225,10 +227,12 @@ export async function expandSearch(
 	const query = normalizeName(term);
 	if (!query) return { ...NO_EXPANSION, exact };
 
-	// One `SELECT DISTINCT name` then a Jaro-Winkler pass in memory: ~3ms of SQL and ~2ms
-	// of scoring at 1,865 users, both linear in the distinct-name count. If this ever shows
-	// up in a profile, hand `scope` to this query too or reach for a trigram index.
-	const rows = await prisma.user.findMany({ select: { name: true }, distinct: ['name'] });
+	// Apply the active filters before ranking and capping suggestions.
+	const rows = await prisma.user.findMany({
+		where: whereFromConditions(scope),
+		select: { name: true },
+		distinct: ['name']
+	});
 
 	// Measured against the caller's raw term because that is the string
 	// `searchCondition` puts in `contains`.
@@ -466,7 +470,15 @@ export function whereFromConditions(
  * the expansion that probe decides.
  */
 export function recipientConditions(filters: RecipientFilters): Prisma.UserWhereInput[] {
-	const { roles, statuses, decisions, includeNoDecision, emails } = filters;
+	const {
+		roles,
+		statuses,
+		decisions,
+		includeNoDecision,
+		pendingDecisions,
+		includeNoPending,
+		emails
+	} = filters;
 
 	const conditions: Prisma.UserWhereInput[] = [];
 
@@ -484,7 +496,8 @@ export function recipientConditions(filters: RecipientFilters): Prisma.UserWhere
 	if (roles?.length) conditions.push({ role: { in: roles } });
 	if (statuses?.length) conditions.push({ status: { in: statuses } });
 
-	// Reads activeDecision — never pendingDecision, which is unreleased.
+	// Reads activeDecision — never pendingDecision, which has its own filter below so a
+	// send to "accepted" can never quietly include people who haven't been told yet.
 	if (decisions !== undefined || includeNoDecision !== undefined) {
 		const decisionOr: Prisma.UserWhereInput[] = [];
 		if (decisions?.length) decisionOr.push({ activeDecision: { in: decisions } });
@@ -492,6 +505,20 @@ export function recipientConditions(filters: RecipientFilters): Prisma.UserWhere
 
 		if (decisionOr.length === 1) conditions.push(decisionOr[0]);
 		else if (decisionOr.length > 1) conditions.push({ OR: decisionOr });
+		else conditions.push({ uid: MATCH_NOTHING });
+	}
+
+	// A literal PENDING reads as "none": it is the enum's starting value and
+	// `setDecision` refuses to write it.
+	if (pendingDecisions !== undefined || includeNoPending !== undefined) {
+		const pendingOr: Prisma.UserWhereInput[] = [];
+		if (pendingDecisions?.length) pendingOr.push({ pendingDecision: { in: pendingDecisions } });
+		if (includeNoPending) {
+			pendingOr.push({ pendingDecision: null }, { pendingDecision: DecisionStatus.PENDING });
+		}
+
+		if (pendingOr.length === 1) conditions.push(pendingOr[0]);
+		else if (pendingOr.length > 1) conditions.push({ OR: pendingOr });
 		else conditions.push({ uid: MATCH_NOTHING });
 	}
 

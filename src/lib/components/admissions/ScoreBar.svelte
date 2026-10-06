@@ -2,6 +2,8 @@
 	import { untrack } from 'svelte';
 	import type { ReviewPhase } from '$lib/admissions/reviewSession.svelte';
 	import { MAX_SCORE, MIN_SCORE, isValidScore } from '$lib/admissions/score';
+	import { rubricComplete, rubricSubtotal, type RubricCriterion } from '$lib/admissions/rubric';
+	import RubricScoreModal from './RubricScoreModal.svelte';
 	import { Button, Textarea } from '$lib/components/ui';
 	import { formatDate } from '$lib/format';
 
@@ -10,8 +12,15 @@
 		notes,
 		scorerName,
 		scoredAt,
+		rubric,
+		savedSelections,
+		savedDelta,
+		maxScore,
 		onSave,
+		onSaveRubric,
+		onDecide,
 		saving,
+		deciding,
 		hasPrev,
 		hasNext,
 		onPrev,
@@ -25,8 +34,22 @@
 		notes: string | null;
 		scorerName: string | null;
 		scoredAt: Date | string | null;
+		/** Empty when none is defined — the plain 0–20 input takes over. */
+		rubric: RubricCriterion[];
+		savedSelections: Array<{ criterionId: string; levelId: string }>;
+		savedDelta: number | null;
+		/** Rubric max when one exists, MAX_SCORE otherwise — the parent decides. */
+		maxScore: number;
 		onSave: (score: number, notes: string) => void;
+		onSaveRubric: (
+			selections: Array<{ criterionId: string; levelId: string }>,
+			delta: number,
+			notes: string
+		) => void;
+		/** Sets a pending decision straight from the review pane, score or no score. */
+		onDecide: (decision: 'ACCEPTED' | 'REJECTED' | 'WAITLISTED') => void;
 		saving: boolean;
+		deciding: boolean;
 		hasPrev: boolean;
 		hasNext: boolean;
 		onPrev: () => void;
@@ -45,6 +68,30 @@
 
 	let empty = $derived(scoreDraft === undefined || Number.isNaN(scoreDraft));
 	let valid = $derived(!empty && isValidScore(scoreDraft as number));
+
+	let hasRubric = $derived(rubric.length > 0);
+
+	// Rubric drafts live here, not in the modal, so closing it keeps the picks. Saved
+	// selections may reference cells a rubric edit deleted; `rubricComplete` treats
+	// those criteria as unpicked, which is exactly the freeze-totals contract.
+	let selectionDraft = $state<Record<string, string | undefined>>(
+		untrack(() => Object.fromEntries(savedSelections.map((s) => [s.criterionId, s.levelId])))
+	);
+	let deltaDraft = $state<number | undefined>(untrack(() => savedDelta ?? 0));
+	let rubricOpen = $state(false);
+
+	let rubricDone = $derived(rubricComplete(rubric, selectionDraft));
+	let rubricTotal = $derived(rubricSubtotal(rubric, selectionDraft) + (deltaDraft ?? 0));
+
+	function saveRubric() {
+		if (!rubricDone || busy) return;
+		rubricOpen = false;
+		onSaveRubric(
+			rubric.map((c) => ({ criterionId: c.id, levelId: selectionDraft[c.id] as string })),
+			deltaDraft ?? 0,
+			notesDraft
+		);
+	}
 
 	// Controls stay put but dimmed while acquiring; a read-only flash on every switch
 	// trains reviewers to click through it.
@@ -126,45 +173,109 @@
 				<Button size="sm" onclick={onNext} disabled={!hasNext || busy}>Next →</Button>
 			</div>
 
-			<div class="flex items-center gap-2.5 max-md:w-full">
-				<!-- A number field, not 21 buttons or a slider: the reviewer is on the keyboard. -->
-				<label for="score-input" class="text-xs font-semibold whitespace-nowrap text-foreground">
-					Score
-				</label>
-				<input
-					id="score-input"
-					type="number"
-					inputmode="numeric"
-					min={MIN_SCORE}
-					max={MAX_SCORE}
-					step="1"
-					bind:value={scoreDraft}
-					onkeydown={onScoreKeydown}
-					disabled={busy}
-					aria-invalid={!empty && !valid}
-					class="w-18 rounded-md border bg-card px-2.5 py-1.5 text-center font-mono text-touch
-					       tabular-nums outline-none focus-visible:shadow-ring sm:text-base
-					       {!empty && !valid ? 'border-danger-500' : 'border-border'}"
-				/>
-				<span class="font-mono text-2xs text-foreground-tertiary">/ {MAX_SCORE}</span>
-				<Button
-					variant="primary"
-					size="sm"
-					loading={saving}
-					disabled={!valid || busy}
-					onclick={save}
-					class="max-md:flex-1"
-				>
-					{hasNext ? 'Save & next' : 'Save score'}
-				</Button>
+			<div class="flex flex-wrap items-center gap-2.5 max-md:w-full">
+				<!-- Obvious calls get decided right here, score or no score; the ranked
+				     pass remains for everyone else. -->
+				<div class="flex items-center gap-1.5">
+					<Button
+						size="sm"
+						variant="primary"
+						disabled={busy || deciding}
+						onclick={() => onDecide('ACCEPTED')}
+					>
+						Accept
+					</Button>
+					<Button
+						size="sm"
+						class="border-transparent bg-warning-500 font-semibold text-white hover:bg-warning-700 active:bg-warning-700"
+						disabled={busy || deciding}
+						onclick={() => onDecide('WAITLISTED')}
+					>
+						Waitlist
+					</Button>
+					<Button
+						size="sm"
+						variant="danger"
+						disabled={busy || deciding}
+						onclick={() => onDecide('REJECTED')}
+					>
+						Reject
+					</Button>
+				</div>
+				<div aria-hidden="true" class="h-5 w-px bg-border max-md:hidden"></div>
+
+				{#if hasRubric}
+					<div class="flex items-center gap-2.5 max-md:w-full">
+						<span class="font-mono text-xs text-foreground-secondary tabular-nums">
+							{rubricDone ? rubricTotal : '—'} / {maxScore}
+						</span>
+						<Button
+							variant="primary"
+							size="sm"
+							loading={saving}
+							disabled={busy}
+							onclick={() => (rubricOpen = true)}
+							class="max-md:flex-1"
+						>
+							Score
+						</Button>
+					</div>
+				{:else}
+					<div class="flex items-center gap-2.5 max-md:w-full">
+						<!-- A number field, not 21 buttons or a slider: the reviewer is on the keyboard. -->
+						<label
+							for="score-input"
+							class="text-xs font-semibold whitespace-nowrap text-foreground"
+						>
+							Score
+						</label>
+						<input
+							id="score-input"
+							type="number"
+							inputmode="numeric"
+							min={MIN_SCORE}
+							max={MAX_SCORE}
+							step="1"
+							bind:value={scoreDraft}
+							onkeydown={onScoreKeydown}
+							disabled={busy}
+							aria-invalid={!empty && !valid}
+							class="w-18 rounded-md border bg-card px-2.5 py-1.5 text-center font-mono text-touch
+						       tabular-nums outline-none focus-visible:shadow-ring sm:text-base
+						       {!empty && !valid ? 'border-danger-500' : 'border-border'}"
+						/>
+						<span class="font-mono text-2xs text-foreground-tertiary">/ {MAX_SCORE}</span>
+						<Button
+							variant="primary"
+							size="sm"
+							loading={saving}
+							disabled={!valid || busy}
+							onclick={save}
+							class="max-md:flex-1"
+						>
+							Save score
+						</Button>
+					</div>
+				{/if}
 			</div>
 		</div>
 
 		<!-- Re-scoring overwrites attribution, so say whose number this is first. -->
 		{#if score !== null && scorerName}
 			<div class="mt-2 text-2xs text-foreground-tertiary">
-				Scored {score}/{MAX_SCORE} by {scorerName}{scoredAt ? ` · ${formatDate(scoredAt)}` : ''}
+				Scored {score}/{maxScore} by {scorerName}{scoredAt ? ` · ${formatDate(scoredAt)}` : ''}
 			</div>
 		{/if}
 	{/if}
 </div>
+
+{#if hasRubric}
+	<RubricScoreModal
+		bind:open={rubricOpen}
+		criteria={rubric}
+		bind:selections={selectionDraft}
+		bind:delta={deltaDraft}
+		{saving}
+		onSave={saveRubric}
+	/>
+{/if}

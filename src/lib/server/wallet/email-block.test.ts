@@ -114,6 +114,17 @@ describe('the wallet buttons', () => {
 		expect(attachments).toHaveLength(1);
 	});
 
+	it('latch to the event start when no RSVP deadline is set', async () => {
+		configureProviders();
+		const noDeadline = { RSVPDeadline: null, hackathonStartDate: new Date('2026-04-15') };
+
+		const before = await buildCheckInPassBlock(hacker, noDeadline, AFTER);
+		expect(before.html).not.toContain('/wallet/');
+
+		const after = await buildCheckInPassBlock(hacker, noDeadline, new Date('2026-04-16'));
+		expect(after.html).toContain('/wallet/apple');
+	});
+
 	it('are withheld when no provider is configured', async () => {
 		const { html } = await buildCheckInPassBlock(hacker, settings, AFTER);
 		expect(html).not.toContain('/wallet/');

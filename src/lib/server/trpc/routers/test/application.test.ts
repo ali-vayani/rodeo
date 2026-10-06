@@ -28,6 +28,7 @@ const { sendTemplatedEmail } = await import('$lib/server/email');
 beforeEach(() => {
 	mockReset(db);
 	vi.mocked(sendTemplatedEmail).mockClear();
+	db.templateOverride.findMany.mockResolvedValue([] as never);
 });
 
 const response = {
@@ -495,6 +496,46 @@ describe('application.rsvp', () => {
 			message: expect.stringContaining('RSVP deadline passed on')
 		});
 		expect(db.user.update).not.toHaveBeenCalled();
+	});
+
+	it('accepts an RSVP at any time when no deadline is configured', async () => {
+		// A null deadline means the event runs without one: confirmations never close.
+		const caller = createTestCaller(db, acceptedHacker);
+		db.user.findUniqueOrThrow.mockResolvedValue(acceptedHacker as never);
+		db.user.update.mockResolvedValue({
+			...acceptedHacker,
+			status: UserStatus.CONFIRMED
+		} as never);
+		db.settings.findFirst.mockResolvedValue({ ...openWindow, RSVPDeadline: null });
+
+		const result = await caller.application.rsvp();
+
+		expect(result.status).toBe(UserStatus.CONFIRMED);
+	});
+
+	it('still confirms the RSVP when the template cannot be rendered, but sends nothing', async () => {
+		// The send is dropped, never the hacker's action: nobody may be blocked from
+		// RSVPing because an organizer left {{rsvp_deadline}} in a template.
+		const caller = createTestCaller(db, acceptedHacker);
+		db.user.findUniqueOrThrow.mockResolvedValue(acceptedHacker as never);
+		db.user.update.mockResolvedValue({
+			...acceptedHacker,
+			status: UserStatus.CONFIRMED
+		} as never);
+		db.settings.findFirst.mockResolvedValue({
+			...openWindow,
+			RSVPDeadline: null,
+			confirmTemplate: 'Confirmed! RSVP by {{rsvp_deadline}}.'
+		});
+		const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+		const result = await caller.application.rsvp();
+
+		expect(result.status).toBe(UserStatus.CONFIRMED);
+		expect(sendTemplatedEmail).not.toHaveBeenCalled();
+		// Dropped silently is how this becomes a mystery; it goes to the server log.
+		expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('{{rsvp_deadline}}'));
+		errorSpy.mockRestore();
 	});
 
 	it('reports the already-RSVPd state ahead of a passed deadline', async () => {

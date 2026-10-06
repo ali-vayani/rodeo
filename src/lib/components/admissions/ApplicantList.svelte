@@ -5,7 +5,7 @@
 	import type { ScoreFilter } from '$lib/admissions/score';
 	import type { BlacklistMatch } from '$lib/blacklist/match';
 	import type { Role } from '$lib/generated/prisma/enums';
-	import { isEngaged, linkedFacetKey, type Facet, type FacetState } from '$lib/facets';
+	import { isEngaged, type Facet, type FacetState } from '$lib/facets';
 
 	let {
 		applicants,
@@ -20,13 +20,15 @@
 		facets,
 		facetSelection,
 		onFacetsChange,
-		searchInfo,
-		onSuggestionSelect,
 		loading,
 		collapsed,
 		onToggleCollapse,
 		presenceMap,
-		selfClaimUid
+		selfClaimUid,
+		page,
+		totalPages,
+		total,
+		onPageChange
 	}: {
 		applicants: Array<{
 			uid: string;
@@ -51,15 +53,18 @@
 		facets: Facet[];
 		facetSelection: FacetState;
 		onFacetsChange: (selected: FacetState) => void;
-		/** `names` is ranked by relevance; the list below is `createdAt desc`, hence a separate strip. */
-		searchInfo: { names: string[]; fuzzy: boolean; capped: boolean; exact: number };
-		onSuggestionSelect: (name: string) => void;
 		loading: boolean;
 		collapsed: boolean;
 		onToggleCollapse: () => void;
 		presenceMap: Record<string, string>;
 		/** presenceMap excludes yourself, so this is the only signal that you hold a lock. */
 		selfClaimUid: string | null;
+		/** 1-indexed. The queue is paginated server-side, so `applicants` is only this page's rows. */
+		page: number;
+		totalPages: number;
+		/** Every matching row across all pages, for the "X–Y of Z" readout. */
+		total: number;
+		onPageChange: (page: number) => void;
 	} = $props();
 
 	// Same 48rem breakpoint as `md:`, so a desktop collapse never leaves a shrunken list
@@ -74,23 +79,6 @@
 	// Facets, not values: a substring box or a range is one filter however it is filled.
 	let activeFilterCount = $derived(
 		Object.values(facetSelection).filter((selection) => isEngaged(selection)).length
-	);
-
-	// `fuzzy` means the fold ran, not that it found anything.
-	let showSuggestions = $derived(searchInfo.fuzzy && searchInfo.names.length > 0);
-
-	// Keyed off `exact`, not `fuzzy`: the fold runs below a floor of five, so keying off
-	// it put "No exact match" above three people named Vayani.
-	let suggestionsPrefix = $derived(
-		searchInfo.exact > 0 ? 'Similar names:' : 'No exact match — did you mean:'
-	);
-
-	// Built here, not in markup: Svelte trims whitespace at an `{#if}` boundary, which
-	// glued the cap onto the colon.
-	let suggestionsLabel = $derived(
-		searchInfo.capped
-			? `${suggestionsPrefix} (showing the ${searchInfo.names.length} closest)`
-			: suggestionsPrefix
 	);
 
 	function clearFacetFilters() {
@@ -149,7 +137,7 @@
 			<span
 				class="mt-2 text-[10px] font-semibold tracking-widest text-muted-foreground uppercase [writing-mode:vertical-rl]"
 			>
-				{applicants.length}
+				{total}
 			</span>
 		</div>
 	{:else}
@@ -201,30 +189,6 @@
 				class="w-full rounded border border-border bg-[#f9f9f9] px-[10px] py-1.5 text-touch text-primary outline-none sm:text-xs"
 			/>
 		</div>
-
-		{#if showSuggestions}
-			<div class="shrink-0 border-b border-border bg-muted px-3 py-2">
-				<div class="text-2xs text-foreground-secondary">{suggestionsLabel}</div>
-				<!-- Scrolled: at the cap this is 25 names, which would leave two applicants visible. -->
-				<div class="mt-1.5 flex max-h-40 flex-wrap gap-1 overflow-y-auto">
-					{#each searchInfo.names as name (name)}
-						{@const active =
-							facetSelection[linkedFacetKey('NAME')]?.values?.includes(name) ?? false}
-						<button
-							type="button"
-							aria-pressed={active}
-							onclick={() => onSuggestionSelect(name)}
-							class="max-w-full cursor-pointer truncate rounded-sm border px-1.5 py-0.5 text-xs
-							       transition-colors duration-150 focus-visible:shadow-ring {active
-								? 'border-primary bg-primary text-primary-foreground'
-								: 'border-border bg-card text-foreground hover:bg-surface-hover'}"
-						>
-							{name}
-						</button>
-					{/each}
-				</div>
-			</div>
-		{/if}
 
 		{#if facets.length > 0}
 			<div class="shrink-0 border-b border-border">
@@ -355,5 +319,31 @@
 				{/each}
 			{/if}
 		</div>
+
+		{#if totalPages > 1}
+			<div
+				class="flex shrink-0 items-center justify-between gap-2 border-t border-border px-3 py-2"
+			>
+				<button
+					type="button"
+					onclick={() => onPageChange(page - 1)}
+					disabled={page <= 1}
+					class="cursor-pointer rounded border border-border bg-card px-2 py-1 text-2xs text-foreground disabled:cursor-not-allowed disabled:opacity-40"
+				>
+					‹ Prev
+				</button>
+				<span class="text-2xs text-muted-foreground tabular-nums">
+					Page {page} of {totalPages} · {total} applicant{total === 1 ? '' : 's'}
+				</span>
+				<button
+					type="button"
+					onclick={() => onPageChange(page + 1)}
+					disabled={page >= totalPages}
+					class="cursor-pointer rounded border border-border bg-card px-2 py-1 text-2xs text-foreground disabled:cursor-not-allowed disabled:opacity-40"
+				>
+					Next ›
+				</button>
+			</div>
+		{/if}
 	{/if}
 </div>

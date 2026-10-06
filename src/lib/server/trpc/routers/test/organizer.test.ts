@@ -43,20 +43,21 @@ function mockGroupBy(fn: unknown, value: unknown) {
  * succeeded. Hiding the nav links does not change that, since these procedures are
  * reachable at /api/trpc/* regardless.
  */
-describe('organizer is denied everything holding user data', () => {
+describe('organizer is denied everything outside their sections and the admin-only admissions acts', () => {
 	const denied: Record<string, (c: ReturnType<typeof createTestCaller>) => Promise<unknown>> = {
 		'user.list': (c) => c.user.list({ page: 1, pageSize: 10 }),
 		'user.getById': (c) => c.user.getById({ uid: hackerUser.uid }),
 		'user.updateRole': (c) => c.user.updateRole({ uid: hackerUser.uid, role: 'HACKER' as never }),
 		'user.exportCsv': (c) => c.user.exportCsv(),
-		'admissions.list': (c) => c.admissions.list({}),
-		'admissions.presence': (c) => c.admissions.presence(),
-		'admissions.setDecision': (c) =>
-			c.admissions.setDecision({ uid: hackerUser.uid, decision: 'ACCEPTED' as never }),
+		// Organizers review applications, but the irreversible or event-wide admissions
+		// acts stay admin-only: releasing emails decisions, bulk-deciding skips the
+		// claim-by-claim review path, and the rubric defines how everyone scores.
+		'admissions.release': (c) => c.admissions.release({ uids: [hackerUser.uid] }),
+		'admissions.setDecisions': (c) =>
+			c.admissions.setDecisions({ uids: [hackerUser.uid], decision: 'ACCEPTED' as never }),
+		'admissions.reviewerStats': (c) => c.admissions.reviewerStats(),
+		'rubric.save': (c) => c.rubric.save({ rubrics: [] }),
 		'blacklist.list': (c) => c.blacklist.list(),
-		// Aggregate counts, but of a named applicant pool — at a count of one they are
-		// per-person data, and no organizer-reachable page uses them.
-		'filters.facets': (c) => c.filters.facets(),
 		'blacklist.add': (c) =>
 			c.blacklist.add({ firstName: 'A', lastName: 'B', email: 'a@b.com' } as never),
 		'email.startSend': (c) => c.email.startSend({ subject: 's', body: 'b' } as never),
@@ -99,7 +100,7 @@ describe('organizer is denied everything holding user data', () => {
 	}
 });
 
-describe('organizer keeps the sections with no per-person data', () => {
+describe('organizer keeps their sections, admissions review included', () => {
 	it('can look up a scan', async () => {
 		db.settings.findFirst.mockResolvedValue(mockSettings as never);
 		db.user.findMany.mockResolvedValue([hackerUser] as never);
@@ -140,6 +141,19 @@ describe('organizer keeps the sections with no per-person data', () => {
 				type: ScheduleType.CEREMONY
 			} as never)
 		).resolves.toBeDefined();
+	});
+
+	it('can list the admissions review queue', async () => {
+		db.user.findMany.mockResolvedValue([] as never);
+		db.blacklist.findMany.mockResolvedValue([] as never);
+		const caller = createTestCaller(db, organizerUser);
+		await expect(caller.admissions.list({})).resolves.toBeDefined();
+	});
+
+	it('can read the scoring rubric', async () => {
+		db.rubricCriterion.findMany.mockResolvedValue([] as never);
+		const caller = createTestCaller(db, organizerUser);
+		await expect(caller.rubric.get()).resolves.toBeDefined();
 	});
 
 	it("is still refused when it isn't staff at all", async () => {

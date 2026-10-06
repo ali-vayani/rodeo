@@ -17,6 +17,7 @@
  */
 export const TEMPLATE_VARIABLES = [
 	{ key: 'name', label: "Hacker's full name", placeholder: '[hacker name]' },
+	{ key: 'role', label: "Applicant's role", placeholder: '[role]' },
 	{ key: 'hackathon_start', label: 'Hackathon start date', placeholder: '[start date]' },
 	// Not "[end date]": this is the RSVP cutoff, not when the event ends. Labelling it
 	// as an end date would be the same lie in a shorter form.
@@ -105,6 +106,64 @@ export function substituteVariables(
 	});
 }
 
+/**
+ * Variables with nothing to substitute under these settings, mapped to why not.
+ *
+ * Only event-level variables can appear here, and only `rsvp_deadline` can today: its
+ * column is nullable, and an event that never closes RSVPs has no date to name.
+ *
+ * `hacker_qr_code` is deliberately absent. It is empty for a recipient who is not
+ * attending, which is a fact about that recipient rather than the event — blocking on it
+ * would stop every non-attendee's mail, which is the opposite of what it is for.
+ */
+export function unavailableVariables(settings: {
+	RSVPDeadline: Date | string | null;
+}): Map<string, string> {
+	const unavailable = new Map<string, string>();
+	if (settings.RSVPDeadline == null) {
+		unavailable.set('rsvp_deadline', 'no RSVP Deadline is set');
+	}
+	return unavailable;
+}
+
+/**
+ * Why these texts cannot be mailed as they stand, or null when they can.
+ *
+ * The rule every send path shares: a template may only go out if every variable it
+ * names has a value. Substituting nothing would mail a sentence with a hole in it, and
+ * substituting a stand-in would mail a date the event does not have.
+ *
+ * Pass the subject and the body — a variable in either one is enough to stop the send.
+ */
+export function templateBlockers(
+	texts: readonly string[],
+	settings: { RSVPDeadline: Date | string | null }
+): { keys: string[]; message: string } | null {
+	const unavailable = unavailableVariables(settings);
+	if (unavailable.size === 0) return null;
+
+	const keys: string[] = [];
+	for (const text of texts) {
+		// Fresh lastIndex per text: VARIABLE_PATTERN is global and module-scoped.
+		VARIABLE_PATTERN.lastIndex = 0;
+		let match: RegExpExecArray | null;
+		while ((match = VARIABLE_PATTERN.exec(text)) !== null) {
+			const key = match[1];
+			if (unavailable.has(key) && !keys.includes(key)) keys.push(key);
+		}
+	}
+	if (keys.length === 0) return null;
+
+	const named = keys.map((key) => `{{${key}}}`).join(' and ');
+	const reasons = [...new Set(keys.map((key) => unavailable.get(key)!))].join(' and ');
+	return {
+		keys,
+		message:
+			`This email uses ${named}, but ${reasons}. ` +
+			'Remove the variable from the template, or set the date under Settings → Dates.'
+	};
+}
+
 export type TemplateSegment =
 	| { type: 'text'; value: string }
 	/** `value` is the substituted sample; the source text was `{{key}}`. */
@@ -156,11 +215,15 @@ export function tokenizeTemplate(
  */
 export function buildEventVars(settings: {
 	hackathonStartDate: Date;
-	RSVPDeadline: Date;
+	RSVPDeadline: Date | null;
 }): Record<string, string> {
+	// Blank, not the event start: an event with no deadline has no date to name, and
+	// putting the start date under an "RSVP deadline" label states something untrue.
+	// A template that uses the variable is refused by `templateBlockers` before it can
+	// send, so this value is the floor rather than the plan.
 	return {
 		hackathon_start: settings.hackathonStartDate.toLocaleDateString(),
-		rsvp_deadline: settings.RSVPDeadline.toLocaleDateString()
+		rsvp_deadline: settings.RSVPDeadline ? settings.RSVPDeadline.toLocaleDateString() : ''
 	};
 }
 
@@ -169,8 +232,8 @@ export function buildEventVars(settings: {
  * Prisma `User`/`Settings` row without this module importing Prisma.
  */
 export function buildTemplateVars(
-	user: { name: string },
-	settings: { hackathonStartDate: Date; RSVPDeadline: Date },
+	user: { name: string; role?: string | null },
+	settings: { hackathonStartDate: Date; RSVPDeadline: Date | null },
 	/**
 	 * The pre-rendered check-in block. Passed in rather than built here, because
 	 * producing it needs Prisma, the QR encoder and an inline attachment. Defaults to
@@ -180,8 +243,11 @@ export function buildTemplateVars(
 ): Record<string, string> {
 	// `name` comes from a linked application question, so an account that has not
 	// answered it holds `''` — and "Hi ," is worse than a filler salutation.
+	const rawRole = user.role?.trim();
 	return {
 		name: user.name?.trim() || NAME_FALLBACK,
+		// Capitalize first letter so "HACKER" renders as "Hacker" in emails.
+		role: rawRole ? rawRole.charAt(0) + rawRole.slice(1).toLowerCase() : '',
 		...buildEventVars(settings),
 		hacker_qr_code: checkInPass
 	};
@@ -193,7 +259,7 @@ export function buildTemplateVars(
  */
 export function buildExternalTemplateVars(settings: {
 	hackathonStartDate: Date;
-	RSVPDeadline: Date;
+	RSVPDeadline: Date | null;
 }): Record<string, string> {
 	return buildTemplateVars({ name: NAME_FALLBACK }, settings);
 }

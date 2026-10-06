@@ -1,6 +1,7 @@
-import type { PrismaClient, Question } from '$lib/generated/prisma/client';
-import { QuestionType, Role } from '$lib/generated/prisma/client';
-import { router, adminProcedure } from '../init';
+import { z } from 'zod';
+import type { Prisma, PrismaClient, Question } from '$lib/generated/prisma/client';
+import { DecisionStatus, QuestionType, Role } from '$lib/generated/prisma/client';
+import { router, portalProcedure } from '../init';
 import {
 	FILTERABLE_LINKED_FIELDS,
 	LINKED_FIELD_COLUMN,
@@ -23,9 +24,8 @@ import { humanizeEnum } from '$lib/format';
 /**
  * The filter vocabulary for every application answer worth filtering on.
  *
- * `adminProcedure`, not `portalProcedure`: the pages rendering these controls are not
- * in `ORGANIZER_SECTIONS`, and every university with exact headcounts is per-person
- * data in aggregate clothing.
+ * `portalProcedure`: the admissions review queue renders these controls and organizers
+ * review applications, so the facet vocabulary is theirs to read too.
  */
 
 /** What the facet builder needs off a question. */
@@ -71,13 +71,15 @@ function linkedControlFor(question: Pick<Question, 'type' | 'optionPreset'>): Fa
 /** How many users hold each distinct value of a linked column, plus the absent count. */
 async function observedValues(
 	prisma: Pick<PrismaClient, 'user'>,
-	field: LinkedField
+	field: LinkedField,
+	userWhere?: Prisma.UserWhereInput
 ): Promise<{ counts: Map<string, number>; noneCount: number }> {
 	// `groupBy`'s return type is keyed on the `by` tuple, which a runtime-chosen column
 	// can't produce. `LINKED_FIELD_COLUMN` keeps the set closed.
 	const column = LINKED_FIELD_COLUMN[field];
 	const rows = (await (prisma.user.groupBy as unknown as (args: unknown) => Promise<unknown[]>)({
 		by: [column],
+		where: userWhere,
 		_count: { _all: true }
 	})) as ({ _count: { _all: number } } & Record<string, string | null>)[];
 
@@ -170,154 +172,176 @@ export const filtersRouter = router({
 	 * this value", and no recompute on every keystroke. Four queries regardless of form
 	 * size, plus one `groupBy` per linked facet.
 	 */
-	facets: adminProcedure.query(async ({ ctx }): Promise<Facet[]> => {
-		const [questions, roleRows, totalUsers, settings] = await Promise.all([
-			ctx.prisma.question.findMany({
-				select: {
-					id: true,
-					title: true,
-					type: true,
-					options: true,
-					optionPreset: true,
-					linkedField: true,
-					targetRole: true
-				},
-				// Two questions may link the same column; the first on the form wins.
-				orderBy: { order: 'asc' }
-			}),
-			ctx.prisma.user.groupBy({ by: ['role'], _count: { _all: true } }),
-			ctx.prisma.user.count(),
-			ctx.prisma.settings.findFirst({ select: { homeState: true } })
-		]);
+	facets: portalProcedure
+		.input(z.object({ scoredOrPending: z.boolean().optional() }).optional())
+		.query(async ({ ctx, input }): Promise<Facet[]> => {
+			// When scoped to the Pending Decisions pass, only count users who are scored or
+			// have a real pending decision — so the filter badges reflect that population.
+			const userWhere: Prisma.UserWhereInput = input?.scoredOrPending
+				? {
+						OR: [
+							{ score: { not: null } },
+							{
+								AND: [
+									{ pendingDecision: { not: null } },
+									{ pendingDecision: { not: DecisionStatus.PENDING } }
+								]
+							}
+						]
+					}
+				: {};
 
-		const byRole = new Map<Role, number>(roleRows.map((r) => [r.role, r._count._all]));
+			const [questions, roleRows, totalUsers, settings] = await Promise.all([
+				ctx.prisma.question.findMany({
+					select: {
+						id: true,
+						title: true,
+						type: true,
+						options: true,
+						optionPreset: true,
+						linkedField: true,
+						targetRole: true
+					},
+					// Two questions may link the same column; the first on the form wins.
+					orderBy: { order: 'asc' }
+				}),
+				ctx.prisma.user.groupBy({ by: ['role'], where: userWhere, _count: { _all: true } }),
+				ctx.prisma.user.count({ where: userWhere }),
+				ctx.prisma.settings.findFirst({ select: { homeState: true } })
+			]);
 
-		const facets: Facet[] = [];
+			const byRole = new Map<Role, number>(roleRows.map((r) => [r.role, r._count._all]));
 
-		const byField = new Map<LinkedField, FacetQuestion>();
-		for (const question of questions) {
-			if (!isLinkedField(question.linkedField)) continue;
-			if (!byField.has(question.linkedField)) byField.set(question.linkedField, question);
-		}
+			const facets: Facet[] = [];
 
-		// Linked fields, read off their `User` columns. Iterated in FILTERABLE_LINKED_FIELDS
-		// order so the panel doesn't reshuffle when the form is reordered.
-		for (const field of FILTERABLE_LINKED_FIELDS) {
-			const question = byField.get(field);
-			if (!question) continue;
-
-			const control = linkedControlFor(question);
-			const { counts, noneCount } = await observedValues(ctx.prisma, field);
-
-			// A select's list is bounded by the question, so it is never truncated.
-			const { options, truncated } =
-				control === 'select'
-					? { options: selectOptions(question.options, counts), truncated: false }
-					: comboboxOptions(counts);
-
-			facets.push({
-				key: linkedFacetKey(field),
-				label: question.title,
-				control,
-				options,
-				noneCount,
-				truncated
-			});
-
-			// State is University read through a dataset, so it sits directly under it.
-			if (field === 'UNIVERSITY') {
-				const state = await stateFacet(ctx.prisma, settings?.homeState ?? null);
-				if (state) facets.push(state);
+			const byField = new Map<LinkedField, FacetQuestion>();
+			for (const question of questions) {
+				if (!isLinkedField(question.linkedField)) continue;
+				if (!byField.has(question.linkedField)) byField.set(question.linkedField, question);
 			}
-		}
 
-		// Everything else on the form. Linked questions are skipped: they already have a
-		// facet above reading the column their answers were copied into.
-		const answerQuestions = questions
-			.filter((q) => q.linkedField === null)
-			.map((q) => ({ question: q, control: controlFor(q) }))
-			.filter((q): q is { question: FacetQuestion; control: FacetControl } => q.control !== null);
+			// Linked fields, read off their `User` columns. Iterated in FILTERABLE_LINKED_FIELDS
+			// order so the panel doesn't reshuffle when the form is reordered.
+			for (const field of FILTERABLE_LINKED_FIELDS) {
+				const question = byField.get(field);
+				if (!question) continue;
 
-		// `search` facets need no vocabulary; shipping a thousand short-text answers is
-		// why they get a substring box.
-		const tallied = answerQuestions.filter((q) => q.control !== 'search');
-		const valueRows = tallied.length
-			? await ctx.prisma.applicationResponse.groupBy({
-					by: ['questionId', 'value'],
-					where: { questionId: { in: tallied.map((q) => q.question.id) } },
-					_count: { _all: true }
-				})
-			: [];
+				const control = linkedControlFor(question);
+				const { counts, noneCount } = await observedValues(ctx.prisma, field, userWhere);
 
-		/** Target roles per facet key, for `disambiguate` below. */
-		const questionRoles = new Map<string, Role[]>();
+				// A select's list is bounded by the question, so it is never truncated.
+				const { options, truncated } =
+					control === 'select'
+						? { options: selectOptions(question.options, counts), truncated: false }
+						: comboboxOptions(counts);
 
-		// `groupBy` buckets a MULTI_SELECT by its whole encoded set, and nobody filters by
-		// "picked exactly Rust and Go". Those rows are unpacked onto their options below.
-		const multiSelectIds = new Set(
-			tallied
-				.filter(({ question }) => question.type === QuestionType.MULTI_SELECT)
-				.map(({ question }) => question.id)
-		);
+				facets.push({
+					key: linkedFacetKey(field),
+					label: question.title,
+					control,
+					options,
+					noneCount,
+					truncated
+				});
 
-		const answerCounts = new Map<string, Map<string, number>>();
-		const answered = new Map<string, number>();
-		for (const row of valueRows) {
-			// As with the linked columns, '' is an absent answer, not a value.
-			if (row.value === '') continue;
-			const counts = answerCounts.get(row.questionId) ?? new Map<string, number>();
-			if (multiSelectIds.has(row.questionId)) {
-				// Accumulated, not assigned: two different sets can both contain this option.
-				for (const option of decodeMultiSelect(row.value)) {
-					counts.set(option, (counts.get(option) ?? 0) + row._count._all);
-				}
-			} else {
-				counts.set(row.value, row._count._all);
-			}
-			answerCounts.set(row.questionId, counts);
-			// Still one row per user either way, so the answered tally is unaffected by the
-			// unpacking above — the option counts sum past it, and are meant to.
-			answered.set(row.questionId, (answered.get(row.questionId) ?? 0) + row._count._all);
-		}
-
-		for (const { question, control } of answerQuestions) {
-			const counts = answerCounts.get(question.id) ?? new Map<string, number>();
-			const audience = audienceSize(question.targetRole, byRole, totalUsers);
-			// Never negative: a role changed after applying leaves the answer behind.
-			const noneCount = Math.max(0, audience - (answered.get(question.id) ?? 0));
-
-			const facet: Facet = {
-				key: questionFacetKey(question.id),
-				label: question.title,
-				control,
-				options: [],
-				noneCount
-			};
-
-			if (control === 'select') {
-				facet.options =
-					question.type === QuestionType.CHECKBOX
-						? CHECKBOX_OPTIONS.map((o) => ({ ...o, count: counts.get(o.value) ?? 0 }))
-						: selectOptions(question.options, counts);
-			} else if (control === 'combobox') {
-				const { options, truncated } = comboboxOptions(counts);
-				facet.options = options;
-				facet.truncated = truncated;
-			} else if (control === 'range') {
-				// Observed extent, so the inputs can show what the data spans.
-				const numbers = [...counts.keys()].map(Number).filter(Number.isFinite);
-				if (numbers.length) {
-					facet.bounds = { min: Math.min(...numbers), max: Math.max(...numbers) };
+				// State is University read through a dataset, so it sits directly under it.
+				if (field === 'UNIVERSITY') {
+					const state = await stateFacet(ctx.prisma, settings?.homeState ?? null, userWhere);
+					if (state) facets.push(state);
 				}
 			}
 
-			facets.push(facet);
-			questionRoles.set(facet.key, question.targetRole);
-		}
+			// Everything else on the form. Linked questions are skipped: they already have a
+			// facet above reading the column their answers were copied into.
+			const answerQuestions = questions
+				.filter((q) => q.linkedField === null)
+				.map((q) => ({ question: q, control: controlFor(q) }))
+				.filter((q): q is { question: FacetQuestion; control: FacetControl } => q.control !== null);
 
-		// Last, so a question titled "State" collides with the derived facet too.
-		disambiguate(facets, questionRoles);
+			// `search` facets need no vocabulary; shipping a thousand short-text answers is
+			// why they get a substring box.
+			const tallied = answerQuestions.filter((q) => q.control !== 'search');
+			const valueRows = tallied.length
+				? await ctx.prisma.applicationResponse.groupBy({
+						by: ['questionId', 'value'],
+						where: {
+							questionId: { in: tallied.map((q) => q.question.id) },
+							// When scoped, only count responses from users in the target population.
+							...(Object.keys(userWhere).length > 0 ? { user: userWhere } : {})
+						},
+						_count: { _all: true }
+					})
+				: [];
 
-		return facets;
-	})
+			/** Target roles per facet key, for `disambiguate` below. */
+			const questionRoles = new Map<string, Role[]>();
+
+			// `groupBy` buckets a MULTI_SELECT by its whole encoded set, and nobody filters by
+			// "picked exactly Rust and Go". Those rows are unpacked onto their options below.
+			const multiSelectIds = new Set(
+				tallied
+					.filter(({ question }) => question.type === QuestionType.MULTI_SELECT)
+					.map(({ question }) => question.id)
+			);
+
+			const answerCounts = new Map<string, Map<string, number>>();
+			const answered = new Map<string, number>();
+			for (const row of valueRows) {
+				// As with the linked columns, '' is an absent answer, not a value.
+				if (row.value === '') continue;
+				const counts = answerCounts.get(row.questionId) ?? new Map<string, number>();
+				if (multiSelectIds.has(row.questionId)) {
+					// Accumulated, not assigned: two different sets can both contain this option.
+					for (const option of decodeMultiSelect(row.value)) {
+						counts.set(option, (counts.get(option) ?? 0) + row._count._all);
+					}
+				} else {
+					counts.set(row.value, row._count._all);
+				}
+				answerCounts.set(row.questionId, counts);
+				// Still one row per user either way, so the answered tally is unaffected by the
+				// unpacking above — the option counts sum past it, and are meant to.
+				answered.set(row.questionId, (answered.get(row.questionId) ?? 0) + row._count._all);
+			}
+
+			for (const { question, control } of answerQuestions) {
+				const counts = answerCounts.get(question.id) ?? new Map<string, number>();
+				const audience = audienceSize(question.targetRole, byRole, totalUsers);
+				// Never negative: a role changed after applying leaves the answer behind.
+				const noneCount = Math.max(0, audience - (answered.get(question.id) ?? 0));
+
+				const facet: Facet = {
+					key: questionFacetKey(question.id),
+					label: question.title,
+					control,
+					options: [],
+					noneCount
+				};
+
+				if (control === 'select') {
+					facet.options =
+						question.type === QuestionType.CHECKBOX
+							? CHECKBOX_OPTIONS.map((o) => ({ ...o, count: counts.get(o.value) ?? 0 }))
+							: selectOptions(question.options, counts);
+				} else if (control === 'combobox') {
+					const { options, truncated } = comboboxOptions(counts);
+					facet.options = options;
+					facet.truncated = truncated;
+				} else if (control === 'range') {
+					// Observed extent, so the inputs can show what the data spans.
+					const numbers = [...counts.keys()].map(Number).filter(Number.isFinite);
+					if (numbers.length) {
+						facet.bounds = { min: Math.min(...numbers), max: Math.max(...numbers) };
+					}
+				}
+
+				facets.push(facet);
+				questionRoles.set(facet.key, question.targetRole);
+			}
+
+			// Last, so a question titled "State" collides with the derived facet too.
+			disambiguate(facets, questionRoles);
+
+			return facets;
+		})
 });

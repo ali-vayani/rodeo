@@ -14,13 +14,13 @@
  * forwarded copy carries no credential that could mint somebody else's pass.
  *
  * Eligibility mirrors the account page exactly. Not confirmed means no block at all and
- * the rest of the email sends normally; confirmed before the RSVP deadline means the QR
- * without wallet buttons.
+ * the rest of the email sends normally; confirmed before the wallet unlock date means
+ * the QR without wallet buttons.
  */
 
 import QRCode from 'qrcode';
 import { UserStatus } from '$lib/generated/prisma/enums';
-import { isRsvpClosed } from '$lib/application/window';
+import { isWalletUnlocked } from '$lib/wallet/eligibility';
 import { appOrigin } from '$lib/server/env';
 import { emailSettings } from '$lib/server/settings';
 import { buildTemplateVars } from '$lib/email/variables';
@@ -68,7 +68,7 @@ function contentId(uid: string): string {
 
 export async function buildCheckInPassBlock(
 	user: CheckInPassSubject,
-	settings: { RSVPDeadline: Date } | null | undefined,
+	settings: { RSVPDeadline: Date | null; hackathonStartDate: Date } | null | undefined,
 	now: Date = new Date()
 ): Promise<CheckInPassBlock> {
 	const attending = user.status === UserStatus.CONFIRMED || user.status === UserStatus.CHECKED_IN;
@@ -86,8 +86,8 @@ export async function buildCheckInPassBlock(
 	const code = displayCode(user.uid);
 	const origin = appOrigin();
 
-	// Wallet passes need the RSVP deadline behind us *and* a configured provider.
-	const walletUnlocked = isRsvpClosed(settings, now);
+	// Wallet passes need the unlock date behind us *and* a configured provider.
+	const walletUnlocked = isWalletUnlocked(settings, now);
 	const apple = walletUnlocked && appleWalletConfigured(now);
 	const google = walletUnlocked && googleWalletConfigured();
 
@@ -139,12 +139,12 @@ export async function buildCheckInPassBlock(
  *
  * Takes the raw Settings row and splits it deliberately: template dates go through
  * `emailSettings`, whose defaults keep an unconfigured install sending, while wallet
- * gating reads the row as-is, since `DEFAULT_SETTINGS.RSVPDeadline` is process boot
- * time and would put wallet buttons in every confirmed hacker's inbox.
+ * gating reads the row as-is, since `DEFAULT_SETTINGS.hackathonStartDate` is process
+ * boot time and would put wallet buttons in every confirmed hacker's inbox.
  */
 export async function buildEmailPersonalization(
 	user: CheckInPassSubject,
-	settings: { hackathonStartDate: Date; RSVPDeadline: Date } | null,
+	settings: { hackathonStartDate: Date; RSVPDeadline: Date | null } | null,
 	now: Date = new Date()
 ): Promise<{ vars: Record<string, string>; attachments: EmailAttachment[] }> {
 	const block = await buildCheckInPassBlock(user, settings, now);

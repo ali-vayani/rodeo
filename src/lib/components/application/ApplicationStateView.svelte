@@ -177,7 +177,7 @@
 			<BatLogo class="mx-auto mb-4 w-16 text-brand-ink" />
 			{@render badge('Accepted', 'ok')}
 			<h2 class="mt-3 mb-2 text-2xl font-extrabold text-foreground">
-				You're in, {user.name.split('')[0]}!
+				You're in, {user.name}!
 			</h2>
 			<p class="mx-auto mb-6 max-w-prose text-md leading-relaxed text-foreground-secondary">
 				{#if rsvpClosed}

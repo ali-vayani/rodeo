@@ -1,6 +1,7 @@
 import { router } from './init';
 import { userRouter } from './routers/user';
 import { admissionsRouter } from './routers/admissions';
+import { rubricRouter } from './routers/rubric';
 import { applicationRouter } from './routers/application';
 import { questionsRouter } from './routers/questions';
 import { settingsRouter } from './routers/settings';
@@ -19,6 +20,7 @@ import { dataRouter } from './routers/data';
 export const appRouter = router({
 	user: userRouter,
 	admissions: admissionsRouter,
+	rubric: rubricRouter,
 	application: applicationRouter,
 	questions: questionsRouter,
 	settings: settingsRouter,

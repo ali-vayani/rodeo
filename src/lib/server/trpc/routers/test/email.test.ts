@@ -22,13 +22,30 @@ vi.mock('$lib/server/email', () => ({
 	sendEmail: vi.fn().mockResolvedValue(undefined)
 }));
 
+// The attachment bytes live behind the storage layer; the router only needs the two
+// calls it makes, and mocking here keeps the AWS SDK out of these tests entirely.
+vi.mock('$lib/server/storage', () => ({
+	getObject: vi.fn(),
+	storageFailureReason: (e: unknown) => (e instanceof Error ? e.message : String(e))
+}));
+
+// The real implementation behind a spy, so one test can make the QR encoder fail while
+// every other test keeps the genuine block (sendTest asserts on the real attachment).
+vi.mock('$lib/server/wallet/email-block', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('$lib/server/wallet/email-block')>();
+	return { ...actual, buildEmailPersonalization: vi.fn(actual.buildEmailPersonalization) };
+});
+
 const { prisma } = await import('$lib/server/db');
 const db = prisma as DeepMockProxy<PrismaClient>;
 const { sendEmail } = await import('$lib/server/email');
+const { getObject } = await import('$lib/server/storage');
+const { buildEmailPersonalization } = await import('$lib/server/wallet/email-block');
 
 beforeEach(() => {
 	mockReset(db);
 	vi.mocked(sendEmail).mockClear();
+	vi.mocked(getObject).mockReset().mockResolvedValue(Buffer.from('pdf-bytes'));
 });
 
 const emailInput = {
@@ -122,7 +139,13 @@ describe('email.startSend + sendOne', () => {
 		expect(sendEmail).toHaveBeenCalledTimes(2);
 		expect(db.emailLog.create).toHaveBeenCalledWith(
 			expect.objectContaining({
-				data: expect.objectContaining({ subject: emailInput.subject, body: emailInput.body })
+				data: expect.objectContaining({
+					subject: emailInput.subject,
+					body: emailInput.body,
+					sent: [],
+					failed: [],
+					errors: {}
+				})
 			})
 		);
 	});
@@ -164,6 +187,51 @@ describe('email.startSend + sendOne', () => {
 		await caller.email.sendOne({ sendId: started.sendId!, recipient: hackerUser.uid });
 
 		expect(getRow()).toMatchObject({ sent: [hackerUser.uid], failed: [], errors: {} });
+		errorSpy.mockRestore();
+	});
+
+	it('reports whether each recipient got the check-in QR block', async () => {
+		const caller = createTestCaller(db, adminUser);
+		const confirmed = { ...hackerUser, status: UserStatus.CONFIRMED };
+		mockUsers([confirmed, appliedHacker] as never);
+		stubSendLog();
+
+		const started = await caller.email.startSend({ ...emailInput, expectedCount: 2 } as never);
+		const withQr = await caller.email.sendOne({
+			sendId: started.sendId!,
+			recipient: confirmed.uid
+		});
+		const withoutQr = await caller.email.sendOne({
+			sendId: started.sendId!,
+			recipient: appliedHacker.uid
+		});
+
+		expect(withQr.qrAttached).toBe(true);
+		expect(withoutQr.qrAttached).toBe(false);
+	});
+
+	it('records a QR build failure on the row instead of throwing', async () => {
+		// The page retries thrown calls as network noise; a broken QR must instead land
+		// in the log's failure column, where finishSend and the history report it.
+		const caller = createTestCaller(db, adminUser);
+		const confirmed = { ...hackerUser, status: UserStatus.CONFIRMED };
+		mockUsers([confirmed] as never);
+		const getRow = stubSendLog();
+		vi.mocked(buildEmailPersonalization).mockRejectedValueOnce(new Error('QR encode failed'));
+		const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+		const started = await caller.email.startSend({ ...emailInput, expectedCount: 1 } as never);
+		const result = await caller.email.sendOne({
+			sendId: started.sendId!,
+			recipient: confirmed.uid
+		});
+
+		expect(result).toMatchObject({ ok: false, error: 'QR encode failed', retryable: false });
+		expect(getRow()).toMatchObject({
+			failed: [confirmed.uid],
+			errors: { [confirmed.uid]: 'QR encode failed' }
+		});
+		expect(sendEmail).not.toHaveBeenCalled();
 		errorSpy.mockRestore();
 	});
 
@@ -307,13 +375,15 @@ describe('email.startSend + sendOne', () => {
 			to: hackerUser.email,
 			subject: `Hi ${hackerUser.name}`,
 			body: `We start ${start}, ${hackerUser.name}.`,
-			attachments: []
+			attachments: [],
+			idempotencyKey: expect.stringMatching(/^custom\//)
 		});
 		expect(sendEmail).toHaveBeenCalledWith({
 			to: appliedHacker.email,
 			subject: `Hi ${appliedHacker.name}`,
 			body: `We start ${start}, ${appliedHacker.name}.`,
-			attachments: []
+			attachments: [],
+			idempotencyKey: expect.stringMatching(/^custom\//)
 		});
 	});
 
@@ -367,6 +437,97 @@ describe('email.startSend + sendOne', () => {
 	});
 });
 
+describe('email.startSend + sendOne — attachments', () => {
+	const ref = {
+		key: 'email-attachments/123e4567-e89b-42d3-a456-426614174000',
+		filename: 'schedule.pdf',
+		contentType: 'application/pdf',
+		size: 9
+	};
+
+	it('stores the refs on the log and mails the file to every recipient', async () => {
+		const caller = createTestCaller(db, adminUser);
+		mockUsers([hackerUser, appliedHacker] as never);
+		stubSendLog();
+
+		const result = await runSend(caller, { ...emailInput, expectedCount: 2, attachments: [ref] });
+
+		expect(result).toEqual({ sent: 2, external: 0 });
+		// On the row, not the request: `sendOne` reads the refs back from here, so a
+		// resumed send attaches the same files whatever the client later claims.
+		expect(db.emailLog.create).toHaveBeenCalledWith(
+			expect.objectContaining({ data: expect.objectContaining({ attachments: [ref] }) })
+		);
+		for (const call of vi.mocked(sendEmail).mock.calls) {
+			expect(call[0].attachments).toEqual([
+				{
+					filename: ref.filename,
+					content: Buffer.from('pdf-bytes'),
+					contentType: ref.contentType
+				}
+			]);
+		}
+	});
+
+	it('refuses a key outside the attachment prefix', async () => {
+		// The schema is what stops a hand-written call mailing an arbitrary bucket
+		// object — an applicant's resume, say.
+		const caller = createTestCaller(db, adminUser);
+		mockUsers([hackerUser] as never);
+
+		await expect(
+			caller.email.startSend({
+				...emailInput,
+				expectedCount: 1,
+				attachments: [{ ...ref, key: 'applications/user-1/question-1' }]
+			} as never)
+		).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+		expect(db.emailLog.create).not.toHaveBeenCalled();
+	});
+
+	it('fails the whole send before mailing anyone when an attachment cannot be read', async () => {
+		const caller = createTestCaller(db, adminUser);
+		mockUsers([hackerUser] as never);
+		vi.mocked(getObject).mockRejectedValue(new Error('NoSuchKey: gone'));
+		const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+		await expect(
+			caller.email.startSend({ ...emailInput, expectedCount: 1, attachments: [ref] } as never)
+		).rejects.toThrow('could not be read');
+		// Refused before the log row exists: a committed send with a dead ref would fail
+		// all N recipients one at a time instead.
+		expect(db.emailLog.create).not.toHaveBeenCalled();
+		expect(sendEmail).not.toHaveBeenCalled();
+		errorSpy.mockRestore();
+	});
+
+	it('records a per-recipient failure when the object vanishes mid-send', async () => {
+		const caller = createTestCaller(db, adminUser);
+		mockUsers([hackerUser] as never);
+		const getRow = stubSendLog();
+		// Readable at startSend, gone by the time sendOne fetches it.
+		vi.mocked(getObject)
+			.mockResolvedValueOnce(Buffer.from('pdf-bytes'))
+			.mockRejectedValue(new Error('NoSuchKey: gone'));
+		const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+		const started = await caller.email.startSend({
+			...emailInput,
+			expectedCount: 1,
+			attachments: [ref]
+		} as never);
+		const result = await caller.email.sendOne({
+			sendId: started.sendId!,
+			recipient: hackerUser.uid
+		});
+
+		expect(result).toMatchObject({ ok: false, error: 'NoSuchKey: gone' });
+		expect(getRow()).toMatchObject({ failed: [hackerUser.uid] });
+		expect(sendEmail).not.toHaveBeenCalled();
+		errorSpy.mockRestore();
+	});
+});
+
 describe('email.startSend + sendOne — external recipients', () => {
 	const GHOST = 'ghost@yopmail.com';
 	const listInput = {
@@ -402,7 +563,8 @@ describe('email.startSend + sendOne — external recipients', () => {
 			to: hackerUser.email,
 			subject: `Hi ${hackerUser.name}`,
 			body: `Body ${hackerUser.name}`,
-			attachments: []
+			attachments: [],
+			idempotencyKey: expect.stringMatching(/^custom\//)
 		});
 		// The nameless fallback, identical to what the compose preview shows. No
 		// attachments: the check-in block needs a User row, and this address has none.
@@ -410,7 +572,8 @@ describe('email.startSend + sendOne — external recipients', () => {
 			to: GHOST,
 			subject: `Hi ${NAME_FALLBACK}`,
 			body: `Body ${NAME_FALLBACK}`,
-			attachments: []
+			attachments: [],
+			idempotencyKey: expect.stringMatching(/^custom\//)
 		});
 	});
 
@@ -727,6 +890,83 @@ describe('email.previewRecipients', () => {
 	});
 });
 
+describe('refusing a template whose variables have no value', () => {
+	const noDeadline = { ...mockSettings, RSVPDeadline: null };
+
+	it('refuses startSend before resolving a single recipient', async () => {
+		const caller = createTestCaller(db, adminUser);
+		db.settings.findFirst.mockResolvedValue(noDeadline);
+
+		await expect(
+			caller.email.startSend({
+				...emailInput,
+				body: 'RSVP by {{rsvp_deadline}}.',
+				expectedCount: 1
+			} as never)
+		).rejects.toMatchObject({
+			code: 'BAD_REQUEST',
+			message: expect.stringContaining('{{rsvp_deadline}}')
+		});
+
+		// Nothing was queued: the whole point is that this is caught before the send.
+		expect(db.emailLog.create).not.toHaveBeenCalled();
+		expect(sendEmail).not.toHaveBeenCalled();
+	});
+
+	it('refuses on the subject too', async () => {
+		const caller = createTestCaller(db, adminUser);
+		db.settings.findFirst.mockResolvedValue(noDeadline);
+
+		await expect(
+			caller.email.startSend({
+				...emailInput,
+				subject: 'RSVP by {{rsvp_deadline}}',
+				expectedCount: 1
+			} as never)
+		).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+	});
+
+	it('allows the same draft once a deadline exists', async () => {
+		const caller = createTestCaller(db, adminUser);
+		db.settings.findFirst.mockResolvedValue(mockSettings);
+		mockUsers([hackerUser] as never);
+		stubSendLog();
+
+		await expect(
+			caller.email.startSend({
+				...emailInput,
+				body: 'RSVP by {{rsvp_deadline}}.',
+				expectedCount: 1
+			} as never)
+		).resolves.toMatchObject({ users: 1 });
+	});
+
+	it('refuses a test send, so proofreading is where this surfaces', async () => {
+		const caller = createTestCaller(db, adminUser);
+		db.settings.findFirst.mockResolvedValue(noDeadline);
+
+		await expect(
+			caller.email.sendTest({
+				template: 'accept',
+				subject: 'You are in',
+				body: 'RSVP by {{rsvp_deadline}}.'
+			})
+		).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+		expect(sendEmail).not.toHaveBeenCalled();
+	});
+
+	it('leaves a draft without the variable alone', async () => {
+		const caller = createTestCaller(db, adminUser);
+		db.settings.findFirst.mockResolvedValue(noDeadline);
+		mockUsers([hackerUser] as never);
+		stubSendLog();
+
+		await expect(
+			caller.email.startSend({ ...emailInput, expectedCount: 1 } as never)
+		).resolves.toMatchObject({ users: 1 });
+	});
+});
+
 describe('email.eventVars', () => {
 	it('renders the dates server-side, exactly as a send would', async () => {
 		const caller = createTestCaller(db, adminUser);
@@ -745,8 +985,9 @@ describe('email.eventVars', () => {
 
 		await expect(caller.email.eventVars()).resolves.toEqual({
 			hackathon_start: DEFAULT_SETTINGS.hackathonStartDate.toLocaleDateString(),
-			// The default row has no RSVP deadline, so the var latches to the event start.
-			rsvp_deadline: DEFAULT_SETTINGS.hackathonStartDate.toLocaleDateString()
+			// The default row has no RSVP deadline, so the variable renders blank rather
+			// than naming a date the event does not have.
+			rsvp_deadline: ''
 		});
 	});
 });
@@ -809,6 +1050,17 @@ describe('email.sendTest', () => {
 				body: `Hi ${adminUser.name}, we start ${SAMPLE_VARS.hackathon_start}.`
 			})
 		);
+	});
+
+	it('reports whether the QR block went with the test', async () => {
+		const caller = createTestCaller(db, adminUser);
+		db.settings.findFirst.mockResolvedValue(mockSettings);
+		expect((await caller.email.sendTest(testInput)).qrAttached).toBe(true);
+
+		// No Settings row means no personalization and no QR; the page tells the admin
+		// instead of mailing a QR-less proof with no explanation.
+		db.settings.findFirst.mockResolvedValue(null);
+		expect((await caller.email.sendTest(testInput)).qrAttached).toBe(false);
 	});
 
 	it('does not write an EmailLog row', async () => {
@@ -921,13 +1173,15 @@ describe('previewRecipients and sendCustom agree on the recipient set', () => {
 		return [
 			...db.user.count.mock.calls.map((c) => c[0]?.where),
 			...db.user.findMany.mock.calls.map((c) => c[0]?.where)
-		].filter((w) => {
-			if (w === undefined) return false;
-			const key = JSON.stringify(w);
-			if (seen.has(key)) return false;
-			seen.add(key);
-			return true;
-		});
+		]
+			.filter((w) => {
+				if (w === undefined) return false;
+				const key = JSON.stringify(w);
+				if (seen.has(key)) return false;
+				seen.add(key);
+				return true;
+			})
+			.sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b)));
 	}
 
 	function stubRoster() {
@@ -983,7 +1237,10 @@ describe('previewRecipients and sendCustom agree on the recipient set', () => {
 
 		expect(preview.search).toMatchObject({ fuzzy: true, capped: false });
 		expect(preview.search.names).toContain('Sarah Chen');
-		const where = selectionWheres().at(-1) as { AND: unknown[] };
+		const where = db.user.findMany.mock.calls.findLast((call) => !call[0]?.distinct)?.[0]
+			?.where as {
+			AND: unknown[];
+		};
 		expect(where.AND).toContainEqual({
 			OR: [
 				{ name: { contains: 'Sarh Chn', mode: 'insensitive' } },
@@ -1083,5 +1340,39 @@ describe('email recipient filters — linked application fields', () => {
 
 		const where = db.user.findMany.mock.calls.at(-1)?.[0]?.where as { AND: unknown[] };
 		expect(where.AND).toContainEqual({ university: { in: ['Rice University'] } });
+	});
+});
+
+describe('QR attachment preview', () => {
+	it('embeds the same recipient PNG without sending email', async () => {
+		const user = { ...hackerUser, status: UserStatus.CONFIRMED };
+		db.user.findUnique.mockResolvedValue(user as never);
+		const caller = createTestCaller(db, adminUser);
+		const result = await caller.email.previewCheckIn({ uid: user.uid });
+		expect(result.html).toContain('src="data:image/png;base64,');
+		expect(result.html).not.toContain('cid:');
+		expect(result.filenames).toEqual([`RC-${user.uid.slice(-4).toUpperCase()}.png`]);
+		expect(sendEmail).not.toHaveBeenCalled();
+	});
+
+	it('omits the attachment for an unconfirmed recipient', async () => {
+		db.user.findUnique.mockResolvedValue(appliedHacker as never);
+		const result = await createTestCaller(db, adminUser).email.previewCheckIn({
+			uid: appliedHacker.uid
+		});
+		expect(result).toEqual({ html: '', filenames: [] });
+	});
+
+	it('provides a sample when no recipient is selected', async () => {
+		const result = await createTestCaller(db, adminUser).email.previewCheckIn({});
+		expect(result.html).toContain('Sample attendee');
+		expect(result.filenames).toHaveLength(1);
+		expect(db.user.findUnique).not.toHaveBeenCalled();
+	});
+
+	it('restricts previews to admins', async () => {
+		await expect(createTestCaller(db, hackerUser).email.previewCheckIn({})).rejects.toMatchObject({
+			code: 'FORBIDDEN'
+		});
 	});
 });

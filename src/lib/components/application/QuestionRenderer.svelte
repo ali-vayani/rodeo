@@ -144,7 +144,7 @@
 	{:else if question.type === QuestionType.LONG_TEXT}
 		<textarea
 			id={inputId}
-			class="{inputClass} resize-none"
+			class="{inputClass} resize-y"
 			rows={4}
 			placeholder={question.placeholder ?? ''}
 			{value}

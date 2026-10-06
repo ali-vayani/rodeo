@@ -13,6 +13,7 @@
 export const LOG_ACTIONS = [
 	// Admissions
 	{ key: 'admissions.score.set', label: 'Application scored', group: 'Admissions' },
+	{ key: 'admissions.rubric.save', label: 'Scoring rubric saved', group: 'Admissions' },
 	{ key: 'admissions.decision.set', label: 'Decision set', group: 'Admissions' },
 	{ key: 'admissions.decision.bulk', label: 'Decisions set in bulk', group: 'Admissions' },
 	{ key: 'admissions.decision.blocked', label: 'Decision blocked by lock', group: 'Admissions' },
@@ -25,6 +26,7 @@ export const LOG_ACTIONS = [
 	{ key: 'user.roles.update', label: 'Role changed', group: 'Users' },
 	{ key: 'user.status.update', label: 'Status changed', group: 'Users' },
 	{ key: 'user.decision.override', label: 'Decision overridden', group: 'Users' },
+	{ key: 'user.notes.update', label: 'Notes updated', group: 'Users' },
 	{ key: 'user.export', label: 'User list exported', group: 'Users' },
 
 	// Application editor
@@ -41,6 +43,12 @@ export const LOG_ACTIONS = [
 	// Settings
 	{ key: 'settings.update', label: 'Settings updated', group: 'Settings' },
 	{ key: 'settings.templates.update', label: 'Email templates updated', group: 'Settings' },
+	{ key: 'settings.templateOverride.upsert', label: 'Template override saved', group: 'Settings' },
+	{
+		key: 'settings.templateOverride.delete',
+		label: 'Template override removed',
+		group: 'Settings'
+	},
 
 	// Schedule
 	{ key: 'schedule.create', label: 'Event added', group: 'Schedule' },

@@ -3,6 +3,7 @@ import {
 	assertSafeToSeed,
 	createPrismaClient,
 	seedQuestions,
+	seedRubric,
 	seedSettings,
 	SEED_WINDOWS
 } from './seedShared';
@@ -22,6 +23,7 @@ async function main() {
 
 	await seedQuestions(prisma);
 	await seedSettings(prisma, SEED_WINDOWS.open);
+	await seedRubric(prisma);
 
 	if (process.env.SEED_PRUNE === '1') {
 		const pruned = await pruneUnmanagedUsers(prisma);

@@ -86,7 +86,14 @@
 		}
 	};
 
-	const gate = $derived(state === 'filling' ? FILLING[windowState] : GATES[state]);
+	const gate = $derived.by(() => {
+		if (state === 'filling') return FILLING[windowState];
+		// An event without an RSVP deadline has no deadline to confirm before.
+		if (state === 'accepted' && !data.settings?.RSVPDeadline) {
+			return { ...GATES.accepted, note: 'Confirm your spot to secure your place.' };
+		}
+		return GATES[state];
+	});
 
 	const statusLabel = $derived(getApplicationStateLabel(data.user));
 </script>

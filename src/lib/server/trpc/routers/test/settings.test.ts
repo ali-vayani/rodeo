@@ -14,10 +14,24 @@ vi.mock('$lib/server/db', async () => {
 	return { prisma: mockDeep<PrismaClient>() };
 });
 
+vi.mock('$lib/server/storage', () => ({
+	getObject: vi.fn(),
+	putObject: vi.fn(),
+	deleteObject: vi.fn(),
+	storageFailureReason: (error: unknown) => String(error)
+}));
+
+const { getObject, putObject, deleteObject } = await import('$lib/server/storage');
+
 const { prisma } = await import('$lib/server/db');
 const db = prisma as DeepMockProxy<PrismaClient>;
 
-beforeEach(() => mockReset(db));
+beforeEach(() => {
+	mockReset(db);
+	vi.mocked(getObject).mockReset().mockResolvedValue(Buffer.from('pdf'));
+	vi.mocked(putObject).mockReset().mockResolvedValue(undefined);
+	vi.mocked(deleteObject).mockReset().mockResolvedValue(undefined);
+});
 
 describe('settings.get', () => {
 	it('returns the full row to an admin', async () => {
@@ -115,6 +129,47 @@ describe('settings.update', () => {
 		expect(result.timezone).toBe('America/New_York');
 	});
 
+	it('stores a null RSVP deadline untouched', async () => {
+		// A bare z.coerce.date() would turn null into the 1970 epoch; the nullable
+		// wrapper must pass it through so "no deadline" survives the round trip.
+		const caller = createTestCaller(db, adminUser);
+		db.settings.findFirst.mockResolvedValue(mockSettings);
+		db.settings.update.mockResolvedValue({ ...mockSettings, RSVPDeadline: null });
+
+		await caller.settings.update({ ...mockSettings, RSVPDeadline: null });
+
+		expect(db.settings.update).toHaveBeenCalledWith(
+			expect.objectContaining({ data: expect.objectContaining({ RSVPDeadline: null }) })
+		);
+	});
+
+	it('names the offending field when a date is unusable', async () => {
+		// The form sends `new Date('')` for a date typed without a time. Before these
+		// messages the reader got a bare "Invalid date" with no clue which of the five
+		// controls it meant.
+		const caller = createTestCaller(db, adminUser);
+		db.settings.findFirst.mockResolvedValue(mockSettings);
+
+		await expect(
+			caller.settings.update({ ...mockSettings, hackathonStartDate: new Date('') } as never)
+		).rejects.toMatchObject({ message: expect.stringContaining('Event Start') });
+	});
+
+	it('names both sides when the dates are out of order', async () => {
+		const caller = createTestCaller(db, adminUser);
+		db.settings.findFirst.mockResolvedValue(mockSettings);
+
+		await expect(
+			caller.settings.update({
+				...mockSettings,
+				applicationDeadline: new Date('2026-05-01'),
+				RSVPDeadline: new Date('2026-04-01')
+			} as never)
+		).rejects.toMatchObject({
+			message: expect.stringContaining('RSVP Deadline must be on or after Applications Close')
+		});
+	});
+
 	it('creates row when none exists', async () => {
 		const caller = createTestCaller(db, adminUser);
 		db.settings.findFirst.mockResolvedValue(null);
@@ -136,6 +191,68 @@ describe('settings.update', () => {
 
 describe('settings.updateTemplates', () => {
 	const templates = { accept: { subject: 'New subject', body: 'New body' } };
+	const ref = {
+		key: 'email-attachments/123e4567-e89b-42d3-a456-426614174000',
+		filename: 'schedule.pdf',
+		contentType: 'application/pdf',
+		size: 3
+	};
+
+	it('keeps the previous file when saving its removal fails', async () => {
+		const savedRef = {
+			...ref,
+			key: ref.key.replace('email-attachments/', 'email-template-attachments/')
+		};
+		db.settings.findFirst.mockResolvedValue({ ...mockSettings, acceptAttachments: [savedRef] });
+		db.settings.update.mockRejectedValue(new Error('database unavailable'));
+		await expect(
+			createTestCaller(db, adminUser).settings.updateTemplates({
+				templates: {
+					accept: { ...templates.accept, attachments: [] }
+				}
+			})
+		).rejects.toThrow('database unavailable');
+		expect(deleteObject).not.toHaveBeenCalled();
+	});
+
+	it('removes newly copied files if the database write fails but keeps the upload for retry', async () => {
+		db.settings.findFirst.mockResolvedValue(mockSettings);
+		db.settings.update.mockRejectedValue(new Error('database unavailable'));
+		await expect(
+			createTestCaller(db, adminUser).settings.updateTemplates({
+				templates: {
+					accept: { ...templates.accept, attachments: [ref] }
+				}
+			})
+		).rejects.toThrow('database unavailable');
+		expect(putObject).toHaveBeenCalledOnce();
+		expect(deleteObject).toHaveBeenCalledWith(vi.mocked(putObject).mock.calls[0][0]);
+		expect(deleteObject).not.toHaveBeenCalledWith(ref.key);
+	});
+
+	it('refuses a missing attachment without changing the template', async () => {
+		vi.mocked(getObject).mockRejectedValue(new Error('NoSuchKey'));
+		await expect(
+			createTestCaller(db, adminUser).settings.updateTemplates({
+				templates: {
+					accept: { ...templates.accept, attachments: [ref] }
+				}
+			})
+		).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+		expect(db.settings.update).not.toHaveBeenCalled();
+		expect(db.settings.create).not.toHaveBeenCalled();
+	});
+
+	it('rejects more than five attachments', async () => {
+		await expect(
+			createTestCaller(db, adminUser).settings.updateTemplates({
+				templates: {
+					accept: { ...templates.accept, attachments: Array(6).fill(ref) }
+				}
+			})
+		).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+		expect(putObject).not.toHaveBeenCalled();
+	});
 
 	it('writes only the template columns it was given', async () => {
 		// Regression guard: this is the whole reason updateTemplates exists. A full

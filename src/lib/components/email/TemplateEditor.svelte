@@ -4,11 +4,19 @@
 	let {
 		label,
 		subject = $bindable(),
-		body = $bindable()
+		body = $bindable(),
+		unavailable = new Map()
 	}: {
 		label: string;
 		subject: string;
 		body: string;
+		/**
+		 * Variables with no value under the current settings, mapped to why — from
+		 * `unavailableVariables`. Their chips are shown greyed and refuse to insert:
+		 * hiding them would leave an organizer wondering where a variable went, and the
+		 * send paths refuse a template that uses one anyway.
+		 */
+		unavailable?: ReadonlyMap<string, string>;
 	} = $props();
 
 	let subjectEl = $state<HTMLInputElement | undefined>(undefined);
@@ -44,7 +52,7 @@
 	}
 </script>
 
-<div class="flex min-h-0 flex-1 flex-col gap-3">
+<div class="flex flex-col gap-3">
 	<div class="flex flex-col gap-1.5">
 		<label
 			for="template-subject"
@@ -70,18 +78,26 @@
 			Insert
 		</span>
 		{#each TEMPLATE_VARIABLES as v (v.key)}
+			{@const blockedReason = unavailable.get(v.key)}
 			<button
 				type="button"
 				onclick={() => insertVariable(v.key)}
-				title={'hint' in v ? `${v.label} — ${v.hint}` : v.label}
-				class="cursor-pointer rounded-md border border-border bg-muted px-1.5 py-0.5 font-mono text-xs text-foreground hover:bg-neutral-100"
+				disabled={blockedReason !== undefined}
+				title={blockedReason
+					? `${v.label} — unavailable because ${blockedReason}. An email using it cannot be sent.`
+					: 'hint' in v
+						? `${v.label} — ${v.hint}`
+						: v.label}
+				class="rounded-md border border-border bg-muted px-1.5 py-0.5 font-mono text-xs text-foreground
+					enabled:cursor-pointer enabled:hover:bg-neutral-100
+					disabled:cursor-not-allowed disabled:text-foreground-tertiary disabled:line-through disabled:opacity-50"
 			>
 				{'{{' + v.key + '}}'}
 			</button>
 		{/each}
 	</div>
 
-	<div class="flex min-h-0 flex-1 flex-col gap-1.5">
+	<div class="mb-2 flex flex-col gap-1.5">
 		<label
 			for="template-body"
 			class="font-mono text-2xs font-medium tracking-eyebrow text-foreground-tertiary uppercase"
@@ -94,7 +110,7 @@
 			bind:value={body}
 			onfocus={() => (lastFocused = 'body')}
 			placeholder="Body of the {label} email"
-			class="min-h-40 w-full flex-1 resize-none rounded-md border border-border bg-card px-3 py-2 font-mono text-base leading-relaxed text-foreground outline-none focus:border-primary md:min-h-0"
+			class="min-h-48 w-full resize-y rounded-md border border-border bg-card px-3 py-2 font-mono text-base leading-relaxed text-foreground outline-none focus:border-primary"
 		></textarea>
 	</div>
 </div>

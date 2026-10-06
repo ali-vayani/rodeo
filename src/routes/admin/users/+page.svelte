@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { errorMessage } from '$lib/ui/errors';
 	import type { PageData } from './$types';
-	import { untrack } from 'svelte';
+	import { onDestroy, untrack } from 'svelte';
 	import { fly } from 'svelte/transition';
 	import { createClient } from '$lib/trpc/client';
 	import UserFilters from '$lib/components/admin/UserFilters.svelte';
@@ -14,9 +14,10 @@
 		DECISION_VALUES,
 		DECISION_OPTIONS,
 		allChecked,
+		allCleared,
 		buildRecipientParams
 	} from '$lib/admin/filters';
-	import { linkedFacetKey, type FacetState } from '$lib/facets';
+	import type { FacetState } from '$lib/facets';
 	import { Role, UserStatus, DecisionStatus } from '$lib/generated/prisma/enums';
 	import { STAFF_ROLES } from '$lib/auth/permissions';
 
@@ -33,18 +34,22 @@
 	let totalPages = $derived(Math.ceil(total / PAGE_SIZE));
 	let loadingPage = $state(false);
 
+	let listRequest = 0;
+
 	async function loadPage(p: number) {
+		clearTimeout(searchTimer);
+		const request = ++listRequest;
 		loadingPage = true;
 		try {
 			const result = await trpc.user.list.query(buildListParams(p));
+			if (request !== listRequest) return;
 			users = result.users;
 			total = result.total;
-			expansion = result.search;
 			page = p;
 		} catch (e) {
-			showToast(errorMessage(e, 'Failed to load page'), 'error');
+			if (request === listRequest) showToast(errorMessage(e, 'Failed to load page'), 'error');
 		} finally {
-			loadingPage = false;
+			if (request === listRequest) loadingPage = false;
 		}
 	}
 
@@ -53,6 +58,7 @@
 	let roleFilter = $state(allChecked(ALL_ROLES));
 	let statusFilter = $state(allChecked(ALL_STATUSES));
 	let decisionFilter = $state(allChecked(DECISION_OPTIONS));
+	let pendingFilter = $state(allChecked(DECISION_OPTIONS));
 	let search = $state('');
 
 	/**
@@ -62,49 +68,19 @@
 	 */
 	let facetSelection = $state<FacetState>({});
 
-	/**
-	 * The Name facet has no control of its own, since it is one distinct value per person.
-	 * The did-you-mean chips below the search box drive it directly.
-	 */
-	const NAME_FACET = linkedFacetKey('NAME');
-
 	function buildListParams(p: number) {
 		return {
 			page: p,
 			pageSize: PAGE_SIZE,
-			...buildRecipientParams(roleFilter, statusFilter, decisionFilter, search, facetSelection)
+			...buildRecipientParams(
+				roleFilter,
+				statusFilter,
+				decisionFilter,
+				pendingFilter,
+				search,
+				facetSelection
+			)
 		};
-	}
-
-	// What the server fell back to when the typed term matched almost nothing. The rows
-	// themselves are `createdAt desc` under pagination and are NOT ranked; these names are.
-	let expansion = $state(untrack(() => data.search));
-
-	/**
-	 * The wording follows `exact`, how many rows the typed term matched on its own, not
-	 * `fuzzy`, which only says the fold ran. The fold runs below a floor of five, so
-	 * "No exact match" over a list of exact matches would read as a broken search.
-	 */
-	let suggestionsLabel = $derived(
-		expansion.exact > 0 ? 'Similar names:' : 'No exact match — did you mean:'
-	);
-
-	/** The name a did-you-mean chip currently pins the list to, if any. */
-	let pinnedName = $derived(
-		facetSelection[NAME_FACET]?.values?.length === 1 ? facetSelection[NAME_FACET].values[0] : null
-	);
-
-	/**
-	 * Narrow to one suggested person with an exact `name` filter. The search term is left
-	 * in the box on purpose, so the strip stays on screen and a wrong guess is one click
-	 * away from the next candidate.
-	 */
-	function pickSuggestion(name: string) {
-		facetSelection = {
-			...facetSelection,
-			[NAME_FACET]: { values: pinnedName === name ? [] : [name] }
-		};
-		loadPage(1);
 	}
 
 	function toggleRole(r: string) {
@@ -119,28 +95,44 @@
 		decisionFilter = { ...decisionFilter, [d]: !decisionFilter[d] };
 		loadPage(1);
 	}
+	function togglePending(d: string) {
+		pendingFilter = { ...pendingFilter, [d]: !pendingFilter[d] };
+		loadPage(1);
+	}
 
 	// `clear` resets a group to its all-ticked "no filter" default. None ticked also
 	// means "no filter", so clearing to empty would show every row above a panel
 	// claiming nothing is selected.
 	function clearRole() {
-		roleFilter = allChecked(ALL_ROLES);
+		roleFilter = allCleared(ALL_ROLES);
 		loadPage(1);
 	}
 	function clearStatus() {
-		statusFilter = allChecked(ALL_STATUSES);
+		statusFilter = allCleared(ALL_STATUSES);
 		loadPage(1);
 	}
 	function clearDecision() {
-		decisionFilter = allChecked(DECISION_OPTIONS);
+		decisionFilter = allCleared(DECISION_OPTIONS);
+		loadPage(1);
+	}
+	function clearPending() {
+		pendingFilter = allCleared(DECISION_OPTIONS);
 		loadPage(1);
 	}
 
 	let searchTimer: ReturnType<typeof setTimeout>;
 	function onSearchInput() {
+		// Invalidate pending results as soon as typing resumes, before the debounce ends.
+		listRequest++;
+		loadingPage = true;
 		clearTimeout(searchTimer);
 		searchTimer = setTimeout(() => loadPage(1), 400);
 	}
+
+	onDestroy(() => {
+		clearTimeout(searchTimer);
+		listRequest++;
+	});
 
 	let exporting = $state(false);
 
@@ -180,7 +172,9 @@
 	let editRole = $state<Role>(Role.UNDECLARED);
 	let editStatus = $state<UserStatus>(UserStatus.CREATED);
 	let editPending = $state<DecisionStatus | ''>('');
+	let editNotes = $state('');
 	let saving = $state(false);
+	let savingNotes = $state(false);
 
 	/**
 	 * Released means the applicant has been emailed an outcome, so both decision controls
@@ -205,6 +199,7 @@
 		editRole = user.role;
 		editStatus = user.status;
 		editPending = user.pendingDecision ?? '';
+		editNotes = user.notes ?? '';
 		detailOpen = true;
 		loadProfile(user.uid);
 	}
@@ -239,6 +234,23 @@
 		profileLoading = false;
 		// Invalidate any in-flight fetch so it can't repopulate a closed modal.
 		profileToken++;
+	}
+
+	async function saveNotes() {
+		if (!selectedUser) return;
+		savingNotes = true;
+		try {
+			const updated = await trpc.user.updateNotes.mutate({
+				uid: selectedUser.uid,
+				notes: editNotes
+			});
+			users = users.map((u) => (u.uid === updated.uid ? { ...u, notes: updated.notes } : u));
+			showToast('Notes saved');
+		} catch (e) {
+			showToast(errorMessage(e, 'Failed to save notes'), 'error');
+		} finally {
+			savingNotes = false;
+		}
 	}
 
 	async function saveAll() {
@@ -334,6 +346,9 @@
 		{decisionFilter}
 		onToggleDecision={toggleDecision}
 		onClearDecision={clearDecision}
+		{pendingFilter}
+		onTogglePending={togglePending}
+		onClearPending={clearPending}
 		facets={data.facets}
 		bind:selection={facetSelection}
 		onSelectionChange={() => loadPage(1)}
@@ -352,43 +367,6 @@
 				{total} total
 			</span>
 		</div>
-
-		<!--
-			Suggestion strip, shown only when the server has names the typed term did not
-			already select.
-
-			These names are the one ranked thing on this screen. The rows below are
-			`createdAt desc` under pagination, since a score computed in application memory
-			cannot drive a SQL ORDER BY without breaking skip/take. Clicking a name applies
-			it as an exact filter.
-		-->
-		{#if expansion.fuzzy && expansion.names.length > 0}
-			<div
-				class="flex flex-wrap items-center gap-x-2 gap-y-1.5 border-b border-border bg-muted px-4 py-2.5"
-			>
-				<span class="text-xs text-foreground-secondary">{suggestionsLabel}</span>
-				{#each expansion.names as name (name)}
-					<button
-						type="button"
-						aria-pressed={pinnedName === name}
-						onclick={() => pickSuggestion(name)}
-						class="max-w-full cursor-pointer truncate rounded-sm border px-2 py-0.5 text-sm
-						       transition-colors duration-150 focus-visible:shadow-ring {pinnedName === name
-							? 'border-primary bg-primary text-primary-foreground'
-							: 'border-border bg-card text-foreground hover:bg-surface-hover'}"
-					>
-						{name}
-					</button>
-				{/each}
-				{#if expansion.capped}
-					<!-- The suggestion list hit its cap, so it is a sample of the close matches
-					     rather than all of them. A truncated list is a different answer. -->
-					<span class="text-xs text-foreground-tertiary">
-						showing the {expansion.names.length} closest
-					</span>
-				{/if}
-			</div>
-		{/if}
 
 		{#if users.length === 0}
 			<div class="py-12 text-center text-base text-muted-foreground">No results</div>
@@ -669,6 +647,23 @@
 					{selectedUser.activeDecision ? decLabel(selectedUser.activeDecision) : 'None'}
 				</div>
 				<div class="mt-1 text-2xs text-muted-foreground">Set by releasing decisions</div>
+			</div>
+		</div>
+
+		<!-- Admin notes: freeform per-user annotations visible only to admins. -->
+		<div>
+			<div class="mb-1.5 text-2xs font-bold tracking-eyebrow text-muted-foreground uppercase">
+				Admin Notes
+			</div>
+			<textarea
+				bind:value={editNotes}
+				placeholder="Add notes about this user…"
+				rows={4}
+				maxlength={5000}
+				class="w-full resize-y rounded-md border border-border bg-muted px-3 py-2.5 text-base text-foreground outline-none placeholder:text-foreground-tertiary focus:border-primary focus:bg-white"
+			></textarea>
+			<div class="mt-2">
+				<Button variant="secondary" loading={savingNotes} onclick={saveNotes}>Save Notes</Button>
 			</div>
 		</div>
 

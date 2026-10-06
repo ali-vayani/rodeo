@@ -21,17 +21,22 @@
 	interface Props {
 		availability: WalletAvailability;
 		rsvpDeadline: Date | string | null | undefined;
+		/** The fallback unlock date when no RSVP deadline is configured. */
+		eventStart: Date | string | null | undefined;
 	}
 
-	let { availability, rsvpDeadline }: Props = $props();
+	let { availability, rsvpDeadline, eventStart }: Props = $props();
 
 	const offered = $derived(availability.apple || availability.google);
 
 	const waitingMessage = $derived.by(() => {
 		if (availability.reason !== 'RSVP_STILL_OPEN') return null;
-		return rsvpDeadline
-			? `Wallet passes unlock after the RSVP deadline on ${formatDateLong(rsvpDeadline)}.`
-			: 'Wallet passes unlock after the RSVP deadline.';
+		if (rsvpDeadline) {
+			return `Wallet passes unlock after the RSVP deadline on ${formatDateLong(rsvpDeadline)}.`;
+		}
+		return eventStart
+			? `Wallet passes unlock when the event starts on ${formatDateLong(eventStart)}.`
+			: 'Wallet passes unlock once the attendee list is final.';
 	});
 </script>
 

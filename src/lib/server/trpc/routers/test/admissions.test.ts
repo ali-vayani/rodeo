@@ -40,6 +40,7 @@ beforeEach(() => {
 	// `list` folds the blacklist to flag applicants; default to empty so tests that are
 	// about filtering don't each have to say they aren't about the blacklist.
 	db.blacklist.findMany.mockResolvedValue([] as never);
+	db.templateOverride.findMany.mockResolvedValue([] as never);
 });
 
 afterEach(() => {
@@ -79,6 +80,46 @@ describe('admissions.list', () => {
 		db.user.findMany.mockResolvedValue([hackerUser, pendingUser] as never);
 		const result = await caller.admissions.list({});
 		expect(result.applicants).toHaveLength(2);
+	});
+
+	it('fetches everything and skips the count query when no page is requested', async () => {
+		// The ranked decision pass needs the whole queue for bulk release, so it calls
+		// `list` without `pageSize` and must keep getting every match back.
+		const caller = createTestCaller(db, adminUser);
+		db.user.findMany.mockResolvedValue([hackerUser, pendingUser] as never);
+		const result = await caller.admissions.list({});
+		expect(db.user.findMany).toHaveBeenCalledWith(
+			expect.not.objectContaining({ skip: expect.anything(), take: expect.anything() })
+		);
+		expect(db.user.count).not.toHaveBeenCalled();
+		expect(result.total).toBe(2);
+	});
+
+	it('paginates when page and pageSize are given', async () => {
+		const caller = createTestCaller(db, adminUser);
+		db.user.count.mockResolvedValue(250);
+		db.user.findMany.mockResolvedValue([hackerUser] as never);
+
+		const result = await caller.admissions.list({ page: 3, pageSize: 100 });
+
+		expect(db.user.findMany).toHaveBeenCalledWith(
+			expect.objectContaining({ skip: 200, take: 100 })
+		);
+		expect(result.total).toBe(250);
+		expect(result.page).toBe(3);
+		expect(result.pageSize).toBe(100);
+	});
+
+	it('counts against the same filters used to fetch the page', async () => {
+		const caller = createTestCaller(db, adminUser);
+		db.user.count.mockResolvedValue(1);
+		db.user.findMany.mockResolvedValue([hackerUser] as never);
+
+		await caller.admissions.list({ roles: [Role.HACKER], page: 1, pageSize: 100 });
+
+		const findManyWhere = db.user.findMany.mock.calls[0][0]?.where;
+		const countWhere = db.user.count.mock.calls[0][0]?.where;
+		expect(countWhere).toEqual(findManyWhere);
 	});
 
 	it('reports no blacklist match when the table is empty', async () => {
@@ -576,26 +617,80 @@ describe('admissions.setDecision', () => {
 });
 
 describe('admissions.release', () => {
+	it('refuses the whole batch when the decision template cannot be rendered', async () => {
+		// Before the transaction, deliberately: releasing is irreversible, so an
+		// unrenderable template has to stop the batch while stopping it is still free.
+		// Skipping the send afterwards would leave applicants decided and unmailed.
+		const caller = createTestCaller(db, adminUser);
+		db.user.findMany.mockResolvedValue([pendingUser] as never);
+		db.settings.findFirst.mockResolvedValue({
+			...mockSettings,
+			RSVPDeadline: null,
+			acceptTemplate: 'You are in! RSVP by {{rsvp_deadline}}.'
+		} as never);
+
+		await expect(caller.admissions.release({})).rejects.toMatchObject({
+			code: 'BAD_REQUEST',
+			message: expect.stringContaining('{{rsvp_deadline}}')
+		});
+
+		// The decisions are untouched, which is the whole point of checking first.
+		expect(db.$transaction).not.toHaveBeenCalled();
+		expect(db.user.updateManyAndReturn).not.toHaveBeenCalled();
+	});
+
+	it('releases normally when the template needs nothing the event lacks', async () => {
+		const caller = createTestCaller(db, adminUser);
+		db.user.findMany.mockResolvedValue([pendingUser] as never);
+		db.settings.findFirst.mockResolvedValue({
+			...mockSettings,
+			RSVPDeadline: null,
+			acceptTemplate: 'You are in! We start {{hackathon_start}}.'
+		} as never);
+		db.log.create.mockResolvedValue({} as never);
+		db.$transaction.mockResolvedValue([[{ uid: pendingUser.uid }]]);
+
+		await expect(caller.admissions.release({})).resolves.toEqual({ released: 1 });
+	});
+
+	it('ignores the variable in a template no one in the batch will receive', async () => {
+		// Only ACCEPTED is pending here, so a broken waitlist template is not this
+		// batch's problem and must not block it.
+		const caller = createTestCaller(db, adminUser);
+		db.user.findMany.mockResolvedValue([pendingUser] as never);
+		db.settings.findFirst.mockResolvedValue({
+			...mockSettings,
+			RSVPDeadline: null,
+			acceptTemplate: 'You are in!',
+			waitlistTemplate: 'Hold tight until {{rsvp_deadline}}.'
+		} as never);
+		db.log.create.mockResolvedValue({} as never);
+		db.$transaction.mockResolvedValue([[{ uid: pendingUser.uid }]]);
+
+		await expect(caller.admissions.release({})).resolves.toEqual({ released: 1 });
+	});
+
 	it('copies pending→active for all matched users', async () => {
 		const caller = createTestCaller(db, adminUser);
 		db.user.findMany.mockResolvedValue([pendingUser] as never);
 		db.settings.findFirst.mockResolvedValue(null);
 		db.log.create.mockResolvedValue({} as never);
-		db.$transaction.mockResolvedValue([{ count: 1 }]);
+		db.$transaction.mockResolvedValue([[{ uid: pendingUser.uid }]]);
 
 		const result = await caller.admissions.release({});
 		expect(result).toEqual({ released: 1 });
 		expect(db.$transaction).toHaveBeenCalled();
-		// The CAS is keyed on the exact pending value read.
-		expect(db.user.updateMany).toHaveBeenCalledWith(
+		// The CAS is keyed per decision group on the exact pending value read.
+		expect(db.user.updateManyAndReturn).toHaveBeenCalledWith(
 			expect.objectContaining({
-				where: { uid: pendingUser.uid, pendingDecision: pendingUser.pendingDecision },
+				where: { uid: { in: [pendingUser.uid] }, pendingDecision: pendingUser.pendingDecision },
 				data: {
 					activeDecision: pendingUser.pendingDecision,
 					pendingDecision: null,
 					claimedBy: null,
 					claimedAt: null
-				}
+				},
+				select: { uid: true }
 			})
 		);
 	});
@@ -605,11 +700,11 @@ describe('admissions.release', () => {
 		db.user.findMany.mockResolvedValue([pendingUser] as never);
 		db.settings.findFirst.mockResolvedValue(null);
 		db.log.create.mockResolvedValue({} as never);
-		db.$transaction.mockResolvedValue([{ count: 1 }]);
+		db.$transaction.mockResolvedValue([[{ uid: pendingUser.uid }]]);
 
 		await caller.admissions.release({});
 
-		const data = db.user.updateMany.mock.calls[0]?.[0]?.data;
+		const data = db.user.updateManyAndReturn.mock.calls[0]?.[0]?.data;
 		expect(data).toMatchObject({ claimedBy: null, claimedAt: null });
 	});
 
@@ -622,11 +717,11 @@ describe('admissions.release', () => {
 		db.user.findMany.mockResolvedValue([pendingUser] as never);
 		db.settings.findFirst.mockResolvedValue(null);
 		db.log.create.mockResolvedValue({} as never);
-		db.$transaction.mockResolvedValue([{ count: 1 }]);
+		db.$transaction.mockResolvedValue([[{ uid: pendingUser.uid }]]);
 
 		await caller.admissions.release({});
 
-		const data = db.user.updateMany.mock.calls[0]?.[0]?.data;
+		const data = db.user.updateManyAndReturn.mock.calls[0]?.[0]?.data;
 		expect(data).not.toHaveProperty('decidedBy');
 		expect(data).not.toHaveProperty('decidedAt');
 	});
@@ -636,7 +731,7 @@ describe('admissions.release', () => {
 		db.user.findMany.mockResolvedValue([pendingUser] as never);
 		db.settings.findFirst.mockResolvedValue(null);
 		db.log.create.mockResolvedValue({} as never);
-		db.$transaction.mockResolvedValue([{ count: 1 }]);
+		db.$transaction.mockResolvedValue([[{ uid: pendingUser.uid }]]);
 
 		await caller.admissions.release({});
 
@@ -657,7 +752,7 @@ describe('admissions.release', () => {
 		db.user.findMany.mockResolvedValue([pendingUser] as never);
 		db.settings.findFirst.mockResolvedValue(mockSettings);
 		db.log.create.mockResolvedValue({} as never);
-		db.$transaction.mockResolvedValue([{ count: 1 }]);
+		db.$transaction.mockResolvedValue([[{ uid: pendingUser.uid }]]);
 
 		await caller.admissions.release({});
 
@@ -743,6 +838,22 @@ describe('admissions.list — typo-tolerant search', () => {
 	beforeEach(() => {
 		db.user.findMany.mockResolvedValue([hackerUser] as never);
 	});
+
+	it.each(['Hackr', 'Hacker', 'hacker@example.com'])(
+		'uses the same search predicate as Users for %s',
+		async (search) => {
+			db.user.count.mockResolvedValue(0);
+			const caller = createTestCaller(db, adminUser);
+			const users = await caller.user.list({ search });
+			const usersWhere = db.user.findMany.mock.calls.at(-1)?.[0]?.where as { AND: unknown[] };
+
+			const admissions = await caller.admissions.list({ search });
+			const admissionsWhere = db.user.findMany.mock.calls.at(-1)?.[0]?.where as { AND: unknown[] };
+
+			expect(admissions.search).toEqual(users.search);
+			expect(admissionsWhere.AND.at(-1)).toEqual(usersWhere.AND.at(-1));
+		}
+	);
 
 	it('leaves a productive search alone, without scanning names', async () => {
 		db.user.count.mockResolvedValue(EXACT_MATCH_FLOOR as never);
@@ -1027,6 +1138,195 @@ describe('admissions.setScore', () => {
 			caller.admissions.setScore({ uid: hackerUser.uid, score: 17.5 })
 		).rejects.toThrow();
 		expect(db.user.update).not.toHaveBeenCalled();
+	});
+});
+
+describe('admissions.setRubricScore', () => {
+	/** Routes the interactive transaction straight at the mock client. */
+	const runInTransaction = () =>
+		db.$transaction.mockImplementation(((arg: unknown) =>
+			typeof arg === 'function'
+				? (arg as (tx: typeof db) => unknown)(db)
+				: Promise.resolve([])) as never);
+
+	/** The applicant's role picks the rubric, so the fetch precedes validation. */
+	const mockRole = (role: Role = Role.HACKER) =>
+		db.user.findUnique.mockResolvedValueOnce({ role } as never);
+
+	const rubric = [
+		{
+			id: 'c1',
+			role: Role.HACKER,
+			title: 'Motivation',
+			order: 0,
+			levels: [
+				{ id: 'c1l1', criterionId: 'c1', label: '1', description: '', points: 1, order: 0 },
+				{ id: 'c1l2', criterionId: 'c1', label: '2', description: '', points: 4, order: 1 }
+			]
+		},
+		{
+			id: 'c2',
+			role: Role.HACKER,
+			title: 'Project',
+			order: 1,
+			levels: [
+				{ id: 'c2l1', criterionId: 'c2', label: '1', description: '', points: 2, order: 0 },
+				{ id: 'c2l2', criterionId: 'c2', label: '2', description: '', points: 6, order: 1 }
+			]
+		}
+	];
+
+	const fullSelection = [
+		{ criterionId: 'c1', levelId: 'c1l2' },
+		{ criterionId: 'c2', levelId: 'c2l2' }
+	];
+
+	it('computes the total server-side, replaces the selections, and releases the claim', async () => {
+		const caller = createTestCaller(db, adminUser);
+		runInTransaction();
+		mockRole();
+		db.rubricCriterion.findMany.mockResolvedValue(rubric as never);
+		db.user.update.mockResolvedValue({ ...hackerUser, score: 7, scoreDelta: -3 } as never);
+		db.log.create.mockResolvedValue({} as never);
+
+		// Picked 4 + 6, delta -3 → 7. The client never sends a total to trust.
+		const result = await caller.admissions.setRubricScore({
+			uid: hackerUser.uid,
+			selections: fullSelection,
+			delta: -3,
+			notes: 'Solid'
+		});
+
+		expect(result.score).toBe(7);
+		expect(db.user.update).toHaveBeenCalledWith({
+			where: claimableWhere(hackerUser.uid, adminUser.uid),
+			data: {
+				score: 7,
+				scoreDelta: -3,
+				notes: 'Solid',
+				scoredBy: adminUser.uid,
+				scoredAt: new Date(),
+				claimedBy: null,
+				claimedAt: null
+			}
+		});
+		expect(db.rubricSelection.deleteMany).toHaveBeenCalledWith({
+			where: { userId: hackerUser.uid }
+		});
+		expect(db.rubricSelection.createMany).toHaveBeenCalledWith({
+			data: fullSelection.map((s) => ({ userId: hackerUser.uid, ...s }))
+		});
+	});
+
+	it("validates against the applicant's own role's rubric only", async () => {
+		const caller = createTestCaller(db, adminUser);
+		runInTransaction();
+		mockRole(Role.MENTOR);
+		db.rubricCriterion.findMany.mockResolvedValue(rubric as never);
+		db.user.update.mockResolvedValue({ ...hackerUser, score: 12 } as never);
+		db.log.create.mockResolvedValue({} as never);
+
+		await caller.admissions.setRubricScore({ uid: hackerUser.uid, selections: fullSelection });
+
+		expect(db.rubricCriterion.findMany).toHaveBeenCalledWith({
+			where: { role: Role.MENTOR },
+			include: { levels: true }
+		});
+	});
+
+	it('logs the total, the rubric subtotal, and the delta', async () => {
+		const caller = createTestCaller(db, adminUser);
+		runInTransaction();
+		mockRole();
+		db.rubricCriterion.findMany.mockResolvedValue(rubric as never);
+		db.user.update.mockResolvedValue({ ...hackerUser, score: 12 } as never);
+		db.log.create.mockResolvedValue({} as never);
+
+		await caller.admissions.setRubricScore({
+			uid: hackerUser.uid,
+			selections: fullSelection,
+			delta: 2
+		});
+
+		expect(db.log.create).toHaveBeenCalledWith(
+			expect.objectContaining({
+				data: expect.objectContaining({
+					action: 'admissions.score.set',
+					metadata: expect.objectContaining({ score: 12, rubricScore: 10, delta: 2 })
+				})
+			})
+		);
+	});
+
+	it('rejects when a criterion has no selection', async () => {
+		const caller = createTestCaller(db, adminUser);
+		mockRole();
+		db.rubricCriterion.findMany.mockResolvedValue(rubric as never);
+
+		await expect(
+			caller.admissions.setRubricScore({
+				uid: hackerUser.uid,
+				selections: [{ criterionId: 'c1', levelId: 'c1l1' }]
+			})
+		).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+		expect(db.user.update).not.toHaveBeenCalled();
+	});
+
+	it('rejects a level that belongs to a different criterion', async () => {
+		const caller = createTestCaller(db, adminUser);
+		mockRole();
+		db.rubricCriterion.findMany.mockResolvedValue(rubric as never);
+
+		await expect(
+			caller.admissions.setRubricScore({
+				uid: hackerUser.uid,
+				selections: [
+					{ criterionId: 'c1', levelId: 'c2l1' },
+					{ criterionId: 'c2', levelId: 'c2l2' }
+				]
+			})
+		).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+		expect(db.user.update).not.toHaveBeenCalled();
+	});
+
+	it("rejects when the applicant's role has no rubric", async () => {
+		const caller = createTestCaller(db, adminUser);
+		mockRole(Role.VOLUNTEER);
+		db.rubricCriterion.findMany.mockResolvedValue([] as never);
+
+		await expect(
+			caller.admissions.setRubricScore({ uid: hackerUser.uid, selections: [] })
+		).rejects.toMatchObject({ code: 'BAD_REQUEST', message: expect.stringContaining('volunteer') });
+	});
+
+	it('throws NOT_FOUND when the applicant does not exist', async () => {
+		const caller = createTestCaller(db, adminUser);
+		db.user.findUnique.mockResolvedValue(null as never);
+
+		await expect(
+			caller.admissions.setRubricScore({ uid: 'ghost-uid', selections: fullSelection })
+		).rejects.toMatchObject({ code: 'NOT_FOUND' });
+		expect(db.rubricCriterion.findMany).not.toHaveBeenCalled();
+	});
+
+	it('throws CONFLICT naming the holder when another admin has it locked', async () => {
+		const caller = createTestCaller(db, adminUser);
+		runInTransaction();
+		mockRole();
+		db.rubricCriterion.findMany.mockResolvedValue(rubric as never);
+		db.user.update.mockRejectedValue(recordNotFound());
+		// Second findUnique call: the conflict path re-reads to name the claim holder.
+		db.user.findUnique.mockResolvedValueOnce({
+			name: claimedHacker.name,
+			claimer: { name: adminUser2.name }
+		} as never);
+
+		await expect(
+			caller.admissions.setRubricScore({ uid: claimedHacker.uid, selections: fullSelection })
+		).rejects.toMatchObject({
+			code: 'CONFLICT',
+			message: expect.stringContaining('Second Admin')
+		});
 	});
 });
 

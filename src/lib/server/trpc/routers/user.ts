@@ -232,6 +232,23 @@ export const userRouter = router({
 			return user;
 		}),
 
+	updateNotes: adminProcedure
+		.input(z.object({ uid: z.string(), notes: z.string().max(5000) }))
+		.mutation(async ({ ctx, input }) => {
+			const user = await ctx.prisma.user.update({
+				where: { uid: input.uid },
+				data: { notes: input.notes.trim() || null }
+			});
+
+			await logAction(ctx, {
+				action: 'user.notes.update',
+				summary: `Updated notes for ${user.name}`,
+				target: { id: user.uid, label: user.name }
+			});
+
+			return user;
+		}),
+
 	exportCsv: adminProcedure.query(async ({ ctx }) => {
 		const users = await ctx.prisma.user.findMany({
 			orderBy: { createdAt: 'desc' }

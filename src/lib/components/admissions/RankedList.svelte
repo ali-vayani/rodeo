@@ -2,7 +2,6 @@
 	import { SvelteSet } from 'svelte/reactivity';
 	import ApplicationResponses from './ApplicationResponses.svelte';
 	import BlacklistBadge from './BlacklistBadge.svelte';
-	import { MAX_SCORE } from '$lib/admissions/score';
 	import { effectiveDecision } from '$lib/admissions/decision';
 	import { Badge, Button, Checkbox, Modal } from '$lib/components/ui';
 	import { ConfirmDialog, DataTable } from '$lib/components/patterns';
@@ -11,6 +10,9 @@
 	import type { BlacklistMatch } from '$lib/blacklist/match';
 	import type { DecisionStatus } from '$lib/generated/prisma/enums';
 	import { humanizeEnum, pluralize } from '$lib/format';
+	import { APPLICANT_ROLES } from '$lib/admissions/roles';
+	import RubricScoreModal from './RubricScoreModal.svelte';
+	import { type RubricCriterion } from '$lib/admissions/rubric';
 
 	type Applicant = {
 		uid: string;
@@ -18,11 +20,13 @@
 		email: string;
 		role: string;
 		score: number | null;
+		scoreDelta: number | null;
 		notes: string | null;
 		scorer: { name: string } | null;
 		pendingDecision: string | null;
 		activeDecision: string | null;
 		blacklistMatch: BlacklistMatch | null;
+		rubricSelections: Array<{ criterionId: string; levelId: string }>;
 		application: Array<{
 			value: string;
 			userId: string;
@@ -37,21 +41,39 @@
 		deciding,
 		releasingOne,
 		unscoredCount,
+		maxScoreFor,
+		rubricForRole,
 		onDecide,
 		onClear,
-		onReleaseOne
+		onReleaseOne,
+		onRescore,
+		onSaveRubricScore,
+		onSelectionChange
 	}: {
 		/** Already ranked by the server; never reordered here. */
 		applicants: Applicant[];
 		loading: boolean;
 		deciding: boolean;
 		releasingOne: boolean;
+		/** Per-role rubrics mean per-role maxes; each row shows its own scale. */
+		maxScoreFor: (role: string) => number;
+		rubricForRole: (role: string) => RubricCriterion[];
 		/** Unscored applicants cannot appear here; the count is shown so the list is not mistaken for complete. */
 		unscoredCount: number;
 		onDecide: (uids: string[], decision: DecisionStatus) => void;
 		onClear: (uid: string) => void;
 		/** Releases and emails immediately. */
 		onReleaseOne: (uid: string) => void;
+		/** Sends the applicant back to the review pane for a fresh score. */
+		onRescore: (uid: string) => void;
+		/** Rescores inline via the rubric modal; resolves on success, rejects on failure. */
+		onSaveRubricScore: (
+			uid: string,
+			selections: Array<{ criterionId: string; levelId: string }>,
+			delta: number
+		) => Promise<void>;
+		/** Fires whenever the checkbox selection changes; used by the parent for "Release Selected". */
+		onSelectionChange?: (uids: string[]) => void;
 	} = $props();
 
 	let selected = new SvelteSet<string>();
@@ -64,21 +86,83 @@
 
 	let releaseTarget = $state<(typeof rows)[number] | null>(null);
 
-	// Rank is a property of position in this list, not of the applicant.
-	let rows = $derived(applicants.map((applicant, i) => ({ ...applicant, rank: i + 1 })));
+	let rescoreTarget = $state<Applicant | null>(null);
+	let rescoreOpen = $state(false);
+	let rescoreSelections = $state<Record<string, string | undefined>>({});
+	let rescoreDelta = $state<number | undefined>(0);
+	let rescoreSaving = $state(false);
+
+	function openRescore(applicant: Applicant) {
+		rescoreTarget = applicant;
+		rescoreSelections = Object.fromEntries(
+			applicant.rubricSelections.map((s) => [s.criterionId, s.levelId])
+		);
+		rescoreDelta = applicant.scoreDelta ?? 0;
+		rescoreOpen = true;
+	}
+
+	async function saveRescore() {
+		if (!rescoreTarget) return;
+		const criteria = rubricForRole(rescoreTarget.role);
+		rescoreSaving = true;
+		try {
+			await onSaveRubricScore(
+				rescoreTarget.uid,
+				criteria.map((c) => ({ criterionId: c.id, levelId: rescoreSelections[c.id] as string })),
+				rescoreDelta ?? 0
+			);
+			rescoreOpen = false;
+			rescoreTarget = null;
+		} finally {
+			rescoreSaving = false;
+		}
+	}
+
+	let roleFilter = $state<string | null>(null);
+
+	// Fixed to APPLICANT_ROLES so tabs don't disappear when server-side filters narrow the results.
+	const availableRoles = APPLICANT_ROLES;
+
+	// Rank is a property of position in the visible list, not of the applicant: with
+	// per-role maxes, cross-role raw scores aren't comparable, so a role tab re-ranks
+	// within that role rather than showing global positions full of gaps.
+	let rows = $derived(
+		applicants
+			.filter((a) => !roleFilter || a.role === roleFilter)
+			.map((applicant, i) => ({ ...applicant, rank: i + 1 }))
+	);
 	type Row = (typeof rows)[number];
 
 	let allSelected = $derived(rows.length > 0 && selected.size === rows.length);
 
-	// Prunes uids that dropped out on refetch before a bulk action can send them.
+	// Prunes uids no longer visible — dropped by a refetch or hidden by the role tab —
+	// so a bulk action can never touch rows the operator can't see.
 	$effect(() => {
-		const present = new Set(applicants.map((a) => a.uid));
+		const present = new Set(rows.map((a) => a.uid));
 		for (const uid of selected) if (!present.has(uid)) selected.delete(uid);
 	});
 
-	function toggle(uid: string) {
-		if (selected.has(uid)) selected.delete(uid);
-		else selected.add(uid);
+	$effect(() => {
+		onSelectionChange?.([...selected]);
+	});
+
+	let lastToggledIdx = $state<number | null>(null);
+
+	function toggle(uid: string, index: number, shiftKey = false) {
+		if (shiftKey && lastToggledIdx !== null) {
+			const start = Math.min(lastToggledIdx, index);
+			const end = Math.max(lastToggledIdx, index);
+			// Apply the same action as what's happening to the clicked item.
+			const add = !selected.has(uid);
+			for (let i = start; i <= end; i++) {
+				if (add) selected.add(rows[i].uid);
+				else selected.delete(rows[i].uid);
+			}
+		} else {
+			if (selected.has(uid)) selected.delete(uid);
+			else selected.add(uid);
+		}
+		lastToggledIdx = index;
 	}
 
 	function toggleAll() {
@@ -136,6 +220,27 @@
 </script>
 
 <div class="mb-3 flex flex-wrap items-center gap-x-3 gap-y-2">
+	<div class="flex items-center gap-1">
+		<button
+			type="button"
+			onclick={() => (roleFilter = null)}
+			class="rounded px-2 py-0.5 text-xs font-medium transition-colors
+				       {roleFilter === null ? 'bg-primary text-white' : 'text-foreground-secondary hover:bg-muted'}"
+		>
+			All
+		</button>
+		{#each availableRoles as role (role)}
+			<button
+				type="button"
+				onclick={() => (roleFilter = roleFilter === role ? null : role)}
+				class="rounded px-2 py-0.5 text-xs font-medium transition-colors
+					       {roleFilter === role ? 'bg-primary text-white' : 'text-foreground-secondary hover:bg-muted'}"
+			>
+				{humanizeEnum(role)}
+			</button>
+		{/each}
+	</div>
+
 	<Button size="sm" onclick={toggleAll} disabled={rows.length === 0}>
 		{allSelected ? 'Clear selection' : 'Select all'}
 	</Button>
@@ -197,11 +302,14 @@
 >
 	{#snippet cell({ row, column })}
 		{#if column.key === 'select'}
-			<Checkbox
-				checked={selected.has(row.uid)}
-				onCheckedChange={() => toggle(row.uid)}
-				aria-label="Select {row.name}"
-			/>
+			<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
+			<div onclick={(e) => toggle(row.uid, row.rank - 1, e.shiftKey)}>
+				<Checkbox
+					checked={selected.has(row.uid)}
+					onCheckedChange={() => {}}
+					aria-label="Select {row.name}"
+				/>
+			</div>
 		{:else if column.key === 'rank'}
 			<span class="font-mono text-2xs text-foreground-tertiary tabular-nums">{row.rank}</span>
 		{:else if column.key === 'name'}
@@ -226,7 +334,26 @@
 				<span class="text-2xs text-foreground-tertiary">—</span>
 			{/if}
 		{:else if column.key === 'score'}
-			<span class="font-mono text-base font-medium tabular-nums">{row.score}</span>
+			{@const hasRubric = rubricForRole(row.role).length > 0}
+			{#if hasRubric}
+				<button
+					type="button"
+					onclick={() => openRescore(row)}
+					title="Click to rescore"
+					class="cursor-pointer border-none bg-transparent p-0 font-mono text-base font-medium
+					       tabular-nums underline-offset-2 hover:underline focus-visible:shadow-ring"
+				>
+					{row.score ?? '—'}<span class="text-2xs font-normal text-foreground-tertiary"
+						>/{maxScoreFor(row.role)}</span
+					>
+				</button>
+			{:else}
+				<span class="font-mono text-base font-medium tabular-nums">
+					{row.score ?? '—'}<span class="text-2xs font-normal text-foreground-tertiary"
+						>/{maxScoreFor(row.role)}</span
+					>
+				</span>
+			{/if}
 		{:else if column.key === 'notes'}
 			{#if row.notes}
 				<!-- Clamped so the score and decision stay on screen together; full text on hover. -->
@@ -291,6 +418,15 @@
 	{/snippet}
 </DataTable>
 
+<RubricScoreModal
+	bind:open={rescoreOpen}
+	criteria={rescoreTarget ? rubricForRole(rescoreTarget.role) : []}
+	bind:selections={rescoreSelections}
+	bind:delta={rescoreDelta}
+	saving={rescoreSaving}
+	onSave={saveRescore}
+/>
+
 <!-- No typed phrase: a pending decision is reversible until Release, which has its own gate. -->
 <ConfirmDialog
 	open={pending !== null}
@@ -326,7 +462,7 @@
 >
 	{#if open}
 		<div class="mb-5 flex flex-wrap items-center gap-2">
-			<Badge tone="info">{open.score}/{MAX_SCORE}</Badge>
+			<Badge tone="info">{open.score}/{maxScoreFor(open.role)}</Badge>
 			<span class="text-2xs text-foreground-tertiary">
 				{humanizeEnum(open.role)}{open.scorer ? ` · scored by ${open.scorer.name}` : ''}
 			</span>
@@ -347,6 +483,16 @@
 	{#snippet footer()}
 		{#if open}
 			{@const applicant = open}
+			<Button
+				class="mr-auto"
+				disabled={deciding}
+				onclick={() => {
+					onRescore(applicant.uid);
+					open = null;
+				}}
+			>
+				Rescore
+			</Button>
 			<Button
 				variant="primary"
 				disabled={deciding}

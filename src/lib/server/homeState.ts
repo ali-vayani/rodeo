@@ -63,10 +63,13 @@ interface Buckets {
  * and "outside Texas" one of 6,250. This bounds every list by the distinct universities
  * among applicants and makes the facet counts fall out of the same pass.
  */
-export async function stateBuckets(prisma: Pick<PrismaClient, 'user'>): Promise<Buckets> {
+export async function stateBuckets(
+	prisma: Pick<PrismaClient, 'user'>,
+	userWhere?: Prisma.UserWhereInput
+): Promise<Buckets> {
 	const [placement, rows] = await Promise.all([
 		loadBuckets(),
-		prisma.user.groupBy({ by: ['university'], _count: { _all: true } })
+		prisma.user.groupBy({ by: ['university'], where: userWhere, _count: { _all: true } })
 	]);
 
 	const byCode = new Map<string, BucketTally>();
@@ -129,11 +132,12 @@ function namesFor(buckets: Buckets, code: string, homeState: string | null): str
  */
 export async function stateFacet(
 	prisma: Pick<PrismaClient, 'user'>,
-	homeState: string | null
+	homeState: string | null,
+	userWhere?: Prisma.UserWhereInput
 ): Promise<Facet | null> {
 	if (!homeState) return null;
 
-	const buckets = await stateBuckets(prisma);
+	const buckets = await stateBuckets(prisma, userWhere);
 	if (buckets.byCode.size === 0) return null;
 
 	const home = buckets.byCode.get(homeState)?.count ?? 0;
