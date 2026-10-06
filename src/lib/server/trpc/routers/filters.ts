@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import type { Prisma, PrismaClient, Question } from '$lib/generated/prisma/client';
 import { DecisionStatus, QuestionType, Role } from '$lib/generated/prisma/client';
-import { router, adminProcedure } from '../init';
+import { router, portalProcedure } from '../init';
 import {
 	FILTERABLE_LINKED_FIELDS,
 	USER_LINKED_FIELD_COLUMN,
@@ -24,9 +24,8 @@ import { humanizeEnum } from '$lib/format';
 /**
  * The filter vocabulary for every application answer worth filtering on.
  *
- * `adminProcedure`, not `portalProcedure`: the pages rendering these controls are not
- * in `ORGANIZER_SECTIONS`, and every university with exact headcounts is per-person
- * data in aggregate clothing.
+ * `portalProcedure`: the admissions review queue renders these controls and organizers
+ * review applications, so the facet vocabulary is theirs to read too.
  */
 
 /** What the facet builder needs off a question. */
@@ -180,7 +179,7 @@ export const filtersRouter = router({
 	 * this value", and no recompute on every keystroke. Four queries regardless of form
 	 * size, plus one `groupBy` per linked facet.
 	 */
-	facets: adminProcedure
+	facets: portalProcedure
 		.input(z.object({ scoredOrPending: z.boolean().optional() }).optional())
 		.query(async ({ ctx, input }): Promise<Facet[]> => {
 			// When scoped to the Pending Decisions pass, only count users who are scored or

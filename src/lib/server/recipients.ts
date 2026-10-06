@@ -233,10 +233,12 @@ export async function expandSearch(
 	const query = normalizeName(term);
 	if (!query) return { ...NO_EXPANSION, exact };
 
-	// One `SELECT DISTINCT name` then a Jaro-Winkler pass in memory: ~3ms of SQL and ~2ms
-	// of scoring at 1,865 users, both linear in the distinct-name count. If this ever shows
-	// up in a profile, hand `scope` to this query too or reach for a trigram index.
-	const rows = await prisma.user.findMany({ select: { name: true }, distinct: ['name'] });
+	// Apply the active filters before ranking and capping suggestions.
+	const rows = await prisma.user.findMany({
+		where: whereFromConditions(scope),
+		select: { name: true },
+		distinct: ['name']
+	});
 
 	// Measured against the caller's raw term because that is the string
 	// `searchCondition` puts in `contains`.

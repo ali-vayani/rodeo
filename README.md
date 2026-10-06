@@ -142,6 +142,66 @@ Roles are `HACKER`, `JUDGE`, `MENTOR`, `VOLUNTEER`, `ORGANIZER`, `ADMIN`, and `U
 
 Resolved from `VERCEL_ENV` (falling back to `NODE_ENV`) in `src/lib/server/env.ts`. A production boot fails immediately if `SUPABASE_URL`, `SUPABASE_ANON_KEY`, or `RESEND_API_KEY` is missing.
 
+### Email attachments
+
+Custom emails accept up to five files, 4 MB each. The composer uploads files to private
+S3 storage and saves their references in `EmailLog`. Each recipient gets the file bytes
+as Resend attachments. PDFs open from the filename links in the composer and confirmation
+step; other files download. The browser must stay open while a bulk send runs.
+
+The email template editor supports the same attachments, saved separately for each
+template. Save Changes stores files under `email-template-attachments/`, outside the
+30-day draft expiration policy. Send Test includes the current draft's files, even
+before saving. Application, decision, and RSVP emails include the saved files alongside
+any recipient QR image. Revert restores the saved file list. Removing a file deletes
+it only after saving, and only when no other template still references it.
+
+Apply database migrations before deploying these changes. Configure S3 using the four
+variables in `.env.example`, and configure `RESEND_API_KEY` and a verified `EMAIL_FROM`
+for production. Development and preview never deliver email.
+
+Configure attachment retention once per bucket with the same S3 environment variables.
+The setup identity also needs `s3:GetLifecycleConfiguration` and
+`s3:PutLifecycleConfiguration` on `arn:aws:s3:::BUCKET`. The app's runtime identity does
+not need those permissions.
+
+```sh
+npm run email:retention
+npm run email:retention -- --apply
+```
+
+The first command previews the resulting bucket configuration. The second installs
+30-day expiration for `email-attachments/`, preserving unrelated lifecycle rules.
+It applies to existing uploads too, including abandoned drafts. Application files and
+wallet artwork are outside the prefix. S3 removes noncurrent versions after one day
+and cleans up expired delete markers in versioned buckets. Cleanup runs asynchronously;
+30 days is eligibility for expiration, not an exact deletion time.
+See [AWS lifecycle configuration](https://docs.aws.amazon.com/AmazonS3/latest/userguide/how-to-set-lifecycle-configuration-intro.html)
+and [version expiration rules](https://docs.aws.amazon.com/AmazonS3/latest/userguide/intro-lifecycle-rules.html).
+
+Email logs keep filenames after file expiration. Old or removed files must be reattached
+before sending again. Delivered attachments remain in recipients' mailboxes. Local
+`.uploads` files are for development and are not subject to S3 lifecycle rules.
+
+Retries reuse a Resend idempotency key for each send and recipient. Resend deduplicates
+matching requests for [24 hours](https://resend.com/docs/dashboard/emails/idempotency-keys).
+The application also skips recipients already marked as sent. A send with unresolved
+requests is reported as incomplete. Success means Resend accepted the message, not
+that the recipient's inbox has confirmed delivery.
+
+Run the pipeline integration tests against a local PostgreSQL database with schema-creation
+permission. They create an isolated schema, apply all migrations, and remove the schema
+afterward. Uploads use real local files; the real Resend SDK serializes requests, but
+HTTP delivery is intercepted so no email leaves the machine.
+
+```sh
+EMAIL_PIPELINE_TEST_DATABASE_URL=postgresql://rodeo:rodeo@localhost:5432/rodeo-development npm run test:email-pipeline
+```
+
+The integration tests skip when the variable is unset and refuse remote databases.
+Production verification still requires uploading a PDF and sending to one controlled
+inbox, then checking the attachment and Resend delivery status.
+
 ### Production auth
 
 Production signs in through Supabase — Google OAuth or email/password — and first login **is** registration: the `User` row is created from the Supabase identity with the `HACKER` role. The email/password sign-up form registers with Supabase only; the local row still comes from that first authenticated request. Password resets ride Supabase's recovery mail: the link signs the user in through `/auth/callback` and lands on `/reset-password`. Elevating someone to organizer or admin is done from `/admin/users`.

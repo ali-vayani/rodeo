@@ -14,6 +14,7 @@ import { sendTemplatedEmail } from '$lib/server/email';
 import { buildEmailPersonalization } from '$lib/server/wallet/email-block';
 import { templateBlockers } from '$lib/email/variables';
 import { emailSettings } from '$lib/server/settings';
+import { resolveTemplate } from '$lib/server/emailTemplates';
 import { formatDateLong } from '$lib/format';
 
 /**
@@ -454,23 +455,17 @@ export const applicationRouter = router({
 		// Defaults when no row exists — an unconfigured install still confirms an RSVP.
 		// A template an admin has deliberately blanked still opts out.
 		const mail = emailSettings(settings);
-		if (
-			sendableTemplate(
-				'RSVP confirmation',
-				{ subject: mail.confirmSubject, body: mail.confirmTemplate },
-				settings,
-				user.email
-			)
-		) {
+		const overrides = await ctx.prisma.templateOverride.findMany({
+			where: { templateKey: 'confirm' }
+		});
+		const confirmTemplate = resolveTemplate(mail, overrides, 'confirm', user.role);
+		if (sendableTemplate('RSVP confirmation', confirmTemplate, settings, user.email)) {
 			// The RSVP confirmation is where a hacker wants their pass, so this send carries the
 			// check-in block. Personalization takes the raw row so the wallet gate fails closed.
 			const { vars, attachments } = await buildEmailPersonalization(updated, settings);
-			await sendTemplatedEmail(
-				user.email,
-				{ subject: mail.confirmSubject, body: mail.confirmTemplate },
-				vars,
-				attachments
-			).catch(reportSendFailure('RSVP confirmation', user.email));
+			await sendTemplatedEmail(user.email, confirmTemplate, vars, attachments).catch(
+				reportSendFailure('RSVP confirmation', user.email)
+			);
 		}
 
 		return updated;
@@ -513,17 +508,14 @@ export const applicationRouter = router({
 
 		const settings = await ctx.prisma.settings.findFirst();
 		const mail = emailSettings(settings);
-		if (
-			sendableTemplate(
-				'RSVP decline',
-				{ subject: mail.declineSubject, body: mail.declineTemplate },
-				settings,
-				user.email
-			)
-		) {
+		const overrides = await ctx.prisma.templateOverride.findMany({
+			where: { templateKey: 'decline' }
+		});
+		const declineTemplate = resolveTemplate(mail, overrides, 'decline', user.role);
+		if (sendableTemplate('RSVP decline', declineTemplate, settings, user.email)) {
 			await sendTemplatedEmail(
 				user.email,
-				{ subject: mail.declineSubject, body: mail.declineTemplate },
+				declineTemplate,
 				// Vars only: a declined account has no check-in block, so there is no
 				// attachment to carry.
 				(await buildEmailPersonalization(user, settings)).vars
@@ -623,21 +615,15 @@ export const applicationRouter = router({
 			// Defaults when no Settings row exists — the window guards read that as
 			// "unconfigured, allow through", and an application allowed through gets acknowledged.
 			const mail = emailSettings(settings);
-			if (
-				sendableTemplate(
-					'application submitted',
-					{ subject: mail.submitSubject, body: mail.submitTemplate },
-					settings,
-					user.email
-				)
-			) {
+			const overrides = await ctx.prisma.templateOverride.findMany({
+				where: { templateKey: 'submit' }
+			});
+			const submitTemplate = resolveTemplate(mail, overrides, 'submit', updatedUser.role);
+			if (sendableTemplate('application submitted', submitTemplate, settings, user.email)) {
 				const { vars, attachments } = await buildEmailPersonalization(updatedUser, settings);
-				await sendTemplatedEmail(
-					user.email,
-					{ subject: mail.submitSubject, body: mail.submitTemplate },
-					vars,
-					attachments
-				).catch(reportSendFailure('application submitted', user.email));
+				await sendTemplatedEmail(user.email, submitTemplate, vars, attachments).catch(
+					reportSendFailure('application submitted', user.email)
+				);
 			}
 
 			return updatedUser;

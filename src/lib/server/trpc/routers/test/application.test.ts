@@ -28,6 +28,7 @@ const { sendTemplatedEmail } = await import('$lib/server/email');
 beforeEach(() => {
 	mockReset(db);
 	vi.mocked(sendTemplatedEmail).mockClear();
+	db.templateOverride.findMany.mockResolvedValue([] as never);
 });
 
 const response = {

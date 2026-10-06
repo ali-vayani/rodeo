@@ -47,6 +47,12 @@ export const LOG_ACTIONS = [
 	{ key: 'food.groups.generate', label: 'Food groups generated', group: 'Settings' },
 	{ key: 'food.groups.rename', label: 'Food group renamed', group: 'Settings' },
 	{ key: 'food.groups.release', label: 'Food groups released', group: 'Settings' },
+	{ key: 'settings.templateOverride.upsert', label: 'Template override saved', group: 'Settings' },
+	{
+		key: 'settings.templateOverride.delete',
+		label: 'Template override removed',
+		group: 'Settings'
+	},
 
 	// Schedule
 	{ key: 'schedule.create', label: 'Event added', group: 'Schedule' },

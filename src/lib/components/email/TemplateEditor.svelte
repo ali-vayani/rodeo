@@ -52,7 +52,7 @@
 	}
 </script>
 
-<div class="flex min-h-0 flex-1 flex-col gap-3">
+<div class="flex flex-col gap-3">
 	<div class="flex flex-col gap-1.5">
 		<label
 			for="template-subject"
@@ -97,7 +97,7 @@
 		{/each}
 	</div>
 
-	<div class="flex min-h-0 flex-1 flex-col gap-1.5">
+	<div class="mb-2 flex flex-col gap-1.5">
 		<label
 			for="template-body"
 			class="font-mono text-2xs font-medium tracking-eyebrow text-foreground-tertiary uppercase"
@@ -110,7 +110,7 @@
 			bind:value={body}
 			onfocus={() => (lastFocused = 'body')}
 			placeholder="Body of the {label} email"
-			class="min-h-40 w-full flex-1 resize-none rounded-md border border-border bg-card px-3 py-2 font-mono text-base leading-relaxed text-foreground outline-none focus:border-primary md:min-h-0"
+			class="min-h-48 w-full resize-y rounded-md border border-border bg-card px-3 py-2 font-mono text-base leading-relaxed text-foreground outline-none focus:border-primary"
 		></textarea>
 	</div>
 </div>
