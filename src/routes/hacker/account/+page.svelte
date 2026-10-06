@@ -10,6 +10,7 @@
 	import ApplicationStateView from '$lib/components/application/ApplicationStateView.svelte';
 	import { createRsvpHandler } from '$lib/application/rsvp.svelte';
 	import { createDeclineHandler } from '$lib/application/decline.svelte';
+	import NameEditor from '$lib/components/account/NameEditor.svelte';
 
 	let { data }: { data: PageData } = $props();
 
@@ -78,10 +79,7 @@
 						decoration standing in for information — the name is the identity here.
 					-->
 					<div class="mb-5 min-w-0">
-						<p class="text-2xl leading-tight font-extrabold break-words text-foreground">
-							{user.name}
-						</p>
-						<p class="mt-1 text-base break-words text-foreground-secondary">{user.email}</p>
+						<NameEditor bind:name={user.name} email={user.email} />
 					</div>
 
 					<dl class="border-t border-brand-line-subtle">

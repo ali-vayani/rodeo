@@ -5,6 +5,7 @@ import {
 	UserStatus,
 	DecisionStatus,
 	InvitationStatus,
+	LinkedField,
 	QuestionType
 } from '$lib/generated/prisma/client';
 import { router, authedProcedure, adminProcedure } from '../init';
@@ -111,6 +112,31 @@ export const userRouter = router({
 			}
 		});
 	}),
+
+	updateName: authedProcedure
+		.input(z.object({ name: z.string().trim().min(1).max(100) }))
+		.mutation(async ({ ctx, input }) => {
+			const nameQuestions = await ctx.prisma.question.findMany({
+				where: { linkedField: LinkedField.NAME },
+				select: { id: true }
+			});
+			const [user] = await ctx.prisma.$transaction([
+				ctx.prisma.user.update({
+					where: { uid: ctx.user.uid },
+					data: { name: input.name },
+					select: { name: true }
+				}),
+				// Keep the application answer and the profile projection from drifting apart.
+				ctx.prisma.applicationResponse.updateMany({
+					where: {
+						userId: ctx.user.uid,
+						questionId: { in: nameQuestions.map(({ id }) => id) }
+					},
+					data: { value: input.name }
+				})
+			]);
+			return user;
+		}),
 
 	list: adminProcedure
 		.input(

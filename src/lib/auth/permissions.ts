@@ -20,6 +20,7 @@ import { Role } from '../generated/prisma/enums';
 
 export type AdminSection =
 	| 'dashboard'
+	| 'account'
 	| 'users'
 	| 'admissions'
 	| 'scan'
@@ -31,7 +32,13 @@ export type AdminSection =
 	| 'logs';
 
 /** Everything an organizer may reach. Every other section is admin-only. */
-export const ORGANIZER_SECTIONS: AdminSection[] = ['dashboard', 'admissions', 'scan', 'schedule'];
+export const ORGANIZER_SECTIONS: AdminSection[] = [
+	'dashboard',
+	'account',
+	'admissions',
+	'scan',
+	'schedule'
+];
 
 /**
  * Route prefixes per section, used both to guard requests and to filter the nav —
@@ -42,6 +49,7 @@ export const ORGANIZER_SECTIONS: AdminSection[] = ['dashboard', 'admissions', 's
  */
 export const SECTION_PATHS: Record<AdminSection, string[]> = {
 	dashboard: ['/admin/dashboard'],
+	account: ['/admin/account'],
 	users: ['/admin/users'],
 	admissions: ['/admin/admissions'],
 	scan: ['/admin/scan'],

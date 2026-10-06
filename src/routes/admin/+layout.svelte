@@ -13,6 +13,7 @@
 	// link to a route that does not exist.
 	const links = [
 		{ href: '/admin/dashboard', label: 'Dashboard', section: 'dashboard' },
+		{ href: '/admin/account', label: 'Account', section: 'account' },
 		{ href: '/admin/users', label: 'Users', section: 'users' },
 		{ href: '/admin/admissions', label: 'Admissions', section: 'admissions' },
 		{ href: '/admin/scan', label: 'Scan', section: 'scan' },
