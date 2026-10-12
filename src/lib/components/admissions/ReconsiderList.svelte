@@ -17,6 +17,7 @@
 		score: number | null;
 		notes: string | null;
 		scorer: { name: string } | null;
+		decider: { name: string } | null;
 		pendingDecision: string | null;
 		activeDecision: string | null;
 		blacklistMatch: BlacklistMatch | null;
@@ -164,9 +165,11 @@
 			<span class="text-xs text-foreground-secondary">{humanizeEnum(row.role)}</span>
 		{:else if column.key === 'released'}
 			{#if row.activeDecision}
-				<Badge tone={DECISION_TONE[row.activeDecision] ?? 'neutral'}>
-					{humanizeEnum(row.activeDecision)}
-				</Badge>
+				<span title={row.decider ? `Decided by ${row.decider.name}` : undefined}>
+					<Badge tone={DECISION_TONE[row.activeDecision] ?? 'neutral'}>
+						{humanizeEnum(row.activeDecision)}
+					</Badge>
+				</span>
 			{:else}
 				<span class="text-2xs text-foreground-tertiary">—</span>
 			{/if}
@@ -174,9 +177,11 @@
 			{@const pending =
 				row.pendingDecision && row.pendingDecision !== 'PENDING' ? row.pendingDecision : null}
 			{#if pending}
-				<Badge tone={DECISION_TONE[pending] ?? 'neutral'}>
-					{humanizeEnum(pending)}
-				</Badge>
+				<span title={row.decider ? `Decided by ${row.decider.name}` : undefined}>
+					<Badge tone={DECISION_TONE[pending] ?? 'neutral'}>
+						{humanizeEnum(pending)}
+					</Badge>
+				</span>
 			{:else}
 				<span class="text-2xs text-foreground-tertiary">—</span>
 			{/if}
@@ -245,7 +250,9 @@
 				<Badge tone="info">{open.score}/{maxScoreFor(open.role)}</Badge>
 			{/if}
 			<span class="text-2xs text-foreground-tertiary">
-				{humanizeEnum(open.role)}{open.scorer ? ` · scored by ${open.scorer.name}` : ''}
+				{humanizeEnum(open.role)}{open.scorer
+					? ` · scored by ${open.scorer.name}`
+					: ''}{open.decider ? ` · decided by ${open.decider.name}` : ''}
 			</span>
 		</div>
 

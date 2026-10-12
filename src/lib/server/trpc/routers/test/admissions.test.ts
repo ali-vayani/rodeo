@@ -82,6 +82,20 @@ describe('admissions.list', () => {
 		expect(result.applicants).toHaveLength(2);
 	});
 
+	it('requests the decider alongside the scorer, so a decision shows who made it', async () => {
+		const caller = createTestCaller(db, adminUser);
+		db.user.findMany.mockResolvedValue([hackerUser] as never);
+		await caller.admissions.list({});
+		expect(db.user.findMany).toHaveBeenCalledWith(
+			expect.objectContaining({
+				include: expect.objectContaining({
+					scorer: { select: { name: true } },
+					decider: { select: { name: true } }
+				})
+			})
+		);
+	});
+
 	it('fetches everything and skips the count query when no page is requested', async () => {
 		// The ranked decision pass needs the whole queue for bulk release, so it calls
 		// `list` without `pageSize` and must keep getting every match back.
@@ -1494,6 +1508,22 @@ describe('admissions.stats', () => {
 		expect(stats.unscored).toBe(18);
 		// The two halves are the same population the groupBy called undecided.
 		expect(stats.scored + stats.unscored).toBe(stats.undecided);
+	});
+});
+
+describe('admissions.reconsidering', () => {
+	it('requests the decider alongside the scorer, so a released decision shows who made it', async () => {
+		const caller = createTestCaller(db, adminUser);
+		db.user.findMany.mockResolvedValue([] as never);
+		await caller.admissions.reconsidering();
+		expect(db.user.findMany).toHaveBeenCalledWith(
+			expect.objectContaining({
+				include: expect.objectContaining({
+					scorer: { select: { name: true } },
+					decider: { select: { name: true } }
+				})
+			})
+		);
 	});
 });
 
