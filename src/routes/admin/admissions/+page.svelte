@@ -671,7 +671,11 @@
 				await loadRanked();
 			} else {
 				const applied = new Set(uids);
-				ranked = ranked.map((a) => (applied.has(a.uid) ? { ...a, pendingDecision: decision } : a));
+				ranked = ranked.map((a) =>
+					applied.has(a.uid)
+						? { ...a, pendingDecision: decision, decider: { name: data.adminName } }
+						: a
+				);
 			}
 			void refreshStats();
 		} catch (e) {
@@ -721,7 +725,9 @@
 		try {
 			await trpc.admissions.setDecision.mutate({ uid: uids[0], decision });
 			reconsider = reconsider.map((a) =>
-				a.uid === uids[0] ? { ...a, pendingDecision: decision } : a
+				a.uid === uids[0]
+					? { ...a, pendingDecision: decision, decider: { name: data.adminName } }
+					: a
 			);
 			void refreshStats();
 			showToast(`Set to ${decision.toLowerCase()}`);

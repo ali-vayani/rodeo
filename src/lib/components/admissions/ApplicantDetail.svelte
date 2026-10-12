@@ -40,6 +40,7 @@
 			notes: string | null;
 			scoredAt: Date | string | null;
 			scorer: { name: string } | null;
+			decider: { name: string } | null;
 			blacklistMatch: BlacklistMatch | null;
 			createdAt: Date | string;
 			application: Array<{
@@ -170,6 +171,7 @@
 				     label every untouched applicant "Pending: Pending". -->
 				{#if pendingChip}
 					<span
+						title={applicant.decider ? `Decided by ${applicant.decider.name}` : undefined}
 						class="inline-block rounded px-2 py-[3px] text-[11px] font-semibold {DECISION_CLASS[
 							pendingChip
 						] ?? 'bg-[#e5e7eb] text-[#374151]'}"
@@ -179,6 +181,7 @@
 				{/if}
 				{#if applicant.activeDecision}
 					<span
+						title={applicant.decider ? `Decided by ${applicant.decider.name}` : undefined}
 						class="inline-block rounded px-2 py-[3px] text-[11px] font-semibold opacity-70 {DECISION_CLASS[
 							applicant.activeDecision
 						] ?? 'bg-[#e5e7eb] text-[#374151]'}"

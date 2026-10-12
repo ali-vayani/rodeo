@@ -164,6 +164,10 @@ export const admissionsRouter = router({
 					include: {
 						application: { include: { question: true } },
 						scorer: { select: { name: true } },
+						// `decidedBy` survives `release` untouched (see `release` below), so this
+						// names whoever set the decision currently sitting in pending or active —
+						// the same attribution `scorer` gives for the score.
+						decider: { select: { name: true } },
 						// So reopening the rubric modal shows the cells behind a saved score.
 						rubricSelections: { select: { criterionId: true, levelId: true } }
 					},
@@ -723,6 +727,7 @@ export const admissionsRouter = router({
 			include: {
 				application: { include: { question: true } },
 				scorer: { select: { name: true } },
+				decider: { select: { name: true } },
 				// Same shape as `list`, so a row can be carried into the review pane to rescore.
 				rubricSelections: { select: { criterionId: true, levelId: true } }
 			}
