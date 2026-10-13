@@ -28,7 +28,8 @@
 		"db:seed:demo": "npx tsx prisma/seedDemo.ts",
 		"db:seed:open": "npx tsx prisma/seedScenario1.ts",
 		"db:seed:closed": "npx tsx prisma/seedScenario2.ts",
-		"db:seed:event": "npx tsx prisma/seedScenario3.ts"
+		"db:seed:event": "npx tsx prisma/seedScenario3.ts",
+		"db:backfill:dietary-restriction": "npx tsx scripts/backfill-dietary-restriction.ts"
 	},
 	"devDependencies": {
 		"@eslint/compat": "^2.0.4",

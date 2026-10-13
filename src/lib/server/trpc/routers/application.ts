@@ -5,7 +5,8 @@ import { UserStatus, DecisionStatus, QuestionType, Role } from '$lib/generated/p
 import { router, authedProcedure } from '../init';
 import { APPLICANT_ROLES } from '$lib/admissions/roles';
 import { normalizeEmail } from '$lib/blacklist/match';
-import { LINKED_FIELD_COLUMN, isLinkedField } from '$lib/linkedFields';
+import { USER_LINKED_FIELD_COLUMN, isUserLinkedField } from '$lib/linkedFields';
+import { normalizeDietaryRestriction } from '$lib/dietaryRestriction';
 import { acceptsWriteIn, isOptionsType } from '$lib/questions/options';
 import { decodeMultiSelect } from '$lib/questions/multiSelect';
 import { isAnswered } from '$lib/questions/isAnswered';
@@ -373,12 +374,24 @@ export const applicationRouter = router({
 				assertAnswerValid(question, input.value);
 			}
 
-			// Write through to the user record for linked fields. The allowlist lives in
-			// `$lib/linkedFields` because the admin filter panels share the same three columns.
-			if (isLinkedField(question.linkedField)) {
+			// Every linked field writes through to User. Scalar links (name/university/year)
+			// copy the answer as-is; DIETARY_RESTRICTION is MULTI_SELECT, so its answer is a
+			// JSON-encoded set that must be decoded into an array before it lands on the
+			// column — an empty or cleared answer decodes to `[]`, never null.
+			if (isUserLinkedField(question.linkedField)) {
 				await ctx.prisma.user.update({
 					where: { uid: ctx.user.uid },
-					data: { [LINKED_FIELD_COLUMN[question.linkedField]]: input.value }
+					data: { [USER_LINKED_FIELD_COLUMN[question.linkedField]]: input.value }
+				});
+			} else if (question.linkedField === 'DIETARY_RESTRICTION') {
+				// "No dietary restrictions" is an offered option, not an actual restriction —
+				// keeping it out of the mirrored set is what lets food grouping tell the two
+				// apart with a plain `length > 0` (see `foodPoolFor`). Matched case- and
+				// whitespace-insensitively; a real restriction selected alongside it is kept.
+				const restrictions = normalizeDietaryRestriction(decodeMultiSelect(input.value));
+				await ctx.prisma.user.update({
+					where: { uid: ctx.user.uid },
+					data: { dietaryRestriction: restrictions }
 				});
 			}
 

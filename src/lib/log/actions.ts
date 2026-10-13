@@ -26,6 +26,7 @@ export const LOG_ACTIONS = [
 	{ key: 'user.roles.update', label: 'Role changed', group: 'Users' },
 	{ key: 'user.status.update', label: 'Status changed', group: 'Users' },
 	{ key: 'user.decision.override', label: 'Decision overridden', group: 'Users' },
+	{ key: 'user.foodGroup.update', label: 'Food group changed', group: 'Users' },
 	{ key: 'user.notes.update', label: 'Notes updated', group: 'Users' },
 	{ key: 'user.export', label: 'User list exported', group: 'Users' },
 
@@ -43,6 +44,9 @@ export const LOG_ACTIONS = [
 	// Settings
 	{ key: 'settings.update', label: 'Settings updated', group: 'Settings' },
 	{ key: 'settings.templates.update', label: 'Email templates updated', group: 'Settings' },
+	{ key: 'food.groups.generate', label: 'Food groups generated', group: 'Settings' },
+	{ key: 'food.groups.rename', label: 'Food group renamed', group: 'Settings' },
+	{ key: 'food.groups.release', label: 'Food groups released', group: 'Settings' },
 	{ key: 'settings.templateOverride.upsert', label: 'Template override saved', group: 'Settings' },
 	{
 		key: 'settings.templateOverride.delete',

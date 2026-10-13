@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import type { Prisma, PrismaClient } from '$lib/generated/prisma/client';
 import { Role, UserStatus, DecisionStatus, QuestionType } from '$lib/generated/prisma/client';
-import { LINKED_FIELD_COLUMN, type LinkedField } from '$lib/linkedFields';
+import { USER_LINKED_FIELD_COLUMN, type LinkedField } from '$lib/linkedFields';
 import { splitNoValue } from '$lib/facets';
 import { encodeMultiSelectMember } from '$lib/questions/multiSelect';
 import { stateCondition } from '$lib/server/homeState';
@@ -47,7 +47,10 @@ export const answerFilterSchema = z.object({
 export type AnswerFilters = z.infer<typeof answerFilterSchema>;
 
 /** Filter key ↔ linked field. The plural is the wire name and the query parameter. */
-const LINKED_FILTER_KEYS: Record<keyof LinkedFieldFilters, LinkedField> = {
+const LINKED_FILTER_KEYS: Record<
+	keyof LinkedFieldFilters,
+	Exclude<LinkedField, 'DIETARY_RESTRICTION'>
+> = {
 	names: 'NAME',
 	universities: 'UNIVERSITY',
 	years: 'YEAR'
@@ -57,7 +60,10 @@ const LINKED_FILTER_KEYS: Record<keyof LinkedFieldFilters, LinkedField> = {
  * The linked columns that are nullable. Prisma rejects `{ name: null }` at runtime, so
  * "no value" means NULL-or-empty for these two and empty-only for `name`.
  */
-const NULLABLE_LINKED_FIELDS = new Set<LinkedField>(['UNIVERSITY', 'YEAR']);
+const NULLABLE_LINKED_FIELDS = new Set<Exclude<LinkedField, 'DIETARY_RESTRICTION'>>([
+	'UNIVERSITY',
+	'YEAR'
+]);
 
 /**
  * The one definition of "which users does this filter select". Browse and send MUST
@@ -268,7 +274,7 @@ export function linkedFieldConditions(filters: LinkedFieldFilters): Prisma.UserW
 
 	for (const [key, field] of Object.entries(LINKED_FILTER_KEYS) as [
 		keyof LinkedFieldFilters,
-		LinkedField
+		Exclude<LinkedField, 'DIETARY_RESTRICTION'>
 	][]) {
 		const selected = filters[key];
 		if (selected === undefined) continue;
@@ -281,7 +287,7 @@ export function linkedFieldConditions(filters: LinkedFieldFilters): Prisma.UserW
 		const or: Prisma.UserWhereInput[] = [];
 		// Computed keys over a closed set of column names — the cast is what a dynamic
 		// key costs; `LINKED_FIELD_COLUMN` is what keeps the set closed.
-		const column = LINKED_FIELD_COLUMN[field];
+		const column = USER_LINKED_FIELD_COLUMN[field];
 		if (values.length) or.push({ [column]: { in: values } } as Prisma.UserWhereInput);
 		if (includeNone) {
 			// The write-through does not trim, so a blank answer stores '' rather than

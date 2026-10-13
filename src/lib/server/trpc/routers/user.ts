@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { TRPCError } from '@trpc/server';
+import type { FoodGroupPool } from '$lib/generated/prisma/client';
 import {
 	Role,
 	UserStatus,
@@ -26,6 +27,15 @@ function csvCell(value: string | null | undefined): string {
 	const neutralized = /^[=+\-@\t\r]/.test(raw) ? `'${raw}` : raw;
 	return `"${neutralized.replace(/"/g, '""')}"`;
 }
+
+/**
+ * Shared between `list` and `getById` so /admin/users can show and edit a user's food
+ * group without a second round trip, and reused by `updateFoodGroup`'s return value so a
+ * save merges onto the same shape the list already has.
+ */
+const FOOD_GROUP_MEMBER_INCLUDE = {
+	foodGroupMember: { select: { foodGroup: { select: { id: true, name: true, pool: true } } } }
+} as const;
 
 /**
  * An answer as it should read in a spreadsheet cell. A MULTI_SELECT answer stores JSON
@@ -131,7 +141,8 @@ export const userRouter = router({
 					where,
 					skip: (page - 1) * pageSize,
 					take: pageSize,
-					orderBy: { createdAt: 'desc' }
+					orderBy: { createdAt: 'desc' },
+					include: FOOD_GROUP_MEMBER_INCLUDE
 				})
 			]);
 
@@ -146,7 +157,8 @@ export const userRouter = router({
 				// Sorted here so every reader sees answers in the order they were asked.
 				application: { include: { question: true }, orderBy: { question: { order: 'asc' } } },
 				team: { include: { members: true } },
-				scans: { orderBy: { timestamp: 'desc' } }
+				scans: { orderBy: { timestamp: 'desc' } },
+				...FOOD_GROUP_MEMBER_INCLUDE
 			}
 		});
 	}),
@@ -286,6 +298,76 @@ export const userRouter = router({
 			});
 
 			return user;
+		}),
+
+	/**
+	 * Manual food-group override from /admin/users — the escape hatch for exceptions
+	 * `foodGroups.generate`'s automatic dietary/no-restriction split doesn't cover (e.g.
+	 * two hackers who need to sit together). Any existing group is a valid target
+	 * regardless of its pool: this is deliberately not pool-guarded, since restricting it
+	 * would defeat the point of an override. Allowed even after a group has been
+	 * released — this is the fix-a-mistake path, and a mistake is often noticed only
+	 * after release.
+	 *
+	 * Food groups are hacker-only, though, same as `foodGroups.generate` — this is an
+	 * override of *which* group someone lands in, not of who the feature applies to.
+	 * Removing someone from a group (`foodGroupId: null`) is always allowed regardless of
+	 * role, since that can only ever correct a stale assignment, never create one.
+	 *
+	 * Throws:
+	 * - TRPCError NOT_FOUND — foodGroupId does not name an existing group
+	 * - TRPCError BAD_REQUEST — the target user isn't a hacker
+	 */
+	updateFoodGroup: adminProcedure
+		.input(z.object({ uid: z.string(), foodGroupId: z.string().nullable() }))
+		.mutation(async ({ ctx, input }) => {
+			const before = await ctx.prisma.user.findUniqueOrThrow({
+				where: { uid: input.uid },
+				select: { name: true, role: true, ...FOOD_GROUP_MEMBER_INCLUDE }
+			});
+
+			let group: { id: string; name: string; pool: FoodGroupPool } | null = null;
+			if (input.foodGroupId !== null) {
+				if (before.role !== Role.HACKER) {
+					throw new TRPCError({
+						code: 'BAD_REQUEST',
+						message: 'Only hackers can be assigned to a food group.'
+					});
+				}
+				group = await ctx.prisma.foodGroup.findUnique({
+					where: { id: input.foodGroupId },
+					select: { id: true, name: true, pool: true }
+				});
+				if (!group) {
+					throw new TRPCError({
+						code: 'NOT_FOUND',
+						message: 'That food group no longer exists — refresh and try again.'
+					});
+				}
+			}
+
+			if (group) {
+				// `userId` is unique on FoodGroupMember (one current group per user), so this
+				// is a move when a membership already exists, an assignment when it doesn't.
+				await ctx.prisma.foodGroupMember.upsert({
+					where: { userId: input.uid },
+					update: { foodGroupId: group.id },
+					create: { userId: input.uid, foodGroupId: group.id }
+				});
+			} else {
+				await ctx.prisma.foodGroupMember.deleteMany({ where: { userId: input.uid } });
+			}
+
+			const beforeName = before.foodGroupMember?.foodGroup.name ?? null;
+			const afterName = group?.name ?? null;
+			await logAction(ctx, {
+				action: 'user.foodGroup.update',
+				summary: `Changed ${before.name}'s food group — ${valueOrNone(beforeName)} to ${valueOrNone(afterName)}`,
+				target: { id: input.uid, label: before.name },
+				metadata: { from: beforeName, to: afterName }
+			});
+
+			return { uid: input.uid, foodGroupMember: group ? { foodGroup: group } : null };
 		}),
 
 	updateNotes: adminProcedure

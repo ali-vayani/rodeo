@@ -1,5 +1,5 @@
 import { Role, UserStatus, DecisionStatus } from '$lib/generated/prisma/enums';
-import type { LinkedField } from '$lib/linkedFields';
+import { isUserLinkedField, type LinkedField } from '$lib/linkedFields';
 import { isEngaged, parseFacetKey, type FacetState } from '$lib/facets';
 import { parseCsv } from '$lib/csv';
 import { isValidEmail } from '$lib/email/address';
@@ -64,11 +64,13 @@ export type RecipientParams = {
 } & LinkedParams &
 	AnswerParams;
 
+// DIETARY_RESTRICTION excluded: its wire filter has nowhere to put an array-valued
+// answer, so it travels as a normal per-question `answers` entry instead.
 const LINKED_PARAM_KEY = {
 	NAME: 'names',
 	UNIVERSITY: 'universities',
 	YEAR: 'years'
-} as const satisfies Record<LinkedField, keyof LinkedParams>;
+} as const satisfies Record<Exclude<LinkedField, 'DIETARY_RESTRICTION'>, keyof LinkedParams>;
 
 /**
  * Translates facet panel state into the wire params `$lib/server/recipients` reads.
@@ -93,6 +95,10 @@ export function facetParams(selection: FacetState = {}): LinkedParams & AnswerPa
 		if (!parsed) continue;
 
 		if (parsed.kind === 'linked') {
+			// Only the linked fields with a scalar (single-valued) `User` column have a
+			// dedicated wire param. DIETARY_RESTRICTION mirrors onto an array column and is
+			// filtered like any other question instead — see `isUserLinkedField`.
+			if (!isUserLinkedField(parsed.field)) continue;
 			// Copied, not aliased: these params travel to a tRPC call while the caller's
 			// state keeps mutating under the filter panel.
 			if (chosen.values?.length) params[LINKED_PARAM_KEY[parsed.field]] = [...chosen.values];

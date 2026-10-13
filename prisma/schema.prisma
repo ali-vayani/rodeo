@@ -56,6 +56,14 @@ enum LinkedField {
   NAME
   UNIVERSITY
   YEAR
+  /// Unlike the other profile fields, a person can hold several values, so this
+  /// mirrors onto `User.dietaryRestriction`, an array column, rather than a scalar one.
+  DIETARY_RESTRICTION
+}
+
+enum FoodGroupPool {
+  DIETARY_RESTRICTION
+  NO_RESTRICTION
 }
 
 /// A bundled option list a question draws its choices from, instead of `options`.
@@ -88,12 +96,16 @@ model User {
   email           String              @unique
   university      String?
   year            String?
+  /// Mirrors the selected options of the DIETARY_RESTRICTION question, kept in sync
+  /// on every `application.save`. `[]` means no restriction, never null.
+  dietaryRestriction String[]         @default([])
   application     ApplicationResponse[]
   scans           Scan[]
   teamId          String?
   team            Team?               @relation(fields: [teamId], references: [id])
   groupId         String?
   group           Group?              @relation(fields: [groupId], references: [id])
+  foodGroupMember FoodGroupMember?
   pendingDecision DecisionStatus?
   activeDecision  DecisionStatus?
   role            Role                @default(UNDECLARED)
@@ -365,4 +377,28 @@ model Invitation {
   userId String?
   user   User?            @relation(fields: [userId], references: [uid], onDelete: SetNull)
   status InvitationStatus @default(PENDING)
+}
+
+/// An admin-created food group. Membership is separate from User profile data so
+/// groups can be regenerated or adjusted without changing an application.
+model FoodGroup {
+  id        String        @id @default(cuid())
+  name      String
+  pool      FoodGroupPool
+  createdAt DateTime      @default(now())
+  /// Null until an admin explicitly makes this group's assignments visible to attendees.
+  releasedAt DateTime?
+  members   FoodGroupMember[]
+}
+
+/// A user belongs to at most one current food group. A join model keeps that
+/// assignment out of the User model while allowing group metadata to grow later.
+model FoodGroupMember {
+  id          String    @id @default(cuid())
+  foodGroupId String
+  foodGroup   FoodGroup @relation(fields: [foodGroupId], references: [id], onDelete: Cascade)
+  userId      String    @unique
+  user        User      @relation(fields: [userId], references: [uid], onDelete: Cascade)
+
+  @@unique([foodGroupId, userId])
 }

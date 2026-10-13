@@ -21,6 +21,7 @@
 	import type { FacetState } from '$lib/facets';
 	import { Role, UserStatus, DecisionStatus } from '$lib/generated/prisma/enums';
 	import { STAFF_ROLES } from '$lib/auth/permissions';
+	import { humanizeEnum } from '$lib/format';
 
 	let { data }: { data: PageData } = $props();
 
@@ -248,9 +249,17 @@
 	let editRole = $state<Role>(Role.UNDECLARED);
 	let editStatus = $state<UserStatus>(UserStatus.CREATED);
 	let editPending = $state<DecisionStatus | ''>('');
+	// '' is "no group" — the same unset convention as editPending, mapped back to null on
+	// save. Not restricted to the user's own dietary pool: this is a manual override for
+	// exceptions the automatic split doesn't cover, so any existing group is a valid target.
+	let editFoodGroupId = $state('');
 	let editNotes = $state('');
 	let saving = $state(false);
 	let savingNotes = $state(false);
+
+	const foodGroupOptions = untrack(() =>
+		data.foodGroups.map((g) => ({ value: g.id, label: `${g.name} — ${humanizeEnum(g.pool)}` }))
+	);
 
 	/**
 	 * Released means the applicant has been emailed an outcome, so both decision controls
@@ -275,6 +284,7 @@
 		editRole = user.role;
 		editStatus = user.status;
 		editPending = user.pendingDecision ?? '';
+		editFoodGroupId = user.foodGroupMember?.foodGroup.id ?? '';
 		editNotes = user.notes ?? '';
 		detailOpen = true;
 		loadProfile(user.uid);
@@ -336,7 +346,13 @@
 			// The decision call is skipped entirely for a released applicant rather than sent
 			// and allowed to fail. The server rejects it with a CONFLICT, which would sink the
 			// whole Promise.all and lose the valid role and status edits.
-			const [roleResult, statusResult, decisionResult] = await Promise.all([
+			//
+			// Food group is skipped the same way for a non-hacker: the field is hidden for
+			// them (food groups are hacker-only), but `editFoodGroupId` still holds whatever
+			// it was initialized to. Sending it regardless would resubmit an unchanged value
+			// the server now rejects outright for a non-hacker, turning an unrelated save
+			// (e.g. just a status change) into a failure.
+			const [roleResult, statusResult, decisionResult, foodGroupResult] = await Promise.all([
 				trpc.user.updateRole.mutate({ uid: selectedUser.uid, role: editRole }),
 				trpc.user.updateStatus.mutate({ uid: selectedUser.uid, status: editStatus }),
 				released
@@ -344,9 +360,20 @@
 					: trpc.user.updateDecisions.mutate({
 							uid: selectedUser.uid,
 							pendingDecision: editPending || null
+						}),
+				selectedUser.role !== Role.HACKER
+					? null
+					: trpc.user.updateFoodGroup.mutate({
+							uid: selectedUser.uid,
+							foodGroupId: editFoodGroupId || null
 						})
 			]);
-			const merged = { ...roleResult, ...statusResult, ...decisionResult } as User;
+			const merged = {
+				...roleResult,
+				...statusResult,
+				...decisionResult,
+				...foodGroupResult
+			} as User;
 			users = users.map((u) => (u.uid === merged.uid ? { ...u, ...merged } : u));
 			closeModal();
 			showToast('User saved');
@@ -735,6 +762,29 @@
 				<div class="mt-1 text-2xs text-muted-foreground">Set by releasing decisions</div>
 			</div>
 		</div>
+
+		<!-- Food groups are hacker-only, so this control is irrelevant for any other role —
+		     gated on the user's saved role rather than the live `editRole` radio so it
+		     doesn't flicker in and out as an admin experiments before saving. Manual
+		     override: not restricted to this user's own dietary/no-restriction pool, and
+		     editable even after a group has been released to attendees. This is the escape
+		     hatch for exceptions `foodGroups.generate`'s automatic split doesn't cover —
+		     re-running Generate still wipes it, same as any other group. -->
+		{#if selectedUser.role === Role.HACKER}
+			<div>
+				<div class="mb-1.5 text-2xs font-bold tracking-eyebrow text-muted-foreground uppercase">
+					Food Group
+				</div>
+				<Combobox
+					bind:value={editFoodGroupId}
+					placeholder="None"
+					clearable
+					options={foodGroupOptions}
+					emptyMessage="No food groups have been generated yet"
+					ariaLabel="Food group"
+				/>
+			</div>
+		{/if}
 
 		<!-- Admin notes: freeform per-user annotations visible only to admins. -->
 		<div>

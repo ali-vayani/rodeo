@@ -4,8 +4,8 @@ import { DecisionStatus, QuestionType, Role } from '$lib/generated/prisma/client
 import { router, portalProcedure } from '../init';
 import {
 	FILTERABLE_LINKED_FIELDS,
-	LINKED_FIELD_COLUMN,
-	isLinkedField,
+	USER_LINKED_FIELD_COLUMN,
+	isUserLinkedField,
 	type LinkedField
 } from '$lib/linkedFields';
 import {
@@ -68,15 +68,22 @@ function linkedControlFor(question: Pick<Question, 'type' | 'optionPreset'>): Fa
 	return control === 'select' ? 'select' : 'combobox';
 }
 
-/** How many users hold each distinct value of a linked column, plus the absent count. */
+/**
+ * How many users hold each distinct value of a linked column, plus the absent count.
+ *
+ * Scalar linked fields only: `groupBy` here counts one row per distinct column value,
+ * which is meaningless for DIETARY_RESTRICTION's array column (it would group by
+ * exact array equality, not by individual restriction) — that one is filtered like
+ * any other question instead. See `FILTERABLE_LINKED_FIELDS`.
+ */
 async function observedValues(
 	prisma: Pick<PrismaClient, 'user'>,
-	field: LinkedField,
+	field: Exclude<LinkedField, 'DIETARY_RESTRICTION'>,
 	userWhere?: Prisma.UserWhereInput
 ): Promise<{ counts: Map<string, number>; noneCount: number }> {
 	// `groupBy`'s return type is keyed on the `by` tuple, which a runtime-chosen column
 	// can't produce. `LINKED_FIELD_COLUMN` keeps the set closed.
-	const column = LINKED_FIELD_COLUMN[field];
+	const column = USER_LINKED_FIELD_COLUMN[field];
 	const rows = (await (prisma.user.groupBy as unknown as (args: unknown) => Promise<unknown[]>)({
 		by: [column],
 		where: userWhere,
@@ -216,7 +223,7 @@ export const filtersRouter = router({
 
 			const byField = new Map<LinkedField, FacetQuestion>();
 			for (const question of questions) {
-				if (!isLinkedField(question.linkedField)) continue;
+				if (!isUserLinkedField(question.linkedField)) continue;
 				if (!byField.has(question.linkedField)) byField.set(question.linkedField, question);
 			}
 
@@ -254,7 +261,7 @@ export const filtersRouter = router({
 			// Everything else on the form. Linked questions are skipped: they already have a
 			// facet above reading the column their answers were copied into.
 			const answerQuestions = questions
-				.filter((q) => q.linkedField === null)
+				.filter((q) => !isUserLinkedField(q.linkedField))
 				.map((q) => ({ question: q, control: controlFor(q) }))
 				.filter((q): q is { question: FacetQuestion; control: FacetControl } => q.control !== null);
 

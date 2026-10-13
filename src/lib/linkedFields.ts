@@ -18,26 +18,37 @@ import type { LinkedField, User } from '$lib/generated/prisma/client';
 export const LINKED_FIELDS = [
 	'NAME',
 	'UNIVERSITY',
-	'YEAR'
+	'YEAR',
+	'DIETARY_RESTRICTION'
 ] as const satisfies readonly LinkedField[];
 
 export type { LinkedField };
 
 /**
- * The `User` column each linked field writes through to. The allowlist for a computed
- * property assignment into a Prisma `update`, so it must stay a closed set.
+ * The `User` column each *scalar* linked field writes through to, verbatim. The
+ * allowlist for a computed property assignment into a Prisma `update`, so it must
+ * stay a closed set.
+ *
+ * DIETARY_RESTRICTION is deliberately absent: it mirrors onto a `User` column too
+ * (`dietaryRestriction`), but as a decoded array rather than the raw answer string, so
+ * it can't share this map's "write the value straight through" contract — see
+ * `application.ts`'s `save`, which mirrors it separately.
  */
-export const LINKED_FIELD_COLUMN = {
+export const USER_LINKED_FIELD_COLUMN = {
 	NAME: 'name',
 	UNIVERSITY: 'university',
 	YEAR: 'year'
-} as const satisfies Record<LinkedField, keyof Pick<User, 'name' | 'university' | 'year'>>;
+} as const satisfies Record<
+	'NAME' | 'UNIVERSITY' | 'YEAR',
+	keyof Pick<User, 'name' | 'university' | 'year'>
+>;
 
 /** How a linked field is written where a person reads it. */
 export const LINKED_FIELD_LABEL = {
 	NAME: 'Name',
 	UNIVERSITY: 'University',
-	YEAR: 'Year'
+	YEAR: 'Year',
+	DIETARY_RESTRICTION: 'Dietary restriction'
 } as const satisfies Record<LinkedField, string>;
 
 /**
@@ -53,4 +64,15 @@ export const FILTERABLE_LINKED_FIELDS = ['UNIVERSITY', 'YEAR'] as const satisfie
 
 export function isLinkedField(value: string | null | undefined): value is LinkedField {
 	return value != null && (LINKED_FIELDS as readonly string[]).includes(value);
+}
+
+/**
+ * True only for links that mirror an answer into a *scalar* User column. False for
+ * DIETARY_RESTRICTION, which mirrors into an array column through its own path
+ * instead — see `USER_LINKED_FIELD_COLUMN`.
+ */
+export function isUserLinkedField(
+	value: string | null | undefined
+): value is keyof typeof USER_LINKED_FIELD_COLUMN {
+	return value != null && value in USER_LINKED_FIELD_COLUMN;
 }

@@ -36,7 +36,8 @@ export const LINKED_FIELD_DEFAULTS = {
 	// 6,447 institutions, so the list cannot live in `Question.options`. Same type as
 	// Year, since every dropdown is searchable; only the preset differs.
 	UNIVERSITY: { type: 'DROPDOWN', options: [], optionPreset: 'UNIVERSITIES_NA' },
-	YEAR: { type: 'DROPDOWN', options: [...YEAR_OPTIONS], optionPreset: null }
+	YEAR: { type: 'DROPDOWN', options: [...YEAR_OPTIONS], optionPreset: null },
+	DIETARY_RESTRICTION: { type: 'MULTI_SELECT', options: [], optionPreset: null }
 } as const satisfies Record<LinkedField, LinkedFieldDefault>;
 
 /** The shape to apply when a question is linked to `field`. Freshly copied arrays. */

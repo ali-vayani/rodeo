@@ -2,7 +2,13 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { mockReset, type DeepMockProxy } from 'vitest-mock-extended';
 import type { PrismaClient } from '$lib/generated/prisma/client';
 import { Role, UserStatus, DecisionStatus } from '$lib/generated/prisma/client';
-import { createTestCaller, adminUser, hackerUser, appliedHacker } from '../test-utils';
+import {
+	createTestCaller,
+	adminUser,
+	hackerUser,
+	appliedHacker,
+	organizerUser
+} from '../test-utils';
 import { NO_VALUE } from '$lib/facets';
 import { EXACT_MATCH_FLOOR } from '$lib/server/recipients';
 
@@ -236,6 +242,120 @@ describe('user.updateStatus', () => {
 		const caller = createTestCaller(db, hackerUser);
 		await expect(
 			caller.user.updateStatus({ uid: 'uid', status: UserStatus.APPLIED })
+		).rejects.toMatchObject({ code: 'FORBIDDEN' });
+	});
+});
+
+describe('user.updateFoodGroup', () => {
+	const group = { id: 'group-1', name: 'Dietary group 1', pool: 'DIETARY_RESTRICTION' } as const;
+
+	it('assigns a user with no current group', async () => {
+		const caller = createTestCaller(db, adminUser);
+		db.user.findUniqueOrThrow.mockResolvedValue({ ...hackerUser, foodGroupMember: null } as never);
+		db.foodGroup.findUnique.mockResolvedValue(group as never);
+		db.foodGroupMember.upsert.mockResolvedValue({} as never);
+
+		const result = await caller.user.updateFoodGroup({
+			uid: hackerUser.uid,
+			foodGroupId: group.id
+		});
+
+		expect(result).toEqual({ uid: hackerUser.uid, foodGroupMember: { foodGroup: group } });
+		expect(db.foodGroupMember.upsert).toHaveBeenCalledWith({
+			where: { userId: hackerUser.uid },
+			update: { foodGroupId: group.id },
+			create: { userId: hackerUser.uid, foodGroupId: group.id }
+		});
+	});
+
+	it('moves a user already in a different group, regardless of pool', async () => {
+		// Deliberately not pool-guarded: an override exists to cover exceptions the
+		// automatic dietary/no-restriction split doesn't, so any group is a valid target.
+		const caller = createTestCaller(db, adminUser);
+		const previousGroup = { id: 'group-0', name: 'Food group 1', pool: 'NO_RESTRICTION' };
+		db.user.findUniqueOrThrow.mockResolvedValue({
+			...hackerUser,
+			foodGroupMember: { foodGroup: previousGroup }
+		} as never);
+		db.foodGroup.findUnique.mockResolvedValue(group as never);
+		db.foodGroupMember.upsert.mockResolvedValue({} as never);
+
+		await caller.user.updateFoodGroup({ uid: hackerUser.uid, foodGroupId: group.id });
+
+		expect(db.log.create).toHaveBeenCalledWith({
+			data: expect.objectContaining({
+				action: 'user.foodGroup.update',
+				targetId: hackerUser.uid,
+				metadata: { from: previousGroup.name, to: group.name }
+			})
+		});
+	});
+
+	it('removes a user from their group when foodGroupId is null', async () => {
+		const caller = createTestCaller(db, adminUser);
+		db.user.findUniqueOrThrow.mockResolvedValue({
+			...hackerUser,
+			foodGroupMember: { foodGroup: group }
+		} as never);
+		db.foodGroupMember.deleteMany.mockResolvedValue({ count: 1 } as never);
+
+		const result = await caller.user.updateFoodGroup({ uid: hackerUser.uid, foodGroupId: null });
+
+		expect(result).toEqual({ uid: hackerUser.uid, foodGroupMember: null });
+		expect(db.foodGroupMember.deleteMany).toHaveBeenCalledWith({
+			where: { userId: hackerUser.uid }
+		});
+		expect(db.foodGroupMember.upsert).not.toHaveBeenCalled();
+	});
+
+	it('throws BAD_REQUEST when assigning a non-hacker to a group', async () => {
+		const caller = createTestCaller(db, adminUser);
+		db.user.findUniqueOrThrow.mockResolvedValue({
+			...organizerUser,
+			foodGroupMember: null
+		} as never);
+
+		await expect(
+			caller.user.updateFoodGroup({ uid: organizerUser.uid, foodGroupId: group.id })
+		).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+		expect(db.foodGroup.findUnique).not.toHaveBeenCalled();
+		expect(db.foodGroupMember.upsert).not.toHaveBeenCalled();
+	});
+
+	it('still allows removing a non-hacker from a group (never creates, only corrects)', async () => {
+		const caller = createTestCaller(db, adminUser);
+		db.user.findUniqueOrThrow.mockResolvedValue({
+			...organizerUser,
+			foodGroupMember: { foodGroup: group }
+		} as never);
+		db.foodGroupMember.deleteMany.mockResolvedValue({ count: 1 } as never);
+
+		const result = await caller.user.updateFoodGroup({
+			uid: organizerUser.uid,
+			foodGroupId: null
+		});
+
+		expect(result).toEqual({ uid: organizerUser.uid, foodGroupMember: null });
+		expect(db.foodGroupMember.deleteMany).toHaveBeenCalledWith({
+			where: { userId: organizerUser.uid }
+		});
+	});
+
+	it('throws NOT_FOUND for a food group that no longer exists', async () => {
+		const caller = createTestCaller(db, adminUser);
+		db.user.findUniqueOrThrow.mockResolvedValue({ ...hackerUser, foodGroupMember: null } as never);
+		db.foodGroup.findUnique.mockResolvedValue(null);
+
+		await expect(
+			caller.user.updateFoodGroup({ uid: hackerUser.uid, foodGroupId: 'missing' })
+		).rejects.toMatchObject({ code: 'NOT_FOUND' });
+		expect(db.foodGroupMember.upsert).not.toHaveBeenCalled();
+	});
+
+	it('throws FORBIDDEN for non-admin', async () => {
+		const caller = createTestCaller(db, hackerUser);
+		await expect(
+			caller.user.updateFoodGroup({ uid: 'uid', foodGroupId: null })
 		).rejects.toMatchObject({ code: 'FORBIDDEN' });
 	});
 });
