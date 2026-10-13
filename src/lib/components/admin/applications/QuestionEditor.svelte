@@ -61,6 +61,7 @@
 	let linkedField = $state<LinkedField | ''>('');
 	let optionPreset = $state<OptionPreset | null>(null);
 	let allowOther = $state(false);
+	let walkIn = $state(false);
 	let errors = $state<Record<string, string>>({});
 	let newOptionInput = $state('');
 
@@ -86,6 +87,7 @@
 				linkedField = question.linkedField ?? '';
 				optionPreset = question.optionPreset;
 				allowOther = question.allowOther;
+				walkIn = question.walkIn;
 			} else {
 				title = '';
 				type = 'SHORT_TEXT';
@@ -99,6 +101,7 @@
 				linkedField = '';
 				optionPreset = null;
 				allowOther = false;
+				walkIn = false;
 			}
 			errors = {};
 			newOptionInput = '';
@@ -220,7 +223,8 @@
 			// Cleared for the types that can't carry one, so a stale preset cannot return on a
 			// later type switch.
 			optionPreset: isPresetable ? optionPreset : null,
-			allowOther: showAllowOther && allowOther
+			allowOther: showAllowOther && allowOther,
+			walkIn
 		};
 
 		onSave(data);
@@ -332,6 +336,17 @@
 							</button>
 						{/each}
 					</div>
+				</div>
+
+				<div class="field field-inline">
+					<label>
+						<input type="checkbox" bind:checked={walkIn} />
+						<span>Walk-in question</span>
+					</label>
+					<p class="field-note">
+						Part of the walk-in form: invited walk-ins answer only these questions when they
+						register at the door.
+					</p>
 				</div>
 
 				{#if showPlaceholder}

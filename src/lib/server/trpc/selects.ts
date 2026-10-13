@@ -33,7 +33,11 @@ export const SELF_USER_SELECT = {
 	status: true,
 	activeDecision: true,
 	teamId: true,
-	createdAt: true
+	createdAt: true,
+	// Both drive the portal's Walk-In tab: invited shows it, isWalkIn is the caller's
+	// own confirmation state.
+	walkInInvitedAt: true,
+	isWalkIn: true
 } as const;
 
 export type SelfUser = Pick<User, keyof typeof SELF_USER_SELECT>;

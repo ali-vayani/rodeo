@@ -98,6 +98,8 @@
 				rejectSubject: merged.rejectSubject,
 				waitlistTemplate: merged.waitlistTemplate,
 				waitlistSubject: merged.waitlistSubject,
+				walkinTemplate: merged.walkinTemplate,
+				walkinSubject: merged.walkinSubject,
 				timezone: merged.timezone,
 				homeState: merged.homeState
 			});

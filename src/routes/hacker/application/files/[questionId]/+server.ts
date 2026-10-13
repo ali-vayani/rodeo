@@ -52,9 +52,11 @@ export const POST: RequestHandler = async ({ params, locals, request }) => {
 	if (!question) error(404, 'That question does not exist.');
 	if (question.type !== QuestionType.FILE) error(400, 'That question does not take a file.');
 
-	// The same function the form renders from, so the two cannot drift.
+	// The same function the form renders from, so the two cannot drift. A walk-in
+	// invitee is exempt, matching `application.save`: they answer at the door, after
+	// the deadline.
 	const windowState = applicationWindowState(settings);
-	if (windowState !== 'open') {
+	if (!user.walkInInvitedAt && windowState !== 'open') {
 		// Logged rather than merely refused: the form disables itself in this window, so a
 		// request that arrives anyway means a stale tab or a client-side gate that failed.
 		console.error(

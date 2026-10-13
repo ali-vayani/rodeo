@@ -133,7 +133,9 @@ describe('buildTemplateVars', () => {
 			// Empty unless a caller supplies the block: this module cannot build it
 			// (Prisma, a QR encoder, and an attachment are all out of bounds here), and
 			// empty is also the right value for a recipient with no pass to show.
-			hacker_qr_code: ''
+			hacker_qr_code: '',
+			// Same shape: the URL needs `appOrigin()`, which is server-only.
+			walkin_link: ''
 		});
 	});
 
@@ -144,6 +146,16 @@ describe('buildTemplateVars', () => {
 			'<table>qr</table>'
 		);
 		expect(vars.hacker_qr_code).toBe('<table>qr</table>');
+	});
+
+	it('carries a supplied walk-in link through', () => {
+		const vars = buildTemplateVars(
+			{ name: 'Sarah Chen' },
+			{ hackathonStartDate: new Date(2026, 3, 15), RSVPDeadline: new Date(2026, 3, 1) },
+			'',
+			'https://rodeo.example/hacker/walkin'
+		);
+		expect(vars.walkin_link).toBe('https://rodeo.example/hacker/walkin');
 	});
 });
 

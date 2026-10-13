@@ -16,6 +16,7 @@ import { walletRouter } from './routers/wallet';
 import { filtersRouter } from './routers/filters';
 import { statsRouter } from './routers/stats';
 import { dataRouter } from './routers/data';
+import { walkinRouter } from './routers/walkin';
 
 export const appRouter = router({
 	user: userRouter,
@@ -34,7 +35,8 @@ export const appRouter = router({
 	wallet: walletRouter,
 	filters: filtersRouter,
 	stats: statsRouter,
-	data: dataRouter
+	data: dataRouter,
+	walkin: walkinRouter
 });
 
 export type AppRouter = typeof appRouter;

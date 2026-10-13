@@ -12,6 +12,7 @@ import {
 import { EXTERNAL_RECIPIENT_PREFIX, EXACT_MATCH_FLOOR } from '$lib/server/recipients';
 import { NAME_FALLBACK, SAMPLE_VARS } from '$lib/email/variables';
 import { DEFAULT_SETTINGS } from '$lib/server/settings';
+import { walkInUrl } from '$lib/server/walkin';
 
 vi.mock('$lib/server/db', async () => {
 	const { mockDeep } = await import('vitest-mock-extended');
@@ -811,7 +812,8 @@ describe('email.eventVars', () => {
 
 		await expect(caller.email.eventVars()).resolves.toEqual({
 			hackathon_start: mockSettings.hackathonStartDate.toLocaleDateString(),
-			rsvp_deadline: mockSettings.RSVPDeadline.toLocaleDateString()
+			rsvp_deadline: mockSettings.RSVPDeadline.toLocaleDateString(),
+			walkin_link: walkInUrl()
 		});
 	});
 
@@ -824,7 +826,8 @@ describe('email.eventVars', () => {
 			hackathon_start: DEFAULT_SETTINGS.hackathonStartDate.toLocaleDateString(),
 			// The default row has no RSVP deadline, so the variable renders blank rather
 			// than naming a date the event does not have.
-			rsvp_deadline: ''
+			rsvp_deadline: '',
+			walkin_link: walkInUrl()
 		});
 	});
 });

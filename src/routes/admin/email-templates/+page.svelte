@@ -18,7 +18,7 @@
 
 	type Draft = { subject: string; body: string };
 
-	/** Pull the 12 template columns into `{ [key]: { subject, body } }`. */
+	/** Pull the template/subject column pairs into `{ [key]: { subject, body } }`. */
 	function extract(settings: PageData['settings']): Record<TemplateKey, Draft> {
 		const row = settings as unknown as Record<string, string>;
 		return Object.fromEntries(

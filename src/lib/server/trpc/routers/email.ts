@@ -19,6 +19,7 @@ import {
 	SAMPLE_VARS
 } from '$lib/email/variables';
 import { buildEmailPersonalization } from '$lib/server/wallet/email-block';
+import { walkInUrl } from '$lib/server/walkin';
 import { UserStatus } from '$lib/generated/prisma/enums';
 import { logAction } from '$lib/server/log';
 
@@ -113,7 +114,7 @@ export const emailRouter = router({
 	 * back to `DEFAULT_SETTINGS` when no row exists, so the preview shows the same.
 	 */
 	eventVars: adminProcedure.query(async ({ ctx }) => {
-		return buildEventVars(emailSettings(await ctx.prisma.settings.findFirst()));
+		return buildEventVars(emailSettings(await ctx.prisma.settings.findFirst()), walkInUrl());
 	}),
 
 	/**
@@ -295,7 +296,7 @@ export const emailRouter = router({
 
 			if (input.recipient.startsWith(EXTERNAL_RECIPIENT_PREFIX)) {
 				to = input.recipient.slice(EXTERNAL_RECIPIENT_PREFIX.length);
-				vars = buildExternalTemplateVars(emailSettings(settings));
+				vars = buildExternalTemplateVars(emailSettings(settings), walkInUrl());
 			} else {
 				const user = await ctx.prisma.user.findUnique({ where: { uid: input.recipient } });
 				if (!user) {

@@ -136,6 +136,9 @@
 				{#if question.required}
 					<span class="required-badge">Required</span>
 				{/if}
+				{#if question.walkIn}
+					<span class="walkin-badge">Walk-in</span>
+				{/if}
 			</div>
 			<div class="meta">
 				<span
@@ -311,6 +314,19 @@
 		color: #b00000;
 		background: #b0000012;
 		border: 1px solid #b0000030;
+		border-radius: 4px;
+		padding: 1px 6px;
+		letter-spacing: var(--tracking-eyebrow);
+		text-transform: uppercase;
+	}
+
+	.walkin-badge {
+		font-family: var(--font-mono);
+		font-size: var(--text-2xs);
+		font-weight: 600;
+		color: #5b21b6;
+		background: #5b21b612;
+		border: 1px solid #5b21b630;
 		border-radius: 4px;
 		padding: 1px 6px;
 		letter-spacing: var(--tracking-eyebrow);

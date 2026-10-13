@@ -23,6 +23,7 @@ export type AdminSection =
 	| 'users'
 	| 'admissions'
 	| 'scan'
+	| 'walkin'
 	| 'email'
 	| 'application-editor'
 	| 'schedule'
@@ -30,8 +31,14 @@ export type AdminSection =
 	| 'settings'
 	| 'logs';
 
-/** Everything an organizer may reach. Every other section is admin-only. */
-export const ORGANIZER_SECTIONS: AdminSection[] = ['dashboard', 'scan', 'schedule'];
+/**
+ * Everything an organizer may reach. Every other section is admin-only.
+ *
+ * `walkin` and `scan` are the event-day exceptions to "organizers see no per-person
+ * data": both are desk work that names the attendee in front of you, and both expose
+ * only name, email and status — never applications or decisions.
+ */
+export const ORGANIZER_SECTIONS: AdminSection[] = ['dashboard', 'scan', 'walkin', 'schedule'];
 
 /**
  * Route prefixes per section, used both to guard requests and to filter the nav —
@@ -45,6 +52,7 @@ export const SECTION_PATHS: Record<AdminSection, string[]> = {
 	users: ['/admin/users'],
 	admissions: ['/admin/admissions'],
 	scan: ['/admin/scan'],
+	walkin: ['/admin/walkin'],
 	email: ['/admin/email-templates', '/admin/custom-email'],
 	'application-editor': ['/admin/application-editor'],
 	schedule: ['/admin/schedule'],
