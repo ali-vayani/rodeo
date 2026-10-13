@@ -10,6 +10,7 @@ import { sendTemplatedEmail } from '$lib/server/email';
 import { buildEmailPersonalization } from '$lib/server/wallet/email-block';
 import { templateBlockers } from '$lib/email/variables';
 import { emailSettings } from '$lib/server/settings';
+import { resolveTemplate } from '$lib/server/emailTemplates';
 import { logAction } from '$lib/server/log';
 import { toSelfUser } from '../selects';
 import { reportSendFailure, sendableTemplate } from './application';
@@ -82,15 +83,21 @@ export const walkinRouter = router({
 
 			// Staff-initiated, so a template that cannot send is refused loudly up front,
 			// like `email.startSend` — the sender is standing at a desk and needs to know.
+			// Resolved per role like every other lifecycle send; walk-ins are HACKERs
+			// unless the account already held another applicant role.
 			const mail = emailSettings(settings);
-			if (!mail.walkinTemplate) {
+			const overrides = await ctx.prisma.templateOverride.findMany({
+				where: { templateKey: 'walkin' }
+			});
+			const inviteTemplate = resolveTemplate(mail, overrides, 'walkin', user.role);
+			if (!inviteTemplate.body) {
 				throw new TRPCError({
 					code: 'BAD_REQUEST',
 					message: 'The walk-in email template is empty. An admin can set it under Email Templates.'
 				});
 			}
 			const blocked = templateBlockers(
-				[mail.walkinSubject, mail.walkinTemplate],
+				[inviteTemplate.subject, inviteTemplate.body],
 				settings ?? { RSVPDeadline: null }
 			);
 			if (blocked) {
@@ -98,12 +105,7 @@ export const walkinRouter = router({
 			}
 
 			const { vars, attachments } = await buildEmailPersonalization(user, settings);
-			await sendTemplatedEmail(
-				user.email,
-				{ subject: mail.walkinSubject, body: mail.walkinTemplate },
-				vars,
-				attachments
-			);
+			await sendTemplatedEmail(user.email, inviteTemplate, vars, attachments);
 
 			await logAction(ctx, {
 				action: 'walkin.invite',
@@ -260,23 +262,18 @@ export const walkinRouter = router({
 		});
 
 		// The same confirmation mail an RSVP sends, QR block and all — this is the email
-		// they show at the check-in desk if their phone dies on the portal.
+		// they show at the check-in desk if their phone dies on the portal. Resolved per
+		// role, matching `application.rsvp`.
 		const mail = emailSettings(settings);
-		if (
-			sendableTemplate(
-				'walk-in confirmation',
-				{ subject: mail.confirmSubject, body: mail.confirmTemplate },
-				settings,
-				updated.email
-			)
-		) {
+		const overrides = await ctx.prisma.templateOverride.findMany({
+			where: { templateKey: 'confirm' }
+		});
+		const confirmTemplate = resolveTemplate(mail, overrides, 'confirm', updated.role);
+		if (sendableTemplate('walk-in confirmation', confirmTemplate, settings, updated.email)) {
 			const { vars, attachments } = await buildEmailPersonalization(updated, settings);
-			await sendTemplatedEmail(
-				updated.email,
-				{ subject: mail.confirmSubject, body: mail.confirmTemplate },
-				vars,
-				attachments
-			).catch(reportSendFailure('walk-in confirmation', updated.email));
+			await sendTemplatedEmail(updated.email, confirmTemplate, vars, attachments).catch(
+				reportSendFailure('walk-in confirmation', updated.email)
+			);
 		}
 
 		return toSelfUser(updated);

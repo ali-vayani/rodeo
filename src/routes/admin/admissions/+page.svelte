@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { onMount, onDestroy } from 'svelte';
 	import type { Role, DecisionStatus } from '$lib/generated/prisma/enums';
 	import { errorMessage, isTRPCErrorCode } from '$lib/ui/errors';
 	import { fly } from 'svelte/transition';
@@ -20,12 +21,17 @@
 	import { rubricForRole, rubricMaxScore, type CriterionDraft } from '$lib/admissions/rubric';
 	import { APPLICANT_ROLES } from '$lib/admissions/roles';
 	import { facetParams } from '$lib/admin/filters';
-	import { isEngaged, linkedFacetKey, type FacetState } from '$lib/facets';
+	import { isAdmin } from '$lib/auth/permissions';
+	import { isEngaged, type FacetState } from '$lib/facets';
 	import FacetFilters from '$lib/components/admin/FacetFilters.svelte';
 
 	let { data }: { data: PageData } = $props();
 
 	const trpc = createClient();
+
+	// Organizers get the Review tab only: deciding in bulk, releasing decisions and
+	// editing rubrics are admin acts, and the server rejects them regardless.
+	const fullAccess = $derived(isAdmin(data.role));
 
 	type ListResult = Awaited<ReturnType<typeof trpc.admissions.list.query>>;
 	type Applicant = ListResult['applicants'][number];
@@ -118,27 +124,6 @@
 	let decideActiveFilterCount = $derived(
 		Object.values(decideFacetSelection).filter((s) => isEngaged(s)).length
 	);
-
-	/** The Name facet, which the did-you-mean chips drive directly. See `onSuggestionSelect`. */
-	const NAME_FACET = linkedFacetKey('NAME');
-
-	/** What the last list query did with the search term — drives the "did you mean" strip. */
-	let searchInfo = $state<ListResult['search']>({
-		names: [],
-		fuzzy: false,
-		capped: false,
-		exact: 0
-	});
-
-	/**
-	 * Whether the current `name` selection came from a suggestion chip rather than the
-	 * filter panel.
-	 *
-	 * A chip sets a filter the organizer cannot see without opening the panel, so typing a
-	 * fresh search term while one is active would silently intersect the two and return
-	 * nothing. Panel selections are visible and are left alone.
-	 */
-	let nameFromSuggestion = $state(false);
 
 	let loading = $state(false);
 	let scoreLoading = $state(false);
@@ -240,23 +225,15 @@
 		selectedUid = uid;
 	}
 
-	$effect(() => {
+	onMount(() => {
 		async function initialLoad() {
 			try {
-				const [listResult, fetchedFacets, fetchedStats, fetchedRubric] = await Promise.all([
-					trpc.admissions.list.query({
-						noDecision: true,
-						scored: false,
-						page: applicantsPage,
-						pageSize: APPLICANTS_PAGE_SIZE
-					}),
+				const [, fetchedFacets, fetchedStats, fetchedRubric] = await Promise.all([
+					loadApplicants(),
 					trpc.filters.facets.query(),
 					trpc.admissions.stats.query(),
 					trpc.rubric.get.query()
 				]);
-				applicants = listResult.applicants;
-				searchInfo = listResult.search;
-				applicantsTotal = listResult.total;
 				reviewFacets = fetchedFacets;
 				decideFacets = fetchedFacets;
 				stats = fetchedStats;
@@ -301,7 +278,11 @@
 		};
 	});
 
+	let applicantsRequest = 0;
+
 	async function loadApplicants() {
+		clearTimeout(searchTimer);
+		const request = ++applicantsRequest;
 		loading = true;
 		try {
 			const result = await trpc.admissions.list.query({
@@ -319,13 +300,14 @@
 				// someone ticked a box and unticked it again.
 				...facetParams(facetSelection)
 			});
+			if (request !== applicantsRequest) return;
 			applicants = result.applicants;
-			searchInfo = result.search;
 			applicantsTotal = result.total;
 		} catch (e) {
-			showToast(errorMessage(e, 'Failed to load applicants'), 'error');
+			if (request === applicantsRequest)
+				showToast(errorMessage(e, 'Failed to load applicants'), 'error');
 		} finally {
-			loading = false;
+			if (request === applicantsRequest) loading = false;
 		}
 	}
 
@@ -435,11 +417,10 @@
 	let searchTimer: ReturnType<typeof setTimeout>;
 	function onSearchInput(value: string) {
 		search = value;
-		if (nameFromSuggestion) {
-			nameFromSuggestion = false;
-			facetSelection = { ...facetSelection, [NAME_FACET]: { values: [] } };
-		}
 		applicantsPage = 1;
+		applicantsRequest++;
+		loading = true;
+
 		clearTimeout(searchTimer);
 		searchTimer = setTimeout(loadApplicants, 400);
 	}
@@ -448,7 +429,6 @@
 	// immediately — the 400ms debounce exists for keystrokes, which these are not.
 	function onFacetsChange(next: FacetState) {
 		facetSelection = next;
-		nameFromSuggestion = false;
 		loadApplicantsFromStart();
 	}
 
@@ -460,18 +440,10 @@
 		loadApplicantsFromStart();
 	}
 
-	/**
-	 * Narrow to one suggested name, or click the active chip to back out of it.
-	 *
-	 * Sets the `names` filter rather than rewriting the search box. The typed term is what
-	 * produced the suggestions, so replacing it would delete the strip that offered them.
-	 */
-	function onSuggestionSelect(name: string) {
-		const next = facetSelection[NAME_FACET]?.values?.includes(name) ? [] : [name];
-		facetSelection = { ...facetSelection, [NAME_FACET]: { values: next } };
-		nameFromSuggestion = next.length > 0;
-		loadApplicantsFromStart();
-	}
+	onDestroy(() => {
+		clearTimeout(searchTimer);
+		applicantsRequest++;
+	});
 
 	async function handleSaveScore(score: number, notes: string) {
 		if (!selectedUid || !session.canDecide) return;
@@ -870,9 +842,11 @@
 				{stats.waitlisted} waitlisted | {pendingCount} pending release
 			</span>
 		</div>
-		<Button size="sm" onclick={() => (showRubricEditor = true)}>
-			{rubric.length > 0 ? 'Edit rubrics' : 'Set up rubrics'}
-		</Button>
+		{#if fullAccess}
+			<Button size="sm" onclick={() => (showRubricEditor = true)}>
+				{rubric.length > 0 ? 'Edit rubrics' : 'Set up rubrics'}
+			</Button>
+		{/if}
 	</div>
 
 	<!--
@@ -887,13 +861,17 @@
 		<Tabs
 			tabs={[
 				{ value: 'review', label: 'Review', badge: stats.unscored },
-				{
-					value: 'decide',
-					label: 'Pending Decisions',
-					badge: rankedUnfilteredTotal ?? stats.scored + stats.pending
-				},
-				{ value: 'reconsider', label: 'Reconsider' },
-				{ value: 'stats', label: 'Stats' }
+				...(fullAccess
+					? [
+							{
+								value: 'decide',
+								label: 'Pending Decisions',
+								badge: rankedUnfilteredTotal ?? stats.scored + stats.pending
+							},
+							{ value: 'reconsider', label: 'Reconsider' },
+							{ value: 'stats', label: 'Stats' }
+						]
+					: [])
 			]}
 			active={tab}
 			onChange={onTabChange}
@@ -918,8 +896,6 @@
 					facets={reviewFacets}
 					{facetSelection}
 					{onFacetsChange}
-					{searchInfo}
-					{onSuggestionSelect}
 					{loading}
 					collapsed={sidebarCollapsed}
 					onToggleCollapse={() => (sidebarCollapsed = !sidebarCollapsed)}

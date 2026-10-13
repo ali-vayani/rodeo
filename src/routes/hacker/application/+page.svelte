@@ -2,7 +2,11 @@
 	import type { PageData } from './$types';
 	import { Role, UserStatus } from '$lib/generated/prisma/enums';
 	import { computeApplicationState, type ApplicationState } from '$lib/application/state';
-	import { applicationWindowState } from '$lib/application/window';
+	import {
+		roleApplicationWindowState,
+		effectiveRoleOpen,
+		effectiveRoleDeadline
+	} from '$lib/application/window';
 	import { formatDateLong } from '$lib/format';
 	import { errorMessage } from '$lib/ui/errors';
 	import { isAnswered } from '$lib/questions/isAnswered';
@@ -29,14 +33,37 @@
 
 	const ROLES_FOR_APPLICATION: Role[] = [Role.HACKER, Role.JUDGE, Role.MENTOR, Role.VOLUNTEER];
 
-	// The account's own role when it is one you can apply as, else HACKER. An
-	// UNDECLARED account — the state a self-registered user can land in — has no
-	// application-relevant role yet, so the form opens on the common case.
+	/**
+	 * The account's own role when it is one you can apply as AND its window is open,
+	 * else the first role whose window is currently open, else the stored role (closed
+	 * but at least correct), else HACKER as a last resort.
+	 *
+	 * Without the open-window check, a HACKER account whose deadline just passed would
+	 * land on the closed Hacker form even when Mentor or Judge is still accepting.
+	 */
 	function initialRole(): Role {
-		return ROLES_FOR_APPLICATION.includes(user.role) ? user.role : Role.HACKER;
+		const stored = user.role;
+		const storedIsApplicant = ROLES_FOR_APPLICATION.includes(stored);
+		const storedIsOpen =
+			storedIsApplicant && roleApplicationWindowState(data.settings, stored) === 'open';
+		if (storedIsOpen) return stored;
+
+		const openRole = ROLES_FOR_APPLICATION.find(
+			(r) => roleApplicationWindowState(data.settings, r) === 'open'
+		);
+		// Fall back to the stored role (closed) rather than always defaulting to HACKER,
+		// so a Mentor whose window is closed doesn't land on the Hacker form.
+		return openRole ?? (storedIsApplicant ? stored : Role.HACKER);
 	}
 
 	let selectedRole = $state<Role>(initialRole());
+
+	/** Per-role window states — drives the RoleSelector's greyed-out UI. */
+	let roleWindowStates = $derived(
+		Object.fromEntries(
+			ROLES_FOR_APPLICATION.map((r) => [r, roleApplicationWindowState(data.settings, r)])
+		) as Record<Role, import('$lib/application/window').ApplicationWindowState>
+	);
 
 	// The role the server has on record, which is what `syncRole` reconciles against.
 	let persistedRole = $state<Role>(untrack(() => user.role));
@@ -74,10 +101,19 @@
 
 	// `application.save` and `application.submit` are both gated on this window, so
 	// outside it the form was live but every keystroke was thrown away by the server.
-	let windowState = $derived(applicationWindowState(data.settings));
+	// Uses the role-specific open/deadline when set, falling back to the global pair.
+	let windowState = $derived(roleApplicationWindowState(data.settings, selectedRole));
 	let windowOpen = $derived(windowState === 'open');
-	let opensOn = $derived(formatDateLong(data.settings?.applicationOpen));
-	let closesOn = $derived(formatDateLong(data.settings?.applicationDeadline));
+	let opensOn = $derived(formatDateLong(effectiveRoleOpen(data.settings, selectedRole)));
+	let closesOn = $derived(formatDateLong(effectiveRoleDeadline(data.settings, selectedRole)));
+
+	const ROLE_LABELS: Partial<Record<Role, string>> = {
+		[Role.HACKER]: 'Hacker',
+		[Role.JUDGE]: 'Judge',
+		[Role.MENTOR]: 'Mentor',
+		[Role.VOLUNTEER]: 'Volunteer'
+	};
+	let selectedRoleLabel = $derived(ROLE_LABELS[selectedRole] ?? 'Your');
 
 	type SaveStatus = 'idle' | 'saving' | 'saved' | 'error';
 	let saveStatus = $state<SaveStatus>('idle');
@@ -237,8 +273,8 @@
 				role="status"
 			>
 				<TriangleAlert class="size-4 shrink-0" aria-hidden="true" />
-				Applications closed on {closesOn}. Your answers are shown below but can no longer be
-				changed.
+				{selectedRoleLabel} applications closed on {closesOn}. Your answers are shown below but can
+				no longer be changed.
 			</p>
 		{:else if windowState === 'before'}
 			<p
@@ -247,8 +283,8 @@
 				role="status"
 			>
 				<TriangleAlert class="size-4 shrink-0" aria-hidden="true" />
-				Applications open on {opensOn}. You can read the questions now and answer them once the form
-				opens.
+				{selectedRoleLabel} applications open on {opensOn}. You can read the questions now and
+				answer them once the form opens.
 			</p>
 		{:else if data.settings}
 			<p
@@ -257,7 +293,7 @@
 				role="status"
 			>
 				<TriangleAlert class="size-4 shrink-0" aria-hidden="true" />
-				Applications close on {closesOn}.
+				{selectedRoleLabel} applications close on {closesOn}.
 			</p>
 		{/if}
 
@@ -284,10 +320,16 @@
 			</div>
 
 			<div class="px-7 py-7">
+				<!--
+					Pass roleStates for per-role gating. Do not pass `disabled` based on
+					windowOpen: if the selected role is closed but another is open, the user
+					must still be able to switch. The form fields below are what lock when
+					the selected role's window is shut.
+				-->
 				<RoleSelector
 					selected={selectedRole}
 					onselect={(r) => (selectedRole = r)}
-					disabled={!windowOpen}
+					roleStates={roleWindowStates}
 				/>
 
 				{#if filteredQuestions.length === 0}

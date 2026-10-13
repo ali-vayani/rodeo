@@ -17,6 +17,7 @@
  */
 export const TEMPLATE_VARIABLES = [
 	{ key: 'name', label: "Hacker's full name", placeholder: '[hacker name]' },
+	{ key: 'role', label: "Applicant's role", placeholder: '[role]' },
 	{ key: 'hackathon_start', label: 'Hackathon start date', placeholder: '[start date]' },
 	// Not "[end date]": this is the RSVP cutoff, not when the event ends. Labelling it
 	// as an end date would be the same lie in a shorter form.
@@ -248,7 +249,7 @@ export function buildEventVars(
  * Prisma `User`/`Settings` row without this module importing Prisma.
  */
 export function buildTemplateVars(
-	user: { name: string },
+	user: { name: string; role?: string | null },
 	settings: { hackathonStartDate: Date; RSVPDeadline: Date | null },
 	/**
 	 * The pre-rendered check-in block. Passed in rather than built here, because
@@ -261,8 +262,11 @@ export function buildTemplateVars(
 ): Record<string, string> {
 	// `name` comes from a linked application question, so an account that has not
 	// answered it holds `''` — and "Hi ," is worse than a filler salutation.
+	const rawRole = user.role?.trim();
 	return {
 		name: user.name?.trim() || NAME_FALLBACK,
+		// Capitalize first letter so "HACKER" renders as "Hacker" in emails.
+		role: rawRole ? rawRole.charAt(0) + rawRole.slice(1).toLowerCase() : '',
 		...buildEventVars(settings, walkInLink),
 		hacker_qr_code: checkInPass
 	};

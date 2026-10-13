@@ -86,6 +86,14 @@
 				admissionsSend: merged.admissionsSend ?? undefined,
 				hackathonStartDate: merged.hackathonStartDate,
 				scanActions: merged.scanActions,
+				hackerApplicationOpen: merged.hackerApplicationOpen ?? null,
+				hackerApplicationDeadline: merged.hackerApplicationDeadline ?? null,
+				mentorApplicationOpen: merged.mentorApplicationOpen ?? null,
+				mentorApplicationDeadline: merged.mentorApplicationDeadline ?? null,
+				judgeApplicationOpen: merged.judgeApplicationOpen ?? null,
+				judgeApplicationDeadline: merged.judgeApplicationDeadline ?? null,
+				volunteerApplicationOpen: merged.volunteerApplicationOpen ?? null,
+				volunteerApplicationDeadline: merged.volunteerApplicationDeadline ?? null,
 				submitTemplate: merged.submitTemplate,
 				submitSubject: merged.submitSubject,
 				acceptTemplate: merged.acceptTemplate,
@@ -189,6 +197,14 @@
 					admissionsSend={settings.admissionsSend}
 					RSVPDeadline={settings.RSVPDeadline}
 					hackathonStartDate={settings.hackathonStartDate}
+					hackerApplicationOpen={settings.hackerApplicationOpen}
+					hackerApplicationDeadline={settings.hackerApplicationDeadline}
+					mentorApplicationOpen={settings.mentorApplicationOpen}
+					mentorApplicationDeadline={settings.mentorApplicationDeadline}
+					judgeApplicationOpen={settings.judgeApplicationOpen}
+					judgeApplicationDeadline={settings.judgeApplicationDeadline}
+					volunteerApplicationOpen={settings.volunteerApplicationOpen}
+					volunteerApplicationDeadline={settings.volunteerApplicationDeadline}
 					{saving}
 					onSave={(u) => save(u)}
 				/>

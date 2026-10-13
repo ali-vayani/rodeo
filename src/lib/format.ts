@@ -115,3 +115,9 @@ export function initials(name: string): string {
 export function pluralize(count: number, singular: string, plural = `${singular}s`): string {
 	return `${count} ${count === 1 ? singular : plural}`;
 }
+
+/** `812 KB` / `1.4 MB` — for file listings. Rounds up so nothing shows as `0 KB`. */
+export function formatFileSize(bytes: number): string {
+	const mb = bytes / (1024 * 1024);
+	return mb >= 1 ? `${mb.toFixed(1)} MB` : `${Math.max(1, Math.round(bytes / 1024))} KB`;
+}

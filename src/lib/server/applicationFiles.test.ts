@@ -108,10 +108,10 @@ describe('canDownloadApplicationFile', () => {
 		expect(canDownloadApplicationFile({ uid: 'admin', role: Role.ADMIN }, 'u1')).toBe(true);
 	});
 
-	it('does NOT let an organizer read anyone’s', () => {
-		// `permissions.ts` keeps organizers out of /admin/users and /admin/admissions,
-		// so serving them resumes would be a side door into that data.
-		expect(canDownloadApplicationFile({ uid: 'org', role: Role.ORGANIZER }, 'u1')).toBe(false);
+	it('lets an organizer read anyone’s', () => {
+		// Organizers review applications in /admin/admissions, and a file answer is
+		// part of the application.
+		expect(canDownloadApplicationFile({ uid: 'org', role: Role.ORGANIZER }, 'u1')).toBe(true);
 	});
 
 	it('does not let other applicant roles read anyone’s', () => {

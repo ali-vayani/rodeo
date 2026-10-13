@@ -11,8 +11,8 @@ import { Role } from '../generated/prisma/enums';
  * team or QR code; everyone else is the reverse. The two sets are disjoint and
  * exhaustive, so every account has exactly one home.
  *
- * Within the admin portal, an organizer helps run the event without seeing the people
- * in it, so anything holding real user data is admin-only.
+ * Within the admin portal, an organizer helps run the event and reviews applications,
+ * but every other section holding real user data is admin-only.
  *
  * This module is the single source of truth for both splits. The nav is cosmetic;
  * `adminProcedure` is the actual boundary and it fails closed.
@@ -34,11 +34,16 @@ export type AdminSection =
 /**
  * Everything an organizer may reach. Every other section is admin-only.
  *
- * `walkin` and `scan` are the event-day exceptions to "organizers see no per-person
- * data": both are desk work that names the attendee in front of you, and both expose
- * only name, email and status — never applications or decisions.
+ * `walkin`, like `scan`, is event-day desk work: it exposes only name, email and
+ * status — never applications or decisions.
  */
-export const ORGANIZER_SECTIONS: AdminSection[] = ['dashboard', 'scan', 'walkin', 'schedule'];
+export const ORGANIZER_SECTIONS: AdminSection[] = [
+	'dashboard',
+	'admissions',
+	'scan',
+	'walkin',
+	'schedule'
+];
 
 /**
  * Route prefixes per section, used both to guard requests and to filter the nav —

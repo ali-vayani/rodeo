@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { TRPCError } from '@trpc/server';
 import { Role } from '$lib/generated/prisma/client';
-import { router, adminProcedure } from '../init';
+import { router, adminProcedure, portalProcedure } from '../init';
 import { isApplicantRole } from '$lib/admissions/roles';
 import { logAction } from '$lib/server/log';
 
@@ -27,8 +27,11 @@ const rubricInput = z.object({
 });
 
 export const rubricRouter = router({
-	/** Every role's rubric in one list; group by `role` client-side. `[]` means none. */
-	get: adminProcedure.query(async ({ ctx }) => {
+	/**
+	 * Every role's rubric in one list; group by `role` client-side. `[]` means none.
+	 * Portal-level: organizers score with the rubric; only `save` edits it.
+	 */
+	get: portalProcedure.query(async ({ ctx }) => {
 		return ctx.prisma.rubricCriterion.findMany({
 			orderBy: { order: 'asc' },
 			include: { levels: { orderBy: { order: 'asc' } } }

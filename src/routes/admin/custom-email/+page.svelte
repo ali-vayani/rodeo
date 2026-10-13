@@ -26,6 +26,8 @@
 	import type { TabItem } from '$lib/components/ui/types';
 	import { toast } from '$lib/ui/toast.svelte';
 	import { pluralize } from '$lib/format';
+	import type { EmailAttachmentRef } from '$lib/email/attachments';
+	import AttachmentPicker from '$lib/components/email/AttachmentPicker.svelte';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
@@ -81,6 +83,18 @@
 	let body = $state('');
 	let confirmText = $state('');
 
+	/** Refs the upload endpoint returned; `startSend` receives exactly this list. */
+	let attachments = $state<EmailAttachmentRef[]>([]);
+	let uploading = $state(false);
+
+	function removeAttachment(ref: EmailAttachmentRef) {
+		fetch('/admin/custom-email/attachments', {
+			method: 'DELETE',
+			headers: { 'content-type': 'application/json' },
+			body: JSON.stringify({ key: ref.key })
+		}).catch(() => {});
+	}
+
 	/**
 	 * Resend allows 10 requests/second per team and answers a burst past it with a 429.
 	 * The gap between sends targets roughly 8/s to leave headroom; the round trip usually
@@ -118,7 +132,7 @@
 				)
 	);
 	let composeReady = $derived(subject.trim().length > 0 && body.trim().length > 0);
-	let isDirty = $derived(subject.length > 0 || body.length > 0);
+	let isDirty = $derived(subject.length > 0 || body.length > 0 || attachments.length > 0);
 
 	// The toggle only means anything for an explicit address list; in filter mode there
 	// are no unmatched addresses for it to admit. Sent explicitly rather than inferred.
@@ -130,9 +144,16 @@
 	 * external addresses. Externals carry the same fallback name the server will use.
 	 */
 	let previewTargets = $derived([
-		...sample.map((u) => ({ name: u.name, email: u.email, status: u.status, external: false })),
+		...sample.map((u) => ({
+			uid: u.uid,
+			name: u.name,
+			email: u.email,
+			status: u.status,
+			external: false
+		})),
 		...(sendExternal
 			? externalEmails.map((email) => ({
+					uid: undefined,
 					name: NAME_FALLBACK,
 					email,
 					status: null,
@@ -172,6 +193,7 @@
 	);
 
 	let previewAs = $derived<PreviewAs>({
+		uid: previewTarget?.uid,
 		name: previewTarget?.name ?? '',
 		email: previewTarget?.email ?? '',
 		external: previewTarget?.external ?? false,
@@ -251,7 +273,8 @@
 				// the set drifted, so a stale filter cannot silently mail everyone. External
 				// recipients are inside that number, not alongside it.
 				expectedCount: count,
-				allowExternal: sendExternal
+				allowExternal: sendExternal,
+				attachments
 			});
 
 			const sendId = started.sendId;
@@ -263,13 +286,18 @@
 			const queue = started.recipients.map((recipient) => ({ recipient, attempt: 1 }));
 			progress = { done: 0, total: queue.length };
 
+			// Recipients the QR block was silently left out for — not confirmed attendees.
+			// Only meaningful when the draft asked for one.
+			const usesQr = body.includes('{{hacker_qr_code}}');
+			let qrSkipped = 0;
+
 			while (queue.length > 0) {
 				const job = queue.shift()!;
 				// A dropped connection is indistinguishable from a paced-out send from here, and
 				// both are worth another go, so a thrown request joins the retryable failures.
 				const result = await trpc.email.sendOne
 					.mutate({ sendId, recipient: job.recipient })
-					.catch(() => ({ ok: false, retryable: true }));
+					.catch(() => ({ ok: false, skipped: false, retryable: true, qrAttached: null }));
 
 				if (!result.ok && result.retryable && job.attempt < MAX_ATTEMPTS) {
 					// To the back, so one struggling recipient does not hold up the rest.
@@ -278,17 +306,22 @@
 					continue;
 				}
 
+				if (usesQr && result.ok && !result.skipped && result.qrAttached === false) {
+					qrSkipped += 1;
+				}
 				progress.done += 1;
 				if (queue.length > 0) await sleep(SEND_INTERVAL_MS);
 			}
 
 			const result = await trpc.email.finishSend.mutate({ sendId });
-			if (result.failed > 0) {
+			if (result.failed > 0 || result.pending > 0) {
 				// The most common error explains most blasts (quota, bad domain) in one line.
 				const reason = result.failures[0]
 					? ` Most common error: ${result.failures[0].message}`
 					: '';
-				toast.error(`Sent ${result.sent} of ${result.total} — ${result.failed} failed.${reason}`);
+				toast.error(
+					`Sent ${result.sent} of ${result.total}. ${result.failed} failed, ${result.pending} unconfirmed.${reason}`
+				);
 			} else {
 				toast.success(
 					started.external > 0
@@ -297,10 +330,21 @@
 				);
 			}
 
+			// Its own toast rather than a clause in the tally: the blast "succeeded", but an
+			// admin who asked for QR codes needs to hear that some inboxes got none.
+			if (qrSkipped > 0) {
+				toast.error(
+					`The QR code was left out for ${pluralize(qrSkipped, 'recipient')} — ` +
+						'only confirmed attendees get one.'
+				);
+			}
+
 			const refreshed = await trpc.email.getLogs.query({ page: 1, pageSize: 10 });
 			logs = refreshed.logs;
 			subject = '';
 			body = '';
+			// Keep the objects for retries until S3 expires them. The log retains filenames.
+			attachments = [];
 			confirmText = '';
 			step = 1;
 		} catch (e: unknown) {
@@ -360,12 +404,22 @@
 					</p>
 				</div>
 				<TemplateEditor label="Custom" bind:subject bind:body {unavailable} />
+
+				<AttachmentPicker
+					bind:attachments
+					bind:uploading
+					disabled={sending}
+					onError={(message) => toast.error(message)}
+					onRemove={removeAttachment}
+				/>
+
 				<EmailPreview {subject} {body} vars={previewVars} {previewAs} height="sm" />
 			{:else}
 				<SendConfirmation
 					{subject}
 					{body}
 					{count}
+					{attachments}
 					externalCount={sendExternal ? externalEmails.length : 0}
 					vars={previewVars}
 					{previewAs}

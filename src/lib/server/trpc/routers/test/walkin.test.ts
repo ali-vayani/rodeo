@@ -65,6 +65,7 @@ describe('walkin.confirm', () => {
 			.mockResolvedValueOnce(confirmed);
 		db.blacklist.findUnique.mockResolvedValue(null);
 		db.settings.findFirst.mockResolvedValue(mockSettings);
+		db.templateOverride.findMany.mockResolvedValue([]);
 		db.user.updateMany.mockResolvedValue({ count: 1 });
 
 		const result = await caller.walkin.confirm();

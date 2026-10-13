@@ -1,15 +1,28 @@
 import { z } from 'zod';
+import { TRPCError } from '@trpc/server';
+import { Role } from '$lib/generated/prisma/client';
+import type { EmailAttachmentRef } from '$lib/email/attachments';
 import { router, authedProcedure, adminProcedure } from '../init';
 import { TEMPLATE_KEYS, type TemplateKey } from '$lib/email/templates';
 import { isAdmin } from '$lib/auth/permissions';
 import { DEFAULT_SETTINGS } from '$lib/server/settings';
 import { US_STATES } from '$lib/data/states';
 import { logAction, listOrNone } from '$lib/server/log';
+import {
+	attachmentRefSchema,
+	MAX_EMAIL_ATTACHMENTS,
+	persistTemplateAttachments,
+	removeEmailAttachments,
+	storedAttachmentRefs
+} from '$lib/server/emailAttachments';
 
 // Same bounds as `updateTemplates`; `update` is the other write path to these columns
 // and `admissions.release` mails whatever is stored.
 const subject = z.string().min(1).max(200);
 const templateBody = z.string().max(20000);
+
+/** An optional nullable date for per-role overrides — absent or null both mean "use global". */
+const roleDate = z.coerce.date().nullable().optional();
 
 const settingsInput = z
 	.object({
@@ -50,7 +63,17 @@ const settingsInput = z
 			.string()
 			.refine((code) => code in US_STATES, { message: 'Not a US state.' })
 			.nullable()
-			.optional()
+			.optional(),
+
+		// Per-role deadline overrides. Null / absent → inherit global dates.
+		hackerApplicationOpen: roleDate,
+		hackerApplicationDeadline: roleDate,
+		mentorApplicationOpen: roleDate,
+		mentorApplicationDeadline: roleDate,
+		judgeApplicationOpen: roleDate,
+		judgeApplicationDeadline: roleDate,
+		volunteerApplicationOpen: roleDate,
+		volunteerApplicationDeadline: roleDate
 	})
 	// Out-of-order dates make the window guards lock every applicant out.
 	.refine((s) => s.applicationOpen <= s.applicationDeadline, {
@@ -60,13 +83,46 @@ const settingsInput = z
 	.refine((s) => s.RSVPDeadline == null || s.applicationDeadline <= s.RSVPDeadline, {
 		message: 'RSVP Deadline must be on or after Applications Close.',
 		path: ['RSVPDeadline']
-	});
+	})
+	// Per-role: when both are set, open must precede close.
+	.refine(
+		(s) =>
+			s.hackerApplicationOpen == null ||
+			s.hackerApplicationDeadline == null ||
+			s.hackerApplicationOpen <= s.hackerApplicationDeadline,
+		{ message: 'Hacker: open must come before close.', path: ['hackerApplicationDeadline'] }
+	)
+	.refine(
+		(s) =>
+			s.mentorApplicationOpen == null ||
+			s.mentorApplicationDeadline == null ||
+			s.mentorApplicationOpen <= s.mentorApplicationDeadline,
+		{ message: 'Mentor: open must come before close.', path: ['mentorApplicationDeadline'] }
+	)
+	.refine(
+		(s) =>
+			s.judgeApplicationOpen == null ||
+			s.judgeApplicationDeadline == null ||
+			s.judgeApplicationOpen <= s.judgeApplicationDeadline,
+		{ message: 'Judge: open must come before close.', path: ['judgeApplicationDeadline'] }
+	)
+	.refine(
+		(s) =>
+			s.volunteerApplicationOpen == null ||
+			s.volunteerApplicationDeadline == null ||
+			s.volunteerApplicationOpen <= s.volunteerApplicationDeadline,
+		{
+			message: 'Volunteer: open must come before close.',
+			path: ['volunteerApplicationDeadline']
+		}
+	);
 
 // Re-exported for existing importers; lives in `$lib/server/settings` so the senders
 // resolve the same values the editor sees.
 export { DEFAULT_SETTINGS };
 
-type TemplateColumns = Record<`${TemplateKey}Template` | `${TemplateKey}Subject`, string>;
+type TemplateColumns = Record<`${TemplateKey}Template` | `${TemplateKey}Subject`, string> &
+	Record<`${TemplateKey}Attachments`, EmailAttachmentRef[]>;
 
 /**
  * Template and subject columns blanked for non-admin `settings.get` callers, who need
@@ -77,7 +133,8 @@ type TemplateColumns = Record<`${TemplateKey}Template` | `${TemplateKey}Subject`
 const REDACTED_TEMPLATES = Object.fromEntries(
 	TEMPLATE_KEYS.flatMap((key) => [
 		[`${key}Template`, ''],
-		[`${key}Subject`, '']
+		[`${key}Subject`, ''],
+		[`${key}Attachments`, []]
 	])
 ) as TemplateColumns;
 
@@ -144,23 +201,61 @@ export const settingsRouter = router({
 					z.enum(TEMPLATE_KEYS),
 					z.object({
 						subject: z.string().min(1).max(200),
-						body: z.string().max(20000)
+						body: z.string().max(20000),
+						attachments: z.array(attachmentRefSchema).max(MAX_EMAIL_ATTACHMENTS).optional()
 					})
 				)
 			})
 		)
 		.mutation(async ({ ctx, input }) => {
-			const data: Record<string, string> = {};
-			for (const [key, value] of Object.entries(input.templates)) {
-				data[`${key}Subject`] = value.subject;
-				data[`${key}Template`] = value.body;
-			}
-
 			const existing = await ctx.prisma.settings.findFirst();
-			const settings = existing
-				? await ctx.prisma.settings.update({ where: { id: existing.id }, data })
-				: // Fresh install: seed.ts creates no Settings row, so materialise one.
-					await ctx.prisma.settings.create({ data: { ...DEFAULT_SETTINGS, ...data } });
+			const data: Partial<TemplateColumns> = {};
+			const created: string[] = [];
+			let settings;
+			try {
+				for (const key of TEMPLATE_KEYS) {
+					const value = input.templates[key];
+					if (!value) continue;
+					data[`${key}Subject`] = value.subject;
+					data[`${key}Template`] = value.body;
+					if (value.attachments !== undefined) {
+						try {
+							data[`${key}Attachments`] = await persistTemplateAttachments(
+								value.attachments,
+								created
+							);
+						} catch (cause) {
+							throw new TRPCError({
+								code: 'BAD_REQUEST',
+								message:
+									'An attachment could not be saved. Remove and re-attach it, then try again.',
+								cause
+							});
+						}
+					}
+				}
+				settings = existing
+					? await ctx.prisma.settings.update({ where: { id: existing.id }, data })
+					: await ctx.prisma.settings.create({
+							data: { ...DEFAULT_SETTINGS, ...data }
+						});
+			} catch (error) {
+				await removeEmailAttachments(created);
+				throw error;
+			}
+			if (existing) {
+				const retained = new Set(
+					TEMPLATE_KEYS.flatMap((key) =>
+						storedAttachmentRefs(settings[`${key}Attachments`]).map((ref) => ref.key)
+					)
+				);
+				const removed = TEMPLATE_KEYS.flatMap((key) =>
+					storedAttachmentRefs(existing[`${key}Attachments`])
+				)
+					.filter((ref) => !retained.has(ref.key))
+					.map((ref) => ref.key);
+				await removeEmailAttachments([...new Set(removed)]);
+			}
 
 			const edited = Object.keys(input.templates);
 			await logAction(ctx, {
@@ -171,5 +266,97 @@ export const settingsRouter = router({
 			});
 
 			return settings;
+		}),
+
+	/** Returns all template overrides. Used by the admin template editor. */
+	getTemplateOverrides: adminProcedure.query(async ({ ctx }) => {
+		return ctx.prisma.templateOverride.findMany();
+	}),
+
+	/**
+	 * Creates or updates a role-specific template override.
+	 * Presence of an override means it is enabled; to disable, call deleteTemplateOverride.
+	 */
+	upsertTemplateOverride: adminProcedure
+		.input(
+			z.object({
+				templateKey: z.enum(TEMPLATE_KEYS),
+				role: z.nativeEnum(Role),
+				subject: z.string().min(1).max(200),
+				body: z.string().max(20000),
+				attachments: z.array(attachmentRefSchema).max(MAX_EMAIL_ATTACHMENTS).optional()
+			})
+		)
+		.mutation(async ({ ctx, input }) => {
+			const { templateKey, role, subject, body } = input;
+			const created: string[] = [];
+
+			let attachments: EmailAttachmentRef[];
+			try {
+				attachments = await persistTemplateAttachments(input.attachments ?? [], created);
+			} catch (cause) {
+				throw new TRPCError({
+					code: 'BAD_REQUEST',
+					message: 'An attachment could not be saved. Remove and re-attach it, then try again.',
+					cause
+				});
+			}
+
+			let override;
+			try {
+				override = await ctx.prisma.templateOverride.upsert({
+					where: { templateKey_role: { templateKey, role } },
+					create: { templateKey, role, subject, body, attachments },
+					update: { subject, body, attachments }
+				});
+			} catch (error) {
+				await removeEmailAttachments(created);
+				throw error;
+			}
+
+			// Clean up attachments from the previous version of this override that are no
+			// longer referenced.
+			const retained = new Set(storedAttachmentRefs(override.attachments).map((r) => r.key));
+			const staleKeys = created.filter((k) => !retained.has(k));
+			await removeEmailAttachments(staleKeys);
+
+			await logAction(ctx, {
+				action: 'settings.templateOverride.upsert',
+				summary: `Upserted the ${templateKey} template override for ${role}`,
+				metadata: { templateKey, role }
+			});
+
+			return override;
+		}),
+
+	/** Removes a role-specific override, reverting that role to the default template. */
+	deleteTemplateOverride: adminProcedure
+		.input(
+			z.object({
+				templateKey: z.enum(TEMPLATE_KEYS),
+				role: z.nativeEnum(Role)
+			})
+		)
+		.mutation(async ({ ctx, input }) => {
+			const { templateKey, role } = input;
+
+			const existing = await ctx.prisma.templateOverride.findUnique({
+				where: { templateKey_role: { templateKey, role } }
+			});
+
+			if (!existing) return;
+
+			await ctx.prisma.templateOverride.delete({
+				where: { templateKey_role: { templateKey, role } }
+			});
+
+			const keysToRemove = storedAttachmentRefs(existing.attachments).map((r) => r.key);
+			await removeEmailAttachments(keysToRemove);
+
+			await logAction(ctx, {
+				action: 'settings.templateOverride.delete',
+				summary: `Deleted the ${templateKey} template override for ${role}`,
+				metadata: { templateKey, role }
+			});
 		})
 });

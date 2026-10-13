@@ -40,6 +40,7 @@ beforeEach(() => {
 	// `list` folds the blacklist to flag applicants; default to empty so tests that are
 	// about filtering don't each have to say they aren't about the blacklist.
 	db.blacklist.findMany.mockResolvedValue([] as never);
+	db.templateOverride.findMany.mockResolvedValue([] as never);
 });
 
 afterEach(() => {
@@ -635,7 +636,7 @@ describe('admissions.release', () => {
 
 		// The decisions are untouched, which is the whole point of checking first.
 		expect(db.$transaction).not.toHaveBeenCalled();
-		expect(db.user.updateMany).not.toHaveBeenCalled();
+		expect(db.user.updateManyAndReturn).not.toHaveBeenCalled();
 	});
 
 	it('releases normally when the template needs nothing the event lacks', async () => {
@@ -647,7 +648,7 @@ describe('admissions.release', () => {
 			acceptTemplate: 'You are in! We start {{hackathon_start}}.'
 		} as never);
 		db.log.create.mockResolvedValue({} as never);
-		db.$transaction.mockResolvedValue([{ count: 1 }]);
+		db.$transaction.mockResolvedValue([[{ uid: pendingUser.uid }]]);
 
 		await expect(caller.admissions.release({})).resolves.toEqual({ released: 1 });
 	});
@@ -664,7 +665,7 @@ describe('admissions.release', () => {
 			waitlistTemplate: 'Hold tight until {{rsvp_deadline}}.'
 		} as never);
 		db.log.create.mockResolvedValue({} as never);
-		db.$transaction.mockResolvedValue([{ count: 1 }]);
+		db.$transaction.mockResolvedValue([[{ uid: pendingUser.uid }]]);
 
 		await expect(caller.admissions.release({})).resolves.toEqual({ released: 1 });
 	});
@@ -674,21 +675,22 @@ describe('admissions.release', () => {
 		db.user.findMany.mockResolvedValue([pendingUser] as never);
 		db.settings.findFirst.mockResolvedValue(null);
 		db.log.create.mockResolvedValue({} as never);
-		db.$transaction.mockResolvedValue([{ count: 1 }]);
+		db.$transaction.mockResolvedValue([[{ uid: pendingUser.uid }]]);
 
 		const result = await caller.admissions.release({});
 		expect(result).toEqual({ released: 1 });
 		expect(db.$transaction).toHaveBeenCalled();
-		// The CAS is keyed on the exact pending value read.
-		expect(db.user.updateMany).toHaveBeenCalledWith(
+		// The CAS is keyed per decision group on the exact pending value read.
+		expect(db.user.updateManyAndReturn).toHaveBeenCalledWith(
 			expect.objectContaining({
-				where: { uid: pendingUser.uid, pendingDecision: pendingUser.pendingDecision },
+				where: { uid: { in: [pendingUser.uid] }, pendingDecision: pendingUser.pendingDecision },
 				data: {
 					activeDecision: pendingUser.pendingDecision,
 					pendingDecision: null,
 					claimedBy: null,
 					claimedAt: null
-				}
+				},
+				select: { uid: true }
 			})
 		);
 	});
@@ -698,11 +700,11 @@ describe('admissions.release', () => {
 		db.user.findMany.mockResolvedValue([pendingUser] as never);
 		db.settings.findFirst.mockResolvedValue(null);
 		db.log.create.mockResolvedValue({} as never);
-		db.$transaction.mockResolvedValue([{ count: 1 }]);
+		db.$transaction.mockResolvedValue([[{ uid: pendingUser.uid }]]);
 
 		await caller.admissions.release({});
 
-		const data = db.user.updateMany.mock.calls[0]?.[0]?.data;
+		const data = db.user.updateManyAndReturn.mock.calls[0]?.[0]?.data;
 		expect(data).toMatchObject({ claimedBy: null, claimedAt: null });
 	});
 
@@ -715,11 +717,11 @@ describe('admissions.release', () => {
 		db.user.findMany.mockResolvedValue([pendingUser] as never);
 		db.settings.findFirst.mockResolvedValue(null);
 		db.log.create.mockResolvedValue({} as never);
-		db.$transaction.mockResolvedValue([{ count: 1 }]);
+		db.$transaction.mockResolvedValue([[{ uid: pendingUser.uid }]]);
 
 		await caller.admissions.release({});
 
-		const data = db.user.updateMany.mock.calls[0]?.[0]?.data;
+		const data = db.user.updateManyAndReturn.mock.calls[0]?.[0]?.data;
 		expect(data).not.toHaveProperty('decidedBy');
 		expect(data).not.toHaveProperty('decidedAt');
 	});
@@ -729,7 +731,7 @@ describe('admissions.release', () => {
 		db.user.findMany.mockResolvedValue([pendingUser] as never);
 		db.settings.findFirst.mockResolvedValue(null);
 		db.log.create.mockResolvedValue({} as never);
-		db.$transaction.mockResolvedValue([{ count: 1 }]);
+		db.$transaction.mockResolvedValue([[{ uid: pendingUser.uid }]]);
 
 		await caller.admissions.release({});
 
@@ -750,7 +752,7 @@ describe('admissions.release', () => {
 		db.user.findMany.mockResolvedValue([pendingUser] as never);
 		db.settings.findFirst.mockResolvedValue(mockSettings);
 		db.log.create.mockResolvedValue({} as never);
-		db.$transaction.mockResolvedValue([{ count: 1 }]);
+		db.$transaction.mockResolvedValue([[{ uid: pendingUser.uid }]]);
 
 		await caller.admissions.release({});
 
@@ -836,6 +838,22 @@ describe('admissions.list — typo-tolerant search', () => {
 	beforeEach(() => {
 		db.user.findMany.mockResolvedValue([hackerUser] as never);
 	});
+
+	it.each(['Hackr', 'Hacker', 'hacker@example.com'])(
+		'uses the same search predicate as Users for %s',
+		async (search) => {
+			db.user.count.mockResolvedValue(0);
+			const caller = createTestCaller(db, adminUser);
+			const users = await caller.user.list({ search });
+			const usersWhere = db.user.findMany.mock.calls.at(-1)?.[0]?.where as { AND: unknown[] };
+
+			const admissions = await caller.admissions.list({ search });
+			const admissionsWhere = db.user.findMany.mock.calls.at(-1)?.[0]?.where as { AND: unknown[] };
+
+			expect(admissions.search).toEqual(users.search);
+			expect(admissionsWhere.AND.at(-1)).toEqual(usersWhere.AND.at(-1));
+		}
+	);
 
 	it('leaves a productive search alone, without scanning names', async () => {
 		db.user.count.mockResolvedValue(EXACT_MATCH_FLOOR as never);
