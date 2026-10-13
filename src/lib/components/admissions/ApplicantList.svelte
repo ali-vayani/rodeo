@@ -20,6 +20,8 @@
 		facets,
 		facetSelection,
 		onFacetsChange,
+		searchInfo,
+		onSuggestionSelect,
 		loading,
 		collapsed,
 		onToggleCollapse,
@@ -53,6 +55,9 @@
 		facets: Facet[];
 		facetSelection: FacetState;
 		onFacetsChange: (selected: FacetState) => void;
+		/** What the last list query did with the search term — drives the "did you mean" strip. */
+		searchInfo: { names: string[]; fuzzy: boolean; capped: boolean; exact: number };
+		onSuggestionSelect: (name: string) => void;
 		loading: boolean;
 		collapsed: boolean;
 		onToggleCollapse: () => void;
@@ -188,6 +193,20 @@
 				oninput={(e) => onSearchInput((e.currentTarget as HTMLInputElement).value)}
 				class="w-full rounded border border-border bg-[#f9f9f9] px-[10px] py-1.5 text-touch text-primary outline-none sm:text-xs"
 			/>
+			{#if searchInfo.fuzzy && searchInfo.names.length > 0}
+				<div class="mt-1.5 flex flex-wrap gap-1">
+					<span class="text-2xs text-muted-foreground">Did you mean:</span>
+					{#each searchInfo.names as name (name)}
+						<button
+							type="button"
+							onclick={() => onSuggestionSelect(name)}
+							class="cursor-pointer rounded border border-border bg-card px-1.5 py-0.5 text-2xs text-foreground transition-colors hover:bg-[#f0f0f0]"
+						>
+							{name}
+						</button>
+					{/each}
+				</div>
+			{/if}
 		</div>
 
 		{#if facets.length > 0}
