@@ -22,7 +22,7 @@
 	import { APPLICANT_ROLES } from '$lib/admissions/roles';
 	import { facetParams } from '$lib/admin/filters';
 	import { isAdmin } from '$lib/auth/permissions';
-	import { isEngaged, type FacetState } from '$lib/facets';
+	import { isEngaged, linkedFacetKey, type FacetState } from '$lib/facets';
 	import FacetFilters from '$lib/components/admin/FacetFilters.svelte';
 
 	let { data }: { data: PageData } = $props();
@@ -124,6 +124,24 @@
 	let decideActiveFilterCount = $derived(
 		Object.values(decideFacetSelection).filter((s) => isEngaged(s)).length
 	);
+
+	/** The Name facet, which the did-you-mean chips drive directly. See `onSuggestionSelect`. */
+	const NAME_FACET = linkedFacetKey('NAME');
+
+	/** What the last list query did with the search term — drives the "did you mean" strip. */
+	let searchInfo = $state<ListResult['search']>({
+		names: [],
+		fuzzy: false,
+		capped: false,
+		exact: 0
+	});
+
+	/**
+	 * Whether the current `name` selection came from a suggestion chip rather than the
+	 * filter panel. A chip sets a filter the organizer cannot see without opening the panel,
+	 * so typing a fresh search term while one is active would silently intersect the two.
+	 */
+	let nameFromSuggestion = $state(false);
 
 	let loading = $state(false);
 	let scoreLoading = $state(false);
@@ -302,6 +320,7 @@
 			});
 			if (request !== applicantsRequest) return;
 			applicants = result.applicants;
+			searchInfo = result.search;
 			applicantsTotal = result.total;
 		} catch (e) {
 			if (request === applicantsRequest)
@@ -417,10 +436,13 @@
 	let searchTimer: ReturnType<typeof setTimeout>;
 	function onSearchInput(value: string) {
 		search = value;
+		if (nameFromSuggestion) {
+			nameFromSuggestion = false;
+			facetSelection = { ...facetSelection, [NAME_FACET]: { values: [] } };
+		}
 		applicantsPage = 1;
 		applicantsRequest++;
 		loading = true;
-
 		clearTimeout(searchTimer);
 		searchTimer = setTimeout(loadApplicants, 400);
 	}
@@ -429,6 +451,7 @@
 	// immediately — the 400ms debounce exists for keystrokes, which these are not.
 	function onFacetsChange(next: FacetState) {
 		facetSelection = next;
+		nameFromSuggestion = false;
 		loadApplicantsFromStart();
 	}
 
@@ -437,6 +460,19 @@
 		// The selected applicant is very likely about to leave the list, and leaving the
 		// detail pane on them would strand their claim until it went stale.
 		selectedUid = null;
+		loadApplicantsFromStart();
+	}
+
+	/**
+	 * Narrow to one suggested name, or click the active chip to back out of it.
+	 *
+	 * Sets the `names` filter rather than rewriting the search box. The typed term is what
+	 * produced the suggestions, so replacing it would delete the strip that offered them.
+	 */
+	function onSuggestionSelect(name: string) {
+		const next = facetSelection[NAME_FACET]?.values?.includes(name) ? [] : [name];
+		facetSelection = { ...facetSelection, [NAME_FACET]: { values: next } };
+		nameFromSuggestion = next.length > 0;
 		loadApplicantsFromStart();
 	}
 
@@ -896,6 +932,8 @@
 					facets={reviewFacets}
 					{facetSelection}
 					{onFacetsChange}
+					{searchInfo}
+					{onSuggestionSelect}
 					{loading}
 					collapsed={sidebarCollapsed}
 					onToggleCollapse={() => (sidebarCollapsed = !sidebarCollapsed)}
