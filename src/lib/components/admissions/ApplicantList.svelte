@@ -56,7 +56,7 @@
 		facetSelection: FacetState;
 		onFacetsChange: (selected: FacetState) => void;
 		/** What the last list query did with the search term — drives the "did you mean" strip. */
-		searchInfo: { names: string[]; fuzzy: boolean; capped: boolean; exact: number };
+		searchInfo: { names: string[]; fuzzy: boolean };
 		onSuggestionSelect: (name: string) => void;
 		loading: boolean;
 		collapsed: boolean;
