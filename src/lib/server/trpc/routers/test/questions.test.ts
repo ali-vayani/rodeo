@@ -29,7 +29,8 @@ const allRolesQuestion = {
 	regex: null,
 	linkedField: null,
 	optionPreset: null,
-	allowOther: false
+	allowOther: false,
+	walkIn: false
 };
 
 const hackerQuestion = {

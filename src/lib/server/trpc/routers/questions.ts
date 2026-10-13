@@ -64,7 +64,8 @@ const questionInput = z.object({
 	// save a question that writes nowhere.
 	linkedField: z.nativeEnum(LinkedField).nullish(),
 	optionPreset: z.nativeEnum(OptionPreset).nullish(),
-	allowOther: z.boolean().default(false)
+	allowOther: z.boolean().default(false),
+	walkIn: z.boolean().default(false)
 });
 
 export const questionsRouter = router({

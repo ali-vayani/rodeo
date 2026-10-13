@@ -16,6 +16,7 @@
 		{ href: '/admin/users', label: 'Users', section: 'users' },
 		{ href: '/admin/admissions', label: 'Admissions', section: 'admissions' },
 		{ href: '/admin/scan', label: 'Scan', section: 'scan' },
+		{ href: '/admin/walkin', label: 'Walk-In', section: 'walkin' },
 		{ href: '/admin/email-templates', label: 'Email Templates', section: 'email' },
 		{ href: '/admin/custom-email', label: 'Custom Email', section: 'email' },
 		{

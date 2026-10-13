@@ -22,8 +22,10 @@ import { formatDateLong } from '$lib/format';
  * These sends must not throw into the caller — an RSVP that reported failure because
  * Resend was briefly down would tell a hacker their spot wasn't held. Logged rather
  * than dropped, so a silent outage is findable.
+ *
+ * Exported for the walk-in router, whose confirm path sends the same lifecycle mail.
  */
-function reportSendFailure(kind: string, to: string) {
+export function reportSendFailure(kind: string, to: string) {
 	return (error: unknown) => {
 		console.error(`[email] ${kind} notification to ${to} failed to send:`, error);
 	};
@@ -214,8 +216,10 @@ function assertAnswerValid(question: AnswerableQuestion, value: string) {
  * `{{rsvp_deadline}}` in a template. The send is dropped and the reason logged, the
  * same shape as a template an admin has deliberately blanked. The admin-initiated
  * paths (`email.startSend`, `admissions.release`) refuse up front instead.
+ *
+ * Exported for the walk-in router, whose confirm path sends the same lifecycle mail.
  */
-function sendableTemplate(
+export function sendableTemplate(
 	kind: string,
 	template: { subject: string; body: string },
 	settings: { RSVPDeadline: Date | null } | null,
@@ -268,7 +272,7 @@ export const applicationRouter = router({
 			const [user, settings] = await Promise.all([
 				ctx.prisma.user.findUniqueOrThrow({
 					where: { uid: ctx.user.uid },
-					select: { status: true }
+					select: { status: true, walkInInvitedAt: true }
 				}),
 				ctx.prisma.settings.findFirst()
 			]);
@@ -282,7 +286,10 @@ export const applicationRouter = router({
 				});
 			}
 
-			assertWithinApplicationWindow(settings, input.role);
+			// A walk-in invite reopens the form for that account: event day is after the
+			// deadline by construction, so without this the invite would point at a form
+			// every write behind it refuses.
+			if (!user.walkInInvitedAt) assertWithinApplicationWindow(settings, input.role);
 
 			await ctx.prisma.user.update({
 				where: { uid: ctx.user.uid },
@@ -317,7 +324,7 @@ export const applicationRouter = router({
 			const [user, settings] = await Promise.all([
 				ctx.prisma.user.findUniqueOrThrow({
 					where: { uid: ctx.user.uid },
-					select: { status: true, role: true }
+					select: { status: true, role: true, walkInInvitedAt: true }
 				}),
 				ctx.prisma.settings.findFirst()
 			]);
@@ -329,7 +336,8 @@ export const applicationRouter = router({
 				});
 			}
 
-			assertWithinApplicationWindow(settings, user.role);
+			// Walk-in invitees answer at the door, after the deadline. Same bypass as `setRole`.
+			if (!user.walkInInvitedAt) assertWithinApplicationWindow(settings, user.role);
 
 			// eslint-disable-next-line @typescript-eslint/no-explicit-any
 			const question = (await (ctx.prisma.question.findUnique as any)({

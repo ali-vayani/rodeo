@@ -20,6 +20,7 @@ import {
 	SAMPLE_VARS
 } from '$lib/email/variables';
 import { buildCheckInPassBlock, buildEmailPersonalization } from '$lib/server/wallet/email-block';
+import { walkInUrl } from '$lib/server/walkin';
 import {
 	attachmentRefSchema,
 	storedAttachmentRefs,
@@ -141,7 +142,7 @@ export const emailRouter = router({
 	 * back to `DEFAULT_SETTINGS` when no row exists, so the preview shows the same.
 	 */
 	eventVars: adminProcedure.query(async ({ ctx }) => {
-		return buildEventVars(emailSettings(await ctx.prisma.settings.findFirst()));
+		return buildEventVars(emailSettings(await ctx.prisma.settings.findFirst()), walkInUrl());
 	}),
 
 	/**
@@ -366,7 +367,7 @@ export const emailRouter = router({
 					({ vars, attachments } = await buildEmailPersonalization(user, settings));
 					qrAttached = attachments.length > 0;
 				} else {
-					vars = buildExternalTemplateVars(emailSettings(settings));
+					vars = buildExternalTemplateVars(emailSettings(settings), walkInUrl());
 				}
 
 				// A vanished object fails this recipient the same way a rejected send does —

@@ -1,0 +1,16 @@
+import type { PageServerLoad } from './$types';
+import { createCallerFactory } from '$lib/server/trpc/init';
+import { appRouter } from '$lib/server/trpc/router';
+import { createContext } from '$lib/server/trpc/context';
+
+const createCaller = createCallerFactory(appRouter);
+
+export const load: PageServerLoad = async (event) => {
+	const caller = createCaller(createContext(event));
+
+	const [invited, rawSettings] = await Promise.all([caller.walkin.list(), caller.settings.get()]);
+	// DEFAULT_SETTINGS stands in when no row exists; the unlock rule reads null as open.
+	const settings = 'id' in rawSettings ? rawSettings : null;
+
+	return { invited, settings };
+};

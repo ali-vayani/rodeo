@@ -23,6 +23,14 @@ export const TEMPLATE_VARIABLES = [
 	// as an end date would be the same lie in a shorter form.
 	{ key: 'rsvp_deadline', label: 'RSVP deadline', placeholder: '[RSVP deadline]' },
 	{
+		key: 'walkin_link',
+		label: 'Walk-in page link',
+		placeholder: '[walk-in link]',
+		hint:
+			'A link to the walk-in page in the hacker portal. It carries no credential — ' +
+			'the recipient signs in with the invited email address to use it.'
+	},
+	{
 		key: 'hacker_qr_code',
 		label: 'Hacker QR code',
 		placeholder: '[QR code + wallet buttons]',
@@ -213,17 +221,26 @@ export function tokenizeTemplate(
  * Rendered on the server so the compose preview shows the exact strings a send will.
  * Formatting in the browser would use the viewer's locale and timezone.
  */
-export function buildEventVars(settings: {
-	hackathonStartDate: Date;
-	RSVPDeadline: Date | null;
-}): Record<string, string> {
+export function buildEventVars(
+	settings: {
+		hackathonStartDate: Date;
+		RSVPDeadline: Date | null;
+	},
+	/**
+	 * The absolute /hacker/walkin URL. Passed in because this module is isomorphic and
+	 * `appOrigin()` is server-only; server callers build it with `walkInUrl()` from
+	 * `$lib/server/walkin`. Defaults to empty, which only tests exercise.
+	 */
+	walkInLink = ''
+): Record<string, string> {
 	// Blank, not the event start: an event with no deadline has no date to name, and
 	// putting the start date under an "RSVP deadline" label states something untrue.
 	// A template that uses the variable is refused by `templateBlockers` before it can
 	// send, so this value is the floor rather than the plan.
 	return {
 		hackathon_start: settings.hackathonStartDate.toLocaleDateString(),
-		rsvp_deadline: settings.RSVPDeadline ? settings.RSVPDeadline.toLocaleDateString() : ''
+		rsvp_deadline: settings.RSVPDeadline ? settings.RSVPDeadline.toLocaleDateString() : '',
+		walkin_link: walkInLink
 	};
 }
 
@@ -239,7 +256,9 @@ export function buildTemplateVars(
 	 * producing it needs Prisma, the QR encoder and an inline attachment. Defaults to
 	 * empty, which is also correct for a recipient with no pass.
 	 */
-	checkInPass = ''
+	checkInPass = '',
+	/** See `buildEventVars`: the server-built walk-in URL this module cannot make. */
+	walkInLink = ''
 ): Record<string, string> {
 	// `name` comes from a linked application question, so an account that has not
 	// answered it holds `''` — and "Hi ," is worse than a filler salutation.
@@ -248,7 +267,7 @@ export function buildTemplateVars(
 		name: user.name?.trim() || NAME_FALLBACK,
 		// Capitalize first letter so "HACKER" renders as "Hacker" in emails.
 		role: rawRole ? rawRole.charAt(0) + rawRole.slice(1).toLowerCase() : '',
-		...buildEventVars(settings),
+		...buildEventVars(settings, walkInLink),
 		hacker_qr_code: checkInPass
 	};
 }
@@ -257,9 +276,12 @@ export function buildTemplateVars(
  * The substitution map for an address with no account. `sendCustom` and the compose
  * preview both call this, so what the admin reads is what the recipient receives.
  */
-export function buildExternalTemplateVars(settings: {
-	hackathonStartDate: Date;
-	RSVPDeadline: Date | null;
-}): Record<string, string> {
-	return buildTemplateVars({ name: NAME_FALLBACK }, settings);
+export function buildExternalTemplateVars(
+	settings: {
+		hackathonStartDate: Date;
+		RSVPDeadline: Date | null;
+	},
+	walkInLink = ''
+): Record<string, string> {
+	return buildTemplateVars({ name: NAME_FALLBACK }, settings, '', walkInLink);
 }
