@@ -6,12 +6,14 @@
 
 	let { children, data }: { children: import('svelte').Snippet; data: LayoutData } = $props();
 
-	// resolve() here keeps the href literals typechecked against real routes.
-	const links = [
+	// resolve() here keeps the href literals typechecked against real routes. The
+	// Walk-In tab exists only for invited accounts; its page redirects everyone else.
+	const links = $derived([
 		{ href: resolve('/hacker'), label: 'Home' },
 		{ href: resolve('/hacker/application'), label: 'Application' },
+		...(data.user.walkInInvitedAt ? [{ href: resolve('/hacker/walkin'), label: 'Walk-In' }] : []),
 		{ href: resolve('/hacker/account'), label: 'Account' }
-	];
+	]);
 </script>
 
 <!--

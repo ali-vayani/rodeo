@@ -54,6 +54,8 @@ const settingsInput = z
 		rejectSubject: subject,
 		waitlistTemplate: templateBody,
 		waitlistSubject: subject,
+		walkinTemplate: templateBody,
+		walkinSubject: subject,
 		timezone: z.string().min(1),
 		// Checked against the list, not "two letters", so a typo can't become a state
 		// that filters to zero rows.

@@ -31,6 +31,7 @@ export const DEFAULT_SETTINGS = {
 	waitlistAttachments: [],
 	confirmAttachments: [],
 	declineAttachments: [],
+	walkinAttachments: [],
 	submitTemplate: 'Hi {{name}}, your application has been submitted!',
 	submitSubject: 'We received your application',
 	acceptTemplate: 'Hi {{name}}, you have been accepted!',
@@ -43,6 +44,9 @@ export const DEFAULT_SETTINGS = {
 	rejectSubject: 'An update on your application',
 	waitlistTemplate: 'Hi {{name}}, you have been added to the waitlist.',
 	waitlistSubject: "You're on the waitlist",
+	walkinTemplate:
+		'Hi {{name}}, you have been invited as a walk-in! Sign in with this email address and confirm your spot here: {{walkin_link}}',
+	walkinSubject: "You're invited as a walk-in",
 	timezone: 'America/Chicago',
 	homeState: null as string | null
 };

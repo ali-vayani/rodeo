@@ -23,6 +23,7 @@ import { UserStatus } from '$lib/generated/prisma/enums';
 import { isWalletUnlocked } from '$lib/wallet/eligibility';
 import { appOrigin } from '$lib/server/env';
 import { emailSettings } from '$lib/server/settings';
+import { walkInUrl } from '$lib/server/walkin';
 import { buildTemplateVars } from '$lib/email/variables';
 import { appleWalletConfigured, googleWalletConfigured } from './config';
 import type { EmailAttachment } from '$lib/server/email';
@@ -149,7 +150,7 @@ export async function buildEmailPersonalization(
 ): Promise<{ vars: Record<string, string>; attachments: EmailAttachment[] }> {
 	const block = await buildCheckInPassBlock(user, settings, now);
 	return {
-		vars: buildTemplateVars(user, emailSettings(settings), block.html),
+		vars: buildTemplateVars(user, emailSettings(settings), block.html, walkInUrl()),
 		attachments: block.attachments
 	};
 }

@@ -41,6 +41,11 @@ export const EMAIL_TEMPLATES = [
 		key: 'decline',
 		label: 'RSVP Declined',
 		description: 'Sent when a hacker releases their spot.'
+	},
+	{
+		key: 'walkin',
+		label: 'Walk-In Invite',
+		description: 'Sent when staff invites someone as a walk-in on event day.'
 	}
 ] as const;
 
@@ -53,7 +58,8 @@ export const TEMPLATE_KEYS = [
 	'reject',
 	'waitlist',
 	'confirm',
-	'decline'
+	'decline',
+	'walkin'
 ] as const;
 
 // Compile-time guards, both directions: adding a template to one list without the

@@ -100,6 +100,12 @@ model User {
   status          UserStatus          @default(CREATED)
   createdAt       DateTime            @default(now())
 
+  /// Set when staff sends a walk-in invite. Gates the portal's Walk-In tab and the
+  /// walk-in confirm path; also what lets an invitee edit answers after the deadline.
+  walkInInvitedAt DateTime?
+  /// Confirmed through the walk-in flow rather than an accepted-decision RSVP.
+  isWalkIn        Boolean             @default(false)
+
   /// Presence lock: the admin currently reviewing this applicant.
   claimedBy       String?
   claimedAt       DateTime?
@@ -168,6 +174,7 @@ model Settings {
   waitlistAttachments Json @default("[]")
   confirmAttachments Json @default("[]")
   declineAttachments Json @default("[]")
+  walkinAttachments Json @default("[]")
 
   submitTemplate      String
   submitSubject       String   @default("We received your application")
@@ -181,6 +188,8 @@ model Settings {
   rejectSubject       String   @default("An update on your application")
   waitlistTemplate    String
   waitlistSubject     String   @default("You're on the waitlist")
+  walkinTemplate      String
+  walkinSubject       String   @default("You're invited as a walk-in")
 
   /// IANA identifier, e.g. "America/Chicago".
   timezone            String
@@ -192,7 +201,7 @@ model Settings {
 /// Presence means the override is enabled; absence means fall back to the default.
 model TemplateOverride {
   id          String @id @default(cuid())
-  /// One of: submit | accept | reject | waitlist | confirm | decline
+  /// One of: submit | accept | reject | waitlist | confirm | decline | walkin
   templateKey String
   role        Role
   subject     String
@@ -280,6 +289,11 @@ model Question {
   /// isn't in `options`. A preset already takes write-ins without it; see
   /// `acceptsWriteIn`.
   allowOther  Boolean             @default(false)
+
+  /// Part of the walk-in registration form: the subset an invited walk-in answers at
+  /// the door. A flag rather than a second question set, so an answer given either way
+  /// lands in the same response row.
+  walkIn      Boolean             @default(false)
 
   responses   ApplicationResponse[]
 }

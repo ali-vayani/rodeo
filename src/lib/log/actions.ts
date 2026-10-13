@@ -63,6 +63,11 @@ export const LOG_ACTIONS = [
 	// Scan
 	{ key: 'scan.record', label: 'Scan recorded', group: 'Scan' },
 
+	// Walk-in
+	{ key: 'walkin.invite', label: 'Walk-in invited', group: 'Walk-In' },
+	{ key: 'walkin.uninvite', label: 'Walk-in invite revoked', group: 'Walk-In' },
+	{ key: 'walkin.confirm', label: 'Walk-in confirmed', group: 'Walk-In' },
+
 	// Email
 	{ key: 'email.custom.start', label: 'Custom email started', group: 'Email' },
 	{ key: 'email.custom.send', label: 'Custom email sent', group: 'Email' },
