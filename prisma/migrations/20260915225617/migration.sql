@@ -1,0 +1,3 @@
+-- AlterTable
+ALTER TABLE "EmailLog" ALTER COLUMN "sent" DROP DEFAULT,
+ALTER COLUMN "failed" DROP DEFAULT;
