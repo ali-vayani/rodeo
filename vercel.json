@@ -4,6 +4,14 @@
 		{
 			"source": "/_app/immutable/(.*)",
 			"headers": [{ "key": "Access-Control-Allow-Origin", "value": "*" }]
+		},
+		{
+			"source": "/api/trpc/(.*)",
+			"headers": [
+				{ "key": "Access-Control-Allow-Origin", "value": "https://hacktx.com" },
+				{ "key": "Access-Control-Allow-Methods", "value": "GET, POST, OPTIONS" },
+				{ "key": "Access-Control-Allow-Headers", "value": "Content-Type" }
+			]
 		}
 	]
 }
