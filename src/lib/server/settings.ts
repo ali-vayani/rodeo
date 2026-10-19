@@ -48,7 +48,9 @@ export const DEFAULT_SETTINGS = {
 		'Hi {{name}}, you have been invited as a walk-in! Sign in with this email address and confirm your spot here: {{walkin_link}}',
 	walkinSubject: "You're invited as a walk-in",
 	timezone: 'America/Chicago',
-	homeState: null as string | null
+	homeState: null as string | null,
+	projectsEnabled: false,
+	projectsUrl: null as string | null
 };
 
 /**

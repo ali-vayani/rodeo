@@ -195,6 +195,11 @@ model Settings {
   timezone            String
 
   homeState           String?
+
+  /// The Projects tab: a read-only list of submitted projects pulled from an external
+  /// feed. Off by default so the tab only appears once judging is set up.
+  projectsEnabled     Boolean  @default(false)
+  projectsUrl         String?
 }
 
 /// A role-specific override for a lifecycle email template.

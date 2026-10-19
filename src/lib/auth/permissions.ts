@@ -27,6 +27,7 @@ export type AdminSection =
 	| 'email'
 	| 'application-editor'
 	| 'schedule'
+	| 'projects'
 	| 'blacklist'
 	| 'settings'
 	| 'logs';
@@ -42,7 +43,8 @@ export const ORGANIZER_SECTIONS: AdminSection[] = [
 	'admissions',
 	'scan',
 	'walkin',
-	'schedule'
+	'schedule',
+	'projects'
 ];
 
 /**
@@ -61,6 +63,7 @@ export const SECTION_PATHS: Record<AdminSection, string[]> = {
 	email: ['/admin/email-templates', '/admin/custom-email'],
 	'application-editor': ['/admin/application-editor'],
 	schedule: ['/admin/schedule'],
+	projects: ['/admin/projects'],
 	blacklist: ['/admin/blacklist'],
 	settings: ['/admin/settings'],
 	logs: ['/admin/logs']

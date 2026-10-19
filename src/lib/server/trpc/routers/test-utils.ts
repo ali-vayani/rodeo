@@ -185,5 +185,7 @@ export const mockSettings = {
 	walkinTemplate: 'Hi {{name}}, walk in here: {{walkin_link}}',
 	walkinSubject: "You're invited as a walk-in",
 	timezone: 'America/Chicago',
-	homeState: 'TX'
+	homeState: 'TX',
+	projectsEnabled: false,
+	projectsUrl: null
 };

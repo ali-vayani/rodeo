@@ -8,6 +8,7 @@
 	import GeneralTab from '$lib/components/settings/GeneralTab.svelte';
 	import DatesTab from '$lib/components/settings/DatesTab.svelte';
 	import ScanGroupsTab from '$lib/components/settings/ScanGroupsTab.svelte';
+	import ProjectsTab from '$lib/components/settings/ProjectsTab.svelte';
 	import DataExportTab from '$lib/components/settings/DataExportTab.svelte';
 	import DangerZoneTab from '$lib/components/settings/DangerZoneTab.svelte';
 	import Toast from '$lib/components/legacy/Toast.svelte';
@@ -26,13 +27,14 @@
 
 	let scrollContainer = $state<HTMLElement | undefined>(undefined);
 	let activeSection = $state('account');
-	const sectionIds = ['account', 'general', 'dates', 'scan-groups', 'data', 'danger'];
+	const sectionIds = ['account', 'general', 'dates', 'scan-groups', 'projects', 'data', 'danger'];
 
 	const sections = [
 		{ id: 'account', label: 'Account' },
 		{ id: 'general', label: 'General' },
 		{ id: 'dates', label: 'Dates' },
 		{ id: 'scan-groups', label: 'Scan Groups' },
+		{ id: 'projects', label: 'Projects' },
 		{ id: 'data', label: 'Data Export' },
 		{ id: 'danger', label: 'Danger Zone' }
 	];
@@ -109,7 +111,9 @@
 				walkinTemplate: merged.walkinTemplate,
 				walkinSubject: merged.walkinSubject,
 				timezone: merged.timezone,
-				homeState: merged.homeState
+				homeState: merged.homeState,
+				projectsEnabled: merged.projectsEnabled,
+				projectsUrl: merged.projectsUrl
 			});
 			settings = { ...settings, ...updates } as SettingsRow;
 			showToast('Settings saved');
@@ -222,6 +226,25 @@
 			</div>
 			<div class="p-4 md:p-6">
 				<ScanGroupsTab scanActions={settings.scanActions} {saving} onSave={(u) => save(u)} />
+			</div>
+		</div>
+
+		<div
+			id="section-projects"
+			class="scroll-mt-topbar overflow-hidden rounded-md border border-border md:scroll-mt-0"
+		>
+			<div class="border-b border-border bg-muted px-4 py-[9px]">
+				<span class="text-[10px] font-bold tracking-widest text-muted-foreground uppercase">
+					Projects
+				</span>
+			</div>
+			<div class="p-4 md:p-6">
+				<ProjectsTab
+					projectsEnabled={settings.projectsEnabled}
+					projectsUrl={settings.projectsUrl}
+					{saving}
+					onSave={(u) => save(u)}
+				/>
 			</div>
 		</div>
 

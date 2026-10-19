@@ -25,6 +25,7 @@
 			section: 'application-editor'
 		},
 		{ href: '/admin/schedule', label: 'Schedule', section: 'schedule' },
+		{ href: '/admin/projects', label: 'Projects', section: 'projects' },
 		{ href: '/admin/blacklist', label: 'Blacklist', section: 'blacklist' },
 		{ href: '/admin/logs', label: 'Activity Log', section: 'logs' },
 		{ href: '/admin/settings', label: 'Settings', section: 'settings' }

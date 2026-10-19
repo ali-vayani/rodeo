@@ -64,6 +64,16 @@ const settingsInput = z
 			.refine((code) => code in US_STATES, { message: 'Not a US state.' })
 			.nullable()
 			.optional(),
+		// Optional so the older full-object callers keep working; Prisma leaves an absent
+		// field untouched on update and falls back to the column default on create.
+		projectsEnabled: z.boolean().optional(),
+		projectsUrl: z
+			.string()
+			.trim()
+			.url('Projects feed must be a full URL, or leave it blank.')
+			.max(2000)
+			.nullable()
+			.optional(),
 
 		// Per-role deadline overrides. Null / absent → inherit global dates.
 		hackerApplicationOpen: roleDate,

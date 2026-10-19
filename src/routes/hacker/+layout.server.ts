@@ -21,31 +21,34 @@ export const load: LayoutServerLoad = async (event) => {
 	const user = event.locals.user!;
 	const self = toSelfUser(user);
 
+	const caller = createCaller(createContext(event));
+	const { projectsEnabled } = await caller.settings.get();
+
 	const fromUrl = event.url.searchParams.get('join')?.trim();
 	if (fromUrl) rememberInvite(event.cookies, fromUrl);
 
 	const inviteCode = fromUrl || readInvite(event.cookies);
-	if (!inviteCode) return { user: self, invite: null };
+	if (!inviteCode) return { user: self, projectsEnabled, invite: null };
 
 	// Already on a team, so the invitation can no longer do anything. Dropped here rather
 	// than left for `joinByCode` to refuse, so a spent invite stops re-rendering a banner.
 	if (user.teamId) {
 		forgetInvite(event.cookies);
-		return { user: self, invite: null };
+		return { user: self, projectsEnabled, invite: null };
 	}
 
-	const caller = createCaller(createContext(event));
 	const team = await caller.team.getByInviteCode({ inviteCode });
 
 	// Expired, revoked, or a mistyped code. Same treatment: forget it, so a bad link
 	// doesn't leave a permanently broken banner overhead.
 	if (!team) {
 		forgetInvite(event.cookies);
-		return { user: self, invite: null };
+		return { user: self, projectsEnabled, invite: null };
 	}
 
 	return {
 		user: self,
+		projectsEnabled,
 		invite: {
 			...team,
 			/**

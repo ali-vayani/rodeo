@@ -317,3 +317,39 @@ describe('settings.updateTemplates', () => {
 		});
 	});
 });
+
+describe('settings.update projects fields', () => {
+	it('stores the toggle and a trimmed feed URL', async () => {
+		const caller = createTestCaller(db, adminUser);
+		db.settings.findFirst.mockResolvedValue(mockSettings);
+		db.settings.update.mockResolvedValue({
+			...mockSettings,
+			projectsEnabled: true,
+			projectsUrl: 'https://example.com/projects.json'
+		});
+
+		await caller.settings.update({
+			...mockSettings,
+			projectsEnabled: true,
+			projectsUrl: '  https://example.com/projects.json '
+		});
+
+		expect(db.settings.update).toHaveBeenCalledWith(
+			expect.objectContaining({
+				data: expect.objectContaining({
+					projectsEnabled: true,
+					projectsUrl: 'https://example.com/projects.json'
+				})
+			})
+		);
+	});
+
+	it('rejects a feed URL that is not a URL', async () => {
+		const caller = createTestCaller(db, adminUser);
+		db.settings.findFirst.mockResolvedValue(mockSettings);
+
+		await expect(
+			caller.settings.update({ ...mockSettings, projectsUrl: 'projects.json' })
+		).rejects.toMatchObject({ message: expect.stringContaining('full URL') });
+	});
+});
