@@ -38,17 +38,27 @@ function sanitiseName(name: string): string {
 const RESUME_QUESTION_ID = 'c5b5fc2ba322548b0a142ce42';
 
 async function main() {
-	const { DATABASE_URL, DIRECT_URL, AWS_REGION, S3_BUCKET, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY } =
-		process.env;
+	const {
+		DATABASE_URL,
+		DIRECT_URL,
+		AWS_REGION,
+		S3_BUCKET,
+		AWS_ACCESS_KEY_ID,
+		AWS_SECRET_ACCESS_KEY
+	} = process.env;
 
 	// Prefer DIRECT_URL (bypasses the Supabase pooler) for scripts that do a full scan.
 	const dbUrl = DIRECT_URL ?? DATABASE_URL;
 	if (!dbUrl) throw new Error('DIRECT_URL or DATABASE_URL is required');
 	if (!AWS_REGION || !S3_BUCKET || !AWS_ACCESS_KEY_ID || !AWS_SECRET_ACCESS_KEY) {
-		throw new Error('AWS_REGION, S3_BUCKET, AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY are all required');
+		throw new Error(
+			'AWS_REGION, S3_BUCKET, AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY are all required'
+		);
 	}
 	if (AWS_SECRET_ACCESS_KEY === '[SENSITIVE]') {
-		throw new Error('AWS_SECRET_ACCESS_KEY is still the [SENSITIVE] placeholder — copy the real value from the Vercel dashboard into .env.local');
+		throw new Error(
+			'AWS_SECRET_ACCESS_KEY is still the [SENSITIVE] placeholder — copy the real value from the Vercel dashboard into .env.local'
+		);
 	}
 
 	const prisma = createPrismaClient(dbUrl);
