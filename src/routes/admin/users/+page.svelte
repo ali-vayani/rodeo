@@ -145,6 +145,27 @@
 		listRequest++;
 	});
 
+	let downloadingResumes = $state(false);
+
+	async function downloadResumeBook() {
+		downloadingResumes = true;
+		try {
+			const res = await fetch('/admin/export-resumes');
+			if (!res.ok) throw new Error(await res.text());
+			const blob = await res.blob();
+			const url = URL.createObjectURL(blob);
+			const a = document.createElement('a');
+			a.href = url;
+			a.download = 'confirmed-resumes.zip';
+			a.click();
+			URL.revokeObjectURL(url);
+		} catch (e) {
+			showToast(errorMessage(e, 'Failed to download resumes'), 'error');
+		} finally {
+			downloadingResumes = false;
+		}
+	}
+
 	let exportingAll = $state(false);
 
 	/** The plain, one-click export: every user, every field, no dialog. */
@@ -399,6 +420,15 @@
 <div class="mb-6 flex items-center justify-between">
 	<h1 class="text-[22px] font-bold text-primary">Users</h1>
 	<div class="flex items-center gap-2">
+		<button
+			onclick={downloadResumeBook}
+			disabled={downloadingResumes}
+			title="Download resumes for all confirmed hackers as a zip"
+			class="cursor-pointer rounded-md border border-border bg-white px-[14px] py-[7px] text-[13px] font-medium text-primary"
+			class:opacity-60={downloadingResumes}
+		>
+			{downloadingResumes ? 'Downloading…' : 'Resume Book'}
+		</button>
 		<button
 			onclick={openExportModal}
 			title="Pick which rows and columns to include"
