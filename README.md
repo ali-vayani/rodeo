@@ -1,4 +1,4 @@
-## This is a fork of the Freetail Hacker Rodeo Repo setup for my GitHub portfolio + personal experimentation. You can find the offical GitLab repo [here](https://gitlab.com/freetail-hackers/Rodeo-2.0).
+## This is a fork of the Freetail Hacker Rodeo repo setup for my GitHub portfolio + personal experimentation. You can find the offical GitLab repo [here](https://gitlab.com/freetail-hackers/Rodeo-2.0).
 
 # Rodeo
 
