@@ -82,6 +82,21 @@ enum InvitationStatus {
   DECLINED
 }
 
+/// GPU job lifecycle. `UNKNOWN` is entered when a RUNNING attempt's heartbeat goes
+/// stale: the container may still be alive, so the scheduler never re-claims an
+/// UNKNOWN job until a worker reconciles it or an operator fences the host.
+/// SUCCEEDED, FAILED, TIMED_OUT and CANCELLED are terminal.
+enum JobState {
+  QUEUED
+  STARTING
+  RUNNING
+  UNKNOWN
+  SUCCEEDED
+  FAILED
+  TIMED_OUT
+  CANCELLED
+}
+
 model User {
   uid             String              @id @default(cuid())
   name            String
@@ -374,6 +389,8 @@ model Team {
   inviteCode  String       @unique @default(uuid())
   members     User[]
   invitations Invitation[]
+  apiKeys     ApiKey[]
+  jobs        Job[]
 }
 
 model Invitation {
@@ -384,4 +401,73 @@ model Invitation {
   userId String?
   user   User?            @relation(fields: [userId], references: [uid], onDelete: SetNull)
   status InvitationStatus @default(PENDING)
+}
+
+/// GPU compute credential, owned by a team. Only the hash is stored; the plaintext is
+/// shown once at creation. `keyPrefix` lets hackers and admins tell keys apart.
+model ApiKey {
+  id         String    @id @default(cuid())
+  teamId     String
+  team       Team      @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  keyHash    String    @unique
+  keyPrefix  String
+  createdAt  DateTime  @default(now())
+  revokedAt  DateTime?
+  lastUsedAt DateTime?
+
+  @@index([teamId])
+}
+
+/// A GPU job as submitted. This table is the queue: a worker claims a QUEUED row by
+/// flipping it to STARTING in one transaction. Fields the client sends are stored as
+/// sent; everything produced by running the job lives on JobAttempt.
+model Job {
+  id                String       @id @default(cuid())
+  teamId            String
+  team              Team         @relation(fields: [teamId], references: [id])
+  /// Container image reference as submitted (tag or digest). The digest actually
+  /// pulled is recorded on the attempt.
+  image             String
+  /// Exec-form command passed straight to the container runtime, no shell. Empty
+  /// means use the image's default command.
+  command           String[]
+  /// Object-store key under the team's prefix, mounted read-only at /in. Null when
+  /// the job needs no input. Outputs go to outputs/<jobId>/<attemptId>/.
+  inputKey          String?
+  /// Deadline the worker enforces. A limit, not a measurement.
+  maxRuntimeSeconds Int
+  state             JobState     @default(QUEUED)
+  /// Team-scoped key so a retried submission returns the existing job.
+  idempotencyKey    String?
+  /// Cancellation is a request until the worker confirms execution stopped.
+  cancelRequestedAt DateTime?
+  createdAt         DateTime     @default(now())
+  currentAttemptId  String?      @unique
+  currentAttempt    JobAttempt?  @relation("CurrentAttempt", fields: [currentAttemptId], references: [id], onDelete: SetNull)
+  attempts          JobAttempt[] @relation("JobAttempts")
+
+  @@unique([teamId, idempotencyKey])
+  @@index([state, createdAt])
+  @@index([teamId, createdAt])
+}
+
+/// One execution of a Job. A job can run more than once after a worker crash, so
+/// per-run facts live here rather than on Job.
+model JobAttempt {
+  id              String    @id @default(cuid())
+  jobId           String
+  job             Job       @relation("JobAttempts", fields: [jobId], references: [id], onDelete: Cascade)
+  currentFor      Job?      @relation("CurrentAttempt")
+  workerId        String
+  containerId     String?
+  imageDigest     String?
+  startedAt       DateTime  @default(now())
+  lastHeartbeatAt DateTime?
+  finishedAt      DateTime?
+  exitCode        Int?
+  /// Separates workload failures from infrastructure failures, e.g. `workload`,
+  /// `infrastructure`, `timeout`.
+  errorKind       String?
+
+  @@index([jobId, startedAt])
 }
