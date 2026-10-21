@@ -26,3 +26,10 @@ Thumbs.db
 # Vite
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
+
+# GPU service (gpu/)
+__pycache__/
+.pytest_cache/
+*.egg-info/
+gpu/.venv
+.gpu-data
